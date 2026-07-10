@@ -212,6 +212,17 @@ export function clusterSignals(
 ): SignalCluster[] {
   const active: SignalCluster[] = []
 
+  // Facility/location magnitude — buildCompanyProfile() already extracts these
+  // (evidence-extractor.ts) but nothing downstream consumed them until now.
+  // multi_location_operations is a single boolean; it can't distinguish a company
+  // with 2 locations from one with 9. Threshold matches SERVICE_TO_OUTREACH_MAPPING.md's
+  // own "strong" bar (facility count >= 5). Confirmed against benchmark data: Ador
+  // Welding (6 facilities), A-1 Fence (6 units / 50 countries), ATE Group (9 locations)
+  // all clear this despite only weak/absent boolean signals today.
+  const facilityCount = profile.operations.manufacturing_plants_count ?? 0
+  const countryCount = profile.operations.countries_present ?? 0
+  const hasStrongMultiLocationEvidence = facilityCount >= 5 || countryCount >= 10
+
   for (const def of CLUSTER_DEFS) {
     // Check model applicability using profile booleans
     if (!profileMatchesModels(profile, def.applicable_models)) continue
@@ -224,6 +235,7 @@ export function clusterSignals(
     const presentBonus = (def.bonus_signals ?? []).filter(s => Boolean(detectedFactors[s]))
     const totalPresent = presentRequired.length + presentBonus.length
     const totalPossible = def.required_signals.length + (def.bonus_signals?.length ?? 0)
+    const signalsPresent = [...presentRequired, ...presentBonus]
 
     let confidence: 'high' | 'medium' | 'low'
     const ratio = totalPresent / totalPossible
@@ -231,11 +243,18 @@ export function clusterSignals(
     else if (ratio >= 0.33) confidence = 'medium'
     else confidence = 'low'
 
+    // Magnitude boost: a cluster driven by multi_location_operations shouldn't be
+    // capped at medium/low confidence purely because it's a single boolean factor
+    // when the underlying facility/country count is itself strong evidence.
+    if (confidence !== 'high' && hasStrongMultiLocationEvidence && signalsPresent.includes('multi_location_operations')) {
+      confidence = 'high'
+    }
+
     active.push({
       id: def.id,
       theme: def.theme,
       description: def.description,
-      signals_present: [...presentRequired, ...presentBonus],
+      signals_present: signalsPresent,
       confidence,
       applicable_models: def.applicable_models,
       tier: def.tier,

@@ -510,6 +510,10 @@ export async function POST(req: NextRequest) {
       leadership_hiring:                3,
       sustainability_initiative:        3,
       quality_certification_pursuit:    3,
+      named_erp_crm_tool:               8,   // same weight class as erp_implementation/mes_adoption
+      external_training_engagement:     5,   // indirect signal — see EVIDENCE_SOURCE_STRATEGY.md Tier 2
+      // internal_workflow_description intentionally has no urgency weight — it's
+      // descriptive evidence (an internal process exists), not an urgency-driving event.
     }
     const urgencyRaw = extractorResult.signals
       .filter(s => s.is_company_subject)
@@ -518,8 +522,8 @@ export async function POST(req: NextRequest) {
 
     const GROWTH_SIG_TYPES  = new Set(['new_facility', 'capacity_expansion', 'new_market_entry', 'revenue_milestone'])
     const HIRING_SIG_TYPES  = new Set(['digital_transformation_hiring', 'ai_ml_hiring', 'automation_engineering_hiring', 'operations_hiring_surge', 'leadership_hiring'])
-    const DIGITAL_SIG_TYPES = new Set(['digital_transformation', 'industry40_initiative', 'erp_implementation', 'mes_adoption', 'automation_investment', 'iot_investment'])
-    const BIZ_SIG_TYPES     = new Set(['ai_mention', 'acquisition', 'multi_location_operations', 'quality_certification_pursuit', 'sustainability_initiative'])
+    const DIGITAL_SIG_TYPES = new Set(['digital_transformation', 'industry40_initiative', 'erp_implementation', 'mes_adoption', 'automation_investment', 'iot_investment', 'named_erp_crm_tool'])
+    const BIZ_SIG_TYPES     = new Set(['ai_mention', 'acquisition', 'multi_location_operations', 'quality_certification_pursuit', 'sustainability_initiative', 'external_training_engagement'])
 
     const toNormSig = (sig: ExtractorResult['signals'][number]) => ({
       type:     sig.type,
@@ -554,6 +558,10 @@ export async function POST(req: NextRequest) {
       acquisition:                    'recent_news_or_event',
       quality_certification_pursuit:  'digital_transformation',
       sustainability_initiative:      'digital_transformation',
+      named_erp_crm_tool:             'digital_transformation',
+      external_training_engagement:   'recent_news_or_event',
+      // internal_workflow_description intentionally unmapped — falls back to its
+      // own type name (?? sig.type below), no existing synthesis category fits it.
     }
 
     const extractorEnrichedSignals: EnrichedSignal[] = extractorResult.signals.map(sig => ({
@@ -882,6 +890,7 @@ export async function POST(req: NextRequest) {
         contentFlags: extractorResult.contentFlags,
         companySubjectCount: extractorResult.companySubjectCount,
         signalSummary: extractorResult.signalSummary,
+        leadershipContacts: extractorResult.leadershipContacts,
       },
       signalClusters,
 

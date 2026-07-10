@@ -30,46 +30,17 @@ Outreach Angle: "Coordinating reporting across 6 facilities usually means someon
 Confidence: medium (facility count confirmed, reporting gap inferred not confirmed)
 ```
 
-## Demaze Capability Map (draft — Krupal to correct/fill gaps, this is not final)
-Demaze is an AI-first product engineering studio (Ahmedabad, 35+ people, India/East
-Africa/Europe), not a generic dev shop. Positioning is closer to "Virtual CTO / fixed-cost
-dedicated AI-native tech team" than a project-based vendor. 50+ AI projects delivered,
-$25M+ client revenue. Draft capability buckets, inferred from actual delivered work
-(Volvo Pulse AI, FLORA, LAONI, DKC, Srota, Amret AI, Seed Media, prediction-market
-platform, quick commerce, WhatsApp tender, ad-video platform) — NOT from public
-LinkedIn scraping, which is too shallow a source for a company Krupal runs himself:
+## Demaze Capability Map — see DEMAZE_CAPABILITY_MAP.md and SERVICE_TO_OUTREACH_MAPPING.md
+The 8 official Demaze service lines are CONFIRMED ground truth (given directly, not
+inferred) — see `DEMAZE_CAPABILITY_MAP.md` at repo root. "Virtual CTO / Dedicated Team
+Model" is explicitly NOT a service line — it's a positioning device used on some
+proposals only, not a capability bucket. Do not reintroduce it as one.
 
-```yaml
-AI Transformation & Intelligence Systems:
-  - AI-powered lead/sales intelligence (see: Volvo Pulse AI — dealer network sales intelligence)
-  - AI research/analysis copilots
-  - AI-driven workflow/decision support
-
-Business Automation & Operational Systems:
-  - Multi-location reporting and coordination systems
-  - Workflow automation replacing manual/Excel-based processes
-  - Complaint/lifecycle management systems (see: Kabra Extrusiontechnik)
-
-Custom SaaS & Platform Engineering:
-  - Vertical SaaS builds (see: Srota — D2C analytics; Amret AI — health records)
-  - Marketplace/commerce platforms (see: LAONI hyperlocal commerce, quick commerce "Project X")
-  - Prediction market / trading platforms (jurisdiction-agnostic, regulated-adjacent builds)
-  - Event/ticketing platforms (see: FLORA)
-
-Integrations & Data Systems:
-  - CRM/Sales Navigator workflows, lightweight CRM builds
-  - ERP-adjacent / dealer network data integration (Volvo Salesforce/SAP track)
-  - Payment integration for Indian market (Razorpay — not Stripe, which is invite-only in India)
-
-Analytics & Reporting:
-  - Revenue/traffic analytics dashboards (Srota)
-  - Business Value Briefs — translating tech capability into rupee-denominated
-    dealer/client-level outcomes (Volvo playbook)
-
-Virtual CTO / Dedicated Team Model:
-  - Positioned as embedded technical team, not vendor (see: LAONI proposal framing)
-  - Full AI-powered development pipeline (Claude Code driven) as a delivery differentiator
-```
+`SERVICE_TO_OUTREACH_MAPPING.md` is the per-service blueprint (evidence patterns,
+disqualifiers, threshold gating, buyer titles, outreach angles) that
+`generateDeterministicOpportunities()`, the challenge engine, and stakeholder mapping
+should eventually target. It is still draft and under review — see the sequencing
+note below before touching that code.
 
 ## Ideal Customer Problems (think problems, not just industries)
 ```yaml

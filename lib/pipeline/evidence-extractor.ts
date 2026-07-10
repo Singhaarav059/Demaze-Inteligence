@@ -32,6 +32,11 @@ export type SignalType =
   // Business events
   | 'ai_mention' | 'multi_location_operations' | 'acquisition'
   | 'quality_certification_pursuit' | 'sustainability_initiative'
+  // Evidence-source-strategy additions (see EVIDENCE_SOURCE_STRATEGY.md) — sourced
+  // primarily from job postings and named-tool mentions, which the original 20
+  // patterns above never covered (see: AITG benchmark case, 0 signals despite
+  // named SAP MM/FICO modules and an explicit data-workshop in the raw content).
+  | 'named_erp_crm_tool' | 'external_training_engagement' | 'internal_workflow_description'
 
 export type EvidenceSubject =
   | 'company_operations'   // company's own internal processes
@@ -168,6 +173,21 @@ export interface ExtractorResult {
   companySubjectCount: number
   websitePreview: string      // first 3,000 chars for LLM company identification
   companyProfileEvidence: CompanyProfileEvidence  // which patterns fired per flag
+  leadershipContacts: LeadershipContact[]  // named individuals + stated existing portfolio
+}
+
+// ── LeadershipContact — named buyer candidates ─────────────────
+// A named individual + stated existing portfolio (e.g. "he heads the Bid Strategy,
+// Business Development and New Technology/Innovation for the entire Group") is a
+// dramatically stronger buyer signal than a generic per-service title guess — see
+// EVIDENCE_SOURCE_STRATEGY.md, Tier 1: "leadership responsibilities". Extraction is
+// intentionally conservative: a name+title with no nearby portfolio clause is
+// discarded rather than surfaced as a weak/unverified contact.
+export interface LeadershipContact {
+  name: string
+  title: string
+  statedPortfolio: string
+  sourceUrl: string
 }
 
 // ── Constants ─────────────────────────────────────────────────
@@ -196,6 +216,13 @@ const SIGNAL_TO_FACTOR: Partial<Record<SignalType, keyof DetectedFactors>> = {
   acquisition:                    'recent_news_or_event',
   quality_certification_pursuit:  'recent_news_or_event',
   sustainability_initiative:       'recent_news_or_event',
+  named_erp_crm_tool:             'technology_investment',
+  // external_training_engagement and internal_workflow_description intentionally
+  // have no DetectedFactors mapping — none of the 10 existing factor keys fit
+  // either honestly (see EVIDENCE_SOURCE_STRATEGY.md's Reporting & Analytics /
+  // Internal Operations categories). They still surface via signals[], signalSummary,
+  // and the extractorResult response payload; forcing them into an ill-fitting
+  // boolean factor would misrepresent what was actually found.
 }
 
 // ── Signal patterns ────────────────────────────────────────────
@@ -458,6 +485,32 @@ const SIGNAL_PATTERNS: PatternDef[] = [
       /\besg\s+(?:program|initiative|commitment|target|report)\b/i,
       /\bsustainability\s+(?:goal|target|program|roadmap)\b/i,
       /\bgreen\s+(?:manufactur\w+|energy|factory)\b/i,
+    ],
+  },
+
+  // ── Evidence-source-strategy additions (EVIDENCE_SOURCE_STRATEGY.md) ────────
+  {
+    signal: 'named_erp_crm_tool',
+    patterns: [
+      // Named SAP module already in use — covers "SAP (MM Module)" and "SAP (FICO)"
+      // phrasing (AITG job postings: 0 SIGNAL_PATTERNS matches before this).
+      /\bsap\s*\(?\s*(?:mm|fico|fi\/co|sd|pp|hr|hcm|qm|wm|ewm|bw|crm)\b/i,
+      // Other named ERP/CRM/BI platforms stated as already in active use
+      /\b(?:oracle\s+erp|salesforce|netsuite|workday|microsoft\s+dynamics|tableau|power\s*bi|quickbooks|zoho\s+(?:crm|books|one))\b/i,
+      // Generic "knowledge of / experience in <tool>" job-requirement framing
+      /\bknowledge\s+of\s+(?:sap|erp|crm)\b/i,
+      /\b(?:experience|expertise|proficiency)\s+(?:in|with)\s+(?:sap|erp|crm|oracle|salesforce)\b/i,
+    ],
+  },
+  {
+    signal: 'external_training_engagement',
+    patterns: [
+      // AITG: "a workshop on 'Interpreting Data and Understanding Variation'"
+      /\bworkshop\s+(?:on|for|focused\s+on)\b/i,
+      // AITG: "to conduct a Workshop for Senior Management personnel"
+      /\b(?:conduct|conducted|organi[sz]ed?|organi[sz]ing)\s+(?:a\s+|an\s+)?(?:workshop|training\s+(?:program|session))\b/i,
+      /\btraining\s+(?:program|session)\s+(?:on|for|to)\b/i,
+      /\bengaged?\s+(?:a\s+|an\s+)?(?:consultant|trainer|facilitator)\b/i,
     ],
   },
 ]
@@ -865,6 +918,96 @@ function shouldSkipMatch(window: string, def: PatternDef): boolean {
   return def.antiPatterns.some(ap => ap.test(window))
 }
 
+// ── Job-posting workflow extraction ────────────────────────────
+// Job responsibility/duties lists are a structurally distinct evidence source
+// (see EVIDENCE_SOURCE_STRATEGY.md, Tier 1: "job posting responsibilities") —
+// a hiring manager describes the real internal process honestly because the
+// role needs to be filled correctly, not to market the company. Generic
+// SIGNAL_PATTERNS phrase-matching against flat prose misses this entirely
+// (confirmed: ATE Group's BOQ -> P&ID -> compliance -> procurement workflow,
+// found only in a job posting, produced zero SIGNAL_PATTERNS matches). This
+// needs to be captured as a structural block, not a phrase match.
+const RESPONSIBILITY_HEADING = /\b(?:key\s+)?respons\w*\s*:?/i
+
+function extractJobPostingWorkflowEvidence(segments: ContentSegment[]): ExtractedEvidence[] {
+  const results: ExtractedEvidence[] = []
+  let n = 0
+
+  for (const seg of segments) {
+    if (seg.pageType !== 'careers') continue
+
+    const match = RESPONSIBILITY_HEADING.exec(seg.text)
+    if (!match) continue
+
+    const start = match.index + match[0].length
+    const block = seg.text.slice(start, start + 400).replace(/\s+/g, ' ').trim()
+    if (block.length < 60) continue   // heading with no real content following it
+
+    n++
+    results.push({
+      id: `jw${n}`,
+      quote: block,
+      signal_type: 'internal_workflow_description',
+      subject: 'company_operations',   // careers pages already default here (see classifySubject)
+      source_url: seg.url,
+      page_type: seg.pageType,
+      source_tier: seg.tier,
+      evidence_strength: strengthFromTier(seg.tier),
+      pattern_matched: 'internal_workflow_description',
+    })
+  }
+
+  return results
+}
+
+// ── Leadership contact extraction ──────────────────────────────
+// Matches a markdown-heading name immediately followed by a title (tolerating an
+// intermediate sub-heading marker, e.g. "### RAM BHOGALE\n\n#### Chairman"), then
+// searches the following prose for a "heads/leads/oversees/chairs/manages" clause
+// as the stated portfolio. Caution: never trust a name inferred from a URL path —
+// ATE Group's own site has a live bug where /group-executive-lead/a-suresh-5
+// renders the H1 "Anand Mehta" (stale/reused URL slug) — only the rendered
+// heading/body text is trustworthy.
+const LEADERSHIP_TITLE_PATTERN =
+  /#{1,3}\s*([A-Z][^\n]{2,50})\n+\s*#{0,4}\s*(Chairman|Vice\s+Chairman|Managing\s+Director|Administrative\s+Director|Director|CEO|COO|CTO|CFO|President|Vice\s+President|VP|Head\s+of\s+[A-Za-z\s]{2,40}|Chief\s+[A-Za-z]+\s+Officer)\b/g
+
+const PORTFOLIO_CLAUSE =
+  /\b(?:heads?|headed|leads?|led|oversees?|oversaw|chairs?|chaired|manages?|managed)\s+(?:the\s+)?([A-Z][^.]{5,150}?)(?:\.|for\s+the\s+entire|$)/i
+
+const PORTFOLIO_SEARCH_WINDOW = 700   // chars — wide enough to clear 1-2 sentences of bio preamble (see Ace Pipeline: Tarun Singh's portfolio clause lands ~470 chars after his title)
+
+function extractLeadershipEvidence(segments: ContentSegment[]): LeadershipContact[] {
+  const results: LeadershipContact[] = []
+  const seenNames = new Set<string>()
+
+  for (const seg of segments) {
+    const regex = new RegExp(LEADERSHIP_TITLE_PATTERN.source, 'g')
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(seg.text)) !== null) {
+      const name = match[1].trim()
+      const title = match[2].trim()
+      if (seenNames.has(name)) continue
+
+      // A bare name+title with no stated portfolio nearby isn't useful for buyer
+      // targeting — skip rather than surface an unverified/low-value contact.
+      const windowStart = match.index + match[0].length
+      const window = seg.text.slice(windowStart, windowStart + PORTFOLIO_SEARCH_WINDOW)
+      const portfolioMatch = PORTFOLIO_CLAUSE.exec(window)
+      if (!portfolioMatch) continue
+
+      seenNames.add(name)
+      results.push({
+        name,
+        title,
+        statedPortfolio: portfolioMatch[1].trim(),
+        sourceUrl: seg.url,
+      })
+    }
+  }
+
+  return results
+}
+
 // ── Main extraction function ───────────────────────────────────
 
 export function extractSignals(
@@ -917,6 +1060,9 @@ export function extractSignals(
       }
     }
   }
+
+  // ── Job-posting workflow evidence (structural, not phrase-pattern based) ──
+  allEvidence.push(...extractJobPostingWorkflowEvidence(segments))
 
   // ── Deduplicate: collapse very similar quotes ─────────────────
   const seen = new Set<string>()
@@ -1076,6 +1222,9 @@ export function extractSignals(
   if (/cookie|gdpr|privacy\s+policy/i.test(websiteContent.slice(0, 2000))) contentFlags.push('cookie_heavy')
   if (segments.length <= 1) contentFlags.push('single_page')
 
+  // ── Leadership contacts ────────────────────────────────────────────────
+  const leadershipContacts = extractLeadershipEvidence(segments)
+
   // ── Signal summary for LLM prompt ────────────────────────────────────────────
   const signalSummary = buildSignalSummary(signals, detectedFactors, companyProfile, opportunityDrafts)
 
@@ -1098,6 +1247,7 @@ export function extractSignals(
     signalSummary,
     companySubjectCount,
     websitePreview,
+    leadershipContacts,
   }
 }
 

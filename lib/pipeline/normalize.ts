@@ -37,7 +37,7 @@ import {
   generateDeterministicOpportunities,
   DeterministicOpportunity,
 } from '@/lib/pipeline/opportunity-engine'
-import type { CompanyProfile } from '@/lib/pipeline/evidence-extractor'
+import type { CompanyProfile, ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 
 // Converts a BusinessModelType string to a minimal CompanyProfile for
 // backward compatibility when companyProfile is not available from extractor.
@@ -249,6 +249,12 @@ export interface NormalizedAnalysis {
 
   // v4: Deterministic opportunities from opportunity engine
   deterministic_opportunities: DeterministicOpportunity[]
+
+  // Evidence-source-strategy addition: 'insufficient' means deterministic_opportunities
+  // was deliberately suppressed (empty) because essentially no usable evidence was
+  // found — distinct from a thorough analysis that genuinely found nothing relevant.
+  // See EVIDENCE_SOURCE_STRATEGY.md, "Insufficient Evidence" outcome.
+  evidence_sufficiency: 'sufficient' | 'insufficient'
 
   competitive_context: string
 
@@ -478,10 +484,31 @@ export function normalizeAnalysisResult(
   const strategic_challenges = modelProfile.strategic_challenges
 
   // ── Deterministic opportunities (code) ──────────────────────
-  const deterministic_opportunities = generateDeterministicOpportunities(
+  let deterministic_opportunities = generateDeterministicOpportunities(
     signal_clusters,
     profileForClustering,
   )
+
+  // ── Insufficient Evidence outcome (EVIDENCE_SOURCE_STRATEGY.md) ─────────
+  // A company with essentially no usable evidence (AS Agri and Aqua: single-page
+  // Google Sites, companySubjectCount=0, no signals, no named contacts, no facility
+  // data) can still reach this point with clusters=[] and thus opportunities=[]
+  // today — but nothing distinguishes that from "thoroughly analyzed, genuinely
+  // nothing relevant found." Forcing a recommendation in the thin case reads as
+  // presumptuous, not sharp (see the benchmark review). This flag makes the
+  // distinction explicit and defensively re-suppresses opportunities even if
+  // something weak slipped through clustering.
+  const extractorData = flat._extractor as Partial<ExtractorResult> | undefined
+  const hasFacilityEvidence =
+    (profileForClustering.operations.manufacturing_plants_count ?? 0) > 0 ||
+    (profileForClustering.operations.countries_present ?? 0) > 0
+  const insufficientEvidence =
+    (extractorData?.companySubjectCount ?? 0) === 0 &&
+    (extractorData?.signals?.length ?? 0) === 0 &&
+    (extractorData?.leadershipContacts?.length ?? 0) === 0 &&
+    !hasFacilityEvidence
+  const evidence_sufficiency: 'sufficient' | 'insufficient' = insufficientEvidence ? 'insufficient' : 'sufficient'
+  if (insufficientEvidence) deterministic_opportunities = []
 
   // ── Confidence & why_now ─────────────────────────────────────
   const confidence_level = str(flat.confidence_level) || 'low'
@@ -755,6 +782,7 @@ export function normalizeAnalysisResult(
     strategic_challenges,
     opportunities,
     deterministic_opportunities,
+    evidence_sufficiency,
     competitive_context,
     why_demaze,
     outreach_angle, outreach_intelligence,
