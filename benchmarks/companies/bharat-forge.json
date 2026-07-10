@@ -1,0 +1,23 @@
+{
+  "name": "AITG",
+  "url": "https://www.aitg.co",
+  "expectations": {
+    "minSignals": 2,
+    "minOpportunities": 3,
+    "minChallenges": 3,
+    "requiredProfileFlags": [
+      "manufacturer"
+    ],
+    "forbiddenTerms": [
+      "SaaS onboarding",
+      "subscription churn",
+      "monthly recurring revenue",
+      "churn rate",
+      "software subscription",
+      "user acquisition",
+      "loan",
+      "banking",
+      "insurance"
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "runAt": "2026-07-10T08:38:08.488Z",
+  "companies": [
+    {
+      "name": "Ador Welding",
+      "url": "https://www.adorwelding.com",
+      "durationMs": 191893,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "All AI providers failed.\n  1. NVIDIA NIM — Llama 3.1 70B Instruct: LLM timeout after 90000ms\n  2. NVIDIA NIM — Mixtral 8x7B Instruct: LLM timeout after 90000ms\n  3. NVIDIA NIM — Llama-3.1 Nemotron 70B: 404 status code (no body)"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 101213,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "All AI providers failed.\n  1. NVIDIA NIM — Llama 3.1 70B Instruct: LLM timeout after 90000ms\n  2. NVIDIA NIM — Mixtral 8x7B Instruct: 400 status code (no body)\n  3. NVIDIA NIM — Llama-3.1 Nemotron 70B: 404 status code (no body)"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null
+    },
+    {
+      "name": "Muthoot Finance",
+      "url": "https://www.muthootfinance.com",
+      "durationMs": 100428,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "All AI providers failed.\n  1. NVIDIA NIM — Llama 3.1 70B Instruct: LLM timeout after 90000ms\n  2. NVIDIA NIM — Mixtral 8x7B Instruct: 400 status code (no body)\n  3. NVIDIA NIM — Llama-3.1 Nemotron 70B: 404 status code (no body)"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null
+    },
+    {
+      "name": "Chargebee",
+      "url": "https://www.chargebee.com",
+      "durationMs": 170650,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "All AI providers failed.\n  1. NVIDIA NIM — Llama 3.1 70B Instruct: LLM timeout after 90000ms\n  2. NVIDIA NIM — Mixtral 8x7B Instruct: 400 status code (no body)\n  3. NVIDIA NIM — Llama-3.1 Nemotron 70B: 404 status code (no body)"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null
+    }
+  ]
+}

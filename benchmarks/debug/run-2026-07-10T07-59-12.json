@@ -1,0 +1,458 @@
+{
+  "runAt": "2026-07-10T07:59:12.092Z",
+  "companies": [
+    {
+      "name": "Ador Welding",
+      "url": "https://www.adorwelding.com",
+      "durationMs": 274577,
+      "overall": "WARN",
+      "validationOverall": "WARN",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "WARN",
+          "actual": 0,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "WARN",
+          "actual": 0,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "manufactur* + company/facilit/plant/unit",
+            "matched": "manufacturing facilit",
+            "snippet": "dor produces world-class products across six manufacturing facilities nationwide. Its Research and Development Centre, re"
+          },
+          {
+            "pattern": "N manufacturing facilit/plant/unit",
+            "matched": "six manufacturing facilit",
+            "snippet": ",” Ador produces world-class products across six manufacturing facilities nationwide. Its Research and Development Centre, re"
+          }
+        ],
+        "industrial_vendor": [
+          {
+            "pattern": "welding equipment/solution/machine/system",
+            "matched": "welding equipment",
+            "snippet": "mpanies in India, manufacturing high-quality welding equipment, consumables, and welding automation solutions. Additi"
+          },
+          {
+            "pattern": "automation/robotic/welding/cutting solution(s)",
+            "matched": "automation solution",
+            "snippet": "welding equipment, consumables, and welding automation solutions. Additionally, Ador has been in the Flares & Process"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 212502,
+      "overall": "WARN",
+      "validationOverall": "PASS",
+      "signals": 3,
+      "opportunities": 7,
+      "challenges": 5,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "PASS",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "WARN",
+          "actual": 3,
+          "expected": ">= 4"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 7,
+          "expected": ">= 4"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 5,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software-as-a-service\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "forging/casting/stamping/... + line/plant/facilit/unit",
+            "matched": "forging unit",
+            "snippet": "Aerospace suppliers. * * * The Industrial forging unit too has grown beyond Oil & Gas to cater to Mining, Agr"
+          }
+        ],
+        "retailer_suppressed": [
+          {
+            "pattern": "fmcg / consumer goods [SUPPRESSED — automotive/industrial context detected]",
+            "matched": "consumer goods",
+            "snippet": "in demand for several manufactured and consumer goods. Confidence appears to be gradually returning in the Indian"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "Muthoot Finance",
+      "url": "https://www.muthootfinance.com",
+      "durationMs": 128507,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 5,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 0,
+          "expected": ">= 0"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 0,
+          "expected": ">= 0"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 5,
+          "expected": ">= 0"
+        },
+        {
+          "check": "profile_flag:financial_institution",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "no_forbidden:\"factory automation\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"predictive maintenance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"welding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"plant floor\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"manufacturing line\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"CNC machine\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"robotic welding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"weld defect\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "financial_institution": [
+          {
+            "pattern": "bank/insurance/NBFC/mutual fund/asset management/investment bank",
+            "matched": "insurance",
+            "snippet": "ss-loan/) [](https://www.muthootfinance.com/insurance) [**INSURANCE**](https://www.muthootfinance.com/insur"
+          },
+          {
+            "pattern": "loan/deposit/credit card/mortgage/NPA",
+            "matched": "Loan",
+            "snippet": "ent) Cancel ### Search Suggestions - Gold Loan - Money Transfer - Mutual Funds - Enquiry - [\\\\ iMut"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "Chargebee",
+      "url": "https://www.chargebee.com",
+      "durationMs": 131637,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 3,
+      "opportunities": 4,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 2"
+        },
+        {
+          "check": "profile_flag:software_saas",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "no_forbidden:\"plant floor\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"manufacturing line\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"welding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"CNC machine\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"factory automation\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"predictive maintenance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"weld defect\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"robotic welding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"forging\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "software_saas": [
+          {
+            "pattern": "subscription billing/management/platform",
+            "matched": "subscription billing",
+            "snippet": "will be reaching out to you to discuss your subscription billing needs ## Hate waiting? Book a call HUMAN AGENTHuma"
+          },
+          {
+            "pattern": "recurring billing/revenue/payments",
+            "matched": "recurring billing",
+            "snippet": "ling models:** Had flexible modules for both recurring billing and usage-based billing - **Automated Invoicing and T"
+          }
+        ],
+        "services_provider": [
+          {
+            "pattern": "consulting / advisory / professional services",
+            "matched": "Consulting",
+            "snippet": "#### Scott Leese Co-Founder of Scott Lease Consulting ###### Episode 10 ### Sales Strategies and Communiti"
+          }
+        ]
+      },
+      "error": null
+    }
+  ]
+}

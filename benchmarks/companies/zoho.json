@@ -1,0 +1,23 @@
+{
+  "name": "ATE Group",
+  "url": "https://www.ategroup.com",
+  "expectations": {
+    "minSignals": 2,
+    "minOpportunities": 3,
+    "minChallenges": 3,
+    "requiredProfileFlags": [
+      "manufacturer"
+    ],
+    "forbiddenTerms": [
+      "SaaS onboarding",
+      "subscription churn",
+      "monthly recurring revenue",
+      "churn rate",
+      "software subscription",
+      "user acquisition",
+      "loan",
+      "banking",
+      "insurance"
+    ]
+  }
+}

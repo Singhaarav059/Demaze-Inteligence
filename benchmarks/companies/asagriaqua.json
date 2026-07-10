@@ -1,0 +1,21 @@
+{
+  "name": "AS Agri and Aqua",
+  "url": "https://sites.google.com/view/asagriaqua/home",
+  "expectations": {
+    "minSignals": 0,
+    "minOpportunities": 2,
+    "minChallenges": 2,
+    "requiredProfileFlags": [],
+    "forbiddenTerms": [
+      "SaaS onboarding",
+      "subscription churn",
+      "monthly recurring revenue",
+      "churn rate",
+      "software subscription",
+      "user acquisition",
+      "loan",
+      "banking",
+      "insurance"
+    ]
+  }
+}

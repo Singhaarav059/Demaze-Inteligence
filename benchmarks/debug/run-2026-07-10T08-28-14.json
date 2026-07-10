@@ -1,0 +1,89 @@
+{
+  "runAt": "2026-07-10T08:28:14.462Z",
+  "companies": [
+    {
+      "name": "Ador Welding",
+      "url": "https://www.adorwelding.com",
+      "durationMs": 300022,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "This operation was aborted"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "This operation was aborted"
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 300075,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "This operation was aborted"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "This operation was aborted"
+    },
+    {
+      "name": "Muthoot Finance",
+      "url": "https://www.muthootfinance.com",
+      "durationMs": 160525,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed"
+    },
+    {
+      "name": "Chargebee",
+      "url": "https://www.chargebee.com",
+      "durationMs": 55,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed"
+    }
+  ]
+}

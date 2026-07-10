@@ -1,0 +1,170 @@
+{
+  "runAt": "2026-07-10T06:34:13.122Z",
+  "companies": [
+    {
+      "name": "Ador Welding",
+      "url": "https://www.ador.com",
+      "durationMs": 95613,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "Unable to identify company from scraped content"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 119920,
+      "overall": "WARN",
+      "validationOverall": "PASS",
+      "signals": 3,
+      "opportunities": 7,
+      "challenges": 5,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "PASS",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "WARN",
+          "actual": 3,
+          "expected": ">= 4"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 7,
+          "expected": ">= 4"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 5,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software-as-a-service\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "forging/casting/stamping/... + line/plant/facilit/unit",
+            "matched": "forging unit",
+            "snippet": "Aerospace suppliers. * * * The Industrial forging unit too has grown beyond Oil & Gas to cater to Mining, Agr"
+          }
+        ],
+        "retailer": [
+          {
+            "pattern": "supermarket / hypermarket / mall",
+            "matched": "mall",
+            "snippet": "clear energy by encouraging the building of Small Modular Reactors. These innovative policy changes can"
+          }
+        ],
+        "retailer_suppressed": [
+          {
+            "pattern": "fmcg / consumer goods [SUPPRESSED — automotive/industrial context detected]",
+            "matched": "consumer goods",
+            "snippet": "in demand for several manufactured and consumer goods. Confidence appears to be gradually returning in the Indian"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "HDFC Bank",
+      "url": "https://www.hdfcbank.com",
+      "durationMs": 120015,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "This operation was aborted"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "This operation was aborted"
+    },
+    {
+      "name": "Zoho",
+      "url": "https://www.zoho.com",
+      "durationMs": 120003,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "This operation was aborted"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "This operation was aborted"
+    }
+  ]
+}

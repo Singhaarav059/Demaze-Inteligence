@@ -1,0 +1,21 @@
+{
+  "name": "Ace Pipeline",
+  "url": "https://acepipeline.co.in",
+  "expectations": {
+    "minSignals": 1,
+    "minOpportunities": 3,
+    "minChallenges": 3,
+    "requiredProfileFlags": [],
+    "forbiddenTerms": [
+      "SaaS onboarding",
+      "subscription churn",
+      "monthly recurring revenue",
+      "churn rate",
+      "software subscription",
+      "user acquisition",
+      "loan",
+      "banking",
+      "insurance"
+    ]
+  }
+}

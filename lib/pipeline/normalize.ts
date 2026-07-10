@@ -1,0 +1,840 @@
+// ============================================================
+// Analysis Result Normalizer — v4
+// ============================================================
+// Pipeline:
+//   raw LLM JSON
+//   → flattenSections
+//   → evidence extraction
+//   → business model classification (code)
+//   → signal filtering (remove false positives for business model)
+//   → deriveDetectedFactors (4-pass signal supplementation)
+//   → signal clustering (code)
+//   → deterministic opportunity generation (code)
+//   → score computation (deterministic)
+//   → NormalizedAnalysis
+// ============================================================
+
+import {
+  computeScores,
+  computeClusterOpportunityFloor,
+  scoreLabel,
+  DetectedFactors,
+  ScoreWithBreakdown,
+  ScoreBreakdownItem,
+} from '@/lib/pipeline/scorer'
+import {
+  classifyBusinessModel,
+  getBusinessModelProfile,
+  filterSignalsForBusinessModel,
+  BusinessModelType,
+  StrategicChallenge,
+} from '@/lib/pipeline/business-model-classifier'
+import {
+  clusterSignals,
+  SignalCluster,
+} from '@/lib/pipeline/signal-clustering'
+import {
+  generateDeterministicOpportunities,
+  DeterministicOpportunity,
+} from '@/lib/pipeline/opportunity-engine'
+import type { CompanyProfile } from '@/lib/pipeline/evidence-extractor'
+
+// Converts a BusinessModelType string to a minimal CompanyProfile for
+// backward compatibility when companyProfile is not available from extractor.
+function businessModelToProfile(bmt: BusinessModelType): CompanyProfile {
+  return {
+    company_type: {
+      manufacturer:           bmt === 'Manufacturing' || bmt === 'Automotive OEM' || bmt === 'Automotive Supplier',
+      industrial_vendor:      bmt === 'Industrial Technology Vendor',
+      software_saas:          bmt === 'Software/SaaS',
+      services_provider:      bmt === 'Engineering Services',
+      retailer:               false,
+      logistics_operator:     bmt === 'Distribution/Logistics',
+      financial_institution:  false,
+      healthcare_provider:    false,
+      pharma_biotech:         false,
+      conglomerate:           bmt === 'Conglomerate',
+    },
+    operations: {
+      multi_location:                false,
+      global_presence:               false,
+      has_rd_center:                 false,
+      manufacturing_plants_count:    null,
+      countries_present:             null,
+    },
+    capabilities: { has_robotics_or_automation: false, has_software_platform: false },
+    selling_model: {
+      sells_to_industry:       true,
+      sells_to_consumers:      false,
+      sells_physical_product:  bmt === 'Manufacturing' || bmt === 'Automotive OEM' || bmt === 'Automotive Supplier',
+      sells_software:          bmt === 'Software/SaaS',
+      sells_services:          bmt === 'Engineering Services',
+    },
+    primary_type: bmt,
+  }
+}
+
+// ── Evidence types ─────────────────────────────────────────────
+
+export interface EvidenceItem {
+  id: string
+  subject?: string   // company_operations | company_strategy | internal_technology | customer_use_case | product_capability | industry_trend | partner_story | generic_marketing
+  tier?: string      // tier1 | tier2 | tier3
+  category: string
+  quote: string
+  source_page: string
+}
+
+const COMPANY_SUBJECT_TYPES = new Set([
+  'company_operations',
+  'company_strategy',
+  'internal_technology',
+])
+
+function isCompanySubjectEvidence(ev: EvidenceItem): boolean {
+  if (!ev.subject) return true  // backward compat: no subject = allow through
+  return COMPANY_SUBJECT_TYPES.has(ev.subject)
+}
+
+// ── v2/v3/v4 types ────────────────────────────────────────────
+
+export interface StructuredPainPoint {
+  title: string
+  confidence: 'high' | 'medium' | 'low'
+  evidence_id: string
+  evidence: string
+  reasoning: string
+}
+
+export interface ReasoningChain {
+  signal: string
+  business_implication: string
+  strategic_challenge?: string
+  pain_point?: string           // backward compat
+  opportunity: string
+}
+
+// v4 Why Demaze: reasons can be objects (new) or strings (backward compat)
+export interface WhyDemazeReason {
+  signal: string
+  evidence: string
+  evidence_tier?: string
+  business_implication: string
+  strategic_challenge?: string
+  recommended_service: string
+  target_buyer: string
+  confidence: 'high' | 'medium' | 'low'
+}
+
+export interface WhyDemaze {
+  reasons: (WhyDemazeReason | string)[]   // objects (v4) or strings (v3 backward compat)
+  relevant_services: string[]
+  summary?: string
+}
+
+export interface OutreachIntelligence {
+  trigger: string
+  problem: string
+  service: string
+  opening_angle: string
+  why_now: string
+  target_contact?: string
+}
+
+export interface ExecutiveBrief {
+  what_we_observed: string[]
+  what_it_means: string[]
+  what_to_sell: string
+  who_to_contact: string
+  why_now: string
+  overall_confidence: 'high' | 'medium' | 'low'
+}
+
+export interface PrioritizedContact {
+  role: string
+  priority: number
+  reason: string
+}
+
+// Re-export for consumers
+export type { ScoreWithBreakdown, ScoreBreakdownItem, DetectedFactors, SignalCluster, DeterministicOpportunity, BusinessModelType, StrategicChallenge }
+
+// ── Stable internal schema ─────────────────────────────────────
+
+export interface NormalizedAnalysis {
+  // Company profile
+  company_name: string
+  company_summary: string
+  industry: string
+  sub_industry: string
+  company_type: string
+  company_size_estimate: string
+  headquarters_location: string
+
+  // Evidence layer
+  evidence: EvidenceItem[]
+
+  // Scores — deterministic
+  company_fit: ScoreWithBreakdown
+  automation_opportunity: ScoreWithBreakdown
+  outreach_priority_score: number
+  outreach_priority_label: string
+  outreach_priority_methodology: string
+
+  why_now: {
+    explanation: string
+    score: number
+    urgency_label: string
+  }
+
+  score_explanations: {
+    company_fit: string
+    automation_opportunity: string
+    outreach_priority: string
+  }
+
+  detected_factors: Partial<DetectedFactors>
+
+  score_breakdown: {
+    company_fit: ScoreBreakdownItem[]
+    automation_opportunity: ScoreBreakdownItem[]
+  }
+
+  // Signal layer
+  signals: Array<{
+    type: string
+    category: string
+    strength: string
+    evidence: string
+    evidence_id?: string
+  }>
+  signal_summary: string
+
+  // v4: Signal clusters (code-computed)
+  signal_clusters: SignalCluster[]
+
+  // Intelligence
+  pain_points: string[]
+  pain_points_structured: StructuredPainPoint[]
+  reasoning_chains: ReasoningChain[]
+
+  // v4: Strategic challenges from business model profile
+  strategic_challenges: StrategicChallenge[]
+
+  // Opportunities: LLM-explained + deterministic supplement
+  opportunities: Array<{
+    title: string
+    description: string
+    confidence?: string
+    evidence_id?: string
+    evidence?: string
+    reasoning?: string
+    expected_impact?: string
+    entry_point?: string
+    category?: string
+    pain_point_mapped?: string
+    relevance: string
+    evidence_anchor?: string
+    estimated_impact?: string
+    // v4: source of this opportunity
+    source?: 'llm' | 'deterministic'
+    deterministic_id?: string
+    // v5: trust signal fields
+    claim_type?: string
+    observed_basis?: string
+    inferred_from?: string
+    opportunity_confidence?: string
+    demaze_fit_score?: string
+  }>
+
+  // v4: Deterministic opportunities from opportunity engine
+  deterministic_opportunities: DeterministicOpportunity[]
+
+  competitive_context: string
+
+  // Why Demaze (v4: structured reasons)
+  why_demaze: WhyDemaze
+
+  // Executive brief (top-level sales summary)
+  executive_brief: ExecutiveBrief | null
+
+  // Outreach
+  outreach_angle: string
+  outreach_intelligence: OutreachIntelligence
+
+  // Contact prioritization
+  recommended_contact_roles: string[]
+  recommended_contacts: PrioritizedContact[]
+
+  // Validation
+  validation_warnings: string[]
+  content_quality_flags: string[]
+
+  // Business model (v3+)
+  business_model_analysis: {
+    model_type: string
+    value_chain_position: string
+    primary_customers: string
+    core_operational_activities: string[]
+    strategic_pressures: string[]
+  } | null
+
+  // v4: Canonical business model type (code-classified)
+  business_model_type: BusinessModelType
+
+  // SDR research fields (v5+)
+  recent_activity: string[]   // growth/digital signals as plain strings for Research Card
+
+  // Metadata
+  confidence_level: string
+  data_quality_score: number
+  data_quality_notes: string
+  pages_scraped: string[]
+  analyzed_at: string
+
+  _raw: Record<string, unknown>
+}
+
+// ── Signal derivation ─────────────────────────────────────────
+
+function deriveDetectedFactors(
+  llmFactors: Partial<DetectedFactors>,
+  flat: Record<string, unknown>,
+  evidence: EvidenceItem[],
+): Partial<DetectedFactors> {
+  const f: Partial<DetectedFactors> = { ...llmFactors }
+
+  const growthSignals  = Array.isArray(flat.growth_signals)                 ? flat.growth_signals  as Array<Record<string, unknown>> : []
+  const hiringSignals  = Array.isArray(flat.hiring_signals)                 ? flat.hiring_signals  as Array<Record<string, unknown>> : []
+  const digitalSignals = Array.isArray(flat.digital_transformation_signals) ? flat.digital_transformation_signals as Array<Record<string, unknown>> : []
+  const bizSignals     = Array.isArray(flat.business_signals)               ? flat.business_signals as Array<Record<string, unknown>> : []
+
+  if (growthSignals.length > 0) {
+    f.growth_signal = true
+    if (growthSignals.some(s => /capacity/.test(String(s.type ?? '')))) f.capacity_expansion = true
+  }
+  if (hiringSignals.length > 0) f.hiring_signal = true
+  if (digitalSignals.length > 0) {
+    f.digital_transformation = true
+    for (const sig of digitalSignals) {
+      const t = String(sig.type ?? '').toLowerCase()
+      if (/industry.?40|industry_40|smart_factory|iot_investment|mes/.test(t)) f.industry_40_initiative = true
+      if (/automation_investment|automation/.test(t)) { f.automation_keywords = true; f.technology_investment = true }
+      if (/erp|mes|iot|technology/.test(t)) f.technology_investment = true
+    }
+  }
+  if (bizSignals.length > 0 && bizSignals.some(s => /acquisition|funding|partnership|sustainability/.test(String(s.type ?? '')))) {
+    f.recent_news_or_event = true
+  }
+
+  // Pass 2: company-subject evidence only
+  const companyEvidence = evidence.filter(isCompanySubjectEvidence)
+  for (const ev of companyEvidence) {
+    const cat = String(ev.category ?? '').toLowerCase()
+    switch (cat) {
+      case 'growth': case 'expansion': f.growth_signal = true; break
+      case 'capacity_expansion': f.growth_signal = true; f.capacity_expansion = true; break
+      case 'hiring': f.hiring_signal = true; break
+      case 'digital_transformation': case 'digital': f.digital_transformation = true; break
+      case 'automation': f.automation_keywords = true; break
+      case 'ai': case 'ai_mention': f.ai_mention = true; break
+      case 'multi_location': f.multi_location_operations = true; break
+      case 'technology': case 'technology_investment': f.technology_investment = true; break
+      case 'news': case 'recent_news': f.recent_news_or_event = true; break
+    }
+    const q = String(ev.quote ?? '').toLowerCase()
+    if (/industry[\s-]*4\.0|smart[\s-]*factory|iiot|digital[\s-]*twin/.test(q)) { f.digital_transformation = true; f.industry_40_initiative = true }
+    if (/artificial\s+intelligence|ai[\s-]powered|machine\s+learning/.test(q)) f.ai_mention = true
+    if (/automat(?:ion|ed|ing)|robot(?:ics)?|autonomous/.test(q)) f.automation_keywords = true
+    if (/digit(?:al\s+transform|ali[sz])/.test(q)) f.digital_transformation = true
+    if (/(?:multiple|new|additional|expand\w*)\s+(?:plant|facilit|locat|campus|site)/.test(q)) f.multi_location_operations = true
+    if (/technolog\w+\s+(?:invest|capex|deploy|rollout)|erp\s|scada|plc[\s,]/.test(q)) f.technology_investment = true
+  }
+
+  // Pass 3: signal text scan
+  const allSigText = [...growthSignals, ...hiringSignals, ...digitalSignals, ...bizSignals]
+    .map(s => `${String(s.evidence ?? '')} ${String(s.type ?? '')}`).join(' ').toLowerCase()
+  if (/industry[\s-]*4\.0|smart[\s-]*factory|iiot|digital[\s-]*twin/.test(allSigText)) { f.digital_transformation = true; f.industry_40_initiative = true }
+  if (/artificial\s+intelligence|ai[\s-]powered|machine\s+learning/.test(allSigText)) f.ai_mention = true
+  if (/automat(?:ion|ed|ing)|robot(?:ics)?/.test(allSigText)) f.automation_keywords = true
+  if (/digit(?:al\s+transform|ali[sz])/.test(allSigText)) f.digital_transformation = true
+  if (/erp|scada|mes|technolog\w+\s+(?:invest|capex|deploy)/.test(allSigText)) f.technology_investment = true
+  if (/(?:multiple|several|additional|new)\s+(?:plant|facilit|locat|campus|site)/.test(allSigText)) f.multi_location_operations = true
+
+  // Pass 4 removed: scanning LLM-generated company_summary contaminates deterministic
+  // factors with narrative intent rather than evidence. Passes 1-3 cover all legitimate pathways.
+
+  return f
+}
+
+// ── Primitive coercion helpers (module-level) ────────────────
+
+const str = (v: unknown, fallback = ''): string =>
+  v == null ? fallback : typeof v === 'string' ? v.trim() || fallback : String(v).trim() || fallback
+const num = (v: unknown, fallback = 0): number =>
+  v == null ? fallback : typeof v === 'number' ? v : parseFloat(String(v)) || fallback
+const arr = <T>(v: unknown): T[] =>
+  Array.isArray(v) ? (v as T[]) : []
+
+// ── Section flattening ─────────────────────────────────────────
+
+// SECTION_KEYS maps section wrapper names ONLY — NOT output field names.
+// Output field names (pain_points, recommended_contacts, etc.) must NOT appear here.
+// Adding them causes flattenSections() to silently drop arrays with those names
+// when the LLM response also contains any section-wrapped object (e.g. company_profile).
+const SECTION_KEYS: Record<string, string[]> = {
+  profile:    ['COMPANY PROFILE', 'Company Profile', 'company_profile', 'PROFILE'],
+  evidence:   ['EVIDENCE', 'Evidence', 'evidence_extraction', 'EVIDENCE EXTRACTION'],
+  signals:    ['SIGNALS', 'Signals', 'SIGNAL DETECTION'],
+  factors:    ['DETECTED FACTORS', 'Detected Factors', 'FACTORS'],
+  pain:       ['PAIN POINTS', 'Pain Points'],
+  chains:     ['REASONING CHAINS', 'Reasoning Chains'],
+  intel:      ['INTELLIGENCE', 'Intelligence', 'AI OPPORTUNITIES'],
+  why_demaze: ['WHY DEMAZE', 'Why Demaze', 'WHY CONTACT'],
+  outreach:   ['OUTREACH INTELLIGENCE', 'Outreach Intelligence', 'OUTREACH'],
+  contacts:   ['CONTACTS', 'Contact Prioritization', 'CONTACT PRIORITIZATION'],
+  scoring:    ['SCORING', 'Scoring', 'SCORE EXPLANATIONS'],
+  metadata:   ['METADATA', 'Metadata', 'URGENCY'],
+}
+
+function flattenSections(raw: Record<string, unknown>): Record<string, unknown> {
+  const allSectionKeys = Object.values(SECTION_KEYS).flat()
+  const foundSections = allSectionKeys.filter(
+    k => k in raw && typeof raw[k] === 'object' && raw[k] !== null && !Array.isArray(raw[k])
+  )
+  if (foundSections.length === 0) return raw
+  const flat: Record<string, unknown> = {}
+  for (const key of foundSections) Object.assign(flat, raw[key] as object)
+  for (const [key, value] of Object.entries(raw)) {
+    if (!allSectionKeys.includes(key)) flat[key] = value
+  }
+  return flat
+}
+
+// ── Main export ────────────────────────────────────────────────
+
+export function normalizeAnalysisResult(
+  raw: Record<string, unknown>
+): NormalizedAnalysis {
+  const flat = flattenSections(raw)
+
+  // ── Company profile ──────────────────────────────────────────
+  const company_name          = str(flat.company_name)
+  const company_summary       = str(flat.company_summary)
+  const industry              = str(flat.industry)
+  const sub_industry          = str(flat.sub_industry)
+  const company_type          = str(flat.business_model ?? flat.company_type)
+  const company_size_estimate = str(flat.company_size_estimate)
+  const headquarters_location = str(flat.headquarters_location)
+
+  // ── Evidence ─────────────────────────────────────────────────
+  const evidence = arr<EvidenceItem>(flat.evidence)
+
+  // ── Business model classification (code) ────────────────────
+  const rawBma = flat.business_model_analysis
+  let business_model_analysis: NormalizedAnalysis['business_model_analysis'] = null
+  if (rawBma && typeof rawBma === 'object') {
+    const bma = rawBma as Record<string, unknown>
+    business_model_analysis = {
+      model_type:                  str(bma.model_type),
+      value_chain_position:        str(bma.value_chain_position),
+      primary_customers:           str(bma.primary_customers),
+      core_operational_activities: arr<string>(bma.core_operational_activities),
+      strategic_pressures:         arr<string>(bma.strategic_pressures),
+    }
+  }
+  // Canonical business model type from code classifier
+  const rawModelType = business_model_analysis?.model_type ?? str(flat.industry)
+  const business_model_type = classifyBusinessModel(rawModelType)
+  const modelProfile = getBusinessModelProfile(business_model_type)
+
+  // ── Detected factors ─────────────────────────────────────────
+  const llmFactors: Partial<DetectedFactors> = (
+    flat.detected_factors && typeof flat.detected_factors === 'object'
+      ? flat.detected_factors as Partial<DetectedFactors>
+      : {}
+  )
+
+  // 4-pass derivation first
+  const derivedFactors = deriveDetectedFactors(llmFactors, flat, evidence)
+
+  // Then filter out false positives for this business model
+  // (e.g., SaaS companies should not have industry_40_initiative = true)
+  const detected_factors = filterSignalsForBusinessModel(
+    derivedFactors as Partial<Record<string, boolean>>,
+    business_model_type,
+  ) as Partial<DetectedFactors>
+
+  // ── Signal clustering (code) ─────────────────────────────────
+  // Prefer companyProfile from extractor (multi-dimensional) over single-label BusinessModelType.
+  const extractorProfile = (flat._extractor as { companyProfile?: CompanyProfile } | undefined)?.companyProfile
+  const profileForClustering: CompanyProfile = extractorProfile ?? businessModelToProfile(business_model_type)
+  const signal_clusters = clusterSignals(
+    detected_factors as Partial<Record<string, boolean>>,
+    profileForClustering,
+  )
+
+  // ── Strategic challenges from business model profile ─────────
+  const strategic_challenges = modelProfile.strategic_challenges
+
+  // ── Deterministic opportunities (code) ──────────────────────
+  const deterministic_opportunities = generateDeterministicOpportunities(
+    signal_clusters,
+    profileForClustering,
+  )
+
+  // ── Confidence & why_now ─────────────────────────────────────
+  const confidence_level = str(flat.confidence_level) || 'low'
+  const rawWhyNow = flat.why_now
+  let why_now_explanation: string
+  let why_now_score_raw: number
+  if (typeof rawWhyNow === 'object' && rawWhyNow !== null) {
+    const w = rawWhyNow as Record<string, unknown>
+    why_now_explanation = str(w.explanation ?? w.why_now ?? w.text)
+    why_now_score_raw   = num(w.score ?? flat.why_now_score)
+  } else {
+    why_now_explanation = str(rawWhyNow)
+    why_now_score_raw   = num(flat.why_now_score)
+  }
+
+  // ── Score explanations ───────────────────────────────────────
+  const rawScoreExpl = flat.score_explanations
+  let scoreExpl = { company_fit: '', automation_opportunity: '', outreach_priority: '' }
+  if (rawScoreExpl && typeof rawScoreExpl === 'object') {
+    const se = rawScoreExpl as Record<string, unknown>
+    scoreExpl = {
+      company_fit:            str(se.company_fit),
+      automation_opportunity: str(se.automation_opportunity),
+      outreach_priority:      str(se.outreach_priority),
+    }
+  }
+
+  // ── Deterministic scoring ────────────────────────────────────
+  // Apply ICP score modifier from business model profile
+  const adjustedFactors = { ...detected_factors }
+  // Boost multi_location if 2+ plant-related clusters active
+  if (signal_clusters.filter(c => c.id === 'multi_site_coordination').length > 0) {
+    adjustedFactors.multi_location_operations = true
+  }
+
+  const computed = computeScores(
+    adjustedFactors,
+    why_now_score_raw,
+    confidence_level,
+    why_now_explanation,
+    scoreExpl.company_fit,
+    scoreExpl.automation_opportunity,
+    scoreExpl.outreach_priority,
+  )
+
+  const company_fit = computed.company_fit
+
+  // Apply cluster-based opportunity floor.
+  // AUTOMATION_OPP_FACTORS are manufacturing-keyword-based and score near 0 for
+  // conglomerates/SaaS even when multiple high-tier clusters are present.
+  // The floor ensures score ↔ opportunity consistency.
+  const SCORE_CAPS: Record<string, number> = { high: 100, medium: 82, low: 50 }
+  const clusterFloor = computeClusterOpportunityFloor(signal_clusters)
+  const rawOppValue = computed.automation_opportunity.value
+  const boostedOppValue = Math.min(
+    Math.max(rawOppValue, clusterFloor),
+    SCORE_CAPS[confidence_level] ?? 100,
+  )
+  const automation_opportunity: ScoreWithBreakdown = boostedOppValue > rawOppValue
+    ? {
+        ...computed.automation_opportunity,
+        value: boostedOppValue,
+        label: scoreLabel(boostedOppValue),
+        rationale: computed.automation_opportunity.rationale
+          ? `${computed.automation_opportunity.rationale} [Score boosted to ${boostedOppValue} by ${signal_clusters.length} active signal cluster(s)]`
+          : `Score derived from ${signal_clusters.length} active signal cluster(s) (cluster floor: ${clusterFloor})`,
+      }
+    : computed.automation_opportunity
+
+  // Recompute outreach priority with boosted opp score
+  const whyNowCapped = computed.why_now.score
+  const priorityRaw = (company_fit.value * 0.35) + (boostedOppValue * 0.30) + (whyNowCapped * 10 * 0.35)
+  const outreach_priority_score = Math.min(Math.round(priorityRaw), SCORE_CAPS[confidence_level] ?? 100)
+  const outreach_priority_label = scoreLabel(outreach_priority_score)
+  const outreach_priority_methodology = computed.outreach_priority.rationale ?? ''
+  const why_now = {
+    explanation:   computed.why_now.explanation,
+    score:         computed.why_now.score,
+    urgency_label: computed.why_now.urgency_label,
+  }
+  const score_breakdown = {
+    company_fit:            company_fit.breakdown,
+    automation_opportunity: automation_opportunity.breakdown,
+  }
+
+  // ── Signals ──────────────────────────────────────────────────
+  const signals        = mergeSignals(flat)
+  const signal_summary = str(flat.signal_summary)
+
+  // ── Pain points ──────────────────────────────────────────────
+  const rawPainPoints = flat.pain_points
+  let pain_points_structured: StructuredPainPoint[] = []
+  let pain_points: string[] = []
+  if (Array.isArray(rawPainPoints)) {
+    if (rawPainPoints.length > 0 && typeof rawPainPoints[0] === 'object') {
+      pain_points_structured = rawPainPoints as StructuredPainPoint[]
+      pain_points = pain_points_structured.map(p => p.title ?? str(p))
+    } else {
+      pain_points = rawPainPoints.map(p => str(p))
+    }
+  }
+
+  // ── Reasoning chains ─────────────────────────────────────────
+  const reasoning_chains = arr<ReasoningChain>(flat.reasoning_chains)
+
+  // ── Opportunities: deterministic skeleton + LLM enrichment ──
+  // OPPORTUNITY_CATALOG (opportunity-engine.ts) is the canonical source.
+  // The deterministic list defines WHAT opportunities exist (title, entry_point, relevance, category).
+  // The LLM enriches description, evidence, and expected_impact where titles match.
+  // LLM-only titles that do not match any catalog entry are discarded.
+  const rawOpps = flat.ai_opportunities ?? flat.opportunities
+  const llmOpportunities = normalizeOpportunities(rawOpps)
+
+  const opportunities: NormalizedAnalysis['opportunities'] = deterministic_opportunities.map(d => {
+    const llmMatch = llmOpportunities.find(l => titleMatch(d.title, l.title))
+    return {
+      title:             d.title,                                         // canonical from OPPORTUNITY_CATALOG
+      description:       llmMatch?.description || d.strategic_challenge,  // LLM narrative; catalog challenge as fallback
+      confidence:        llmMatch?.confidence,
+      evidence_id:       llmMatch?.evidence_id,
+      evidence:          llmMatch?.evidence,
+      reasoning:         d.llm_explanation_prompt,                        // always catalog prompt — not LLM-invented
+      expected_impact:   llmMatch?.expected_impact ?? '',
+      entry_point:       d.entry_point,                                   // always catalog entry point
+      category:          d.category,
+      pain_point_mapped: llmMatch?.pain_point_mapped,
+      relevance:         d.relevance,                                     // always catalog relevance (High/Medium/Low)
+      evidence_anchor:   undefined,
+      estimated_impact:  '',
+      source:            'deterministic' as const,
+      deterministic_id:  d.id,
+      claim_type:        llmMatch?.claim_type,
+      observed_basis:    llmMatch?.observed_basis,
+      inferred_from:     llmMatch?.inferred_from,
+      opportunity_confidence: llmMatch?.opportunity_confidence ?? llmMatch?.confidence,
+      demaze_fit_score:  llmMatch?.demaze_fit_score,
+    }
+  })
+  console.log(`[normalize:opps] deterministic=${deterministic_opportunities.length} | llm_parsed=${llmOpportunities.length} | llm_enriched=${opportunities.filter(o => o.evidence).length}`)
+
+  const competitive_context = str(flat.competitive_context)
+
+  // ── Why Demaze V4 ────────────────────────────────────────────
+  const rawWhyDemaze = flat.why_demaze
+  let why_demaze: WhyDemaze = { reasons: [], relevant_services: [] }
+  if (rawWhyDemaze && typeof rawWhyDemaze === 'object') {
+    const wd = rawWhyDemaze as Record<string, unknown>
+    const rawReasons = arr<unknown>(wd.reasons)
+    // Handle both v3 (string array) and v4 (object array)
+    const reasons = rawReasons.map(r => {
+      if (typeof r === 'string') return r
+      if (r && typeof r === 'object') {
+        const ro = r as Record<string, unknown>
+        return {
+          signal:               str(ro.signal),
+          evidence:             str(ro.evidence),
+          evidence_tier:        ro.evidence_tier ? str(ro.evidence_tier) : undefined,
+          business_implication: str(ro.business_implication),
+          strategic_challenge:  ro.strategic_challenge ? str(ro.strategic_challenge) : undefined,
+          recommended_service:  str(ro.recommended_service),
+          target_buyer:         str(ro.target_buyer),
+          confidence:           (str(ro.confidence) || 'medium') as 'high' | 'medium' | 'low',
+        } satisfies WhyDemazeReason
+      }
+      return String(r)
+    })
+    why_demaze = {
+      reasons:          reasons,
+      relevant_services: arr<string>(wd.relevant_services),
+      summary:          wd.summary ? str(wd.summary) : undefined,
+    }
+  }
+
+  // ── Outreach intelligence ────────────────────────────────────
+  const rawOI = flat.outreach_intelligence
+  let outreach_intelligence: OutreachIntelligence = {
+    trigger: '', problem: '', service: '', opening_angle: '', why_now: '',
+  }
+  if (rawOI && typeof rawOI === 'object') {
+    const oi = rawOI as Record<string, unknown>
+    outreach_intelligence = {
+      trigger:        str(oi.trigger),
+      problem:        str(oi.problem),
+      service:        str(oi.service),
+      opening_angle:  str(oi.opening_angle),
+      why_now:        str(oi.why_now),
+      target_contact: oi.target_contact ? str(oi.target_contact) : undefined,
+    }
+  }
+  const outreach_angle = str(flat.outreach_angle ?? outreach_intelligence.opening_angle)
+
+  // ── Contacts ─────────────────────────────────────────────────
+  const rawContacts = flat.recommended_contacts
+  let recommended_contacts: PrioritizedContact[] = []
+  let recommended_contact_roles: string[] = []
+  if (Array.isArray(rawContacts) && rawContacts.length > 0) {
+    if (typeof rawContacts[0] === 'object') {
+      recommended_contacts = (rawContacts as Array<Record<string, unknown>>).map(c => ({
+        role: str(c.role), priority: num(c.priority), reason: str(c.reason),
+      }))
+      recommended_contact_roles = recommended_contacts.map(c => c.role)
+    } else {
+      recommended_contact_roles = rawContacts.map(c => str(c))
+    }
+  } else {
+    const oldRoles = flat.recommended_contact_roles
+    if (Array.isArray(oldRoles)) recommended_contact_roles = oldRoles.map(r => str(r))
+  }
+  // Fill contact roles from model profile if LLM provided none
+  if (recommended_contact_roles.length === 0 && modelProfile.default_target_buyers.length > 0) {
+    recommended_contact_roles = modelProfile.default_target_buyers
+  }
+
+  // ── Flags & warnings ─────────────────────────────────────────
+  const content_quality_flags: string[] = arr<string>(flat.content_quality_flags)
+  const validation_warnings: string[]   = arr<string>(flat.validation_warnings)
+
+  const llmFlagsActive     = Object.values(llmFactors).filter(Boolean).length
+  const derivedFlagsActive = Object.values(detected_factors).filter(Boolean).length
+  if (llmFlagsActive === 0 && derivedFlagsActive > 0) {
+    validation_warnings.push(`Auto-derived ${derivedFlagsActive} detected_factor(s) — LLM provided all-false flags`)
+  }
+  // Warn if business model type caused signals to be filtered
+  const filteredCount = Object.keys(derivedFactors).filter(
+    k => Boolean((derivedFactors as Record<string, boolean>)[k]) && !Boolean((detected_factors as Record<string, boolean>)[k])
+  ).length
+  if (filteredCount > 0) {
+    validation_warnings.push(`${filteredCount} signal(s) suppressed — not valid for ${business_model_type} business model (likely false positives from product/customer content)`)
+  }
+
+  // ── Metadata ─────────────────────────────────────────────────
+  const data_quality_score = num(flat.data_quality_score)
+  const data_quality_notes = str(flat.data_quality_notes)
+  const pages_scraped      = arr<string>(flat.pages_scraped)
+  const analyzed_at        = str(flat.analyzed_at)
+
+  // ── SDR research fields (v5+) ─────────────────────────────────
+  const recent_activity: string[] = Array.isArray(flat.recent_activity)
+    ? (flat.recent_activity as unknown[]).map(a => str(a)).filter(Boolean)
+    : []
+
+  // ── Executive brief ─────────────────────────────────────────
+  const rawBrief = flat.executive_brief
+  let executive_brief: ExecutiveBrief | null = null
+  if (rawBrief && typeof rawBrief === 'object') {
+    const b = rawBrief as Record<string, unknown>
+    executive_brief = {
+      what_we_observed: arr<string>(b.what_we_observed),
+      what_it_means:    arr<string>(b.what_it_means),
+      what_to_sell:     str(b.what_to_sell),
+      who_to_contact:   str(b.who_to_contact),
+      why_now:          str(b.why_now),
+      overall_confidence: (str(b.overall_confidence) || 'medium') as 'high' | 'medium' | 'low',
+    }
+  }
+
+  return {
+    company_name, company_summary, industry, sub_industry, company_type,
+    company_size_estimate, headquarters_location,
+    evidence,
+    company_fit, automation_opportunity,
+    outreach_priority_score, outreach_priority_label, outreach_priority_methodology,
+    why_now,
+    score_explanations: scoreExpl,
+    detected_factors,
+    score_breakdown,
+    signals, signal_summary,
+    signal_clusters,
+    pain_points, pain_points_structured,
+    reasoning_chains,
+    strategic_challenges,
+    opportunities,
+    deterministic_opportunities,
+    competitive_context,
+    why_demaze,
+    outreach_angle, outreach_intelligence,
+    recommended_contact_roles, recommended_contacts,
+    validation_warnings, content_quality_flags,
+    business_model_analysis,
+    executive_brief,
+    business_model_type,
+    recent_activity,
+    confidence_level, data_quality_score, data_quality_notes,
+    pages_scraped, analyzed_at,
+    _raw: raw,
+  }
+}
+
+// ── Signal merger ──────────────────────────────────────────────
+
+function mergeSignals(flat: Record<string, unknown>): NormalizedAnalysis['signals'] {
+  const arrays: Array<[unknown, string]> = [
+    [flat.growth_signals, 'growth'],
+    [flat.hiring_signals, 'hiring'],
+    [flat.digital_transformation_signals, 'digital_transformation'],
+    [flat.business_signals, 'business'],
+  ]
+  const merged: NormalizedAnalysis['signals'] = []
+  for (const [rawArr, defaultCat] of arrays) {
+    if (Array.isArray(rawArr)) {
+      for (const sig of rawArr) {
+        if (sig && typeof sig === 'object') {
+          const s = sig as Record<string, unknown>
+          merged.push({
+            type:        str(s.type),
+            category:    str(s.category || defaultCat),
+            strength:    str(s.strength),
+            evidence:    str(s.evidence),
+            evidence_id: s.evidence_id ? str(s.evidence_id) : undefined,
+          })
+        }
+      }
+    }
+  }
+  return merged
+}
+
+// ── LLM title → deterministic title matcher ────────────────────
+// Matches by shared meaningful keywords (>4 chars).
+// "Manufacturing Analytics Platform" matches "Real-time Manufacturing Analytics" via "manufacturing".
+function titleMatch(detTitle: string, llmTitle: string): boolean {
+  const words = (t: string) =>
+    t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 4)
+  const detWords = new Set(words(detTitle))
+  return words(llmTitle).some(w => detWords.has(w))
+}
+
+// ── Opportunity normalizer ─────────────────────────────────────
+
+function normalizeOpportunities(raw: unknown): NormalizedAnalysis['opportunities'] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((o: unknown) => {
+    if (!o || typeof o !== 'object') return null
+    const item = o as Record<string, unknown>
+    return {
+      title:            str(item.title),
+      description:      str(item.description),
+      confidence:       item.confidence ? str(item.confidence) : undefined,
+      evidence_id:      item.evidence_id ? str(item.evidence_id) : undefined,
+      evidence:         item.evidence ? str(item.evidence) : undefined,
+      reasoning:        item.reasoning ? str(item.reasoning) : undefined,
+      expected_impact:  item.expected_impact ? str(item.expected_impact) : undefined,
+      entry_point:      item.entry_point ? str(item.entry_point) : undefined,
+      category:         item.category ? str(item.category) : undefined,
+      pain_point_mapped: item.pain_point_mapped ? str(item.pain_point_mapped) : undefined,
+      relevance:        str(item.relevance ?? item.confidence ?? 'Medium'),
+      evidence_anchor:  item.evidence_anchor ? str(item.evidence_anchor) : undefined,
+      claim_type:           item.claim_type ? str(item.claim_type) : undefined,
+      observed_basis:       item.observed_basis ? str(item.observed_basis) : undefined,
+      inferred_from:        item.inferred_from ? str(item.inferred_from) : undefined,
+      opportunity_confidence: item.opportunity_confidence ? str(item.opportunity_confidence) : undefined,
+      demaze_fit_score:     item.demaze_fit_score ? str(item.demaze_fit_score) : undefined,
+      estimated_impact: item.estimated_impact ? str(item.estimated_impact) : undefined,
+    }
+  }).filter((o): o is NonNullable<typeof o> => o !== null)
+}
