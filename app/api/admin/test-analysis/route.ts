@@ -474,7 +474,7 @@ export async function POST(req: NextRequest) {
 
     // ── Stage 4+5: LLM + Enrichment in parallel ──────────────
     const aiStart = Date.now()
-    const [aiResponse, enrichmentRaw] = await Promise.all([
+    let [aiResponse, enrichmentRaw] = await Promise.all([
       getCompletion({
         systemPrompt: SYSTEM_PROMPT_V2,
         userPrompt,
@@ -638,23 +638,64 @@ export async function POST(req: NextRequest) {
     let parseError: string | null = null
     let synthesisResult: SynthesisResult | null = null
 
+    // L1-E / never-hard-fail: LLM_PARSE previously hard-failed (422, nothing
+    // returned) on the first bad JSON, discarding scrape/extraction/enrichment
+    // work already computed above. Now: retry once (bumping maxTokens if the
+    // failed attempt's finishReason was 'length', since that means the model
+    // was cut off mid-output, not that it wrote malformed JSON with room to
+    // spare), and if the retry also fails, degrade to deterministic-only
+    // output instead of hard-failing — ai_synthesis_status flags this
+    // distinctly so the report doesn't look like "found nothing" when the
+    // AI narrative step is what actually broke.
+    let aiSynthesisFailed = false
+    let aiSynthesisFailureReason: string | undefined
+
+    let rawParsed: Record<string, unknown> = {}
     try {
       // Gate S5: LLM parse
-      let rawParsed: Record<string, unknown>
-      try {
-        rawParsed = JSON.parse(extractJsonFromLLMResponse(aiResponse.content))
-      } catch (parseErr) {
-        const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
-        gate(pipelineGates, 'LLM_PARSE', 'FAIL',
-          `JSON.parse failed: ${errMsg}`,
-          { contentLength: aiResponse.content.length, preview: aiResponse.content.slice(0, 200) })
-        console.error('[pipeline:LLM_PARSE_FAIL]', errMsg)
-        return failResponse('LLM_PARSE', `LLM returned invalid JSON: ${errMsg}`, {
-          provider: aiResponse.providerName,
-          tokensUsed: aiResponse.tokensUsed,
-          contentLength: aiResponse.content.length,
-          rawPreview: aiResponse.content.slice(0, 300),
-        }, pipelineGates)
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          rawParsed = JSON.parse(extractJsonFromLLMResponse(aiResponse.content))
+          break
+        } catch (parseErr) {
+          const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+          console.error(
+            `[pipeline:LLM_PARSE_FAIL] attempt=${attempt} finishReason=${aiResponse.finishReason ?? 'unknown'} provider=${aiResponse.providerName}`,
+            errMsg,
+          )
+
+          if (attempt === 2) {
+            aiSynthesisFailed = true
+            aiSynthesisFailureReason = `LLM returned invalid JSON after retry: ${errMsg} (finishReason: ${aiResponse.finishReason ?? 'unknown'})`
+            gate(pipelineGates, 'LLM_PARSE', 'PARTIAL', aiSynthesisFailureReason, {
+              contentLength: aiResponse.content.length,
+              preview: aiResponse.content.slice(0, 200),
+              finishReason: aiResponse.finishReason ?? 'unknown',
+            })
+            rawParsed = {}
+            break
+          }
+
+          // finishReason:'length' means max_tokens cut the response off mid-string —
+          // retrying with the same budget would very likely truncate at the same spot.
+          const retryMaxTokens = aiResponse.finishReason === 'length' ? 8192 : 4096
+          console.warn(`[pipeline:LLM_PARSE_RETRY] retrying with maxTokens=${retryMaxTokens}`)
+          try {
+            aiResponse = await getCompletion({
+              systemPrompt: SYSTEM_PROMPT_V2,
+              userPrompt,
+              maxTokens: retryMaxTokens,
+              temperature: 0.2,
+              jsonMode: true,
+            })
+          } catch (retryErr) {
+            aiSynthesisFailed = true
+            aiSynthesisFailureReason = `LLM retry request failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
+            gate(pipelineGates, 'LLM_PARSE', 'PARTIAL', aiSynthesisFailureReason)
+            rawParsed = {}
+            break
+          }
+        }
       }
 
       // Warn if LLM produced no substantive output
@@ -663,12 +704,17 @@ export async function POST(req: NextRequest) {
       const _llmContactCount = Array.isArray(rawParsed.recommended_contacts) ? (rawParsed.recommended_contacts as unknown[]).length : 0
       console.log('[pipeline:LLM_OUT]', JSON.stringify({ pain_points_count: _llmPainCount, ai_opportunities_count: _llmOppCount, contacts_count: _llmContactCount }))
 
-      if (_llmOppCount === 0 && _llmPainCount === 0) {
-        gate(pipelineGates, 'LLM_PARSE', 'WARN',
-          'LLM produced no pain_points or ai_opportunities — narrative may be incomplete')
-      } else {
-        gate(pipelineGates, 'LLM_PARSE', 'PASS',
-          `LLM output: ${_llmPainCount} pain_points | ${_llmOppCount} opportunities | ${_llmContactCount} contacts`)
+      // aiSynthesisFailed already recorded its own PARTIAL gate above with the
+      // real reason — don't also emit the generic "no output" WARN here, it
+      // would bury the actual failure reason under a vaguer duplicate.
+      if (!aiSynthesisFailed) {
+        if (_llmOppCount === 0 && _llmPainCount === 0) {
+          gate(pipelineGates, 'LLM_PARSE', 'WARN',
+            'LLM produced no pain_points or ai_opportunities — narrative may be incomplete')
+        } else {
+          gate(pipelineGates, 'LLM_PARSE', 'PASS',
+            `LLM output: ${_llmPainCount} pain_points | ${_llmOppCount} opportunities | ${_llmContactCount} contacts`)
+        }
       }
 
       // ── Why Now narrative floor ──────────────────────────────
@@ -706,6 +752,16 @@ export async function POST(req: NextRequest) {
       // Gate S6: Normalization
       try {
         analysisResult = normalizeAnalysisResult(merged as Record<string, unknown>)
+        if (aiSynthesisFailed) {
+          // Deterministic fields (signals, deterministic_opportunities, signal_clusters)
+          // are still real — only the LLM-authored narrative fields are empty. Flag
+          // that distinctly so the report doesn't read as "nothing was found".
+          analysisResult = {
+            ...(analysisResult as Record<string, unknown>),
+            ai_synthesis_status: 'failed',
+            ai_synthesis_failure_reason: aiSynthesisFailureReason,
+          }
+        }
       } catch (normErr) {
         const errMsg = normErr instanceof Error ? normErr.message : String(normErr)
         gate(pipelineGates, 'NORMALIZATION', 'FAIL',
@@ -728,7 +784,10 @@ export async function POST(req: NextRequest) {
       if (_llmOppCount > 0 && _normOppCount === 0)   console.warn('[pipeline:DROP] ai_opportunities dropped by normalizer — check flattenSections')
       if (_llmContactCount > 0 && _normContactCount === 0) console.warn('[pipeline:DROP] recommended_contacts dropped by normalizer — check flattenSections')
 
-      if (_normOppCount === 0 && _normPainCount === 0) {
+      if (aiSynthesisFailed) {
+        // Already gated PARTIAL at LLM_PARSE with the real reason — skip the
+        // generic "unexpected schema keys" WARN, which would be misleading here.
+      } else if (_normOppCount === 0 && _normPainCount === 0) {
         gate(pipelineGates, 'NORMALIZATION', 'WARN',
           'Normalizer produced 0 pain_points and 0 opportunities — LLM output may have used unexpected schema keys')
       } else {

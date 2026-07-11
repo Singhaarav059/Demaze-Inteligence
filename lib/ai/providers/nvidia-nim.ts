@@ -55,6 +55,7 @@ export class NvidiaProvider implements AIProvider {
     const content = response.choices[0]?.message?.content ?? ''
     const latencyMs = Date.now() - startTime
     const tokensUsed = response.usage?.total_tokens ?? 0
+    const finishReason = response.choices[0]?.finish_reason
 
     return {
       content,
@@ -62,6 +63,7 @@ export class NvidiaProvider implements AIProvider {
       providerName: this.name,
       tokensUsed,
       latencyMs,
+      finishReason,
     }
   }
 

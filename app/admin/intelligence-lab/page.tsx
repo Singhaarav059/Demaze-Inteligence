@@ -2078,6 +2078,9 @@ function ResearchCard({ result }: { result: RunResult }) {
     ? (a.recommended_contacts as Array<Record<string, unknown>>).slice(0, 3)
     : []
 
+  const aiSynthesisFailed = a.ai_synthesis_status === 'failed'
+  const aiSynthesisFailureReason = str(a.ai_synthesis_failure_reason)
+
   const outreachIntel = a.outreach_intelligence as (Record<string, unknown> | null)
   const openingAngle  = str(outreachIntel?.opening_angle) ?? str(a.outreach_angle) ?? ''
   const whyNow        = str(outreachIntel?.why_now)
@@ -2090,6 +2093,27 @@ function ResearchCard({ result }: { result: RunResult }) {
 
   return (
     <div className="space-y-3 max-w-3xl">
+
+      {/* ── AI Synthesis Failure Banner ──────────────────────── */}
+      {/* Distinct from "genuinely found nothing" — the LLM narrative step itself
+          broke after a retry, so pain_points/opportunities/outreach below are
+          empty because they were never written, not because none exist. */}
+      {aiSynthesisFailed && (
+        <Card className="border border-red-900/60 bg-red-950/20">
+          <CardContent className="px-5 py-3">
+            <p className="text-red-400 text-sm font-semibold">⚠ AI synthesis failed — this report is incomplete</p>
+            <p className="text-red-300/80 text-xs mt-1">
+              The AI narrative step could not produce a valid response after a retry. Challenges,
+              opportunities, and outreach angle below reflect deterministic signal data only —
+              empty sections mean the AI failed to write them, not that nothing was found. Re-run
+              the analysis to retry.
+            </p>
+            {aiSynthesisFailureReason && (
+              <p className="text-red-500/60 text-[10px] mt-1.5 font-mono">{aiSynthesisFailureReason}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Company Header ───────────────────────────────────── */}
       <Card className="bg-zinc-900 border-zinc-800">
@@ -2160,7 +2184,9 @@ function ResearchCard({ result }: { result: RunResult }) {
                 ))}
               </ul>
             ) : (
-              <p className="text-zinc-600 text-xs italic">No challenges identified — try a fresh scrape.</p>
+              <p className="text-zinc-600 text-xs italic">
+                {aiSynthesisFailed ? 'AI synthesis failed — see banner above.' : 'No challenges identified — try a fresh scrape.'}
+              </p>
             )}
           </CardContent>
         </Card>
@@ -2188,7 +2214,9 @@ function ResearchCard({ result }: { result: RunResult }) {
                 ))}
               </ul>
             ) : (
-              <p className="text-zinc-600 text-xs italic">No opportunities identified — try a fresh scrape.</p>
+              <p className="text-zinc-600 text-xs italic">
+                {aiSynthesisFailed ? 'AI synthesis failed — see banner above.' : 'No opportunities identified — try a fresh scrape.'}
+              </p>
             )}
           </CardContent>
         </Card>

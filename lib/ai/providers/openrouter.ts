@@ -60,6 +60,7 @@ export class OpenRouterProvider implements AIProvider {
       providerName: this.name,
       tokensUsed: response.usage?.total_tokens ?? 0,
       latencyMs: Date.now() - startTime,
+      finishReason: response.choices[0]?.finish_reason,
     }
   }
 }

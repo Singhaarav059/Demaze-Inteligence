@@ -298,6 +298,15 @@ export interface NormalizedAnalysis {
   pages_scraped: string[]
   analyzed_at: string
 
+  // Distinguishes "the LLM narrative step genuinely failed" from "analysis ran
+  // fine and found nothing" — separate from evidence_sufficiency above, which
+  // is about evidence availability, not synthesis success. Without this, empty
+  // pain_points/opportunities/outreach fields look identical whether the AI
+  // failed to write them or correctly reported "nothing found". Defaults to
+  // 'ok'; route.ts overrides to 'failed' when LLM_PARSE exhausts its retry.
+  ai_synthesis_status: 'ok' | 'failed'
+  ai_synthesis_failure_reason?: string
+
   _raw: Record<string, unknown>
 }
 
@@ -794,6 +803,7 @@ export function normalizeAnalysisResult(
     recent_activity,
     confidence_level, data_quality_score, data_quality_notes,
     pages_scraped, analyzed_at,
+    ai_synthesis_status: 'ok',
     _raw: raw,
   }
 }

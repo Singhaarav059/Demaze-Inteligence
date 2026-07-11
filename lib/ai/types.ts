@@ -22,6 +22,11 @@ export interface CompletionResponse {
   providerName: string  // e.g. "nvidia_nim_llama_70b"
   tokensUsed: number
   latencyMs: number
+  // 'length' means the model hit max_tokens and got cut off mid-output — the
+  // likely cause of "Unterminated string in JSON" parse failures. 'stop' means
+  // the model finished normally but still produced malformed JSON. Undefined
+  // if the provider/SDK didn't report one.
+  finishReason?: string
 }
 
 // Every provider must implement this interface.
