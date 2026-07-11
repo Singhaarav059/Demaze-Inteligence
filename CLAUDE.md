@@ -253,10 +253,15 @@ Fence's `fetch failed` below). Fix the filename/content mismatch and re-add real
 regression coverage for the reference set before trusting "do not regress" again.
 
 ## Company-specific known issues (context for whoever debugs these next)
-- **AITG**: evidence extraction works (production lines, auto parts, chemical industry,
-  group companies all found) but signals=0, opportunities=0. This is NOT a scraping
-  problem — content acquisition already succeeds here. Points at subject-classifier
-  floor (companySubjectCount=0 cascade), not scraper work.
+- **AITG**: superseded (2026-07-11) — the "signals=0, opportunities=0" state
+  described below is resolved. Real root causes were, in order: (1) the
+  `SIGNAL_PATTERNS` coverage gap (see "second-biggest architectural weakness"
+  below, fixed earlier this session), (2) `primary_type`'s cascade bug (fixed
+  in two passes — conglomerate, then the 5 other soft categories, see "ATE
+  Group" below), (3) the opportunity engine inventing fake services instead of
+  using the real 8 (fixed via `service-evidence.ts`, see "Item 5"). AITG now
+  correctly resolves `primary_type: manufacturer` and surfaces 1 real,
+  evidence-backed opportunity.
 - **A-1 Fence**: `fetch failed` — determine if Cloudflare/SSL/slow site/regional block
   before assuming it's fixed by the fallback chain alone.
 - **AS Agri & Aqua**: Google Sites URL. URL normalization bug (losing company identity
@@ -282,6 +287,32 @@ regression coverage for the reference set before trusting "do not regress" again
   checks pass); Bharat Forge and Chargebee re-verified live post-fix and stay
   `manufacturer` / `software_saas` respectively — zero regression. Muthoot still
   inconclusive due to its unrelated scrape failure (see above).
+  **Bug 1 follow-up, same day**: the first fix was incomplete — only reordered
+  `conglomerate`, leaving `financial_institution`/`pharma_biotech`/
+  `healthcare_provider`/`logistics_operator`/`retailer` still checked BEFORE
+  `manufacturer`/`industrial_vendor`/`services_provider`, i.e. the exact same bug
+  class, just uncaught in the first pass. Surfaced when AITG showed
+  `primary_type: healthcare_provider` in a later run — traced to a genuine
+  founder-history anecdote ("Nanasaheb chanced upon many imported hospital
+  equipment lying unused") on AITG's own about page, real content, not a scraper
+  error. A-1 Fence Products had the identical bug via its own CSR section
+  ("...rural development, water and sanitation, **healthcare services**. ##
+  CSR INITIATIVES...") — a fencing company listing healthcare as a corporate-
+  giving cause, misread as its business line. Checked before implementing: no
+  benchmark company correctly depends on any of these 5 categories winning
+  today. Bharat Forge (reference set) had a spurious `retailer` match in
+  historical runs that could have silently mislabeled it under the old order;
+  Muthoot Finance (reference set, genuinely a financial institution) has zero
+  competing manufacturer/industrial_vendor/services_provider evidence so the
+  reorder doesn't change its outcome. **Fixed**: all 5 soft categories moved
+  after the operational categories, same principle as conglomerate.
+  `software_saas` stays first — its patterns are multi-word/specific
+  ("software-as-a-service", "subscription billing platform"), not this bug
+  class. Verified: AITG and A-1 Fence Products both now resolve to
+  `primary_type: manufacturer` (confirmed the actual label, not just "doesn't
+  say healthcare_provider" — `company_type.healthcare_provider` still
+  legitimately fires as a boolean, it just no longer wins the primary_type
+  cascade). Full benchmark re-run clean, no regressions.
 - **Ace Pipeline**: classified as conglomerate — same Bug 1 above, but unlike ATE/AITG,
   NOTHING else fires for Ace Pipeline's scraped content (no manufacturer/industrial_vendor
   evidence at all), so we genuinely don't know its correct classification yet. Do not
