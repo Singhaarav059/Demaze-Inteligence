@@ -128,6 +128,22 @@ function scoreCandidate(words: string[], identity: HomepageIdentity): { confiden
   if (titleRatio === 1) {
     return { confidence: 'high', evidence: `full name match in page title: "${identity.title.slice(0, 100)}"` }
   }
+
+  // Single-word (typically acronym-style) company names are a real collision
+  // trap: "AITG" has ratio=1 against ANY page that mentions the string "AITG"
+  // even once, anywhere, with no other word to corroborate it's the same
+  // entity. Found live: "AITG" wrongly confirmed against aitg.miraheze.org (an
+  // unrelated wiki) via a body-text-only match, because no other candidate
+  // scored anything either, so there was nothing to trigger ambiguity
+  // detection. A body/description-only match is far too weak a signal for a
+  // single-word name — require a title match (handled above) or refuse to
+  // confirm at all. Does not affect multi-word names (e.g. "A-1 Fence
+  // Products" still confirms correctly on a body match, since 3 corroborating
+  // words matching together is real evidence a single acronym match isn't).
+  if (words.length === 1 && titleRatio < 1) {
+    return { confidence: 'none', evidence: 'single-word/acronym-style name — body or description match alone is too weak to confirm without a title match' }
+  }
+
   if (titleRatio >= 0.5 || descRatio === 1 || bodyRatio === 1) {
     const where = titleRatio >= 0.5 ? `partial match in title: "${identity.title.slice(0, 100)}"`
       : descRatio === 1 ? `full match in meta description: "${identity.description.slice(0, 100)}"`

@@ -448,6 +448,37 @@ Failures are scraping, classification, signals, timeouts, parsing — not reason
   the ambiguous path end-to-end ("Om Enterprises" -> `domain: null`,
   `scrapeSource: 'none'`, pipeline completes with `success: true`,
   `evidence_sufficiency: insufficient` — no crash, no hard fail, honest output).
+- **Real false positive found and fixed via post-commit live testing** (once
+  Tavily's quota ran out, re-tested all 6 benchmark companies via the Serper
+  fallback path — this incidentally became a full regression pass): "AITG"
+  wrongly resolved to `aitg.miraheze.org` (an unrelated wiki) at `'confirmed'`/
+  `'medium'` confidence, because "AITG" normalizes to a single significant
+  word (acronym-shaped) and a body-text-only match trivially satisfies
+  ratio=1 for a 1-word name, with no competing candidate to trigger ambiguity
+  detection. This was a known, explicitly-flagged limitation in the original
+  design ("single-word names, ratio can only be 0 or 1") that manifested for
+  real. **Fixed**: single-word company names now require an actual title
+  match to reach any confidence above `'none'` — a body/description-only
+  match is no longer sufficient to auto-confirm. Verified: AITG now correctly
+  returns `'not_found'`; Ador Welding (title match, 2 words) and A-1 Fence
+  Products (body match, 3 words) both unaffected — the fix is scoped to
+  single-word names only, not medium-confidence matches generally.
+- **Genuine real-world ambiguity found in the same re-test, not a bug**:
+  "A-1 Fence Products" (our benchmark company, India,
+  a-1fenceproducts.com) ties at medium confidence against "A-1 Fence
+  Company" — a real, different company in Anaheim, CA (a1fence.com).
+  Correctly returned `'ambiguous'` rather than guessing. Validates the
+  disambiguation design against a real same-name collision, not just the
+  synthetic "Om Enterprises" test case.
+- **Separately noted, not yet fixed**: for ATE Group, Serper *did* surface the
+  correct domain (ategroup.com) as a candidate, but the lightweight `fetch()`
+  verification step failed to retrieve its content ("homepage fetch failed or
+  timed out"), so it scored `'none'` and the request correctly (but not
+  optimally) fell through to `'not_found'`. The plain `fetch()` used for
+  candidate verification is less robust than Firecrawl (used elsewhere in the
+  pipeline) against sites with anti-bot protection or slow responses. Safe
+  failure mode (no wrong guess), but a real precision gap worth revisiting —
+  not blocking, noted for a future pass.
 
 **Item 2 (not started)** — reposition enrichment discovery+fetch from
 implicit-fallback framing to an explicitly parallel, always-on stage (its
