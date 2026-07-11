@@ -10,7 +10,6 @@ import type { SynthesisInput, SynthesisResult } from './types'
 import { buildValidatedSignals } from './validator'
 import { buildStrategicThemes } from './theme-engine'
 import { buildWhyNow } from './why-now-engine'
-import { buildOutreachCards } from './outreach-engine'
 import { computeIntelligenceQuality } from './quality-score'
 
 export type { SynthesisInput, SynthesisResult } from './types'
@@ -18,9 +17,7 @@ export type {
   ValidatedSignal,
   StrategicTheme,
   WhyNowAnalysis,
-  OutreachCard,
   IntelligenceQuality,
-  DemazeRelevanceScore,
   PriorityLevel,
   ConfidenceLevel,
   UrgencyLevel,
@@ -36,17 +33,13 @@ export function synthesizeIntelligence(input: SynthesisInput): SynthesisResult {
   // 3. Build Why Now analysis
   const whyNow = buildWhyNow(input)
 
-  // 4. Build outreach intelligence cards
-  const outreachCards = buildOutreachCards(input, strategicThemes)
-
-  // 5. Compute intelligence quality score
+  // 4. Compute intelligence quality score
   const intelligenceQuality = computeIntelligenceQuality(input, validatedSignals, strategicThemes)
 
   return {
     validatedSignals,
     strategicThemes,
     whyNow,
-    outreachCards,
     intelligenceQuality,
     synthesizedAt: new Date().toISOString(),
   }

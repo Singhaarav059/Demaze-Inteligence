@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { scrapeCompanyWebsite, assessScrapeQuality } from '@/lib/pipeline/scraper'
 import { validateAndNormalizeURL, extractDomain } from '@/lib/utils/url'
-import { estimateTokenCount } from '@/lib/prompts/analyze'
+import { estimateTokenCount } from '@/lib/prompts/scrape-utils'
 import { getCachedScrape, saveScrapeCache } from '@/lib/cache/scrape-cache'
 
 export async function POST(req: NextRequest) {

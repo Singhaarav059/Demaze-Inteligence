@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import type { RunResult, Operation, AnalysisMode, ActiveTab } from './_types'
 import { ComparisonPanel } from './ComparisonPanel'
+import { ResearchCard } from './ResearchCard'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -265,9 +266,14 @@ export default function IntelligenceLab() {
           <h1 className="text-xl font-semibold text-white">Demaze Research Agent</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Enter a company URL → get a research brief for outbound outreach</p>
         </div>
-        <a href="/admin/run-history" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-          View run history →
-        </a>
+        <div className="flex gap-3 text-xs">
+          <a href="/admin/batch-upload" className="text-zinc-500 hover:text-zinc-300 transition-colors">
+            Batch upload →
+          </a>
+          <a href="/admin/run-history" className="text-zinc-500 hover:text-zinc-300 transition-colors">
+            View run history →
+          </a>
+        </div>
       </div>
 
       {/* ── URL Input + Mode ───────────────────────────────── */}
@@ -738,19 +744,18 @@ function AnalysisViewer({ data, extractorResult }: {
   const evidence = Array.isArray(data.evidence) ? (data.evidence as Array<Record<string, unknown>>) : []
   const painPts  = Array.isArray(data.pain_points_structured) ? (data.pain_points_structured as Array<Record<string, unknown>>) : []
   const chains   = Array.isArray(data.reasoning_chains) ? (data.reasoning_chains as Array<Record<string, unknown>>) : []
-  const contacts = Array.isArray(data.recommended_contacts) ? (data.recommended_contacts as Array<Record<string, unknown>>) : []
   const warnings = Array.isArray(data.validation_warnings) ? (data.validation_warnings as string[]) : []
   const contentFlags = Array.isArray(data.content_quality_flags) ? (data.content_quality_flags as string[]) : []
   const whyDemaze = data.why_demaze as {
     reasons?: Array<string | {
       signal?: string; evidence?: string; evidence_tier?: string;
       business_implication?: string; strategic_challenge?: string;
-      recommended_service?: string; target_buyer?: string; confidence?: string
+      recommended_service?: string; confidence?: string
     }>;
     relevant_services?: string[];
     summary?: string;
   } | undefined
-  const outreachIntel = data.outreach_intelligence as { trigger?: string; problem?: string; service?: string; opening_angle?: string; why_now?: string; target_contact?: string } | undefined
+  const outreachIntel = data.outreach_intelligence as { trigger?: string; problem?: string; service?: string; opening_angle?: string; why_now?: string } | undefined
   const bma = data.business_model_analysis as { model_type?: string; value_chain_position?: string; primary_customers?: string; core_operational_activities?: string[]; strategic_pressures?: string[] } | undefined
   const businessModelType = data.business_model_type as string | undefined
   const signalClusters = Array.isArray(data.signal_clusters)
@@ -760,7 +765,7 @@ function AnalysisViewer({ data, extractorResult }: {
     ? (data.strategic_challenges as Array<{ id: string; title: string; description: string; service: string; priority: string }>)
     : []
   const executiveBrief = (data.executive_brief && typeof data.executive_brief === 'object')
-    ? (data.executive_brief as { what_we_observed?: string[]; what_it_means?: string[]; what_to_sell?: string; who_to_contact?: string; why_now?: string; overall_confidence?: string })
+    ? (data.executive_brief as { what_we_observed?: string[]; what_it_means?: string[]; what_to_sell?: string; why_now?: string; overall_confidence?: string })
     : null
   const deterministicOpps = Array.isArray(data.deterministic_opportunities)
     ? (data.deterministic_opportunities as Array<{
@@ -843,12 +848,6 @@ function AnalysisViewer({ data, extractorResult }: {
                 <div>
                   <p className="text-[10px] text-violet-400 uppercase tracking-wide mb-1">What to sell</p>
                   <p className="text-violet-200 text-xs font-medium">{executiveBrief.what_to_sell}</p>
-                </div>
-              )}
-              {executiveBrief.who_to_contact && (
-                <div>
-                  <p className="text-[10px] text-blue-400 uppercase tracking-wide mb-1">Who to contact</p>
-                  <p className="text-blue-200 text-xs font-medium">{executiveBrief.who_to_contact}</p>
                 </div>
               )}
               {executiveBrief.why_now && (
@@ -1149,12 +1148,6 @@ function AnalysisViewer({ data, extractorResult }: {
                 </div>
               )}
             </div>
-            {outreachIntel.target_contact && (
-              <div className="rounded-md bg-emerald-950/30 border border-emerald-800/40 px-3 py-2">
-                <p className="text-[10px] text-emerald-400 uppercase tracking-wide mb-1">Address to</p>
-                <p className="text-emerald-300 text-xs font-medium">{outreachIntel.target_contact}</p>
-              </div>
-            )}
             {outreachIntel.why_now && (
               <div className="rounded-md bg-zinc-800/40 px-3 py-2">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Why contact now?</p>
@@ -1173,44 +1166,6 @@ function AnalysisViewer({ data, extractorResult }: {
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-3">
             <p className="text-zinc-300 text-sm leading-relaxed">{s(data.outreach_angle)}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Contact Prioritization */}
-      {contacts.length > 0 && (
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm text-zinc-300">Contact Prioritization</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-2">
-            {contacts.map((c, i) => (
-              <div key={i} className="flex items-start gap-3 rounded-md bg-zinc-800/60 px-3 py-2">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-zinc-700 flex items-center justify-center text-[10px] font-mono text-zinc-300 mt-0.5">
-                  {n(c.priority) || i + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-zinc-200 text-xs font-medium">{s(c.role)}</p>
-                  {Boolean(c.reason) && <p className="text-zinc-500 text-xs mt-0.5">{s(c.reason)}</p>}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Fallback contact roles (v1 format) */}
-      {contacts.length === 0 && Array.isArray(data.recommended_contact_roles) && (data.recommended_contact_roles as string[]).length > 0 && (
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm text-zinc-300">Contact Roles</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex flex-wrap gap-2">
-              {(data.recommended_contact_roles as string[]).map((r) => (
-                <Badge key={r} variant="outline" className="border-zinc-700 text-zinc-300 text-xs">{r}</Badge>
-              ))}
-            </div>
           </CardContent>
         </Card>
       )}
@@ -1462,7 +1417,7 @@ function AnalysisViewer({ data, extractorResult }: {
 type WhyDemazeReason = string | {
   signal?: string; evidence?: string; evidence_tier?: string;
   business_implication?: string; strategic_challenge?: string;
-  recommended_service?: string; target_buyer?: string; confidence?: string
+  recommended_service?: string; confidence?: string
 }
 
 function MaybeWhyDemaze({ data }: { data: Record<string, unknown> }): ReactElement | null {
@@ -1521,9 +1476,6 @@ function WhyDemazeCard({ whyDemaze }: { whyDemaze: { reasons?: WhyDemazeReason[]
                   <div className="flex flex-wrap gap-2 pt-0.5">
                     {r.recommended_service && (
                       <span className="text-[10px] bg-violet-950/40 text-violet-300 border border-violet-800/40 px-2 py-0.5 rounded">{r.recommended_service}</span>
-                    )}
-                    {r.target_buyer && (
-                      <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">→ {r.target_buyer}</span>
                     )}
                   </div>
                 </div>
@@ -1654,13 +1606,6 @@ const URG_COLOR: Record<string, string> = {
   immediate: 'text-red-300', near_term: 'text-amber-300', emerging: 'text-blue-300',
 }
 
-const REL_COLOR: Record<string, string> = {
-  very_strong: 'text-violet-300 bg-violet-900/30 border-violet-700',
-  strong: 'text-emerald-300 bg-emerald-900/30 border-emerald-700',
-  moderate: 'text-amber-300 bg-amber-900/30 border-amber-700',
-  weak: 'text-zinc-500 bg-zinc-800 border-zinc-700',
-}
-
 function QualityBar({ score, label, note }: { score: number; label: string; note: string }) {
   const bar = score >= 70 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'
   return (
@@ -1684,7 +1629,7 @@ function IntelligencePanel({ result }: { result: RunResult | null }) {
     </div>
   )
   const s = result.synthesisResult
-  const { intelligenceQuality: iq, strategicThemes, validatedSignals, whyNow, outreachCards } = s
+  const { intelligenceQuality: iq, strategicThemes, validatedSignals, whyNow } = s
   const tierColor: Record<string, string> = {
     A: 'text-emerald-300 border-emerald-700 bg-emerald-900/20',
     B: 'text-blue-300 border-blue-700 bg-blue-900/20',
@@ -1805,32 +1750,6 @@ function IntelligencePanel({ result }: { result: RunResult | null }) {
         </div>
       )}
 
-      {/* Outreach Cards */}
-      {outreachCards.length > 0 && (
-        <div>
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 px-1">Outreach Intelligence</h3>
-          <div className="space-y-3">
-            {outreachCards.map((card, i) => (
-              <Card key={i} className="bg-zinc-900 border-zinc-800">
-                <CardContent className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <p className="text-sm font-semibold text-zinc-200">{card.role}</p>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 font-medium ${REL_COLOR[card.demaze_relevance] ?? ''}`}>{card.demaze_relevance.replace('_', ' ')}</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-1 text-xs mb-2">
-                    <div><span className="text-zinc-600">KPI: </span><span className="text-zinc-400">{card.likely_kpi}</span></div>
-                    <div><span className="text-zinc-600">Pain: </span><span className="text-zinc-400">{card.likely_pain}</span></div>
-                  </div>
-                  <div className="border-t border-zinc-800 pt-2 text-xs">
-                    <span className="text-zinc-600">Angle: </span><span className="text-violet-300">{card.message_angle}</span>
-                  </div>
-                  <p className="text-[10px] text-zinc-600 mt-1">{card.why_relevant}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -2023,259 +1942,6 @@ function DebugPanel({
             </div>
           )}
         </div>
-      )}
-    </div>
-  )
-}
-
-// ── Research Card ─────────────────────────────────────────────
-// Clean, SDR-focused output: what they do, challenges, opportunities,
-// who to contact, outreach angle. No scoring complexity.
-
-function ResearchCard({ result }: { result: RunResult }) {
-  const a = result.analysisResult as Record<string, unknown> | undefined
-  if (!a) return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="text-4xl mb-4">🔍</div>
-      <p className="text-zinc-400 text-sm max-w-xs">Enter a company URL above and click <strong className="text-white">Analyze</strong> to generate a research brief.</p>
-    </div>
-  )
-
-  const str = (v: unknown) => (v != null && v !== '' ? String(v) : null)
-
-  const companyName   = str(a.company_name) ?? 'Unknown Company'
-  const industry      = str(a.industry) ?? ''
-  const subIndustry   = str(a.sub_industry) ?? ''
-  const sizeEstimate  = str(a.company_size_estimate) ?? ''
-  const headquarters  = str(a.headquarters_location) ?? ''
-  const summary       = str(a.company_summary) ?? ''
-  const confidence    = str(a.confidence_level) ?? 'low'
-  const businessModel = str(a.business_model) ?? ''
-
-  // Recent activity (new field from SDR schema)
-  const recentActivity: string[] = Array.isArray(a.recent_activity)
-    ? (a.recent_activity as unknown[]).map(x => str(x)).filter(Boolean) as string[]
-    : []
-
-  // Signal quality indicator (replaces 0-10 fit score)
-  const signalCount = result.extractorResult?.signals?.length ?? 0
-  const fitLabel = signalCount >= 4 ? 'Strong Signals' : signalCount >= 2 ? 'Some Signals' : 'Inferred'
-  const fitColor = signalCount >= 4 ? 'text-emerald-400' : signalCount >= 2 ? 'text-amber-400' : 'text-blue-400'
-  const fitBg    = signalCount >= 4 ? 'bg-emerald-950/40 border-emerald-900' : signalCount >= 2 ? 'bg-amber-950/40 border-amber-900' : 'bg-blue-950/40 border-blue-900'
-  const confColor = confidence === 'high' ? 'text-emerald-400' : confidence === 'medium' ? 'text-amber-400' : 'text-zinc-500'
-
-  // Pain points — can be plain strings or objects
-  const rawPainPoints = Array.isArray(a.pain_points) ? a.pain_points as unknown[] : []
-  const painPoints: string[] = rawPainPoints.slice(0, 5).map(p =>
-    typeof p === 'string' ? p :
-    typeof p === 'object' && p !== null ? (str((p as Record<string, unknown>).title) ?? '') : ''
-  ).filter(Boolean)
-
-  const opportunities = Array.isArray(a.opportunities)
-    ? (a.opportunities as Array<Record<string, unknown>>).slice(0, 4)
-    : []
-  const contacts = Array.isArray(a.recommended_contacts)
-    ? (a.recommended_contacts as Array<Record<string, unknown>>).slice(0, 3)
-    : []
-
-  const aiSynthesisFailed = a.ai_synthesis_status === 'failed'
-  const aiSynthesisFailureReason = str(a.ai_synthesis_failure_reason)
-
-  const outreachIntel = a.outreach_intelligence as (Record<string, unknown> | null)
-  const openingAngle  = str(outreachIntel?.opening_angle) ?? str(a.outreach_angle) ?? ''
-  const whyNow        = str(outreachIntel?.why_now)
-    ?? str((a.why_now as Record<string, unknown>)?.explanation)
-    ?? ''
-  const whatToSell    = str((a.executive_brief as Record<string, unknown>)?.what_to_sell) ?? ''
-  const targetContact = str(outreachIntel?.target_contact)
-    ?? str((a.executive_brief as Record<string, unknown>)?.who_to_contact)
-    ?? ''
-
-  return (
-    <div className="space-y-3 max-w-3xl">
-
-      {/* ── AI Synthesis Failure Banner ──────────────────────── */}
-      {/* Distinct from "genuinely found nothing" — the LLM narrative step itself
-          broke after a retry, so pain_points/opportunities/outreach below are
-          empty because they were never written, not because none exist. */}
-      {aiSynthesisFailed && (
-        <Card className="border border-red-900/60 bg-red-950/20">
-          <CardContent className="px-5 py-3">
-            <p className="text-red-400 text-sm font-semibold">⚠ AI synthesis failed — this report is incomplete</p>
-            <p className="text-red-300/80 text-xs mt-1">
-              The AI narrative step could not produce a valid response after a retry. Challenges,
-              opportunities, and outreach angle below reflect deterministic signal data only —
-              empty sections mean the AI failed to write them, not that nothing was found. Re-run
-              the analysis to retry.
-            </p>
-            {aiSynthesisFailureReason && (
-              <p className="text-red-500/60 text-[10px] mt-1.5 font-mono">{aiSynthesisFailureReason}</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Company Header ───────────────────────────────────── */}
-      <Card className="bg-zinc-900 border-zinc-800">
-        <CardContent className="px-5 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold text-white truncate">{companyName}</h2>
-              <p className="text-zinc-400 text-sm mt-0.5">
-                {[industry, subIndustry && subIndustry !== industry ? subIndustry : null]
-                  .filter(Boolean).join(' · ')}
-              </p>
-              {(headquarters || sizeEstimate) && (
-                <p className="text-zinc-600 text-xs mt-0.5">
-                  {[headquarters, sizeEstimate].filter(Boolean).join(' · ')}
-                </p>
-              )}
-            </div>
-            <div className={`text-right shrink-0 rounded-lg border px-3 py-2 min-w-[90px] ${fitBg}`}>
-              <div className={`text-xs font-bold ${fitColor}`}>{fitLabel}</div>
-              <div className={`text-xs mt-0.5 ${confColor}`}>{confidence} confidence</div>
-              <div className="text-[10px] text-zinc-600 mt-0.5">{signalCount} signal{signalCount !== 1 ? 's' : ''}</div>
-            </div>
-          </div>
-          {summary && (
-            <p className="text-zinc-300 text-sm mt-3 leading-relaxed border-t border-zinc-800 pt-3">
-              {summary}
-            </p>
-          )}
-          {businessModel && !summary.toLowerCase().includes(businessModel.toLowerCase().slice(0, 20)) && (
-            <p className="text-zinc-500 text-xs mt-2 italic">{businessModel}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Recent Activity ──────────────────────────────────── */}
-      {recentActivity.length > 0 && (
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recent Activity &amp; Signals</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            <ul className="space-y-1.5">
-              {recentActivity.map((item, i) => (
-                <li key={i} className="text-zinc-300 text-sm flex gap-2">
-                  <span className="text-blue-500 shrink-0 mt-0.5">●</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Challenges + Opportunities ───────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Business Challenges</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            {painPoints.length > 0 ? (
-              <ul className="space-y-2">
-                {painPoints.map((p, i) => (
-                  <li key={i} className="text-zinc-300 text-sm flex gap-2">
-                    <span className="text-red-500 shrink-0 mt-0.5">▸</span>
-                    <span>{p}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-zinc-600 text-xs italic">
-                {aiSynthesisFailed ? 'AI synthesis failed — see banner above.' : 'No challenges identified — try a fresh scrape.'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Demaze Opportunities</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            {opportunities.length > 0 ? (
-              <ul className="space-y-2.5">
-                {opportunities.map((o, i) => (
-                  <li key={i} className="text-sm flex gap-2">
-                    <span className="text-emerald-500 shrink-0 mt-0.5">▸</span>
-                    <div>
-                      <span className="text-zinc-200 font-medium">{str(o.title)}</span>
-                      {str(o.description) && (
-                        <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{str(o.description)}</p>
-                      )}
-                      {str(o.entry_point) && (
-                        <p className="text-zinc-600 text-[10px] mt-0.5">Entry: {str(o.entry_point)}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-zinc-600 text-xs italic">
-                {aiSynthesisFailed ? 'AI synthesis failed — see banner above.' : 'No opportunities identified — try a fresh scrape.'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Who to Contact ───────────────────────────────────── */}
-      {contacts.length > 0 && (
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Who to Contact</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4 space-y-2.5">
-            {contacts.map((c, i) => (
-              <div key={i} className="flex gap-3 text-sm items-start">
-                <span className="text-indigo-400 shrink-0 mt-0.5">▸</span>
-                <div>
-                  <span className="text-white font-medium">{str(c.role) ?? '—'}</span>
-                  {str(c.reason) && <p className="text-zinc-500 text-xs mt-0.5">{str(c.reason)}</p>}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Outreach Angle ───────────────────────────────────── */}
-      {(openingAngle || whatToSell) && (
-        <Card className="border border-indigo-900/60 bg-indigo-950/20">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Outreach Angle</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4 space-y-3">
-            {openingAngle && (
-              <p className="text-zinc-200 text-sm leading-relaxed border-l-2 border-indigo-600 pl-3">
-                &ldquo;{openingAngle}&rdquo;
-              </p>
-            )}
-            <div className="grid grid-cols-1 gap-1.5 text-xs">
-              {whatToSell && (
-                <div>
-                  <span className="text-zinc-500 uppercase tracking-wider font-medium">Lead with: </span>
-                  <span className="text-zinc-300">{whatToSell}</span>
-                </div>
-              )}
-              {targetContact && (
-                <div>
-                  <span className="text-zinc-500 uppercase tracking-wider font-medium">Send to: </span>
-                  <span className="text-zinc-300">{targetContact}</span>
-                </div>
-              )}
-              {whyNow && (
-                <div>
-                  <span className="text-zinc-500 uppercase tracking-wider font-medium">Why now: </span>
-                  <span className="text-zinc-400">{whyNow}</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       )}
     </div>
   )

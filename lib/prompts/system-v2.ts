@@ -34,8 +34,7 @@ CORE RULES:
 3. Challenges and opportunities must be OPERATIONAL (production quality, scheduling, maintenance, data visibility, supply chain) -- not business strategy.
 4. Opportunities must name a specific Demaze service, not generic "AI" or "automation".
 5. recent_activity: list specific signals you detected -- expansions, automation investments, digital transformation programs, hiring surges, etc.
-6. recommended_contacts: always name 2-3 exact job titles specific to their industry.
-7. outreach_intelligence.opening_angle: write the first 2-3 sentences a sales rep could use verbatim. Start with the company's strongest signal. No "I hope this email finds you well."
+6. outreach_intelligence.opening_angle: write the first 2-3 sentences a sales rep could use verbatim. Start with the company's strongest signal. No "I hope this email finds you well."
 
 INFERENCE GUIDE -- when direct evidence is limited, use these patterns:
 - Multi-plant manufacturing: visibility gaps across facilities, quality consistency challenges

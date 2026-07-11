@@ -27,7 +27,7 @@
 
 import Firecrawl from '@mendable/firecrawl-js'
 import { displayURL } from '@/lib/utils/url'
-import { formatScrapedPages } from '@/lib/prompts/analyze'
+import { formatScrapedPages } from '@/lib/prompts/scrape-utils'
 
 // ── Constants ─────────────────────────────────────────────────
 

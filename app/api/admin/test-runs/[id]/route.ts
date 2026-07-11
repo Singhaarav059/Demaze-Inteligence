@@ -31,3 +31,27 @@ export async function GET(
 
   return NextResponse.json({ success: true, run: data })
 }
+
+// ── DELETE: remove a saved run ─────────────────────────────────
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authError = verifyAdminRequest(req)
+  if (authError) return authError
+
+  const { id } = await params
+  const supabase = createServerClient()
+
+  const { error } = await supabase
+    .from('pipeline_test_runs')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
+}

@@ -122,7 +122,6 @@ export interface WhyDemazeReason {
   business_implication: string
   strategic_challenge?: string
   recommended_service: string
-  target_buyer: string
   confidence: 'high' | 'medium' | 'low'
 }
 
@@ -138,22 +137,14 @@ export interface OutreachIntelligence {
   service: string
   opening_angle: string
   why_now: string
-  target_contact?: string
 }
 
 export interface ExecutiveBrief {
   what_we_observed: string[]
   what_it_means: string[]
   what_to_sell: string
-  who_to_contact: string
   why_now: string
   overall_confidence: 'high' | 'medium' | 'low'
-}
-
-export interface PrioritizedContact {
-  role: string
-  priority: number
-  reason: string
 }
 
 // Re-export for consumers
@@ -267,10 +258,6 @@ export interface NormalizedAnalysis {
   // Outreach
   outreach_angle: string
   outreach_intelligence: OutreachIntelligence
-
-  // Contact prioritization
-  recommended_contact_roles: string[]
-  recommended_contacts: PrioritizedContact[]
 
   // Validation
   validation_warnings: string[]
@@ -394,7 +381,7 @@ const arr = <T>(v: unknown): T[] =>
 // ── Section flattening ─────────────────────────────────────────
 
 // SECTION_KEYS maps section wrapper names ONLY — NOT output field names.
-// Output field names (pain_points, recommended_contacts, etc.) must NOT appear here.
+// Output field names (pain_points, outreach_angle, etc.) must NOT appear here.
 // Adding them causes flattenSections() to silently drop arrays with those names
 // when the LLM response also contains any section-wrapped object (e.g. company_profile).
 const SECTION_KEYS: Record<string, string[]> = {
@@ -683,7 +670,6 @@ export function normalizeAnalysisResult(
           business_implication: str(ro.business_implication),
           strategic_challenge:  ro.strategic_challenge ? str(ro.strategic_challenge) : undefined,
           recommended_service:  str(ro.recommended_service),
-          target_buyer:         str(ro.target_buyer),
           confidence:           (str(ro.confidence) || 'medium') as 'high' | 'medium' | 'low',
         } satisfies WhyDemazeReason
       }
@@ -709,32 +695,9 @@ export function normalizeAnalysisResult(
       service:        str(oi.service),
       opening_angle:  str(oi.opening_angle),
       why_now:        str(oi.why_now),
-      target_contact: oi.target_contact ? str(oi.target_contact) : undefined,
     }
   }
   const outreach_angle = str(flat.outreach_angle ?? outreach_intelligence.opening_angle)
-
-  // ── Contacts ─────────────────────────────────────────────────
-  const rawContacts = flat.recommended_contacts
-  let recommended_contacts: PrioritizedContact[] = []
-  let recommended_contact_roles: string[] = []
-  if (Array.isArray(rawContacts) && rawContacts.length > 0) {
-    if (typeof rawContacts[0] === 'object') {
-      recommended_contacts = (rawContacts as Array<Record<string, unknown>>).map(c => ({
-        role: str(c.role), priority: num(c.priority), reason: str(c.reason),
-      }))
-      recommended_contact_roles = recommended_contacts.map(c => c.role)
-    } else {
-      recommended_contact_roles = rawContacts.map(c => str(c))
-    }
-  } else {
-    const oldRoles = flat.recommended_contact_roles
-    if (Array.isArray(oldRoles)) recommended_contact_roles = oldRoles.map(r => str(r))
-  }
-  // Fill contact roles from model profile if LLM provided none
-  if (recommended_contact_roles.length === 0 && modelProfile.default_target_buyers.length > 0) {
-    recommended_contact_roles = modelProfile.default_target_buyers
-  }
 
   // ── Flags & warnings ─────────────────────────────────────────
   const content_quality_flags: string[] = arr<string>(flat.content_quality_flags)
@@ -773,7 +736,6 @@ export function normalizeAnalysisResult(
       what_we_observed: arr<string>(b.what_we_observed),
       what_it_means:    arr<string>(b.what_it_means),
       what_to_sell:     str(b.what_to_sell),
-      who_to_contact:   str(b.who_to_contact),
       why_now:          str(b.why_now),
       overall_confidence: (str(b.overall_confidence) || 'medium') as 'high' | 'medium' | 'low',
     }
@@ -800,7 +762,6 @@ export function normalizeAnalysisResult(
     competitive_context,
     why_demaze,
     outreach_angle, outreach_intelligence,
-    recommended_contact_roles, recommended_contacts,
     validation_warnings, content_quality_flags,
     business_model_analysis,
     executive_brief,

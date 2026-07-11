@@ -5,7 +5,7 @@
 //
 // Input:  Pre-extracted signals from website + enrichment
 // Output: SDR research brief (challenges, opportunities,
-//         contacts, outreach angle)
+//         outreach angle)
 // ============================================================
 
 import type { ExtractorResult, OpportunityDraft } from '@/lib/pipeline/evidence-extractor'
@@ -63,19 +63,10 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
     }
   ],
 
-  "recommended_contacts": [
-    {
-      "role": "Exact job title appropriate for THIS company's industry",
-      "reason": "Why this person cares about the top opportunity and owns the relevant budget or decision"
-    },
-    "(2–3 contacts total. Never leave empty.)"
-  ],
-
   "outreach_intelligence": {
     "trigger": "The strongest single signal — what specifically makes this company a prospect right now",
     "problem": "The operational implication this signal creates for their business",
     "service": "The ONE Demaze service best matched to their situation",
-    "target_contact": "Exact job title — the one most likely to respond",
     "opening_angle": "2–3 sentences a sales rep could use verbatim as a cold email opener. Start with the company signal. No 'I hope this finds you well.' No generic openers.",
     "why_now": "ONE specific reason urgency is real — a company event, a scaling challenge, a market pressure. Not an industry trend."
   },
@@ -91,18 +82,16 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
       "(Max 2 bullets — reasonable inferences only)"
     ],
     "what_to_sell": "ONE specific Demaze service — e.g. 'AI Quality Control for Welding Lines'",
-    "who_to_contact": "ONE exact job title",
     "why_now": "ONE specific company-level reason — not 'industry trends'",
     "overall_confidence": "high | medium | low"
   },
 
   "why_demaze": {
     "reasons": [
-      "Signal — 'evidence quote or inference basis' — operational implication → Demaze service | Target: job title"
+      "Signal — 'evidence quote or inference basis' — operational implication → Demaze service"
     ],
     "outreach_angle": "2–3 sentences a rep could use verbatim. Same as opening_angle above.",
-    "relevant_services": ["Service 1", "Service 2"],
-    "target_contacts": ["VP Operations", "Head of Automation"]
+    "relevant_services": ["Service 1", "Service 2"]
   },
 
   "signal_summary": "1–2 sentence narrative of the most important signals detected, or what was inferred.",
@@ -121,7 +110,6 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
 RULES:
 - pain_points: ALWAYS generate 3–5. Mark each as (observed) if directly stated, (inferred) if based on business model/industry reasoning. NEVER return [].
 - ai_opportunities: ALWAYS generate 3–5. Use pre-extracted signals if available. Use inference if not. NEVER return [].
-- recommended_contacts: ALWAYS 2–3 exact job titles. NEVER return [].
 - opening_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes → good.
 - why_now: Must be company-specific. "Digital transformation is accelerating in manufacturing" = REJECTED. "Ador Welding is scaling robotic welding across 3 plants" = VALID.
 - For thin-content sites: use what you have, infer what you can, state your confidence level honestly.

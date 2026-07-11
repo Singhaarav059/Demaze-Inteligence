@@ -42,6 +42,7 @@ export default function RunHistoryPage() {
   const [expandedDetail, setExpandedDetail] = useState<Record<string, unknown> | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [opFilter, setOpFilter] = useState<string>('all')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function fetchRuns() {
     setLoading(true)
@@ -89,6 +90,20 @@ export default function RunHistoryPage() {
     }
   }
 
+  async function deleteRun(id: string) {
+    if (!window.confirm('Delete this saved run? This cannot be undone.')) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/admin/test-runs/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setRuns(prev => prev.filter(r => r.id !== id))
+        if (expandedId === id) { setExpandedId(null); setExpandedDetail(null) }
+      }
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const filteredRuns = runs
 
   return (
@@ -99,6 +114,12 @@ export default function RunHistoryPage() {
           <p className="text-sm text-zinc-500 mt-0.5">{runs.length} test runs stored</p>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/admin/batch-upload" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mr-2">
+            Batch upload →
+          </a>
+          <a href="/admin/intelligence-lab" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mr-2">
+            Intelligence Lab →
+          </a>
           {/* Filter */}
           {['all', 'scraper_only', 'analysis', 'full_pipeline'].map((op) => (
             <button
@@ -147,9 +168,11 @@ export default function RunHistoryPage() {
         {filteredRuns.map((run) => (
           <div key={run.id} className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
             {/* Row */}
-            <button
+            <div
               onClick={() => fetchDetail(run.id)}
-              className="w-full text-left px-4 py-3 hover:bg-zinc-800/60 transition-colors"
+              role="button"
+              tabIndex={0}
+              className="w-full text-left px-4 py-3 hover:bg-zinc-800/60 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3 flex-wrap">
                 {/* Status dot */}
@@ -191,12 +214,22 @@ export default function RunHistoryPage() {
                   {new Date(run.created_at).toLocaleString()}
                 </span>
 
+                {/* Delete */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteRun(run.id) }}
+                  disabled={deletingId === run.id}
+                  className="text-zinc-600 hover:text-red-400 transition-colors text-xs flex-shrink-0 px-1.5 py-0.5 rounded border border-transparent hover:border-red-900"
+                  title="Delete this run"
+                >
+                  {deletingId === run.id ? '…' : '🗑'}
+                </button>
+
                 {/* Expand indicator */}
                 <span className="text-zinc-600 text-xs flex-shrink-0">
                   {expandedId === run.id ? '▲' : '▼'}
                 </span>
               </div>
-            </button>
+            </div>
 
             {/* Expanded detail */}
             {expandedId === run.id && (

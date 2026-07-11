@@ -80,20 +80,6 @@ export interface WhyNowAnalysis {
   genericityFlag: boolean        // true if narrative could apply to any company
 }
 
-// ── Outreach Intelligence ─────────────────────────────────────
-
-export type DemazeRelevanceScore = 'very_strong' | 'strong' | 'moderate' | 'weak'
-
-export interface OutreachCard {
-  role: string
-  likely_kpi: string
-  likely_pain: string
-  message_angle: string
-  relevant_opportunity: string
-  demaze_relevance: DemazeRelevanceScore
-  why_relevant: string
-}
-
 // ── Intelligence Quality ──────────────────────────────────────
 
 export interface IntelligenceQualityDimension {
@@ -119,7 +105,6 @@ export interface SynthesisResult {
   validatedSignals: ValidatedSignal[]
   strategicThemes: StrategicTheme[]
   whyNow: WhyNowAnalysis
-  outreachCards: OutreachCard[]
   intelligenceQuality: IntelligenceQuality
   synthesizedAt: string
 }

@@ -99,11 +99,6 @@ export interface RunResult {
       narrative: string; genericityFlag: boolean
       triggers: Array<{ signal_type: string; evidence_quote: string; source_label: string; urgency_contribution: number }>
     }
-    outreachCards: Array<{
-      role: string; likely_kpi: string; likely_pain: string
-      message_angle: string; relevant_opportunity: string
-      demaze_relevance: string; why_relevant: string
-    }>
     intelligenceQuality: {
       overall: number; overall_label: string; tier: string
       data_coverage: { label: string; score: number; note: string }

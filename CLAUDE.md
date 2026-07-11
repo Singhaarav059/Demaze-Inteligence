@@ -629,6 +629,63 @@ always found ~7 because it invented them, the new one only surfaces real
 evidence. Since `min_opportunities` is WARN-severity not a hard gate, this
 isn't a regression, it's the new system being honest about thinner cases.
 
+**Item 6 (done 2026-07-11)** — buyer/contact-field removal completed in code,
+not just docs. The "Output schema" lock (2026-07-11) removed buyer/stakeholder
+fields from the spec; this pass finished removing them from the actual
+pipeline: `recommended_contacts`, `recommended_contact_roles`,
+`recommended_contact_roles` fallback from `modelProfile.default_target_buyers`,
+`target_buyer`, `target_contact`, `who_to_contact`, `target_contacts`, and the
+synthesis-layer `OutreachCard`/`outreachCards` concept (its own file,
+`lib/synthesis/outreach-engine.ts`, deleted) removed from
+`lib/pipeline/normalize.ts`, `lib/prompts/analyze-v2.ts`,
+`lib/prompts/system-v2.ts`, `lib/synthesis/types.ts`, `lib/synthesis/index.ts`,
+and the admin UI (`intelligence-lab/page.tsx`). Old v1 prompt files
+(`lib/prompts/analyze.ts`, `schema.ts`, `system.ts` — pre-dated the `-v2` files
+and were never fully retired) deleted outright; their two still-used helpers
+(`formatScrapedPages`, `estimateTokenCount`) extracted into a new
+`lib/prompts/scrape-utils.ts` first so `scraper.ts` and `test-scraper/route.ts`
+keep working. Verified via `tsc --noEmit` (clean) and a live dev-server pass
+over all three admin pages — no dangling imports, no console/server errors.
+
+**Item 7 (done 2026-07-11)** — batch lead-list upload, the first concrete piece
+of the "flexible input" half of the target pipeline (see "Pipeline" section
+above — company identity can now arrive as a file, not just a single URL).
+New `/admin/batch-upload` page: upload an xlsx/csv/docx/pdf lead-list export ->
+`lib/batch/file-parser.ts` parses it into `LeadRow[]` (header-aliasing column
+detection, three-tier graceful degradation: file-level / structure-level /
+row-level — never a hard crash on a malformed row) -> `lib/batch/company-dedup.ts`
+collapses multi-contact-per-company rows into one entry per company (tiered
+domain/exact-name/acronym-squash matching, same word-boundary discipline as
+`website-discovery.ts`; anything weaker is flagged `possibleDuplicateOf` for
+manual review, never silently auto-merged) -> user selects which companies to
+research -> existing 4-step pipeline runs **sequentially, one company at a
+time by design** (batch-level parallelism was considered and rejected given
+real Firecrawl/Tavily quota limits already hit live this session) via the
+existing `/api/admin/test-analysis` endpoint (`mode: 'lightweight'`) -> each
+completed result is persisted to run-history immediately as it finishes, so a
+closed tab mid-batch never loses already-completed (already-paid-for)
+research. Includes consecutive-quota-hit detection (3 companies in a row
+matching a known Firecrawl/Tavily/rate-limit error signature) that pauses the
+batch with an explainable message rather than burning through the rest of the
+queue against an exhausted quota. `ResearchCard` (the SDR-facing single-result
+view) extracted out of `intelligence-lab/page.tsx` into its own component file
+so both pages render results identically. New API route
+`/api/admin/batch-parse` (parse + dedupe only, no research — kept separate
+from the research loop, which reuses `test-analysis` rather than duplicating
+pipeline-invocation logic). New deps: `exceljs`, `papaparse`, `mammoth`,
+`pdf-parse` (parsing), `docx` (devDependency, unused by this feature — check
+before assuming it's wired up if referenced elsewhere later).
+Verified: parse+dedupe tested end-to-end against a real generated xlsx fixture
+(4 companies with deliberately similar names to exercise the
+`possibleDuplicateOf` partial-match path — correctly flagged, not
+auto-merged). `tsc --noEmit` clean. All three admin pages load with no
+console/server errors on a live dev-server pass. The "Research Selected"
+sequential-loop + quota-pause path was exercised manually in the prior session
+(hence the now-deleted `benchmarks/debug/_gen_quota_fixture.ts` scratch
+fixture) but not re-verified end-to-end in this session — if quota-pause
+behavior is in question later, re-test with a fresh fixture of fake
+`.example.com` domains rather than assuming the prior manual pass still holds.
+
 ## The actual goal
 NOT "6/6 benchmark PASS." The goal is: any company URL -> pipeline always returns
 usable intelligence -> no hard crashes -> no hard FAILs -> graceful degradation on

@@ -701,8 +701,7 @@ export async function POST(req: NextRequest) {
       // Warn if LLM produced no substantive output
       const _llmPainCount    = Array.isArray(rawParsed.pain_points)         ? (rawParsed.pain_points as unknown[]).length : 0
       const _llmOppCount     = Array.isArray(rawParsed.ai_opportunities)    ? (rawParsed.ai_opportunities as unknown[]).length : 0
-      const _llmContactCount = Array.isArray(rawParsed.recommended_contacts) ? (rawParsed.recommended_contacts as unknown[]).length : 0
-      console.log('[pipeline:LLM_OUT]', JSON.stringify({ pain_points_count: _llmPainCount, ai_opportunities_count: _llmOppCount, contacts_count: _llmContactCount }))
+      console.log('[pipeline:LLM_OUT]', JSON.stringify({ pain_points_count: _llmPainCount, ai_opportunities_count: _llmOppCount }))
 
       // aiSynthesisFailed already recorded its own PARTIAL gate above with the
       // real reason — don't also emit the generic "no output" WARN here, it
@@ -713,7 +712,7 @@ export async function POST(req: NextRequest) {
             'LLM produced no pain_points or ai_opportunities — narrative may be incomplete')
         } else {
           gate(pipelineGates, 'LLM_PARSE', 'PASS',
-            `LLM output: ${_llmPainCount} pain_points | ${_llmOppCount} opportunities | ${_llmContactCount} contacts`)
+            `LLM output: ${_llmPainCount} pain_points | ${_llmOppCount} opportunities`)
         }
       }
 
@@ -782,12 +781,10 @@ export async function POST(req: NextRequest) {
       const _norm = analysisResult as Record<string, unknown>
       const _normPainCount    = Array.isArray(_norm.pain_points)           ? (_norm.pain_points as unknown[]).length : 0
       const _normOppCount     = Array.isArray(_norm.opportunities)         ? (_norm.opportunities as unknown[]).length : 0
-      const _normContactCount = Array.isArray(_norm.recommended_contacts)  ? (_norm.recommended_contacts as unknown[]).length : 0
-      console.log('[pipeline:NORM_OUT]', JSON.stringify({ pain_points_count: _normPainCount, opportunities_count: _normOppCount, contacts_count: _normContactCount }))
+      console.log('[pipeline:NORM_OUT]', JSON.stringify({ pain_points_count: _normPainCount, opportunities_count: _normOppCount }))
 
       if (_llmPainCount > 0 && _normPainCount === 0) console.warn('[pipeline:DROP] pain_points dropped by normalizer — check flattenSections')
       if (_llmOppCount > 0 && _normOppCount === 0)   console.warn('[pipeline:DROP] ai_opportunities dropped by normalizer — check flattenSections')
-      if (_llmContactCount > 0 && _normContactCount === 0) console.warn('[pipeline:DROP] recommended_contacts dropped by normalizer — check flattenSections')
 
       if (aiSynthesisFailed) {
         // Already gated PARTIAL at LLM_PARSE with the real reason — skip the
@@ -797,7 +794,7 @@ export async function POST(req: NextRequest) {
           'Normalizer produced 0 pain_points and 0 opportunities — LLM output may have used unexpected schema keys')
       } else {
         gate(pipelineGates, 'NORMALIZATION', 'PASS',
-          `Normalized: ${_normPainCount} pain_points | ${_normOppCount} opportunities | ${_normContactCount} contacts`)
+          `Normalized: ${_normPainCount} pain_points | ${_normOppCount} opportunities`)
       }
 
       console.log('[test-analysis] company_name:', (analysisResult as Record<string, unknown>).company_name)
