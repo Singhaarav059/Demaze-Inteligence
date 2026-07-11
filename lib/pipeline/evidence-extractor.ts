@@ -700,6 +700,11 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
     [/\bleader\s+in\s+(?:forgings?|castings?|stampings?|machining|fabrication|manufactur\w+)\b/i,        'leader in forgings/castings/machining/...'],
     [/\bour\s+(?:forging|casting|stamping|machining|fabrication|welding)\s+operations?\b/i,              'our forging/casting/welding operations'],
     [/\b(?:forging|casting|stamping|fabrication|machining)\s+(?:company|business|operations?)\b/i,      'forging/casting company/business/operations'],
+    // Enumerated capability lists ("fabrication, machining, control system design facility")
+    // put other nouns between the capability keyword and facility/plant/unit — the patterns
+    // above all require direct adjacency and miss this list-style copy. Bounded to 40 chars
+    // and excludes '.'/newline so the gap can't cross a sentence boundary into an unrelated claim.
+    [/\b(?:forging|casting|stamping|machining|fabricat\w+|assembly)\b[^.\n]{0,40}?\b(?:facilit\w*|plant|unit)\b/i, 'forging/casting/machining/fabrication + (enumerated list) + facility/plant/unit'],
   ], evidence)) profile.company_type.manufacturer = true
 
   // industrial_vendor: sells industrial equipment / automation / machinery to industry
@@ -772,8 +777,11 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
   ], evidence)) profile.company_type.logistics_operator = true
 
   // financial_institution — emi removed (electromagnetic interference false positive)
+  // bare "bank" excludes common non-financial compounds ("data bank", "food bank", etc.) —
+  // same false-positive class as the 'ir' inside "wire" / 'sec' inside "security" URL-classifier bug.
   if (captureFlag(content, 'financial_institution', [
-    [/\b(?:bank|insurance|nbfc|mutual\s+fund|asset\s+management|investment\s+bank)\b/i, 'bank/insurance/NBFC/mutual fund/asset management/investment bank'],
+    [/\b(?:insurance|nbfc|mutual\s+fund|asset\s+management|investment\s+bank)\b/i, 'insurance/NBFC/mutual fund/asset management/investment bank'],
+    [/(?<!data\s)(?<!food\s)(?<!test\s)(?<!word\s)(?<!blood\s)(?<!piggy\s)(?<!river\s)\bbank\b/i, 'bank (excl. data/food/test/word/blood/piggy/river bank)'],
     [/\bfinancial\s+services?\s+(?:company|provider|firm)\b/i,                          'financial services company/provider/firm'],
     [/\b(?:loan|deposit|credit\s+card|mortgage|npa)\b/i,                               'loan/deposit/credit card/mortgage/NPA'],
   ], evidence)) profile.company_type.financial_institution = true

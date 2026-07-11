@@ -200,9 +200,15 @@ export async function discoverEvidenceSources(
 
   for (const chunk of chunks) {
     await Promise.all(chunk.map(async ({ query, category }) => {
-      const raw = tavilyKey
-        ? await searchTavily(query, tavilyKey)
-        : await searchSerper(query!, serperKey!)
+      // Try Tavily first, but fall through to Serper whenever Tavily comes back
+      // empty — not just when the key is absent. A failed/quota-exceeded Tavily
+      // call also resolves to [] (see searchTavily's catch), which previously
+      // meant a real outage silently produced zero results instead of falling
+      // back to a configured Serper key.
+      let raw = tavilyKey ? await searchTavily(query, tavilyKey) : []
+      if (raw.length === 0 && serperKey) {
+        raw = await searchSerper(query, serperKey)
+      }
 
       for (const r of raw) {
         if (!r.url || seenUrls.has(r.url)) continue

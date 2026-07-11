@@ -16,6 +16,14 @@ export interface BenchmarkExpectations {
    */
   requiredProfileFlags: string[]
   /**
+   * Expected companyProfile.primary_type label. Optional — omit when the
+   * correct label is still an open question (e.g. Ace Pipeline, not yet
+   * root-caused). Added after the AITG conglomerate-priority bug stayed
+   * hidden for a full session because nothing asserted on this field,
+   * only on company_type booleans and signal/opportunity counts.
+   */
+  expectedPrimaryType?: string
+  /**
    * Strings that must NOT appear in the LLM-generated narrative fields
    * (company_summary, pain_points, opportunity titles/descriptions, outreach angle).
    * Case-insensitive.

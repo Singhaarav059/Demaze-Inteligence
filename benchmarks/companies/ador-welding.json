@@ -8,6 +8,7 @@
     "requiredProfileFlags": [
       "manufacturer"
     ],
+    "expectedPrimaryType": "industrial_vendor_manufacturer",
     "forbiddenTerms": [
       "SaaS onboarding",
       "subscription churn",

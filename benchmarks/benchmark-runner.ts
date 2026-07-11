@@ -225,6 +225,21 @@ function runChecks(spec: BenchmarkSpec, apiResponse: ApiResponse): CheckResult[]
     )
   }
 
+  // Check 6b: Expected primary_type label (FAIL — same severity as profile flags;
+  // this is the check that would have caught the AITG conglomerate-priority bug
+  // sooner, since profile_flag checks alone don't see primary_type mislabeling
+  // when a different, correct flag also happens to be true).
+  if (spec.expectations.expectedPrimaryType) {
+    const match = primaryType === spec.expectations.expectedPrimaryType
+    check(
+      'primary_type',
+      match,
+      'FAIL',
+      primaryType,
+      spec.expectations.expectedPrimaryType,
+    )
+  }
+
   // Check 7: Forbidden terms (FAIL — LLM generating wrong-industry content)
   const narrativeText = buildNarrativeText(apiResponse.analysisResult)
   for (const term of spec.expectations.forbiddenTerms) {

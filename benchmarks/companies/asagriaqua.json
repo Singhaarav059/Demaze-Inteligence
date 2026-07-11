@@ -6,6 +6,7 @@
     "minOpportunities": 2,
     "minChallenges": 2,
     "requiredProfileFlags": [],
+    "expectedPrimaryType": "unknown",
     "forbiddenTerms": [
       "SaaS onboarding",
       "subscription churn",

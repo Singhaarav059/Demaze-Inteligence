@@ -223,6 +223,21 @@ Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,
 do not regress these)
 
+**Known gap (2026-07-11, not blocking, needs proper fixing later):** the files in
+`benchmarks/companies/*.json` no longer match their filenames — `bharat-forge.json`
+now holds the AITG spec, `hdfc-bank.json` holds A-1 Fence, `zoho.json` holds ATE
+Group. The original 3-company reference set (Bharat Forge, Muthoot Finance,
+Chargebee) is NOT in the active `npm run benchmark` run at all — "do not regress
+these" above is currently unenforced by automation. Manual spot-check on 2026-07-11
+(hand-run via the admin API) found: Bharat Forge and Chargebee classify correctly
+(`manufacturer` / `software_saas`, zero conglomerate false-positive risk). **Muthoot
+Finance's direct scrape fails entirely** (`successfulUrls: []`, stub content only,
+`primary_type: unknown`) — this is a pre-existing, separate scraper-reliability gap
+for muthootfinance.com specifically, unrelated to any classifier work, and needs its
+own investigation (anti-bot/slow-site/redirect — same diagnostic discipline as A-1
+Fence's `fetch failed` below). Fix the filename/content mismatch and re-add real
+regression coverage for the reference set before trusting "do not regress" again.
+
 ## Company-specific known issues (context for whoever debugs these next)
 - **AITG**: evidence extraction works (production lines, auto parts, chemical industry,
   group companies all found) but signals=0, opportunities=0. This is NOT a scraping
@@ -234,12 +249,37 @@ do not regress these)
   by stripping to bare `sites.google.com`) is fixed. Tavily search fallback parser bug
   (`SearchData has no '.data'`, results actually under `.web`) needs verification —
   check this before assuming Google Sites support is done.
-- **ATE Group**: classified as `primary=conglomerate, manufacturer=false` despite
-  strong manufacturing evidence (industrial technologies, engineering, manufacturing
-  technology, industrial automation). Likely classifier gap — verify after keyword
-  boundary fix is live (see environment gotcha above).
-- **Ace Pipeline**: classified as conglomerate, likely under-classified. Needs review,
-  not yet root-caused.
+- **ATE Group**: root-caused 2026-07-11. Two bugs converged: (1) `evidence-extractor.ts`'s
+  `primary_type` if/else cascade checks `conglomerate` FIRST, before `manufacturer`/
+  `industrial_vendor` — so ATE's real fabrication/machining evidence lost to a generic
+  "diverse sectors" marketing phrase that also fires `conglomerate`. Confirmed the same
+  bug silently affects AITG too (masked — benchmark didn't assert on `primary_type`, only
+  the boolean flag, which AITG's real manufacturer evidence also satisfies). (2) The
+  `manufacturer` regex required direct word-adjacency to plant/facility/unit, missing
+  ATE's actual list-style copy ("fabrication, machining, control system design facility").
+  Bug 2 is FIXED (2026-07-11) — enumerated-capability-list pattern added, verified against
+  live content, `company_type.manufacturer` now correctly `true` for ATE. Also fixed in the
+  same pass: bare `\bbank\b` false-positive (was matching "data bank" in a job posting) —
+  now excludes data/food/test/word/blood/piggy/river bank compounds, same bug class as the
+  historical 'ir'/'sec' URL-classifier substring fix. Bug 1 (the priority reorder) is
+  SCOPED but not yet implemented — pending go-ahead, proposed fix is moving `conglomerate`
+  to the end of the cascade (checked only when nothing more specific matched). Verified
+  zero regression risk against Bharat Forge/Chargebee (neither ever fires `conglomerate`
+  today); Muthoot inconclusive due to its unrelated scrape failure (see above).
+- **Ace Pipeline**: classified as conglomerate — same Bug 1 above, but unlike ATE/AITG,
+  NOTHING else fires for Ace Pipeline's scraped content (no manufacturer/industrial_vendor
+  evidence at all), so we genuinely don't know its correct classification yet. Do not
+  assume "manufacturer" — needs its own content review before assigning an
+  `expectedPrimaryType` in the benchmark spec (deliberately left unset in
+  `acepipeline.json`, unlike the other 5 companies).
+- **Scraper flakiness observed 2026-07-11**: re-running AITG and A-1 Fence back-to-back
+  produced different `successfulUrls` sets between runs — one run's Firecrawl `mapUrl`
+  discovery returned nothing (`discoveryMethod: 'homepage_only'`, `urlsSelectedForScraping:
+  []`), falling back to a generic probe (`/about`, `/about-us`, `/company`, `/products`,
+  `/services`) that missed the actual evidence-bearing pages found on other runs. This is
+  the existing documented scraper-reliability gap manifesting concretely, not a new bug —
+  don't diagnose a `manufacturer`/`primary_type` FAIL as a classifier regression without
+  retrying first (same discipline as the LLM JSON-malformation lesson below).
 
 ## The second-biggest architectural weakness (after scraping): companySubjectCount=0
 When this fires: 0 subjects -> 0 signals -> 0 opportunities -> WARN/FAIL. IMPORTANT
