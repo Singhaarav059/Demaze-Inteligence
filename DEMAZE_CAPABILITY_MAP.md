@@ -2,7 +2,7 @@
 
 Status: CONFIRMED service list (given directly), draft mapping to problems/evidence.
 The 8 service lines below are ground truth, not inferred. Everything mapped to them
-(evidence examples, problem-fit, buyer titles) is still draft until reviewed.
+(evidence examples, problem-fit) is still draft until reviewed.
 
 ## Confirmed services (source: given directly, this is the authoritative list)
 ```yaml
@@ -72,8 +72,6 @@ categories.
   highest-effort lowest-return
 - Whether "Virtual CTO / embedded team" is a positioning device used on some
   proposals, or should be treated as absent entirely from outreach copy
-- Actual buyer titles Demaze successfully closes with (draft guesses below are
-  inferred from typical org structures per problem type, not confirmed)
 - Whether the engagement-to-service-line mapping above is correct — it's my
   inference of which known project maps to which official line, not confirmed
   by anyone at Demaze
@@ -84,35 +82,33 @@ Manufacturing / Industrial:
   - Multi-plant/multi-facility coordination and visibility gaps
   - Manual, delayed plant-to-HQ reporting
   - Legacy systems with no AI-driven decision support
-  likely_buyer: Plant Ops Head, VP Manufacturing, CTO
 
 D2C / E-commerce:
   - Analytics fragmentation, no unified revenue/traffic view
   - India-specific payment gaps (Stripe invite-only)
-  likely_buyer: Founder, Head of Growth, CTO
 
 Dealer / Distribution Networks:
   - Sales intelligence not surfaced at the individual-dealer level
   - Siloed inventory/service data vs. sales opportunity
-  likely_buyer: Head of Sales, Dealer Network Ops, CMO
 
 Regulated-adjacent platforms (fintech, trading, marketplaces):
   - Need jurisdiction-aware, phased-delivery architecture
-  likely_buyer: Founder/CEO, Head of Product, Compliance-adjacent lead
 
 SMBs with informal ops:
   - No CRM, tracking via spreadsheets/WhatsApp
   - Founder-dependent decision-making, no dashboard layer
-  likely_buyer: Founder, Ops Manager
 ```
 
-## Outreach Intelligence Schema (unchanged from prior draft — still the right shape)
+## Output schema — see CLAUDE.md "Output schema" for the current authoritative
+## version (2026-07-11). No buyer/stakeholder field — every real lead row already
+## has a named person and title attached (Sales Navigator export); this pipeline
+## does not generate or rank buyers. The schema below is superseded, kept only for
+## historical reference:
 ```yaml
 Company:
 Signals:
 Likely Problems:
 Demaze Fit:
-Recommended Stakeholder:
 Outreach Angle:
 Confidence:
 ```
@@ -122,9 +118,6 @@ Someone at Demaze (whoever owns this decision) reviewing:
 1. The "evidence_strength: high/medium/low" buckets above — correcting anything wrong
 2. Whether the "legacy" bucket should be dropped entirely or kept for specific segments
 3. Actual revenue mix across the buckets, if known
-4. Real buyer titles from closed deals, if available (much stronger than the
-   inferred guesses above)
 
-Until that review happens, treat every "Demaze Fit" and "Recommended Stakeholder"
-this pipeline generates as a hypothesis, not a fact — the confidence field in every
-report should reflect that.
+Until that review happens, treat every "Demaze Fit" this pipeline generates as a
+hypothesis, not a fact — the confidence field in every report should reflect that.
