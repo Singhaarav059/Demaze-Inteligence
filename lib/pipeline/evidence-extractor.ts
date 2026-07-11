@@ -842,8 +842,13 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
   if (ct.services_provider) profile.selling_model.sells_services = true
 
   // ── primary_type (convenience label) ─────────────────────────
-  if (ct.conglomerate) profile.primary_type = 'conglomerate'
-  else if (ct.software_saas) profile.primary_type = 'software_saas'
+  // `conglomerate` is checked LAST (not first) — its patterns are generic
+  // marketing boilerplate ("diverse sectors", "Group Companies") compared to
+  // every other category's operational evidence, so it should only win when
+  // nothing more specific matched (e.g. Ace Pipeline). Previously checked
+  // first, it silently overrode real manufacturer/industrial_vendor evidence
+  // for ATE Group and AITG. See CLAUDE.md "ATE Group" for the root-cause writeup.
+  if (ct.software_saas) profile.primary_type = 'software_saas'
   else if (ct.financial_institution) profile.primary_type = 'financial_institution'
   else if (ct.pharma_biotech) profile.primary_type = 'pharma_biotech'
   else if (ct.healthcare_provider) profile.primary_type = 'healthcare_provider'
@@ -853,6 +858,7 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
   else if (ct.industrial_vendor) profile.primary_type = 'industrial_vendor'
   else if (ct.manufacturer) profile.primary_type = 'manufacturer'
   else if (ct.services_provider) profile.primary_type = 'services_provider'
+  else if (ct.conglomerate) profile.primary_type = 'conglomerate'
   else profile.primary_type = 'unknown'
 
   return { profile, evidence }

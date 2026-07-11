@@ -261,11 +261,13 @@ regression coverage for the reference set before trusting "do not regress" again
   live content, `company_type.manufacturer` now correctly `true` for ATE. Also fixed in the
   same pass: bare `\bbank\b` false-positive (was matching "data bank" in a job posting) —
   now excludes data/food/test/word/blood/piggy/river bank compounds, same bug class as the
-  historical 'ir'/'sec' URL-classifier substring fix. Bug 1 (the priority reorder) is
-  SCOPED but not yet implemented — pending go-ahead, proposed fix is moving `conglomerate`
-  to the end of the cascade (checked only when nothing more specific matched). Verified
-  zero regression risk against Bharat Forge/Chargebee (neither ever fires `conglomerate`
-  today); Muthoot inconclusive due to its unrelated scrape failure (see above).
+  historical 'ir'/'sec' URL-classifier substring fix. Bug 1 is FIXED (2026-07-11) —
+  `conglomerate` moved to the end of the `primary_type` cascade (checked only when
+  nothing more specific matched). Verified: ATE Group now resolves to `primary_type:
+  manufacturer` (both the `profile_flag:manufacturer` and new `primary_type` benchmark
+  checks pass); Bharat Forge and Chargebee re-verified live post-fix and stay
+  `manufacturer` / `software_saas` respectively — zero regression. Muthoot still
+  inconclusive due to its unrelated scrape failure (see above).
 - **Ace Pipeline**: classified as conglomerate — same Bug 1 above, but unlike ATE/AITG,
   NOTHING else fires for Ace Pipeline's scraped content (no manufacturer/industrial_vendor
   evidence at all), so we genuinely don't know its correct classification yet. Do not
