@@ -508,11 +508,13 @@ makes the intended scope explicit in docs.
   `domain` is empty (no domain to build probe URLs against).
 - Run-history logging: new `website_discovery` JSONB column
   (`supabase/migrations/004_website_discovery.sql`), wired through
-  `test-runs/route.ts` and the admin UI's `saveRun()`. **This migration has NOT
-  been applied to the live database — it needs to be run (Supabase dashboard SQL
-  editor or CLI) before admin-UI test-run saves will succeed once this code is
-  live.** Not applied automatically — a schema change to shared infra is not
-  something to do without an explicit decision.
+  `test-runs/route.ts` and the admin UI's `saveRun()`. **Migration applied
+  2026-07-11 (item 0.7)** — user ran it directly in the Supabase dashboard.
+  Verified end-to-end: `pipeline_test_runs` table existed already (002 was
+  applied earlier), the missing `website_discovery` column was the sole cause
+  of every run-save failing (the insert unconditionally references it), a real
+  POST to `/api/admin/test-runs` with `website_discovery` populated now
+  succeeds, test row deleted after verification.
 - Validated against the 6 known benchmark company names (ground-truth check:
   already know the correct domain for each) plus 3 deliberately hard cases
   (generic name, small/weak-web-presence name). Results were genuinely mixed,
