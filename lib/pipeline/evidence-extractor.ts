@@ -176,13 +176,14 @@ export interface ExtractorResult {
   leadershipContacts: LeadershipContact[]  // named individuals + stated existing portfolio
 }
 
-// ── LeadershipContact — named buyer candidates ─────────────────
+// ── LeadershipContact — named leadership evidence ────────────────
 // A named individual + stated existing portfolio (e.g. "he heads the Bid Strategy,
-// Business Development and New Technology/Innovation for the entire Group") is a
-// dramatically stronger buyer signal than a generic per-service title guess — see
-// EVIDENCE_SOURCE_STRATEGY.md, Tier 1: "leadership responsibilities". Extraction is
-// intentionally conservative: a name+title with no nearby portfolio clause is
-// discarded rather than surfaced as a weak/unverified contact.
+// Business Development and New Technology/Innovation for the entire Group") is
+// strong general company evidence (leadership structure, strategic focus) — see
+// EVIDENCE_SOURCE_STRATEGY.md, Tier 1: "leadership responsibilities". This does
+// NOT feed a buyer field — buyer identity is input data, not generated (see
+// CLAUDE.md "Output schema"). Extraction is intentionally conservative: a
+// name+title with no nearby portfolio clause is discarded rather than surfaced.
 export interface LeadershipContact {
   name: string
   title: string

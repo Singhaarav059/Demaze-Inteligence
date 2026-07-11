@@ -13,9 +13,12 @@ decided before the data reaches us. The per-service `Buyer:` field that used to
 exist in each entry below has been removed for this reason; do not reintroduce
 buyer-title inference anywhere in the pipeline.
 
-This is the blueprint `generateDeterministicOpportunities()`, the challenge engine,
-and stakeholder mapping should target. Don't rebuild that code until this file is
-reviewed — same sequencing constraint as before.
+**Rebuild status (2026-07-11): DONE.** `generateDeterministicOpportunities()` now
+implements this file directly via `lib/pipeline/service-evidence.ts` — one
+regex-based Evidence/Disqualifier/Threshold detector per service, gating a real
+report-surfacing decision (not just a confidence label). See CLAUDE.md "Item 5"
+for the verified before/after (AITG) and pressure-test results against all 6
+benchmark companies' real content.
 
 **Evidence source note (2026-07-10 reframe, see CLAUDE.md "Core reframe")**: every
 "Evidence" field below was written and validated against the company's own scraped
@@ -339,15 +342,13 @@ Outreach Angle:
 
 ---
 
-## What this file still needs before the opportunity engine is rebuilt against it
-1. Validation that the disqualifiers actually prevent false positives on the
-   existing benchmark set (run the 6 benchmark companies through this mapping
-   manually and check nothing gets a service it obviously shouldn't)
-2. A decision on what happens when a company clears the threshold for 3+ services
-   at once — does the report show all of them ranked, or force a single top pick?
-   Not yet decided.
-3. Confirmation that the Threshold tiers (weak/medium/strong) map cleanly onto the
-   existing Confidence field, or whether they're a separate gating layer that runs
-   before confidence scoring even starts (recommended: gating layer — a service that
-   doesn't clear "weak" shouldn't appear in the report at all, regardless of
-   confidence score)
+## Resolved (2026-07-11) — see CLAUDE.md "Item 5" for full detail
+1. **Disqualifier/false-positive validation**: done. Pressure-tested against all
+   6 benchmark companies' real content — no false positives at medium/strong.
+2. **3+ qualifying services**: resolved — show ALL that clear the threshold,
+   ranked by evidence strength, never capped to one. Hiding a real,
+   evidence-backed opportunity to force a single pick is worse than showing several.
+3. **Threshold as gate vs. confidence label**: resolved as a gate, stricter than
+   the original recommendation — 'weak' is computed but never surfaces at all
+   (not even alongside medium/strong at lower confidence). Only 'medium'/'strong'
+   reach the report.

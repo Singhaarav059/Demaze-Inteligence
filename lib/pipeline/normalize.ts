@@ -493,9 +493,14 @@ export function normalizeAnalysisResult(
   const strategic_challenges = modelProfile.strategic_challenges
 
   // ── Deterministic opportunities (code) ──────────────────────
+  // v3: gates directly against the 8 confirmed Demaze services via
+  // service-evidence.ts, not signal_clusters (see opportunity-engine.ts header).
+  const serviceEvidenceContent = str(flat._service_evidence_content) || ''
+  const growthOrHiringSignal = Boolean(detected_factors.growth_signal || detected_factors.hiring_signal)
   let deterministic_opportunities = generateDeterministicOpportunities(
-    signal_clusters,
+    serviceEvidenceContent,
     profileForClustering,
+    growthOrHiringSignal,
   )
 
   // ── Insufficient Evidence outcome (EVIDENCE_SOURCE_STRATEGY.md) ─────────

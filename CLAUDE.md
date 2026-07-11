@@ -560,16 +560,41 @@ extraction to the fetch path.
 dedicated investor-call-transcript/filings targeting pass. Explicitly skip
 government-filings APIs (EDGAR/MCA) — logged as a future category, not built.
 
-**Item 5 (unblocked 2026-07-11)** — rebuild `generateDeterministicOpportunities()`
-against the validated 8-service mapping. Was blocked on review of
-`SERVICE_TO_OUTREACH_MAPPING.md`/`DEMAZE_CAPABILITY_MAP.md`; now confirmed
-urgent and unblocked — a live AITG test showed `generateDeterministicOpportunities()`
-still emitting invented services ("Predictive Maintenance AI", "Production
-Optimization AI") not on the 8 confirmed lines, i.e. real misleading output
-implying Demaze capabilities that may not exist. Rebuild strictly against the 8
-confirmed services only (no invented services); produce a before/after diff on
-the AITG benchmark case as a fast sanity check rather than a full mapping-doc
-read-through first.
+**Item 5 (done 2026-07-11)** — `generateDeterministicOpportunities()` rebuilt
+against the 8 confirmed services. Root cause of the old fake-opportunity bug:
+`normalize.ts` builds the final `opportunities` array EXCLUSIVELY from
+`deterministic_opportunities` — the LLM only enriches a matching title, and any
+LLM-only title that doesn't match a catalog entry is discarded. So "Predictive
+Maintenance AI"/"Production Optimization AI" weren't LLM hallucinations, they
+were literal entries in the old `OPPORTUNITY_CATALOG` (~20 invented, never-real
+services). The old catalog's trigger mechanism (`signal-clustering.ts`'s
+clusters, built from generic `detected_factors` like `growth_signal`/
+`ai_mention`) doesn't map onto what the 8 real services need as evidence at
+all — new file `lib/pipeline/service-evidence.ts` replaces it with direct
+regex-based Evidence/Disqualifier/Threshold detection per service, run against
+raw content, matching SERVICE_TO_OUTREACH_MAPPING.md's spec exactly. Threshold
+is a real gate: 'weak' matches are computed (kept in the evidence trail for
+debugging) but never surface in the report — only 'medium'/'strong' do,
+specifically to avoid recreating the generic "Digital Transformation for
+everyone" anti-pattern via boilerplate weak-tier matches (confirmed a real risk
+during design: ATE Group's "trusted partner to the Indian textile industry"
+marketing copy would have false-positived "Marketplace platforms" at weak tier
+— correctly suppressed). No cap on qualifying services — a company clearing 2+
+services shows all of them, ranked by evidence strength, not forced to one.
+Two disqualifiers from the doc are explicitly NOT enforced (flagged in code
+comments, not silently dropped): "very small company/team" thresholds (10/15
+employees) aren't reliably present in typical scraped prose.
+**Verified**: AITG now surfaces exactly 1 real opportunity (`AI integrations and
+intelligent automation`, evidence = named "SAP (MM)" module in a job posting,
+threshold=medium) instead of the old invented titles. Pressure-tested against
+all 6 benchmark companies' real content — no false positives found at
+medium/strong tier; Ace Pipeline and AS Agri correctly surface zero
+opportunities (genuinely thin real evidence, not a detection gap — verified by
+hand against their actual scraped content). `min_opportunities` benchmark
+checks now show WARN more often than before — this is expected: the old system
+always found ~7 because it invented them, the new one only surfaces real
+evidence. Since `min_opportunities` is WARN-severity not a hard gate, this
+isn't a regression, it's the new system being honest about thinner cases.
 
 ## The actual goal
 NOT "6/6 benchmark PASS." The goal is: any company URL -> pipeline always returns

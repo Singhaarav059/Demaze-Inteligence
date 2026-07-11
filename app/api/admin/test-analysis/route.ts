@@ -747,6 +747,11 @@ export async function POST(req: NextRequest) {
         digital_transformation_signals:  extractor_digital_signals,
         business_signals:                extractor_biz_signals,
         _extractor: extractorResult,
+        // Full combined content for service-evidence.ts's regex-based detection
+        // (opportunity-engine.ts v3) — same website+enriched combination
+        // extractSignals() already builds internally, so evidence detection sees
+        // exactly what signal extraction saw, not just the 3,000-char preview.
+        _service_evidence_content: enrichedContent ? `${fullContent}\n\n${enrichedContent}` : fullContent,
       }
 
       // Gate S6: Normalization
