@@ -13,8 +13,15 @@ export interface RunResult {
   parseError?: string
   mode?: string
   contentCharsUsed?: number
-  scrapeSource?: 'cache' | 'fresh'
+  scrapeSource?: 'cache' | 'fresh' | 'none'
   cachedAt?: string
+  websiteDiscovery?: {
+    status: 'confirmed' | 'ambiguous' | 'not_found'
+    domain: string | null
+    confidence: 'high' | 'medium' | 'none'
+    candidates: Array<{ domain: string; confidence: string; evidence: string }>
+    reason: string
+  } | null
   aiMeta?: {
     model: string
     provider: string

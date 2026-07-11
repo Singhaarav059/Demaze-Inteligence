@@ -441,12 +441,18 @@ const SIGNAL_PATTERNS: PatternDef[] = [
   {
     signal: 'multi_location_operations',
     patterns: [
-      /\b(?:plants?|facilit\w+|locations?)\s+(?:across|in|spanning)\s+(?:\d+|multiple|several|many)/i,
-      /\b\d{2,}\s+(?:plants?|facilit\w+|locations?|offices?|branches?)\b/i,
+      /\b(?:plants?|facilit\w+|locations?|factor(?:y|ies))\s+(?:across|in|spanning)\s+(?:\d+|multiple|several|many)/i,
+      /\b\d{2,}\s+(?:plants?|facilit\w+|locations?|offices?|branches?|factor(?:y|ies))\b/i,
       // Spelled-out numbers + optional adjective: "six manufacturing facilities", "three plants"
-      /\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\s+(?:\w+\s+)?(?:plants?|facilit\w+|sites?|locations?)\b/i,
+      /\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\s+(?:\w+\s+)?(?:plants?|facilit\w+|sites?|locations?|factor(?:y|ies))\b/i,
+      // "Unit(s)" is intentionally NOT added to the general noun lists above — bare
+      // "unit" is far riskier than plant/facility/site/location (business unit, unit
+      // price, unit test, housing unit). Require it to be directly qualified by
+      // manufacturing/production, matching how buildCompanyProfile() already safely
+      // handles this same term (see A-1 Fence: "six manufacturing units").
+      /\b(?:manufactur\w+|production)\s+units?\b/i,
       // Noun + geographic scope: "facilities nationwide", "plants across India"
-      /\b(?:plants?|facilit\w+|sites?)\s+(?:nationwide|pan[-\s]india|across\s+(?:india|the\s+country|the\s+globe|the\s+region))\b/i,
+      /\b(?:plants?|facilit\w+|sites?|factor(?:y|ies))\s+(?:nationwide|pan[-\s]india|across\s+(?:india|the\s+country|the\s+globe|the\s+region))\b/i,
       /\boperations?\s+(?:across|in)\s+\d+\s+(?:countries?|states?|cities?)\b/i,
       /\bglobal\s+(?:manufactur\w+|operations?|footprints?|presence)\b/i,
       /\bglobal\s+(?:manufactur\w+|production)\s+(?:network|footprints?|base|presence)\b/i,

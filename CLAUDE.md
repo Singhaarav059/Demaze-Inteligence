@@ -1,11 +1,66 @@
 # Demaze AI Outbound Intelligence Platform — Project Context
 
 ## What this is
-B2B lead intelligence tool. Input: company URL. Output: company profile, business
-classification, challenges, opportunities, signals, recommended outreach angle.
-Target industries: Manufacturing, Automotive, Industrial, SaaS, Financial Institutions, SMBs.
+A **Company Intelligence Engine** for Demaze outbound sales — NOT a website
+analyzer, and NOT a lead-discovery tool. Input: a company that has ALREADY been
+identified as a lead by something upstream of Demaze (Sales Navigator, Apollo,
+Clay, a CRM export) — typically a company name, sometimes with a domain. Output:
+company profile, business classification, challenges, opportunities, signals,
+recommended outreach angle. Target industries: Manufacturing, Automotive,
+Industrial, SaaS, Financial Institutions, SMBs.
 
 This is NOT a chatbot. Output feeds real Demaze sales outreach.
+
+## Scope boundary — LOCKED (2026-07-10), do not drift past this
+The real architecture is:
+```
+Sales Navigator / Apollo / Clay / CRM  (lead discovery — NOT built here, NOT our job)
+  -> company identified
+  -> Demaze Intelligence Engine        (THIS is what we build)
+       find website -> enrich -> find problem -> AI research
+  -> Buyer
+  -> Outreach angle
+  -> [find person's email -> personalized email generation -> QA agent -> send]  (downstream, NOT built here)
+```
+
+**Demaze's job is exactly four steps: find website -> enrich -> find problem ->
+AI research.** Everything before that (lead discovery) and everything after that
+(finding a person's email, generating a full email, QA'ing it, sending it) is
+**permanently out of scope** — not deferred, not "later," genuinely not ours to
+build. Do not add email-finding, email-generation, a QA agent, or a send
+mechanism to this codebase without an explicit, separate decision to change this
+scope boundary. If a future session proposes building toward LinkedIn/Sales-
+Navigator-style lead discovery, that's a different business — stop and flag it
+rather than proceeding.
+
+**LinkedIn**: stays excluded (see `source-prioritizer.ts`'s `isFetchable()`).
+Explicitly demoted — LinkedIn support is optional and future-only, and must NOT
+drive architecture decisions. We are not trying to replace Sales Navigator.
+
+**Why this matters, concretely** (the "find website -> enrich" part, which IS in
+scope): Ador Welding can be researched through public web sources without ever
+scraping adorwelding.com — named directors, executive changes, financial
+performance, investor-call transcripts, operational pain points, industry
+challenges, news coverage, third-party data. Some of this is more valuable for
+outreach than anything on the company's own site. This is the actual argument
+for investing in enrichment depth, not LinkedIn access.
+
+**Current implementation gaps vs. this vision**:
+- `lib/enrichment/` (`web-enricher.ts`, `discovery-engine.ts`,
+  `source-prioritizer.ts`) already does real multi-source search (Tavily/Serper →
+  investor relations, annual reports, press releases, CEO interviews, news,
+  sustainability reports). Its *discovery* stage already runs unconditionally
+  whenever search API keys are present — it is NOT purely a scrape-quality
+  fallback, only its deeper *recovery* path-probing sub-stage is gated on content
+  quality. (Correcting an earlier overstatement of this gap.) Repositioning it to
+  a fully parallel, always-on stage is item 2 below — not started yet.
+- Public-source category gaps (item 4, not started): no dedicated query template
+  for executive-change announcements; investor-call transcripts and financial
+  disclosures only surface incidentally, not targeted; government-filings APIs
+  (EDGAR/MCA) are a future category, explicitly not being built now.
+- `isFetchable()` still skips PDFs entirely — annual reports and investor
+  presentations (the two highest-priority source types) are disproportionately
+  PDF-published and are being silently dropped. Item 3, not started yet.
 
 ## Why this exists — read this before touching signals/opportunities code
 This is not a generic industry classifier. The report is only useful if a Demaze
@@ -30,90 +85,78 @@ Outreach Angle: "Coordinating reporting across 6 facilities usually means someon
 Confidence: medium (facility count confirmed, reporting gap inferred not confirmed)
 ```
 
-## Demaze Capability Map — see DEMAZE_CAPABILITY_MAP.md and SERVICE_TO_OUTREACH_MAPPING.md
-The 8 official Demaze service lines are CONFIRMED ground truth (given directly, not
-inferred) — see `DEMAZE_CAPABILITY_MAP.md` at repo root. "Virtual CTO / Dedicated Team
-Model" is explicitly NOT a service line — it's a positioning device used on some
-proposals only, not a capability bucket. Do not reintroduce it as one.
+## Business context: capability map and outreach schema — see the dedicated files
+Do NOT use inline business-context content in this file as authoritative anymore.
+Two files now hold this, and supersede any earlier inline version here:
+- **DEMAZE_CAPABILITY_MAP.md** — the 8 confirmed service lines (ground truth, given
+  directly, not inferred), mapped against known delivered work. NOTE: "Virtual CTO /
+  Dedicated Team Model" is NOT one of the 8 confirmed services — that was an earlier
+  guess from a single proposal's framing and has been removed. Don't reintroduce it.
+- **SERVICE_TO_OUTREACH_MAPPING.md** — Evidence -> Disqualifiers -> Likely Pain ->
+  Why Demaze -> Threshold -> Buyer -> Outreach Angle for all 8 services, now
+  VALIDATED against real scraped data from all 6 benchmark companies (not just
+  hypothesis). This is the actual blueprint `generateDeterministicOpportunities()`,
+  the challenge engine, and stakeholder mapping should target.
 
-`SERVICE_TO_OUTREACH_MAPPING.md` is the per-service blueprint (evidence patterns,
-disqualifiers, threshold gating, buyer titles, outreach angles) that
-`generateDeterministicOpportunities()`, the challenge engine, and stakeholder mapping
-should eventually target. It is still draft and under review — see the sequencing
-note below before touching that code.
-
-## Ideal Customer Problems (think problems, not just industries)
-```yaml
-Manufacturing / Industrial:
-  - Multi-plant/multi-facility coordination and visibility gaps
-  - Manual, delayed plant-to-HQ reporting
-  - Vendor/dealer network management without unified data
-  - Legacy systems with no AI-driven decision support
-
-D2C / E-commerce:
-  - Analytics fragmentation (no unified revenue/traffic view)
-  - India-specific payment gaps (Stripe invite-only -> Razorpay integration need)
-  - Attribution and funnel visibility gaps
-
-Dealer/Distribution Networks (see Volvo model):
-  - Sales intelligence not surfaced to individual dealers
-  - Used-inventory/service data siloed from sales opportunity
-  - No systematic "why now" urgency signal for sales teams
-
-Financial/Regulated-adjacent platforms:
-  - Need jurisdiction-agnostic architecture, phased delivery, compliance-aware scoping
-  - Manual approval/onboarding workflows
-
-SMBs with informal ops:
-  - No CRM, tracking via spreadsheets or WhatsApp
-  - Founder-dependent decision-making with no dashboard/reporting layer
-```
-
-## Outreach Intelligence Schema (this is what generateDeterministicOpportunities()
-## and the executive brief should target — not a generic industry/challenge list)
-```yaml
-Company:
-Signals:            # Tier 1/2 evidence only, see Research Standards below
-Likely Problems:     # specific operational pain, not "digital transformation"
-Demaze Fit:          # named capability from the map above, not a generic category
-Recommended Stakeholder:  # actual title, not "Marketing" by default
-Outreach Angle:      # one sentence, usable as a first-line DM/email opener
-Confidence:          # tied to evidence tier, not vibes
-```
-
-## Research Standards — evidence tiers for signal extraction
-Weight evidence by tier when scoring signals/confidence. Marketing language should
-contribute close to nothing — it's currently possible for a page full of "innovative,
-leading, world-class" to inflate a score, and that's a bug in disguise, not a feature.
-
-```yaml
-Tier 1 (strong signal):
-  - Facilities, locations, employee counts, named products, named partners/distributors
-  - ERP/CRM mentions, hiring signals, expansion announcements
-
-Tier 2 (moderate signal):
-  - Supply chain, manufacturing process mentions, dealer network, field teams,
-    service centers, compliance mentions
-
-Tier 3 (near-zero weight):
-  - Pure marketing adjectives: "innovative", "leading", "world-class", "trusted",
-    "excellence" — do not let these move confidence or opportunity scoring
-```
+## Cross-cutting rules from real-data validation — apply these before touching
+## signal/opportunity code, they change what "correct" output looks like
+1. **Customer-facing evidence != internal pain.** A company's own product/service
+   copy (what it sells to ITS customers) must not be scored as evidence of the
+   company's own internal operational gap. Real false positives found: Ace
+   Pipeline's "Pipeline Integrity Management" (a service Ace sells), A-1 Fence's
+   FenSense/Liminal-F products, ATE Group's EcoAxis/SuperAxis™ platform. Reuse the
+   evidence-extractor's existing `classifySubject()` distinction between
+   `product_capability` and `company_operations`/`company_strategy` — don't
+   re-derive this per service in SERVICE_TO_OUTREACH_MAPPING.md.
+2. **9th outcome: insufficient evidence.** Not every company clears a "weak"
+   threshold on any service (see AS Agri & Aqua). The correct output in that case
+   is no forced fit and no forced outreach angle — not a template stretched over
+   thin evidence.
+3. **Prefer named buyers over generic title guesses, and say so when absent.**
+   Where real names exist in scraped content, they're dramatically more useful
+   than generic per-service titles (see SERVICE_TO_OUTREACH_MAPPING.md appendix —
+   Ace Pipeline's Director Tarun Singh, AITG's Dr. Sunil Deshpande). When no name
+   is found, output must say "buyer: unconfirmed," never silently present a
+   generic guess as researched. Never trust a name inferred from a URL slug alone
+   without confirming against the page's actual rendered content — ATE Group's own
+   site has a live bug where a URL slug doesn't match the rendered name.
+4. **The real root cause of live zero-signal results (AITG, Ace Pipeline, A-1
+   Fence) is a `SIGNAL_PATTERNS` coverage gap, not the subject-classifier floor.**
+   Manual read-through of real scrape-cache content found STRONG-qualifying
+   evidence for all three that the live pipeline currently extracts 0 signals
+   from. Fold these into the Signal library section below — they're confirmed
+   present in real sites, not hypothesized categories.
 
 ## Sequencing note re: business-context work vs. current engineering work
 The scraper fallback chain (Session 1) and classifier activation (Session 2) do NOT
-need to wait on this section being finalized — getting content and correct page
-selection is prerequisite regardless of what schema the eventual report uses.
-Signal extraction and opportunity generation (Sessions 3-4) SHOULD wait until the
-capability map and outreach schema above are confirmed by Krupal — building
-generateDeterministicOpportunities() against a generic taxonomy now means rebuilding
-it once the real schema is locked.
+need to wait on business-context work — getting content and correct page selection
+is prerequisite regardless of what schema the eventual report uses. Signal
+extraction and opportunity generation (Sessions 3-4) target the now-validated
+SERVICE_TO_OUTREACH_MAPPING.md schema — see rule 4 above for what needs to happen
+in the extractor before that mapping can actually surface live signals.
 
 ## Pipeline (in order)
+Current implemented pipeline (URL-only input, enrichment as scrape-quality fallback):
 ```
 Company URL
   -> Scraper (multi-tier fallback)
   -> Company identification
+  -> CompanyProfile classification
+  -> Signal extraction
+  -> Challenge generation
+  -> Opportunity generation
+  -> Validation gate (PASS / WARN / PARTIAL — never hard FAIL)
+  -> Final report
+```
+
+Target pipeline per the "not a website analyzer" reframe above (NOT yet built —
+requires a flexible input/identity-resolution stage and promoting multi-source
+research from fallback to parallel first-class stage):
+```
+Company identity (URL, name, LinkedIn, domain, CRM/Apollo/Clay export)
+  -> Identity resolution (canonical company name + domain, however input arrived)
+  -> Scraper (multi-tier fallback)      \
+  -> Multi-source research (parallel)    } both feed evidence extraction, neither is a fallback for the other
   -> CompanyProfile classification
   -> Signal extraction
   -> Challenge generation
@@ -199,15 +242,98 @@ do not regress these)
   not yet root-caused.
 
 ## The second-biggest architectural weakness (after scraping): companySubjectCount=0
-When this fires: 0 subjects -> 0 signals -> 0 opportunities -> WARN/FAIL, even when
-the underlying content clearly supports classification (see AITG above). Fix is a
-"floor" in the subject classifier — fallback behavior when strict extraction comes
-back empty, not a full rewrite.
+When this fires: 0 subjects -> 0 signals -> 0 opportunities -> WARN/FAIL. IMPORTANT
+CORRECTION from real-data validation: for AITG specifically, this was mis-diagnosed
+as a subject-classifier problem. Manual read-through of real scrape-cache content
+found STRONG-qualifying evidence the pipeline should have caught — the actual gap is
+in `SIGNAL_PATTERNS` regex coverage (see below), not subject classification. Keep
+the subject-classifier floor fix (it's still needed for genuinely thin sites like
+AS Agri & Aqua), but don't assume it alone fixes AITG-shaped failures.
 
-## Signal library — categories to add (currently too narrow)
-Existing: automation, digital transformation, capacity expansion
-Add: multi-location operations, distribution complexity, vendor ecosystem,
-product diversification, industrial partnerships
+## Signal library — CONFIRMED gaps from real-data validation (supersedes the
+## earlier guessed category list below it)
+Manual read-through of real scrape-cache content for Ace Pipeline, Ador Welding,
+AITG, and A-1 Fence found these evidence categories present and high-quality, with
+ZERO pattern coverage in `SIGNAL_PATTERNS` today:
+1. **Named ERP/CRM tools embedded in job postings** — e.g. AITG job listings
+   requiring "SAP MM," "SAP FICO" as mandatory skills. Directly evidences the
+   "AI integrations and intelligent automation" service (see
+   SERVICE_TO_OUTREACH_MAPPING.md #8) — confirms existing ERP with no AI layer on top.
+2. **Job-posting task/responsibility bullet lists as workflow evidence** — ATE
+   Group's entire BOQ->procurement->compliance chain came from a job listing, not
+   marketing copy. Treat job postings as a Tier-1-quality structured source, not
+   just a hiring-signal indicator.
+3. **Training/workshop/consultant-engagement mentions as an indirect pain signal**
+   — AITG's cross-company data-interpretation workshop with an external consultant
+   is near-explicit first-hand pain language.
+4. **Named individual + explicit stated portfolio** — e.g. "Director, Bid Strategy,
+   Business Development and New Technology/Innovation" is dramatically stronger
+   buyer evidence than a generic title guess. See SERVICE_TO_OUTREACH_MAPPING.md
+   Rule 3 for how this should be used (prefer named + portfolio, flag "unconfirmed"
+   when absent, never trust a URL-derived name without confirming against rendered
+   content).
+
+Original guessed categories (lower priority than the 4 above — add only after
+the confirmed gaps are addressed, since these were hypothesis, not validated):
+multi-location operations, distribution complexity, vendor ecosystem, product
+diversification, industrial partnerships.
+
+## Global disqualifier — validated, high priority
+Evidence describing what a company SELLS to its own customers must not be scored
+as evidence of that company's own internal operational gap. Real false positives
+found: Ace Pipeline's "Pipeline Integrity Management" (sold to clients, not Ace's
+internal process), A-1 Fence's FenSense/Liminal-F products, ATE Group's EcoAxis/
+SuperAxis™ platform. Reuse the existing `classifySubject()` distinction between
+`product_capability` and `company_operations`/`company_strategy` rather than
+building new per-service logic for this — see SERVICE_TO_OUTREACH_MAPPING.md Rule 1.
+
+## classifySubject() — confirmed 'about' vs 'other' pageType asymmetry (investigated, not fixed)
+Two separate mechanisms exist. The vendor-aware rule (fires for `industrial_vendor:
+true` companies) is already symmetric across 'about'/'other' — not the issue. The
+generic third-person rule (built originally for enrichment/search content, matching
+"the company/the group/the firm") is scoped to `pageType === 'other'` only — this IS
+the asymmetry, confirmed as an oversight (no evidence 'about' was deliberately excluded).
+
+**Measured impact (diagnostic pass, all 6 benchmark companies)**: 2 of 6 affected —
+AITG (1 evidence snippet) and A-1 Fence (3 snippets, 2 duplicate). Ace Pipeline, AS
+Agri, ATE Group, Ador Welding unaffected (Ador's evidence happens to already work via
+an unrelated bug, see below).
+
+**Important negative result**: widening the pageType condition ALONE rescues zero
+new evidence — both affected companies use their own literal name in third person
+("A-1 Fence's operations...", "Companies under AITG...") not the generic "the
+company/group/firm" pattern. The bottleneck is the pattern, not the pageType scope.
+
+**If this gets fixed** (thread company name into `classifySubject()` so it can
+recognize third-person self-reference by name): scope it to `'about'` pages ONLY,
+never `'other'`/enrichment content — this avoids the two biggest false-positive
+risks (third-party/negative mentions, partner/competitor bleed-through) entirely,
+since those only apply to external content. Reuse the URL-classifier's word-boundary
+matching approach for the name match itself (same bug class as 'ir' matching inside
+"wire" — a short/generic company name would collide the same way via naive substring
+match). Source the company name from whatever the pipeline's company-identification
+stage already resolved — do not derive it fresh a second time.
+
+Separately, low-risk, no design decision needed: A-1 Fence's "We offer end-to-end
+support..." evidence is stuck because "offer" isn't in the recognized first-person
+verb list — just add it.
+
+**Priority note**: this fix rescues 4 evidence snippets across 2 companies. The
+confirmed SIGNAL_PATTERNS gaps above (job-posting ERP mentions, job-posting task
+lists, training/workshop mentions) affect more companies with stronger evidence per
+company. Sequence this behind those unless it's cheap to fold into the same session.
+
+## Known, deliberately deferred bug — do NOT fix opportunistically
+`detectPageType()` receives the full URL (e.g. `https://adorwelding.com`) instead of
+a bare path, so the homepage regex never matches — homepages get mislabeled
+`pageType: 'other'` instead of `'homepage'`. This is currently *accidentally helpful*:
+Ador Welding's homepage evidence gets correctly classified only because it qualifies
+for the `'other'`-scoped third-person rule. Fixing the mislabeling naively would be a
+REGRESSION for Ador Welding, because `pageType === 'homepage'` hits an unconditional
+`return 'generic_marketing'` a few lines later. Do not fix either half of this in
+isolation — needs a dedicated session that fixes both the URL-path bug AND the
+unconditional homepage->generic_marketing return together, or benchmark regressions
+will follow.
 
 ## Model quality verdict — DO NOT relitigate this
 Evaluated whether model quality is the bottleneck. Conclusion: no.
@@ -218,21 +344,129 @@ Failures are scraping, classification, signals, timeouts, parsing — not reason
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
-- More enrichment work (L4-A "prove enrichment helps" is open but not urgent)
-- More regexes as a first resort — prefer anchor-text/structural signals over new keyword lists
+- More regexes as a first resort, EXCEPT the 4 confirmed SIGNAL_PATTERNS gaps
+  above — those are validated against real data, not speculative, and are now the
+  highest-priority signal-extraction work
+- **Anything past the scope boundary above**: email-finding, email generation,
+  a QA agent, or a send mechanism. Permanently out of scope, not just deferred.
+- **LinkedIn-driven architecture decisions**. LinkedIn stays excluded/optional.
+- Government-filings APIs (EDGAR/MCA) — logged as a future source category
+  (item 4's scope note), not being built now.
+- RESOLVED (2026-07-10): the "more enrichment work — needs an explicit decision"
+  note that used to be here is resolved. The decision was made: enrichment gets
+  repositioned to a parallel, always-on stage (item 2), new source categories get
+  added (item 4), PDF handling gets fixed (item 3). Work order and status are
+  tracked in "Implementation sequence" below.
 
-## Implementation sequence (do in this order, benchmark after each stage)
-1. Multi-tier scraper fallback (Firecrawl -> Jina -> Tavily -> Direct Fetch) + fix Tavily
-   parser shape bug. Never-hard-fail: return `{status: "PARTIAL", confidence: 30}` instead
-   of FAIL when any fallback source returns content.
-   STOP. Run benchmark. Review A-1 Fence and AS Agri specifically before continuing.
-2. Restart dev server to activate matchesKeyword() boundary fix, b2b_services category,
-   smarter probe trigger. Add anchor-text scoring. Re-run benchmark, check ATE Group,
-   A-1 Fence page selection quality (not just "did it get content" but "did it get the
-   RIGHT pages").
-3. Subject-classifier floor (prevent companySubjectCount=0 cascade). Expand signal
-   library with the 5 new categories above. Re-run benchmark, check AITG specifically.
-4. Provider health tracking — stop retrying known-unhealthy LLM providers.
+## Implementation sequence — CURRENT (2026-07-10), supersedes any earlier version
+## of this section. One item per session, benchmark after each, CLAUDE.md updated
+## in the same commit as any code change.
+
+**Decision 1 (done)**: scope boundary locked — see "Scope boundary" section above.
+
+**Decision 2 (done)** — removals/deprioritizations:
+- `business-model-classifier.ts` retirement: **deferred**. Verified 3 real
+  consumers before deciding: `normalize.ts` (functional — `classifyBusinessModel()`,
+  `getBusinessModelProfile()`, `filterSignalsForBusinessModel()`; `strategic_challenges`
+  in the live API response comes directly from `modelProfile.strategic_challenges`;
+  `filterSignalsForBusinessModel()` actively suppresses false-positive detected_factors,
+  e.g. `industry_40_initiative` for SaaS), plus `signal-clustering.ts` and
+  `opportunity-engine.ts` (type-only imports of `BusinessModelType`). Do not remove
+  this file without replacing what `strategic_challenges` reads from.
+- `company_fit` / ICP scoring: **demoted, not removed**. Verified it feeds
+  `outreach_priority_score`'s weighting formula (`normalize.ts`, 35% weight) but
+  found no code path that skips/gates any pipeline stage based on its value —
+  there was nothing to un-gate. Stays as informational-only output by design;
+  leads arrive pre-qualified from upstream, so a low fit score should never skip
+  research.
+- `icp_score_modifier` field on `business-model-classifier.ts`'s PROFILES table:
+  **deleted**. Verified it was never read anywhere outside its own definition —
+  genuinely dead code, not wired to anything (including `company_fit`).
+- Admin UI (`app/admin/*`): stays as-is. It's the testing harness, not the
+  production flow. No further investment planned.
+
+**Item 1 (done)** — company-name -> website discovery:
+- New: `lib/enrichment/website-discovery.ts` — `discoverCompanyWebsite(companyName, knownDomain?)`.
+  Content-based verification only (word-boundary match of the company's
+  significant name-words against the candidate homepage's title/description/body
+  — NOT URL/domain string similarity, same principle as `matchesKeyword()` and
+  `classifySubject()`'s word-boundary fixes). Confidence tiers: high (full name
+  match in title) / medium (partial title match or full match in
+  description/body) / none. Two candidates tied at the same confidence tier ->
+  `status: 'ambiguous'`, never silently pick one.
+- Changed: `discovery-engine.ts` exports `searchTavily`/`searchSerper` for reuse;
+  fixed a real bug found while wiring this up — `r.url.includes(domain)` with an
+  empty `domain` is always `true` in JS (empty string is a substring of every
+  string), which would have silently excluded 100% of search results the moment
+  company-name-only input reached enrichment. Now guarded (`domain &&
+  r.url.includes(domain)`).
+- Changed: `route.ts` accepts `companyName` in the request body alongside `url`.
+  When only a name is given, discovery runs first; `'confirmed'` proceeds through
+  the normal scrape pipeline; `'ambiguous'`/`'not_found'` skips scraping entirely
+  and reuses the existing empty-scrape stub-injection path (same code path a
+  website that fails to scrape already goes through) so enrichment becomes the
+  primary source — no new degradation logic needed, the graceful-degradation
+  infrastructure built earlier this session already covered this case.
+- Changed: `web-enricher.ts`'s recovery-path probing is skipped entirely when
+  `domain` is empty (no domain to build probe URLs against).
+- Run-history logging: new `website_discovery` JSONB column
+  (`supabase/migrations/004_website_discovery.sql`), wired through
+  `test-runs/route.ts` and the admin UI's `saveRun()`. **This migration has NOT
+  been applied to the live database — it needs to be run (Supabase dashboard SQL
+  editor or CLI) before admin-UI test-run saves will succeed once this code is
+  live.** Not applied automatically — a schema change to shared infra is not
+  something to do without an explicit decision.
+- Validated against the 6 known benchmark company names (ground-truth check:
+  already know the correct domain for each) plus 3 deliberately hard cases
+  (generic name, small/weak-web-presence name). Results were genuinely mixed,
+  not a clean sweep, and that's consistent with this session's "prefer under-
+  confidence" design philosophy: 2/6 clean high-confidence passes, 2/6 correctly
+  refused as `'ambiguous'` (Ace Pipeline: acepipeline.com vs .co.in both matched
+  high-confidence; AITG: aitg.co vs .com) rather than guessing, 2/6 honest
+  `'not_found'` (AS Agri and Aqua — Google Sites URLs collapse to bare
+  `sites.google.com` once reduced to hostname, a known limitation, not yet
+  fixed; ATE Group — the real domain wasn't surfaced by the search queries used).
+  Hard cases: "Om Enterprises" correctly came back `'ambiguous'` (4 plausible
+  domains); "Shree Balaji Fabricators" correctly downgraded to `'medium'`
+  confidence rather than a false high (real title says "...Enterprises Pune",
+  not "Fabricators" — partial word match, scored accordingly).
+- **Found and fixed during end-to-end testing**: Tavily's monthly quota was
+  exhausted mid-session (HTTP 432, confirmed by a direct curl against Tavily's
+  API — "This request exceeds your plan's set usage limit"), which made
+  discovery silently return `not_found` for a company (Ador Welding) that had
+  correctly resolved earlier in the same session. `searchCandidateDomains()`
+  had the same "prefer Tavily unconditionally, only use Serper if the Tavily
+  key is absent" shape as `discoverEvidenceSources()` in `discovery-engine.ts`
+  — neither falls back to Serper when Tavily's call *fails* (as opposed to not
+  being configured). Fixed in `website-discovery.ts` only (new
+  `searchWithFallback()` — falls back to Serper per-query when Tavily returns
+  zero results). **`discovery-engine.ts` has the identical gap and was NOT
+  touched** — out of scope for item 1, worth fixing when item 2 (repositioning
+  enrichment) is worked. Re-verified end-to-end after the fix: Ador Welding
+  resolves correctly via the Serper fallback, hits the existing scrape cache,
+  produces real signals, `evidence_sufficiency: sufficient`. Also re-verified
+  the ambiguous path end-to-end ("Om Enterprises" -> `domain: null`,
+  `scrapeSource: 'none'`, pipeline completes with `success: true`,
+  `evidence_sufficiency: insufficient` — no crash, no hard fail, honest output).
+
+**Item 2 (not started)** — reposition enrichment discovery+fetch from
+implicit-fallback framing to an explicitly parallel, always-on stage (its
+discovery sub-stage already runs unconditionally today, see "Current
+implementation gaps" above — this is about making that intentional and correct,
+plus fixing the sequencing so scraping and enrichment run together, not
+scrape-then-maybe-enrich). Ador Welding is the reference case.
+
+**Item 3 (not started)** — fix the PDF drop in `isFetchable()`. Add PDF text
+extraction to the fetch path.
+
+**Item 4 (not started)** — add executive-change-announcement query template +
+dedicated investor-call-transcript/filings targeting pass. Explicitly skip
+government-filings APIs (EDGAR/MCA) — logged as a future category, not built.
+
+**Item 5 (blocked)** — rebuild `generateDeterministicOpportunities()` against
+the validated 8-service mapping. Blocked on Krupal reviewing
+`SERVICE_TO_OUTREACH_MAPPING.md`/`DEMAZE_CAPABILITY_MAP.md` and confirming the
+evidence rules and outreach angles match how Demaze actually sells. Do not start.
 
 ## The actual goal
 NOT "6/6 benchmark PASS." The goal is: any company URL -> pipeline always returns

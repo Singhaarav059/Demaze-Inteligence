@@ -37,7 +37,6 @@ export interface BusinessModelProfile {
   invalid_signal_types: string[]       // which detected_factors to IGNORE (false positives)
   strategic_challenges: StrategicChallenge[]
   default_target_buyers: string[]
-  icp_score_modifier: number           // -20 to +20 adjustment to company_fit score
 }
 
 // ── Strategic challenge library ────────────────────────────────
@@ -220,7 +219,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.supply_chain_intelligence,
     ],
     default_target_buyers: ['VP Operations', 'Head of Manufacturing', 'Director of Digital Transformation', 'CTO', 'Plant Manager'],
-    icp_score_modifier: 20,
   },
 
   'Automotive OEM': {
@@ -240,7 +238,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.supply_chain_intelligence,
     ],
     default_target_buyers: ['VP Operations', 'VP Quality', 'VP After-Sales', 'CTO', 'Head of Digital Transformation'],
-    icp_score_modifier: 20,
   },
 
   'Automotive Supplier': {
@@ -259,7 +256,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.supply_chain_intelligence,
     ],
     default_target_buyers: ['VP Operations', 'VP Quality', 'Director of Manufacturing', 'Head of Digital Transformation', 'Plant Manager'],
-    icp_score_modifier: 20,
   },
 
   'Software/SaaS': {
@@ -276,7 +272,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.saas_internal_productivity,
     ],
     default_target_buyers: ['CTO', 'COO', 'VP Customer Success', 'VP Product', 'VP Engineering'],
-    icp_score_modifier: -5,  // SaaS is not primary ICP but can be relevant
   },
 
   'Engineering Services': {
@@ -292,7 +287,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.customer_support_scale,
     ],
     default_target_buyers: ['COO', 'VP Delivery', 'Head of Operations', 'CTO', 'PMO Director'],
-    icp_score_modifier: -10,  // Lower ICP fit — narrow relevance
   },
 
   'Conglomerate': {
@@ -310,7 +304,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.industrial_ai_scaling,
     ],
     default_target_buyers: ['Group CTO', 'Group COO', 'Head of Digital Transformation', 'Group CFO', 'CEO'],
-    icp_score_modifier: 10,
   },
 
   'Distribution/Logistics': {
@@ -326,7 +319,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.cross_plant_coordination,
     ],
     default_target_buyers: ['VP Operations', 'Head of Logistics', 'COO', 'Director of Supply Chain'],
-    icp_score_modifier: 5,
   },
 
   'Industrial Technology Vendor': {
@@ -343,7 +335,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.customer_support_scale,
     ],
     default_target_buyers: ['VP Service', 'Director of Field Operations', 'Head of Manufacturing', 'CTO'],
-    icp_score_modifier: 0,
   },
 
   'Other': {
@@ -357,7 +348,6 @@ const PROFILES: Record<BusinessModelType, BusinessModelProfile> = {
       CHALLENGES.saas_internal_productivity,
     ],
     default_target_buyers: ['COO', 'CTO', 'VP Operations'],
-    icp_score_modifier: -10,
   },
 }
 

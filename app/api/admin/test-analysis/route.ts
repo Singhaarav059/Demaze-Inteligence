@@ -26,6 +26,7 @@ import { normalizeAnalysisResult } from '@/lib/pipeline/normalize'
 import { getCachedScrape, saveScrapeCache } from '@/lib/cache/scrape-cache'
 import { assessContentQuality } from '@/lib/pipeline/content-quality'
 import { enrichCompanyIntelligence, detectConsumerSite, type EnrichmentResult, type EnrichedSignal, type EnrichmentOptions } from '@/lib/enrichment/web-enricher'
+import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enrichment/website-discovery'
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
@@ -129,25 +130,49 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const {
-    url,
+    url: rawUrl,
+    companyName: rawCompanyName,
     mode = 'lightweight',
     force = false,
-  } = body as { url: string; mode?: 'lightweight' | 'full'; force?: boolean }
+  } = body as { url?: string; companyName?: string; mode?: 'lightweight' | 'full'; force?: boolean }
 
-  if (!url || typeof url !== 'string') {
-    return NextResponse.json({ success: false, error: 'url is required' }, { status: 400 })
+  if ((!rawUrl || typeof rawUrl !== 'string') && (!rawCompanyName || typeof rawCompanyName !== 'string')) {
+    return NextResponse.json({ success: false, error: 'url or companyName is required' }, { status: 400 })
   }
 
-  const validation = validateAndNormalizeURL(url)
-  if (!validation.valid || !validation.normalizedUrl) {
-    return NextResponse.json(
-      { success: false, error: validation.error ?? 'Invalid URL' },
-      { status: 400 }
-    )
+  // ── Step 0: Website discovery (company-name-only input) ──────────
+  // Only runs when no URL was given directly — a URL provided by the caller
+  // IS the confirmed identity, no need to re-derive it. See CLAUDE.md "Core
+  // reframe" — this is the first step of the company-identity pipeline.
+  let websiteDiscovery: WebsiteDiscoveryResult | null = null
+  let url = rawUrl
+
+  if (!url && rawCompanyName) {
+    websiteDiscovery = await discoverCompanyWebsite(rawCompanyName)
+    console.log(`[WebsiteDiscovery] "${rawCompanyName}" -> status=${websiteDiscovery.status} domain=${websiteDiscovery.domain} confidence=${websiteDiscovery.confidence}`)
+    if (websiteDiscovery.status === 'confirmed' && websiteDiscovery.domain) {
+      url = `https://${websiteDiscovery.domain}`
+    }
+    // status === 'ambiguous' | 'not_found': url stays undefined on purpose —
+    // never guess. Pipeline proceeds below on enrichment-only evidence via the
+    // existing empty-scrape stub path, same as a site that fails to scrape.
   }
 
-  const normalizedUrl = validation.normalizedUrl
-  const domain = extractDomain(new URL(normalizedUrl))
+  let normalizedUrl: string | null = null
+  let domain = ''
+
+  if (url) {
+    const validation = validateAndNormalizeURL(url)
+    if (!validation.valid || !validation.normalizedUrl) {
+      return NextResponse.json(
+        { success: false, error: validation.error ?? 'Invalid URL' },
+        { status: 400 }
+      )
+    }
+    normalizedUrl = validation.normalizedUrl
+    domain = extractDomain(new URL(normalizedUrl))
+  }
+
   const totalStart = Date.now()
   const timing: Record<string, number> = {}
   const pipelineGates: ValidationGate[] = []
@@ -156,11 +181,32 @@ export async function POST(req: NextRequest) {
     // ── Stage 1: SCRAPE ───────────────────────────────────────
     let scrapeResult: ScrapeResult
     let quality: { score: number; note: string }
-    let scrapeSource: 'cache' | 'fresh'
+    let scrapeSource: 'cache' | 'fresh' | 'none'
     let cachedAt: string
 
     const scrapeStart = Date.now()
-    if (!force) {
+    if (!normalizedUrl) {
+      // No confirmed website (company-name-only input, discovery came back
+      // ambiguous/not_found). Synthesize an empty result — the existing
+      // stub-injection path just below treats this identically to a website
+      // that failed to scrape, so no separate code path is needed.
+      scrapeResult = {
+        pages: [], combinedContent: '', successfulUrls: [], failedUrls: [],
+        totalCharCount: 0, wasTruncated: false, discoveryMethod: 'homepage_only',
+        scrapedAt: new Date().toISOString(),
+        debug: {
+          homepageLinksRaw: 0, homepageLinksSameDomain: 0, linkScores: [],
+          urlsSelectedForScraping: [], sitemapChecked: false, sitemapUrlsFound: 0,
+          discoveryMethod: 'homepage_only', isB2CSite: false, b2cPatternsHit: 0,
+          corporateSeedPathsProbed: 0,
+          warnings: [`No website confirmed for "${rawCompanyName}" (${websiteDiscovery?.status}) — proceeding enrichment-only`],
+          errors: [],
+        },
+      }
+      quality = { score: 0, note: 'No website confirmed' }
+      scrapeSource = 'none'
+      cachedAt = new Date().toISOString()
+    } else if (!force) {
       const cached = await getCachedScrape(normalizedUrl)
       if (cached) {
         scrapeResult = cached.scrapeResult
@@ -194,20 +240,27 @@ export async function POST(req: NextRequest) {
         'Scraper returned no usable content — using domain-only stub, enrichment will be primary source',
         { successfulUrls: scrapeResult.successfulUrls.length, contentLength: scrapeResult.combinedContent.length, domain })
 
-      // Build a minimal stub so the rest of the pipeline has something to parse
-      const domainWords = domain
-        .replace(/\.(com|co\.in|in|net|org|io|biz|co|ltd)$/, '')
-        .replace(/[_\-]/g, ' ')
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .trim()
-      const companyGuess = domainWords.charAt(0).toUpperCase() + domainWords.slice(1)
+      // Build a minimal stub so the rest of the pipeline has something to parse.
+      // Prefer the caller-given company name (present whether we got here via
+      // company-name-only input, or a URL that failed to scrape) over guessing
+      // from the domain — domain may be empty entirely (no website confirmed).
+      const companyGuess = rawCompanyName?.trim() || (() => {
+        const domainWords = domain
+          .replace(/\.(com|co\.in|in|net|org|io|biz|co|ltd)$/, '')
+          .replace(/[_\-]/g, ' ')
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .trim()
+        return domainWords.charAt(0).toUpperCase() + domainWords.slice(1)
+      })()
 
       const stub = [
         `# ${companyGuess}`,
         ``,
-        `Website: ${normalizedUrl}`,
+        normalizedUrl ? `Website: ${normalizedUrl}` : `Website: not found`,
         ``,
-        `[Direct website scraping failed — content could not be extracted.]`,
+        normalizedUrl
+          ? `[Direct website scraping failed — content could not be extracted.]`
+          : `[No official website could be confirmed for "${companyGuess}"${websiteDiscovery ? ` (${websiteDiscovery.status})` : ''}.]`,
         `[Company intelligence will be sourced from external research.]`,
       ].join('\n')
 
@@ -858,6 +911,9 @@ export async function POST(req: NextRequest) {
         overall: _overallStatus,
         gates: pipelineGates,
       },
+
+      // Step 0: website discovery (null when a URL was given directly)
+      websiteDiscovery,
 
       // Enrichment timing metrics
       promptEnriched,

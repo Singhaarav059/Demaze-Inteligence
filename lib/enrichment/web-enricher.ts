@@ -332,7 +332,10 @@ export async function enrichCompanyIntelligence(
   let recoveryBlocks: string[] = []
   let recoveryPaths: string[] = []
 
-  const shouldRecover = options?.recovery || isConsumerSite || discovered.length === 0
+  // No domain to probe at all (company-name-only input, no website confirmed) —
+  // `https://${domain}${path}` would build malformed URLs otherwise, wasting a
+  // full probe cycle on requests that can never succeed.
+  const shouldRecover = domain && (options?.recovery || isConsumerSite || discovered.length === 0)
   if (shouldRecover && firecrawlKey) {
     const maxProbe = options?.recovery ? 6 : 4
     const probe = await probeRecoveryPaths(domain, isConsumerSite, maxProbe)

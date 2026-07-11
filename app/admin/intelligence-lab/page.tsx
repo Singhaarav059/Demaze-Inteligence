@@ -136,6 +136,7 @@ export default function IntelligenceLab() {
         scrape_time_ms: data.scrapeTimeMs,
         analysis_time_ms: data.analysisTimeMs,
         discovery_method: sr?.discoveryMethod,
+        website_discovery: data.websiteDiscovery ?? null,
         scrape_result: sr,
         final_result: data.analysisResult,
         prompts: data.prompts,

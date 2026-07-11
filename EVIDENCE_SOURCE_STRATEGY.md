@@ -22,6 +22,13 @@ This document defines *where* reliable evidence lives and *how much to trust it*
 so the eventual extractor rebuild targets real evidence sources instead of more
 regex patterns on the same page types that already proved insufficient.
 
+**Scope note (2026-07-10 reframe, see CLAUDE.md "Core reframe")**: this document
+was written entirely from scraped-website evidence, since that's what the pipeline
+currently ingests. The source tiers below are conceptually source-agnostic — a
+"named leadership contact" or "facility count" is Tier 1 whether it comes from the
+company's own site or from LinkedIn/news/investor calls. See the new entry under
+Tier 1 for the external sources this reframe adds.
+
 ## Evidence Source Tiers
 
 Distinct from — and a layer beneath — the content-pattern tiers already defined in
@@ -87,6 +94,29 @@ Facility / location counts:
     locations). All three cleared "strong" thresholds for Internal Operational
     Software purely on this source type, with zero internal tooling mentioned
     anywhere alongside the count.
+
+External professional / financial sources (LinkedIn, investor-call transcripts,
+executive-change announcements, financial databases):
+  reliability: very high — added 2026-07-10, see CLAUDE.md "Core reframe"
+  why: A company's own website is frequently stale or incomplete on exactly the
+       facts these sources track continuously — who currently holds a role
+       (LinkedIn beats an outdated "About" page), quarterly financial performance
+       and forward guidance (investor calls), and leadership changes (news/
+       announcements, often before the website itself is updated). These are
+       first-party or heavily-vetted third-party facts, not inference.
+  benchmark_example: >
+    Ador Welding specifically — its own site's scraped content was almost entirely
+    financial-disclosure listing pages (annual reports, dividend notices), not
+    substantive About/leadership content. The company can be far better profiled
+    through LinkedIn, investor-call transcripts, and news coverage than through
+    adorwelding.com's own scraped pages.
+  implementation_status: >
+    NOT YET INGESTED. `lib/enrichment/source-prioritizer.ts`'s `isFetchable()`
+    explicitly skips LinkedIn and Glassdoor today ("requires auth"). Investor
+    calls / executive-change news are reachable in principle via the existing
+    Tavily/Serper discovery queries but aren't a dedicated query category yet
+    (`discovery-engine.ts`'s `QueryCategory` is `investor | hiring | expansion |
+    strategy` — no explicit "leadership change" or "earnings call" category).
 ```
 
 ### Tier 2 — Moderate-reliability sources

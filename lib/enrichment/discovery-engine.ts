@@ -120,8 +120,11 @@ function buildDiscoveryQueries(companyName: string): Array<{ query: string; cate
 }
 
 // ── Tavily search ─────────────────────────────────────────────
+// Exported for reuse by website-discovery.ts — same search provider, different
+// purpose (identity resolution vs. evidence discovery), no reason to duplicate
+// the HTTP call logic.
 
-async function searchTavily(
+export async function searchTavily(
   query: string,
   apiKey: string,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
@@ -147,8 +150,9 @@ async function searchTavily(
 }
 
 // ── Serper search (fallback) ──────────────────────────────────
+// Exported for reuse by website-discovery.ts — see note above.
 
-async function searchSerper(
+export async function searchSerper(
   query: string,
   apiKey: string,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
@@ -202,8 +206,11 @@ export async function discoverEvidenceSources(
 
       for (const r of raw) {
         if (!r.url || seenUrls.has(r.url)) continue
-        // Skip company's own domain (already scraped) and PDFs that can't be Firecrawled
-        if (r.url.includes(domain)) continue
+        // Skip company's own domain (already scraped) and PDFs that can't be Firecrawled.
+        // Guard domain being empty/undefined (company-name-only input, no website
+        // resolved yet) — `url.includes('')` is always true in JS, which would
+        // silently exclude every single result and break discovery entirely.
+        if (domain && r.url.includes(domain)) continue
 
         seenUrls.add(r.url)
 

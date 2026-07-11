@@ -9,10 +9,20 @@ This is the blueprint `generateDeterministicOpportunities()`, the challenge engi
 and stakeholder mapping should target. Don't rebuild that code until this file is
 reviewed — same sequencing constraint as before.
 
+**Evidence source note (2026-07-10 reframe, see CLAUDE.md "Core reframe")**: every
+"Evidence" field below was written and validated against the company's own scraped
+website content, since that's what the pipeline currently ingests. That is a
+current-implementation artifact, not a design constraint — the same evidence
+categories (named tools, leadership portfolios, facility counts, workshop/training
+signals) are equally valid, and sometimes stronger, when found via LinkedIn,
+investor-call transcripts, news coverage, or third-party company data. Don't read
+"scraper/evidence-extractor" below as "website only."
+
 ## How to read each entry
 ```yaml
 Service:            # one of the 8 confirmed lines
-Evidence:            # what the scraper/evidence-extractor needs to find
+Evidence:            # what the scraper/evidence-extractor needs to find (from the
+                     # website OR from other researched sources — see note above)
 Disqualifiers:       # negative evidence — presence of this should SUPPRESS the fit,
                      # not just fail to add points. Prevents every company getting
                      # every service.
