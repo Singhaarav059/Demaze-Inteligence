@@ -3,34 +3,46 @@
 ## What this is
 A **Company Intelligence Engine** for Demaze outbound sales — NOT a website
 analyzer, and NOT a lead-discovery tool. Input: a company that has ALREADY been
-identified as a lead by something upstream of Demaze (Sales Navigator, Apollo,
-Clay, a CRM export) — typically a company name, sometimes with a domain. Output:
-company profile, business classification, challenges, opportunities, signals,
-recommended outreach angle. Target industries: Manufacturing, Automotive,
+identified as a lead by something upstream of Demaze (a Sales Navigator export),
+with a specific named person + title ALREADY attached to that row — buyer
+identity is input data, not something this pipeline determines. Every real lead
+row arrives pre-decided on "who." Target industries: Manufacturing, Automotive,
 Industrial, SaaS, Financial Institutions, SMBs.
+
+## Output schema — LOCKED (2026-07-11), matches the sheet's own column names
+Research each company ONCE. Output is exactly these 5 fields, nothing more:
+- **Company Description**
+- **Pain Points**
+- **AI Opportunities**
+- **Recent News**
+- **Personalization Summary**
+
+No buyer/stakeholder field — that's provided as input (name + title, already on
+the row), never generated. No email-finding, generation, QA, or send — those
+stay permanently out of scope per the boundary below.
 
 This is NOT a chatbot. Output feeds real Demaze sales outreach.
 
-## Scope boundary — LOCKED (2026-07-10), do not drift past this
+## Scope boundary — LOCKED (2026-07-10, buyer clarification added 2026-07-11)
 The real architecture is:
 ```
-Sales Navigator / Apollo / Clay / CRM  (lead discovery — NOT built here, NOT our job)
-  -> company identified
+Sales Navigator export (company + named person/title ALREADY attached to the row)
+  -> company identified, buyer already decided — NOT built here, NOT our job
   -> Demaze Intelligence Engine        (THIS is what we build)
        find website -> enrich -> find problem -> AI research
-  -> Buyer
-  -> Outreach angle
   -> [find person's email -> personalized email generation -> QA agent -> send]  (downstream, NOT built here)
 ```
 
 **Demaze's job is exactly four steps: find website -> enrich -> find problem ->
-AI research.** Everything before that (lead discovery) and everything after that
-(finding a person's email, generating a full email, QA'ing it, sending it) is
-**permanently out of scope** — not deferred, not "later," genuinely not ours to
-build. Do not add email-finding, email-generation, a QA agent, or a send
-mechanism to this codebase without an explicit, separate decision to change this
-scope boundary. If a future session proposes building toward LinkedIn/Sales-
-Navigator-style lead discovery, that's a different business — stop and flag it
+AI research.** Everything before that (lead discovery, including WHO the buyer
+is — that arrives on the row, never inferred or ranked by us) and everything
+after that (finding a person's email, generating a full email, QA'ing it,
+sending it) is **permanently out of scope** — not deferred, not "later,"
+genuinely not ours to build. Do not add buyer-ranking/contact-selection logic,
+email-finding, email-generation, a QA agent, or a send mechanism to this
+codebase without an explicit, separate decision to change this scope boundary.
+If a future session proposes building toward LinkedIn/Sales-Navigator-style lead
+discovery, that's a different business — stop and flag it
 rather than proceeding.
 
 **LinkedIn**: stays excluded (see `source-prioritizer.ts`'s `isFetchable()`).
@@ -93,10 +105,11 @@ Two files now hold this, and supersede any earlier inline version here:
   Dedicated Team Model" is NOT one of the 8 confirmed services — that was an earlier
   guess from a single proposal's framing and has been removed. Don't reintroduce it.
 - **SERVICE_TO_OUTREACH_MAPPING.md** — Evidence -> Disqualifiers -> Likely Pain ->
-  Why Demaze -> Threshold -> Buyer -> Outreach Angle for all 8 services, now
-  VALIDATED against real scraped data from all 6 benchmark companies (not just
-  hypothesis). This is the actual blueprint `generateDeterministicOpportunities()`,
-  the challenge engine, and stakeholder mapping should target.
+  Why Demaze -> Threshold -> Outreach Angle for all 8 services, now VALIDATED
+  against real scraped data from all 6 benchmark companies (not just
+  hypothesis). This is the actual blueprint `generateDeterministicOpportunities()`
+  and the challenge engine should target. (No buyer/stakeholder mapping — that's
+  input data, see "Output schema" above.)
 
 ## Cross-cutting rules from real-data validation — apply these before touching
 ## signal/opportunity code, they change what "correct" output looks like
@@ -112,14 +125,15 @@ Two files now hold this, and supersede any earlier inline version here:
    threshold on any service (see AS Agri & Aqua). The correct output in that case
    is no forced fit and no forced outreach angle — not a template stretched over
    thin evidence.
-3. **Prefer named buyers over generic title guesses, and say so when absent.**
-   Where real names exist in scraped content, they're dramatically more useful
-   than generic per-service titles (see SERVICE_TO_OUTREACH_MAPPING.md appendix —
-   Ace Pipeline's Director Tarun Singh, AITG's Dr. Sunil Deshpande). When no name
-   is found, output must say "buyer: unconfirmed," never silently present a
-   generic guess as researched. Never trust a name inferred from a URL slug alone
-   without confirming against the page's actual rendered content — ATE Group's own
-   site has a live bug where a URL slug doesn't match the rendered name.
+3. **Superseded (2026-07-11) — buyer identity is input, not something we generate.**
+   Every real lead row (Sales Navigator export) already has a named person and
+   title attached — there is no "find/rank/select the buyer" problem for this
+   pipeline to solve, and no buyer/contact logic belongs anywhere in it. The
+   named-individual evidence extraction this rule used to describe (Ace
+   Pipeline's Director Tarun Singh, AITG's Dr. Sunil Deshpande) is still valid as
+   general company evidence, but it does not feed a buyer field — there isn't
+   one. Do not reintroduce buyer-title inference or "buyer: unconfirmed"-style
+   output anywhere.
 4. **The real root cause of live zero-signal results (AITG, Ace Pipeline, A-1
    Fence) is a `SIGNAL_PATTERNS` coverage gap, not the subject-classifier floor.**
    Manual read-through of real scrape-cache content found STRONG-qualifying
@@ -309,11 +323,12 @@ ZERO pattern coverage in `SIGNAL_PATTERNS` today:
    — AITG's cross-company data-interpretation workshop with an external consultant
    is near-explicit first-hand pain language.
 4. **Named individual + explicit stated portfolio** — e.g. "Director, Bid Strategy,
-   Business Development and New Technology/Innovation" is dramatically stronger
-   buyer evidence than a generic title guess. See SERVICE_TO_OUTREACH_MAPPING.md
-   Rule 3 for how this should be used (prefer named + portfolio, flag "unconfirmed"
-   when absent, never trust a URL-derived name without confirming against rendered
-   content).
+   Business Development and New Technology/Innovation" is strong general company
+   evidence (leadership structure, strategic focus areas). This does NOT feed a
+   buyer field — buyer identity is input data, not generated (see "Output schema"
+   and "Cross-cutting rules" #3 above). Never trust a URL-derived name without
+   confirming against rendered content — ATE Group's own site has a live bug
+   where a URL slug doesn't match the rendered name.
 
 Original guessed categories (lower priority than the 4 above — add only after
 the confirmed gaps are addressed, since these were hypothesis, not validated):
@@ -427,7 +442,16 @@ Failures are scraping, classification, signals, timeouts, parsing — not reason
 - Admin UI (`app/admin/*`): stays as-is. It's the testing harness, not the
   production flow. No further investment planned.
 
-**Item 1 (done)** — company-name -> website discovery:
+**Item 1 (done)** — company-name -> website discovery. **Scope narrowed
+(2026-07-11): this ONLY runs when a company has NO website listed at all.** If a
+lead row has a website given, trust it as-is and scrape it directly — no
+verification against alternates, no reconciling conflicting values even if the
+input data itself has more than one website for the same company (that's a
+data-quality problem for whoever maintains the lead list, not ours to solve).
+Website-conflict resolution was considered and explicitly rejected as
+out-of-scope — do not build it. The code already matches this narrow scope
+(`route.ts`: discovery only runs `if (!url && rawCompanyName)`) — this note just
+makes the intended scope explicit in docs.
 - New: `lib/enrichment/website-discovery.ts` — `discoverCompanyWebsite(companyName, knownDomain?)`.
   Content-based verification only (word-boundary match of the company's
   significant name-words against the candidate homepage's title/description/body
@@ -536,10 +560,16 @@ extraction to the fetch path.
 dedicated investor-call-transcript/filings targeting pass. Explicitly skip
 government-filings APIs (EDGAR/MCA) — logged as a future category, not built.
 
-**Item 5 (blocked)** — rebuild `generateDeterministicOpportunities()` against
-the validated 8-service mapping. Blocked on Krupal reviewing
-`SERVICE_TO_OUTREACH_MAPPING.md`/`DEMAZE_CAPABILITY_MAP.md` and confirming the
-evidence rules and outreach angles match how Demaze actually sells. Do not start.
+**Item 5 (unblocked 2026-07-11)** — rebuild `generateDeterministicOpportunities()`
+against the validated 8-service mapping. Was blocked on review of
+`SERVICE_TO_OUTREACH_MAPPING.md`/`DEMAZE_CAPABILITY_MAP.md`; now confirmed
+urgent and unblocked — a live AITG test showed `generateDeterministicOpportunities()`
+still emitting invented services ("Predictive Maintenance AI", "Production
+Optimization AI") not on the 8 confirmed lines, i.e. real misleading output
+implying Demaze capabilities that may not exist. Rebuild strictly against the 8
+confirmed services only (no invented services); produce a before/after diff on
+the AITG benchmark case as a fast sanity check rather than a full mapping-doc
+read-through first.
 
 ## The actual goal
 NOT "6/6 benchmark PASS." The goal is: any company URL -> pipeline always returns

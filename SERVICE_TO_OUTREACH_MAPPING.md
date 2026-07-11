@@ -2,8 +2,16 @@
 
 Status: DRAFT. The 8 service lines are confirmed ground truth (see
 DEMAZE_CAPABILITY_MAP.md). Everything below — evidence signals, pain inference,
-disqualifiers, thresholds, buyer titles, outreach angles — is a first-pass
-construction and needs review before the opportunity engine is rebuilt against it.
+disqualifiers, thresholds, outreach angles — is a first-pass construction and
+needs review before the opportunity engine is rebuilt against it.
+
+**Buyer identity note (2026-07-11):** buyer/stakeholder identification is NOT
+something this pipeline generates. Every real lead row arrives with a named
+person and title already attached (Sales Navigator export). There is no
+buyer-ranking or contact-selection problem for this codebase to solve — that's
+decided before the data reaches us. The per-service `Buyer:` field that used to
+exist in each entry below has been removed for this reason; do not reintroduce
+buyer-title inference anywhere in the pipeline.
 
 This is the blueprint `generateDeterministicOpportunities()`, the challenge engine,
 and stakeholder mapping should target. Don't rebuild that code until this file is
@@ -30,16 +38,8 @@ Likely Pain:         # the operational problem the evidence implies
 Why Demaze:          # the specific capability that addresses it (not generic)
 Threshold:           # weak / medium / strong — gates whether this should even
                      # surface in the report, not just how confident it is
-Buyer:
-  Primary:           # decision-maker who'd actually greenlight this
-  Secondary:         # co-sponsor / budget holder
-  Influencer:        # shapes the decision but doesn't sign off
 Outreach Angle:       # one sentence, usable as a first-line opener
 ```
-
-All buyer titles below are inferred from typical org structures for each problem
-type — NOT confirmed from actual closed deals. Treat as a starting hypothesis,
-correct once real win data is available.
 
 ---
 
@@ -72,11 +72,6 @@ Threshold:
   weak: company mentions "data-driven" as marketing language only
   medium: distributed sales/ops structure exists, no AI/automation mentioned
   strong: explicit manual process described (e.g. "our team reviews X manually") + scale
-
-Buyer:
-  Primary: Head of Sales / VP Sales Operations
-  Secondary: CTO / Head of Technology
-  Influencer: Regional/Field Ops leads (feel the pain directly, escalate it)
 
 Outreach Angle:
   "With a network this size, how is lead/opportunity prioritization currently
@@ -116,11 +111,6 @@ Threshold:
   medium: described proprietary process + growth signal (hiring, expansion)
   strong: explicit statement of a process/tool gap blocking a stated business goal
 
-Buyer:
-  Primary: Founder / CEO (especially at SMB/mid-size)
-  Secondary: CTO / Head of Product (if one exists)
-  Influencer: Ops lead who owns the broken process day-to-day
-
 Outreach Angle:
   "Is [specific process you found evidence of] still running on spreadsheets, or
   has that moved to a dedicated tool?"
@@ -157,11 +147,6 @@ Threshold:
   weak: company has a website with a "shop" page, no other signal
   medium: multiple sales channels evident, India-based
   strong: explicit growth/expansion language + fragmented-channel evidence
-
-Buyer:
-  Primary: Founder / Head of Growth
-  Secondary: CTO (if technical co-founder exists)
-  Influencer: Marketing lead (feels the attribution gap most directly)
 
 Outreach Angle:
   "Running sales across [own site + marketplaces] usually means the revenue picture
@@ -200,11 +185,6 @@ Threshold:
   medium: clear vendor/seller network described, unclear platform maturity
   strong: explicit scaling pain — "onboarding partners" as a stated challenge/goal
 
-Buyer:
-  Primary: Founder / CEO
-  Secondary: Head of Operations / Head of Partnerships
-  Influencer: Whoever manages vendor relationships day-to-day
-
 Outreach Angle:
   "As the vendor/partner side grows, is onboarding and matching still handled
   manually, or is there a platform doing that already?"
@@ -241,11 +221,6 @@ Threshold:
   medium: multi-step process described, multiple teams involved
   strong: explicit pain language — delays, errors, compliance risk mentioned
 
-Buyer:
-  Primary: COO / Head of Operations
-  Secondary: Quality/Compliance lead (if process is compliance-adjacent)
-  Influencer: Customer service / process owner (feels the friction daily)
-
 Outreach Angle:
   "How many hand-offs does a [complaint/order/ticket] go through before it's
   resolved today — and is that tracked automatically or manually?"
@@ -280,11 +255,6 @@ Threshold:
   weak: "multiple locations" mentioned once, no reporting-gap language
   medium: 3+ locations/facilities confirmed, no visible internal tooling
   strong: explicit reporting-delay or visibility-gap language, or facility count >=5
-
-Buyer:
-  Primary: COO
-  Secondary: VP Operations / Plant Operations Head
-  Influencer: CFO (cares about reporting accuracy/timeliness for financial reasons)
 
 Outreach Angle:
   "Coordinating reporting across [N] locations usually means someone's stitching
@@ -324,11 +294,6 @@ Threshold:
   strong: multiple locations/units confirmed AND no BI tool named AND scale
     (dealer network, regional offices) suggests real consolidation pain
 
-Buyer:
-  Primary: COO
-  Secondary: Operations Head / Regional Ops Lead
-  Influencer: Finance Controller (cares about numbers accuracy and speed)
-
 Outreach Angle:
   "How are you currently consolidating operational data across [locations/regions/
   dealers] — manually, or is there a system doing it?"
@@ -367,11 +332,6 @@ Threshold:
   strong: explicit repetitive-task description (e.g. "our team creates X content
     weekly") + existing digital infrastructure to integrate into
 
-Buyer:
-  Primary: CTO / Head of Technology
-  Secondary: CMO / Head of Marketing (if integration is content/campaign-facing)
-  Influencer: Whoever owns the specific repetitive task day-to-day
-
 Outreach Angle:
   "Is [named tool/process] connected to anything AI-driven yet, or still a manual
   step in the workflow?"
@@ -380,14 +340,13 @@ Outreach Angle:
 ---
 
 ## What this file still needs before the opportunity engine is rebuilt against it
-1. Correction of buyer titles against real closed-deal data, once available
-2. Validation that the disqualifiers actually prevent false positives on the
+1. Validation that the disqualifiers actually prevent false positives on the
    existing benchmark set (run the 6 benchmark companies through this mapping
    manually and check nothing gets a service it obviously shouldn't)
-3. A decision on what happens when a company clears the threshold for 3+ services
+2. A decision on what happens when a company clears the threshold for 3+ services
    at once — does the report show all of them ranked, or force a single top pick?
    Not yet decided.
-4. Confirmation that the Threshold tiers (weak/medium/strong) map cleanly onto the
+3. Confirmation that the Threshold tiers (weak/medium/strong) map cleanly onto the
    existing Confidence field, or whether they're a separate gating layer that runs
    before confidence scoring even starts (recommended: gating layer — a service that
    doesn't clear "weak" shouldn't appear in the report at all, regardless of
