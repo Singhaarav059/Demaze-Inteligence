@@ -551,7 +551,7 @@ function strengthFromTier(tier: 'tier1' | 'tier2' | 'tier3'): EvidenceStrength {
 
 // ── Evidence subject classifier ────────────────────────────────
 
-function classifySubject(text: string, pageType: PageType, profile?: CompanyProfile): EvidenceSubject {
+function classifySubject(text: string, pageType: PageType, profile?: CompanyProfile, companyName?: string): EvidenceSubject {
   const t = text.toLowerCase()
 
   // Customer-facing content — always external
@@ -592,7 +592,7 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
   }
 
   // First-person internal operations
-  if (/\bwe\s+(?:are|have|do|build|manufactur|operat|produc|assembl|forg|stamp|cast|weld|machine)\b/.test(t)) return 'company_operations'
+  if (/\bwe\s+(?:are|have|do|build|manufactur|operat|produc|assembl|forg|stamp|cast|weld|machine|offer)\b/.test(t)) return 'company_operations'
   if (/\bour\s+(?:plant|facility|facilities|factory|factories|team|workforce|operation|production|manufactur)\b/.test(t)) return 'company_operations'
   if (/\bour\s+(?:employees|workers|staff|people|headcount)\b/.test(t)) return 'company_operations'
   if (/\bour\s+(?:global|international|worldwide)\s+(?:manufactur|operat|product)\w*\b/.test(t)) return 'company_operations'
@@ -610,11 +610,26 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
       /\b(?:industry\s*4\.0|smart\s+factory|iiot|digital\s+twin|ai[\s-]powered|artificial\s+intelligence)\b/.test(t) &&
       !/\b(?:our\s+(?:customer|client)|help\s+(?:you|your)|enable\s+(?:you|your)|for\s+(?:your|our\s+customer))\b/.test(t)) return 'company_strategy'
 
-  // External 'other' sources from enrichment are company-targeted by query.
-  // Accept third-person reporting sentences as company_strategy.
-  if (pageType === 'other') {
-    if (/\b(?:the\s+company|the\s+group|the\s+firm)\s+\w+/i.test(t) &&
-        !/\b(?:help|enable|your\s+company|our\s+customer)\b/i.test(t)) return 'company_strategy'
+  // External 'other' sources from enrichment are company-targeted by query, and
+  // 'about' pages routinely describe the company in third person by name
+  // ("A-1 Fence's operations are spread over six manufacturing units") rather
+  // than first-person "we/our" — previously this recognition only fired for
+  // pageType==='other', so 'about' pages using third-person self-reference
+  // never classified as a company subject even when the evidence was strong.
+  if (pageType === 'other' || pageType === 'about') {
+    const isCustomerFacing = /\b(?:help|enable|your\s+company|our\s+customer)\b/i.test(t)
+    if (!isCustomerFacing) {
+      // Match the company's own name with word boundaries — same discipline as
+      // the URL-classifier's short-keyword boundary fix (see matchesKeyword() in
+      // scraper.ts): a bare short name could otherwise substring-match unrelated
+      // words. Requiring >= 4 chars guards against degenerate/placeholder names.
+      if (companyName && companyName.trim().length >= 4) {
+        const escaped = companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const nameRe = new RegExp(`\\b${escaped}\\b`, 'i')
+        if (nameRe.test(text)) return 'company_strategy'
+      }
+      if (/\b(?:the\s+company|the\s+group|the\s+firm)\s+\w+/i.test(t)) return 'company_strategy'
+    }
   }
 
   // Generic marketing (homepage, taglines)
@@ -1033,6 +1048,7 @@ function extractLeadershipEvidence(segments: ContentSegment[]): LeadershipContac
 export function extractSignals(
   websiteContent: string,
   enrichedContent?: string,
+  companyName?: string,
 ): ExtractorResult {
   const combined = enrichedContent
     ? websiteContent + '\n\n' + enrichedContent
@@ -1059,7 +1075,7 @@ export function extractSignals(
           if (shouldSkipMatch(quote, def)) continue
 
           // Classify subject (profile-aware)
-          const subject = classifySubject(quote, seg.pageType, companyProfile)
+          const subject = classifySubject(quote, seg.pageType, companyProfile, companyName)
 
           evidenceCounter++
           allEvidence.push({

@@ -365,7 +365,7 @@ export async function POST(req: NextRequest) {
 
     // ── Stage 3+2: SIGNAL + PROFILE extraction (website-only) ────────
     const extractStart = Date.now()
-    let extractorResult: ExtractorResult = extractSignals(fullContent, undefined)
+    let extractorResult: ExtractorResult = extractSignals(fullContent, undefined, companyNameFromScrape)
     timing.extraction = Date.now() - extractStart
     console.log(`[Timing] Evidence Extraction (website): ${t(timing.extraction)} | ${extractorResult.signals.length} signals | primary=${extractorResult.companyProfile.primary_type}`)
 
@@ -436,7 +436,7 @@ export async function POST(req: NextRequest) {
         if (enrichedContent.length > 100) {
           const preExtractStart = Date.now()
           const websiteOnlyCount = extractorResult.signals.length
-          extractorResult = extractSignals(fullContent, enrichedContent)
+          extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape)
           timing.reextraction = Date.now() - preExtractStart
           console.log(`[Bridge] Pre-prompt re-extraction: ${websiteOnlyCount} → ${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlyCount}) in ${timing.reextraction}ms`)
         }
@@ -527,7 +527,7 @@ export async function POST(req: NextRequest) {
     const websiteOnlySignalCount = extractorResult.signals.length
     if (!promptEnriched && enrichedContent.length > 100) {
       const reextractStart = Date.now()
-      extractorResult = extractSignals(fullContent, enrichedContent)
+      extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape)
       timing.reextraction = Date.now() - reextractStart
       console.log(`[Bridge] Re-extraction (late): website=${websiteOnlySignalCount} → enriched=${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlySignalCount}) in ${timing.reextraction}ms`)
     } else if (promptEnriched) {
