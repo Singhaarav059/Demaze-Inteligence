@@ -213,8 +213,14 @@ substrings, causing false positives:
 - `/blog/anti-climb-fence-for-high-security-fencing` contains "sec" (in "**sec**urity") -> was scored investor/100
 
 Fix: short keywords require word-separator boundaries (`/ - _ .`) instead of substring match.
-`matchesKeyword()` is the function. See tests/url-classifier.test.ts for the adversarial matrix —
-extend that file, don't rewrite the matching logic without re-running it.
+`matchesKeyword()` is the function. **Stale reference corrected (2026-07-12)**:
+this used to point at `tests/url-classifier.test.ts` as the place holding the
+adversarial matrix — confirmed via search that no such file (or `tests/`
+directory at all) existed until this session's `tests/batch-quota-pause.test.ts`
+(item 7 verification, see below) became the first real test file in this repo.
+The adversarial matrix this note describes was never actually written down as
+an automated test — don't assume it exists; write it fresh in `tests/` if
+`matchesKeyword()` needs to be touched again, using vitest (now set up).
 
 New category added: `b2b_services` (score 75) for: solutions, services, industries,
 industry, application, capabilities, warranty, partner — these previously scored 0.
@@ -539,9 +545,14 @@ makes the intended scope explicit in docs.
   — neither falls back to Serper when Tavily's call *fails* (as opposed to not
   being configured). Fixed in `website-discovery.ts` only (new
   `searchWithFallback()` — falls back to Serper per-query when Tavily returns
-  zero results). **`discovery-engine.ts` has the identical gap and was NOT
-  touched** — out of scope for item 1, worth fixing when item 2 (repositioning
-  enrichment) is worked. Re-verified end-to-end after the fix: Ador Welding
+  zero results). **Stale note removed (2026-07-12)**: this used to say
+  `discovery-engine.ts` had the identical gap and was NOT touched. Re-checked
+  while working item 2 — `discoverEvidenceSources()` in `discovery-engine.ts`
+  already has the same per-query Tavily→Serper fallback
+  (`if (raw.length === 0 && serperKey) { raw = await searchSerper(...) }`).
+  Someone fixed it since this note was written; the note just never got
+  updated. No code change needed here. Re-verified end-to-end after the
+  original fix: Ador Welding
   resolves correctly via the Serper fallback, hits the existing scrape cache,
   produces real signals, `evidence_sufficiency: sufficient`. Also re-verified
   the ambiguous path end-to-end ("Om Enterprises" -> `domain: null`,
@@ -579,12 +590,78 @@ makes the intended scope explicit in docs.
   failure mode (no wrong guess), but a real precision gap worth revisiting —
   not blocking, noted for a future pass.
 
-**Item 2 (not started)** — reposition enrichment discovery+fetch from
-implicit-fallback framing to an explicitly parallel, always-on stage (its
-discovery sub-stage already runs unconditionally today, see "Current
-implementation gaps" above — this is about making that intentional and correct,
-plus fixing the sequencing so scraping and enrichment run together, not
-scrape-then-maybe-enrich). Ador Welding is the reference case.
+**Item 2 (done 2026-07-12)** — enrichment discovery+fetch repositioned from
+"starts after scrape finishes" to genuinely parallel with scrape. Root
+finding before touching code: the framing in this doc's earlier text
+("implicit-fallback") was already stale — discovery already ran
+unconditionally whenever search keys were present (correctly noted above).
+The real gap was purely a *sequencing* one: `enrichCompanyIntelligence()` in
+`lib/enrichment/web-enricher.ts` bundled 4 internal stages (discover →
+prioritize → fetch → recovery) into one function that only got *called*
+after the website scrape finished in `app/api/admin/test-analysis/route.ts`
+— even though stages 1-3 need only `domain` + a company-name guess, both
+already known before scraping starts. Only stage 4 (recovery path-probing)
+genuinely needs scrape output (`isConsumerSite`, content-quality).
+Split `web-enricher.ts`'s monolithic function into two exports —
+`discoverAndFetchExternalSources(domain, companyName)` (stages 1-3, no scrape
+dependency) and the now-exported `probeRecoveryPaths()` (stage 4, unchanged
+body) — plus a pure `buildEnrichmentResult(...)` assembler so the final
+`EnrichmentResult` shape everything downstream depends on
+(`.sources_used`, `.enriched_context`, `.recovery_paths_probed`, etc.) is
+byte-for-byte identical to before, just assembled from pieces computed at
+different times. Confirmed via grep that `enrichCompanyIntelligence` and
+`EnrichmentOptions` were referenced nowhere outside these two files — both
+removed outright rather than left as dead code. In route.ts: a
+`discoverAndFetchExternalSources()` call is now kicked off (not awaited)
+immediately after `domain` is resolved, before Stage 1 SCRAPE even begins —
+new `guessCompanyNameFromDomain()` helper (same domain-prettification regex
+already used for empty-scrape stub injection, now shared instead of
+duplicated) supplies the pre-scrape name guess when the caller didn't
+already give one. The existing soft-timeout (8s) / hard-timeout (70s) /
+late-arrival race machinery in route.ts — verified working correctly earlier
+this session in the live batch-upload test — was **not touched at all**;
+only what runs *inside* the raced promise changed (it now awaits the
+already-in-flight discovery promise instead of starting a fresh sequential
+call). `detectConsumerSite` was being imported into route.ts but never
+called (dead import, an artifact of the old code structure where it only
+ran inside `enrichCompanyIntelligence`) — now genuinely called, since
+route.ts computes `isConsumerSite` itself to decide on recovery.
+Accepted trade-off, not fixed further: the pre-scrape company-name guess is
+lower-precision than the post-scrape, title-derived `companyNameFromScrape`
+(kept unchanged for everything else that already used it — signal
+extraction's self-reference matching, final report naming). Not worth the
+complexity of re-running discovery once a better name is known.
+**Verified**: `tsc --noEmit` clean, all 17 `vitest` assertions still pass
+(unaffected file, confirmed anyway). Two cached-scrape correctness runs
+(A-1 Fence Products, AITG) — zero quota cost, scrape returns near-instantly
+from cache so this doesn't exercise the overlap, but confirms
+`EnrichmentResult` assembly, all 7 pipeline gates, and final report quality
+are unchanged (`SCRAPE/PROFILE/SIGNAL/ENRICHMENT/LLM_PARSE/NORMALIZATION`
+all `PASS`, same as pre-refactor). Live dev-server pass over
+`/admin/intelligence-lab` — no console/server errors. **Latency win directly
+measured** with one FORCE_FRESH run against Ador Welding (this doc's own
+reference case for this item, real API quota spent with explicit
+confirmation first): scrape took 45,563ms (real-world failure chain —
+homepage timeout, Jina timeout, search-fallback bug — an existing, separate,
+unrelated issue, not caused by or fixed in this item). Discovery+fetch took
+19,622ms total and — because it started before scrape instead of after —
+had **already fully resolved by the time scrape finished**, logged as
+`"already resolved before scrape finished (45563ms), fully overlapped, zero
+added wait"`. Knock-on quality win beyond speed: because enrichment was
+already done, it reached the LLM's *first* prompt attempt
+(`prompt_enriched=true`, enrichment wait `3ms`) instead of arriving "late"
+(post-prompt, re-extraction-only) — on the old sequential timing, a scrape
+this slow would have blown well past the 8s soft-timeout and missed the
+initial prompt entirely. Total pipeline time: 71,904ms. Under the old
+sequential design this same run would have been roughly scrape (45.6s) +
+discovery+fetch (19.6s, now would run sequentially after) + LLM (26.2s) ≈
+91.5s — a measured ~20s / ~22% reduction, entirely attributable to the
+overlap, on top of the enriched-first-prompt quality improvement. All other
+gate outcomes for this run (`SCRAPE:WARN` ×2, `PROFILE:WARN`, `SIGNAL:WARN`,
+0 opportunities surviving normalization) are pre-existing, separate, known
+behavior — Ador Welding's real scrape failure chain and the "insufficient
+evidence -> no forced opportunities" outcome are both already-documented,
+correct pipeline behavior, not something this item touched or regressed.
 
 **Item 3 (not started)** — fix the PDF drop in `isFetchable()`. Add PDF text
 extraction to the fetch path.

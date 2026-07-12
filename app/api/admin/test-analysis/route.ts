@@ -25,7 +25,11 @@ import { getCompletion } from '@/lib/ai/provider-factory'
 import { normalizeAnalysisResult } from '@/lib/pipeline/normalize'
 import { getCachedScrape, saveScrapeCache } from '@/lib/cache/scrape-cache'
 import { assessContentQuality } from '@/lib/pipeline/content-quality'
-import { enrichCompanyIntelligence, detectConsumerSite, type EnrichmentResult, type EnrichedSignal, type EnrichmentOptions } from '@/lib/enrichment/web-enricher'
+import {
+  discoverAndFetchExternalSources, probeRecoveryPaths, buildEnrichmentResult, detectConsumerSite,
+  type EnrichmentResult, type EnrichedSignal,
+} from '@/lib/enrichment/web-enricher'
+import type { DiscoveredSource } from '@/lib/enrichment/discovery-engine'
 import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enrichment/website-discovery'
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
@@ -38,6 +42,21 @@ import type { SynthesisResult } from '@/lib/synthesis'
 const MAX_WEBSITE_PREVIEW_CHARS = 3_000
 
 function t(ms: number): string { return `${ms}ms` }
+
+// ── Company-name guess from a bare domain ──────────────────────
+// Used (a) as the pre-scrape company-name guess for kicking off enrichment
+// discovery before scraping starts (item 2, 2026-07-12), and (b) as the
+// empty-scrape stub-injection fallback. Word-boundary splitting on dashes/
+// underscores/camelCase — same discipline as matchesKeyword()'s short-keyword
+// substring-match fix, just for display quality here rather than correctness.
+function guessCompanyNameFromDomain(domain: string): string {
+  const words = domain
+    .replace(/\.(com|co\.in|in|net|org|io|biz|co|ltd)$/, '')
+    .replace(/[_\-]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
 
 // ── JSON fence stripping ──────────────────────────────────────
 // Some models (glm-5.2, older GPT-4) wrap JSON in ```json … ```
@@ -177,6 +196,33 @@ export async function POST(req: NextRequest) {
   const timing: Record<string, number> = {}
   const pipelineGates: ValidationGate[] = []
 
+  // ── Item 2 (2026-07-12): kick off enrichment discovery+fetch NOW ────────
+  // Discovery only needs domain + a company-name guess — both already known
+  // at this point, before the website scrape even starts. Previously this
+  // entire call waited until after scrape completed for no real dependency
+  // reason. Not awaited here — this promise starts executing immediately per
+  // normal JS semantics and runs concurrently with Stage 1 (SCRAPE) below;
+  // it's awaited later, inside the existing enrichmentPromise race, by which
+  // point it's often already resolved. companyGuess is a lower-precision
+  // stand-in for companyNameFromScrape (computed later, post-scrape, from
+  // the actual page title) — accepted trade-off, not worth re-running
+  // discovery once a better name is known.
+  const companyGuess = rawCompanyName?.trim() || guessCompanyNameFromDomain(domain)
+  const discoveryStart = Date.now()
+  let discoveryActualMs: number | null = null
+  const discoveryPromise: Promise<{ discovered: DiscoveredSource[]; prioritized: PrioritizedSource[]; contextBlocks: string[] }> =
+    (async () => {
+      try {
+        const result = await discoverAndFetchExternalSources(domain, companyGuess)
+        discoveryActualMs = Date.now() - discoveryStart
+        return result
+      } catch (e) {
+        discoveryActualMs = Date.now() - discoveryStart
+        console.warn('[Enrichment] Discovery/fetch non-fatal:', e instanceof Error ? e.message : String(e))
+        return { discovered: [], prioritized: [], contextBlocks: [] }
+      }
+    })()
+
   try {
     // ── Stage 1: SCRAPE ───────────────────────────────────────
     let scrapeResult: ScrapeResult
@@ -241,18 +287,9 @@ export async function POST(req: NextRequest) {
         { successfulUrls: scrapeResult.successfulUrls.length, contentLength: scrapeResult.combinedContent.length, domain })
 
       // Build a minimal stub so the rest of the pipeline has something to parse.
-      // Prefer the caller-given company name (present whether we got here via
-      // company-name-only input, or a URL that failed to scrape) over guessing
-      // from the domain — domain may be empty entirely (no website confirmed).
-      const companyGuess = rawCompanyName?.trim() || (() => {
-        const domainWords = domain
-          .replace(/\.(com|co\.in|in|net|org|io|biz|co|ltd)$/, '')
-          .replace(/[_\-]/g, ' ')
-          .replace(/([a-z])([A-Z])/g, '$1 $2')
-          .trim()
-        return domainWords.charAt(0).toUpperCase() + domainWords.slice(1)
-      })()
-
+      // Reuses the same companyGuess computed above (pre-scrape, for the
+      // enrichment discovery kickoff) — same priority: caller-given name,
+      // else domain-derived guess.
       const stub = [
         `# ${companyGuess}`,
         ``,
@@ -307,16 +344,32 @@ export async function POST(req: NextRequest) {
         const candidate = titleMatch[1].trim().replace(/\s+(ltd|limited|inc|corp|pvt|private|llc|plc|technologies|solutions|group)\.?\s*$/i, '').trim()
         if (candidate.length >= 3 && candidate.length <= 60) return candidate
       }
-      const prefix = domain.split('.')[0]
-      return prefix.charAt(0).toUpperCase() + prefix.slice(1)
+      return guessCompanyNameFromDomain(domain)
     })()
 
-    // ── Step 3b: Launch enrichment in background (always-on) ──────────
+    // ── Step 3b: Enrichment (item 2, 2026-07-12) ──────────────────────
+    // discoveryPromise (stages 1-3: discover+prioritize+fetch) was already
+    // kicked off before Stage 1 SCRAPE started, above — it's been running
+    // concurrently with the scrape this whole time. Recovery (stage 4)
+    // genuinely needs scrape output (isConsumerSite, content-quality) so it
+    // can only start now. Both feed into the same outer race/timeout
+    // machinery as before — that part is unchanged.
     let enrichmentResult: EnrichmentResult | null = null
     let sourcesUsed: PrioritizedSource[] = []
     let recoveryTriggered = false
     let enrichedContent = ''
     const thinContent = contentQuality.score < 60 || contentQuality.recommendation === 'low_confidence'
+    const isConsumerSite = detectConsumerSite(fullContent)
+    const firecrawlKey = process.env.FIRECRAWL_API_KEY
+
+    // discoveryPromise may already be resolved (started before scrape) or still
+    // in flight (slow discovery+fetch, or a very fast/cached scrape) — either
+    // way, whether it was already done BY the time scrape finished is the
+    // overlap signal worth logging. Logged here (not after awaiting it below)
+    // specifically to capture that "already done or not yet" state accurately,
+    // since awaiting it would force it to resolve before we could observe that.
+    const discoveryAlreadyDoneAtScrapeEnd = discoveryActualMs !== null
+    console.log(`[Timing] Discovery+Fetch: ${discoveryAlreadyDoneAtScrapeEnd ? `${t(discoveryActualMs!)} — already resolved before scrape finished (${t(timing.scrape)}), fully overlapped, zero added wait` : `still in flight after scrape finished (${t(timing.scrape)}) — will be awaited below`}`)
 
     const ENRICHMENT_TIMEOUT_MS = 70_000
     const enrichStart = Date.now()
@@ -330,10 +383,26 @@ export async function POST(req: NextRequest) {
     const enrichmentPromise: Promise<EnrichmentResult | null> = Promise.race([
       (async () => {
         try {
-          const result = await enrichCompanyIntelligence(domain, companyNameFromScrape, {
-            recovery: thinContent,
-            websiteContent: fullContent,
-          } satisfies EnrichmentOptions)
+          const { discovered, prioritized, contextBlocks: externalBlocks } = await discoveryPromise
+          // discoveryActualMs is always set by now — discoveryPromise's own
+          // body sets it before resolving on both its success and catch paths.
+          timing.discoveryFetch = discoveryActualMs ?? (Date.now() - discoveryStart)
+
+          // Same trigger semantics as the old enrichCompanyIntelligence()'s
+          // internal shouldRecover check — just evaluated here now that
+          // discovery and scrape output are both in scope.
+          let recoveryBlocks: string[] = []
+          let recoveryPaths: string[] = []
+          const shouldRecover = domain && (thinContent || isConsumerSite || discovered.length === 0)
+          if (shouldRecover && firecrawlKey) {
+            const maxProbe = thinContent ? 6 : 4
+            const probe = await probeRecoveryPaths(domain, isConsumerSite, maxProbe)
+            recoveryBlocks = probe.contextBlocks
+            recoveryPaths = probe.pathsProbed
+            console.log(`[Enrichment] Recovery: probed ${probe.pathsProbed.length} paths with content`)
+          }
+
+          const result = buildEnrichmentResult(companyNameFromScrape, domain, discovered, prioritized, externalBlocks, recoveryBlocks, recoveryPaths)
           enrichmentActualMs = Date.now() - enrichStart
           return result
         } catch (e) {
@@ -939,6 +1008,7 @@ export async function POST(req: NextRequest) {
     timing.total = Date.now() - totalStart
     console.log('[Timing] ---------------------------------------------------')
     console.log(`[Timing] Scrape/Cache:        ${t(timing.scrape)}`)
+    console.log(`[Timing] Discovery+Fetch:     ${t(timing.discoveryFetch ?? 0)} (kicked off before scrape, item 2)`)
     console.log(`[Timing] Content Quality:     ${t(timing.contentQuality)}`)
     console.log(`[Timing] Evidence Extraction: ${t(timing.extraction)} (website-only)`)
     console.log(`[Timing] Re-extraction:       ${t(timing.reextraction ?? 0)} (post-enrichment)`)

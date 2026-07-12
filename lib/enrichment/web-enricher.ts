@@ -228,8 +228,13 @@ async function fetchPrioritizedSources(
 // Probes corporate sub-paths on the company's OWN domain even when Tavily
 // already returned external results. This fills the gap for companies like
 // Mahindra where Firecrawl hit financial-services pages instead of manufacturing.
+//
+// Exported (item 2, 2026-07-12): recovery genuinely depends on scrape output
+// (isConsumerSite, content-quality) so route.ts calls this directly after
+// scrape completes, separately from discoverAndFetchExternalSources() below
+// which route.ts kicks off before scrape even starts.
 
-async function probeRecoveryPaths(
+export async function probeRecoveryPaths(
   domain: string,
   isConsumerSite: boolean,
   maxProbe = 6,
@@ -283,31 +288,28 @@ async function probeRecoveryPaths(
   return { contextBlocks, pathsProbed }
 }
 
-// ── Main export ───────────────────────────────────────────────
+// ── Main exports (item 2, 2026-07-12) ───────────────────────────
+// Previously a single enrichCompanyIntelligence() call ran discovery+fetch
+// (stages 1-3) and recovery (stage 4) sequentially, and only started after
+// the website scrape finished — even though stages 1-3 need only domain +
+// a company-name guess, both known before scraping starts. Split in two so
+// route.ts can kick off discovery+fetch immediately (concurrent with the
+// scrape) and run recovery separately once scrape output is actually needed
+// (isConsumerSite, content-quality). See CLAUDE.md Item 2 for the full
+// rationale. EnrichmentResult's shape is unchanged — buildEnrichmentResult()
+// below assembles the exact same object either function used to return.
 
-export interface EnrichmentOptions {
-  /** Set true when content-quality assessment flagged thin_content or no_company_operations_content. */
-  recovery?: boolean
-  /** Full website content — used for B2C consumer-site detection. */
-  websiteContent?: string
-}
-
-export async function enrichCompanyIntelligence(
+/**
+ * Stages 1–3: discover candidate sources (Tavily → Serper), prioritize,
+ * fetch via Firecrawl. Needs only domain + companyName — safe to call
+ * before or independently of a website scrape.
+ */
+export async function discoverAndFetchExternalSources(
   domain: string,
   companyName: string,
-  options?: EnrichmentOptions,
-): Promise<EnrichmentResult | null> {
-  const tavilyKey  = process.env.TAVILY_API_KEY
-  const serperKey  = process.env.SERPER_API_KEY
-  const firecrawlKey = process.env.FIRECRAWL_API_KEY
-
-  const isConsumerSite = options?.websiteContent
-    ? detectConsumerSite(options.websiteContent)
-    : false
-
-  if (isConsumerSite) {
-    console.log(`[Enrichment] Consumer-facing site detected on ${domain} — will probe corporate override paths`)
-  }
+): Promise<{ discovered: DiscoveredSource[]; prioritized: PrioritizedSource[]; contextBlocks: string[] }> {
+  const tavilyKey = process.env.TAVILY_API_KEY
+  const serperKey = process.env.SERPER_API_KEY
 
   // ── Stage 1: Discovery (Tavily → Serper) ─────────────────────
   let discovered: DiscoveredSource[] = []
@@ -320,30 +322,31 @@ export async function enrichCompanyIntelligence(
   const prioritized = discovered.length > 0 ? prioritizeSources(discovered, 5) : []
 
   // ── Stage 3: Fetch external discovered sources ────────────────
-  const { contextBlocks: externalBlocks, fetched } = prioritized.length > 0
+  const { contextBlocks, fetched } = prioritized.length > 0
     ? await fetchPrioritizedSources(prioritized)
     : { contextBlocks: [], fetched: [] }
 
-  console.log(`[Enrichment] External: ${fetched.length} fetched → ${externalBlocks.length} blocks`)
+  console.log(`[Enrichment] External: ${fetched.length} fetched → ${contextBlocks.length} blocks`)
 
-  // ── Stage 4: Recovery path probing ─────────────────
-  //   Previously this was gated to discovered.length === 0 which was never true
-  //   when Tavily/Serper keys were present.
-  let recoveryBlocks: string[] = []
-  let recoveryPaths: string[] = []
+  return { discovered, prioritized, contextBlocks }
+}
 
-  // No domain to probe at all (company-name-only input, no website confirmed) —
-  // `https://${domain}${path}` would build malformed URLs otherwise, wasting a
-  // full probe cycle on requests that can never succeed.
-  const shouldRecover = domain && (options?.recovery || isConsumerSite || discovered.length === 0)
-  if (shouldRecover && firecrawlKey) {
-    const maxProbe = options?.recovery ? 6 : 4
-    const probe = await probeRecoveryPaths(domain, isConsumerSite, maxProbe)
-    recoveryBlocks = probe.contextBlocks
-    recoveryPaths = probe.pathsProbed
-    console.log(`[Enrichment] Recovery: probed ${probe.pathsProbed.length} paths with content`)
-  }
-
+/**
+ * Assembles the final EnrichmentResult from discovery+fetch output (stages
+ * 1-3) and recovery output (stage 4, may be empty arrays if recovery wasn't
+ * triggered). Pure — no I/O. Returns null if no content blocks were
+ * collected at all, matching the previous enrichCompanyIntelligence()
+ * behavior.
+ */
+export function buildEnrichmentResult(
+  companyName: string,
+  domain: string,
+  discovered: DiscoveredSource[],
+  prioritized: PrioritizedSource[],
+  externalBlocks: string[],
+  recoveryBlocks: string[],
+  recoveryPaths: string[],
+): EnrichmentResult | null {
   const allBlocks = [...externalBlocks, ...recoveryBlocks]
 
   if (allBlocks.length === 0) {
@@ -353,7 +356,7 @@ export async function enrichCompanyIntelligence(
 
   const enrichedContext = [
     '[EXTERNAL INTELLIGENCE — Evidence Recovery Pipeline]',
-    `[External sources: ${fetched.length} | Recovery paths: ${recoveryPaths.length} | Total blocks: ${allBlocks.length}]`,
+    `[External sources: ${externalBlocks.length} | Recovery paths: ${recoveryPaths.length} | Total blocks: ${allBlocks.length}]`,
     '',
     ...allBlocks,
     '',
