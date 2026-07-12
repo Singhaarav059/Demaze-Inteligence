@@ -703,16 +703,41 @@ the schema lock holds through this new entry point too. Incidentally
 exercised the `LLM_PARSE_FAIL` retry-with-larger-token-budget fix (from an
 earlier session) live against a real `finishReason=length` truncation — it
 recovered correctly on retry rather than hard-failing.
-**Quota-pause was NOT observed** — none of the 3 real runs produced an actual
-Firecrawl/Tavily/rate-limit error signature (all 3 completed, one with an
-internal LLM parse retry that correctly did NOT get miscounted as a quota
+**Quota-pause was NOT observed live** — none of the 3 real runs produced an
+actual Firecrawl/Tavily/rate-limit error signature (all 3 completed, one with
+an internal LLM parse retry that correctly did NOT get miscounted as a quota
 hit). Deliberately did not force this by burning real API quota against
-already-exhausted limits — genuinely triggering it needs either live quota
-exhaustion (not manufactured on purpose) or a mocked/unit-level test of
-`quotaSignatureIn()`/the consecutive-hit counter in `batch-upload/page.tsx`,
-which hasn't been done. If quota-pause behavior is ever in question, that unit
-test is the safe way to confirm it — re-testing live against real quota
-limits is not a good way to verify this deliberately.
+already-exhausted limits.
+
+**Quota-pause — closed via unit test, not a live burn (2026-07-12)**. The
+detection logic (`quotaSignatureIn`, the consecutive-hit counter, the
+3-in-a-row pause threshold) was pulled out of `batch-upload/page.tsx`'s inline
+functions into a new pure module, `lib/batch/quota-pause.ts` — same pattern as
+`lib/batch/company-dedup.ts`/`file-parser.ts` (pure logic in `lib/`, UI state
+in the page component), no behavior change, `tsc --noEmit` clean and a live
+dev-server pass confirmed the page still renders correctly post-extraction.
+Added `vitest` (project had zero test infrastructure before this — resolves
+the stale `tests/url-classifier.test.ts` reference elsewhere in this doc,
+which pointed at a file that doesn't actually exist; that specific test still
+needs writing separately, not done here) and `npm test` script. New
+`tests/batch-quota-pause.test.ts`, 17 assertions, all passing: every known
+signature (Firecrawl "insufficient credits", Tavily "exceeds your plan"/HTTP
+432, generic "quota exceeded"/"rate limit"/429) correctly detected across all
+three haystack sources (`scrapeResult.debug.errors`, `validation.gates`
+reason/diagnostics, top-level `error`); a generic `LLM_PARSE_FAIL`/truncation
+error and a generic network failure correctly do NOT match (this is the exact
+distinction the live run surfaced — the real retry that happened live must
+never count as a quota hit); the consecutive-hit counter increments on a hit
+and resets on any non-hit; the pause threshold is false below 3 and true at/
+above 3; and a full loop simulation confirms both the pause-at-3rd-company
+case and the streak-broken-by-a-success case, plus a simulation of the actual
+2026-07-12 live run (3 successes) correctly never pausing. This is the
+honest way to confirm the pause logic — re-testing against real quota limits
+to force the condition would have been a bad way to verify this deliberately.
+
+**Phase 1 — complete (2026-07-12).** Items 1, 6, and 7 done and verified
+(live browser passes plus this unit test); items 2–4 were explicitly deferred,
+not abandoned — see their own entries above for what's next.
 If parse+dedupe behavior specifically is in question later, re-test with a fresh fixture of fake
 `.example.com` domains rather than assuming the prior manual pass still holds.
 

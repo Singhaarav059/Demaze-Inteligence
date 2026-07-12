@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ResearchCard } from '../intelligence-lab/ResearchCard'
 import type { RunResult } from '../intelligence-lab/_types'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
+import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 
 type CompanyStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
@@ -30,44 +31,6 @@ interface BatchCompanyState {
   status: CompanyStatus
   result?: RunResult
   errorMessage?: string
-}
-
-// ── Quota-exhaustion detection ────────────────────────────────
-// Known signatures observed live this session: Firecrawl "insufficient
-// credits", Tavily HTTP 432 / "exceeds your plan", generic 429/rate-limit
-// from the LLM provider chain. Scanned from scrapeResult.debug.errors and
-// validation.gates reasons/diagnostics — the only place these surface in
-// the API response today.
-const QUOTA_SIGNATURES = [
-  /insufficient credit/i,
-  /exceeds your plan/i,
-  /quota exceeded/i,
-  /rate limit/i,
-  /\b429\b/,
-  /\b432\b/,
-]
-
-function quotaSignatureIn(data: RunResult): string | null {
-  const haystacks: string[] = []
-  if (data.scrapeResult && 'debug' in data.scrapeResult) {
-    const debug = (data.scrapeResult as unknown as { debug?: { errors?: string[] } }).debug
-    if (debug?.errors) haystacks.push(...debug.errors)
-  }
-  const gates = (data as unknown as { validation?: { gates?: Array<{ reason?: string; diagnostics?: unknown }> } }).validation?.gates
-  if (gates) {
-    for (const g of gates) {
-      if (g.reason) haystacks.push(g.reason)
-      if (g.diagnostics) haystacks.push(JSON.stringify(g.diagnostics))
-    }
-  }
-  if (data.error) haystacks.push(data.error)
-
-  for (const text of haystacks) {
-    for (const sig of QUOTA_SIGNATURES) {
-      if (sig.test(text)) return text
-    }
-  }
-  return null
 }
 
 export default function BatchUploadPage() {
@@ -218,16 +181,12 @@ export default function BatchUploadPage() {
         await persistResult(item.company, data)
 
         const quotaMsg = quotaSignatureIn(data)
-        if (quotaMsg) {
-          consecutiveQuotaHits++
-          if (consecutiveQuotaHits >= 3) {
-            setPausedReason(
-              `Stopped at company ${i + 1} of ${queue.length} — quota likely exhausted (3 consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
-            )
-            break
-          }
-        } else {
-          consecutiveQuotaHits = 0
+        consecutiveQuotaHits = nextConsecutiveHits(consecutiveQuotaHits, quotaMsg)
+        if (quotaMsg && shouldPauseBatch(consecutiveQuotaHits)) {
+          setPausedReason(
+            `Stopped at company ${i + 1} of ${queue.length} — quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
+          )
+          break
         }
       } catch (e) {
         updateCompany(item.company.id, {
