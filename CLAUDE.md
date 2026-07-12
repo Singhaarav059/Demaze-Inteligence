@@ -70,9 +70,11 @@ for investing in enrichment depth, not LinkedIn access.
   for executive-change announcements; investor-call transcripts and financial
   disclosures only surface incidentally, not targeted; government-filings APIs
   (EDGAR/MCA) are a future category, explicitly not being built now.
-- `isFetchable()` still skips PDFs entirely — annual reports and investor
-  presentations (the two highest-priority source types) are disproportionately
-  PDF-published and are being silently dropped. Item 3, not started yet.
+- ~~`isFetchable()` still skips PDFs entirely~~ **RESOLVED (2026-07-12, Item 3)** —
+  PDFs (annual reports / investor presentations, the highest-priority source
+  types) are no longer dropped; they route through `pdf-parse` in
+  `web-enricher.ts` instead of Firecrawl. See Item 3 in the implementation
+  sequence below. Live end-to-end PDF run still pending.
 
 ## Why this exists — read this before touching signals/opportunities code
 This is not a generic industry classifier. The report is only useful if a Demaze
@@ -663,8 +665,44 @@ behavior — Ador Welding's real scrape failure chain and the "insufficient
 evidence -> no forced opportunities" outcome are both already-documented,
 correct pipeline behavior, not something this item touched or regressed.
 
-**Item 3 (not started)** — fix the PDF drop in `isFetchable()`. Add PDF text
-extraction to the fetch path.
+**Item 3 (done 2026-07-12, code + unit tests; live PDF run pending)** — fixed
+the PDF drop. Root shape confirmed before touching code: `isFetchable()` in
+`source-prioritizer.ts` was the *only* real `.pdf` gate (the
+`discovery-engine.ts:215` comment claimed a PDF skip the code never did — both
+comments now corrected). The three highest-value `very_high` source types
+(`annual_report`/`investor_presentation`/`earnings_release`) are the `mustHave`
+Pass-1 selections AND disproportionately PDF-published, so the gate was silently
+discarding exactly the evidence enrichment exists to capture.
+- `isFetchable()`: removed the `.pdf` early-return (LinkedIn/Glassdoor skips
+  kept). PDFs now survive prioritization and compete for the 5 fetch slots.
+- `web-enricher.ts`: PDFs no longer go through Firecrawl (unreliable markdown
+  conversion is *why* they were excluded). New route: `isPdfUrl()` (pure,
+  query/fragment-tolerant extension check) → `fetchPdfText()` (plain `fetch()`
+  with a 15s `AbortController` timeout, content-type + 10 MB size guards) →
+  `extractPdfText()` (pure, no-I/O, `pdf-parse` v2 `PDFParse`
+  → `getText()` → `destroy()` in try/finally). Both `extractPdfText` and
+  `isPdfUrl` are exported specifically so they're unit-testable without network.
+  New dispatcher `fetchSourceContent(url)` routes `.pdf` → `fetchPdfText`, else →
+  `fetchWithFirecrawl`; both `fetchPrioritizedSources()` and
+  `probeRecoveryPaths()` now call it. Text cap stays 6000 → `formatSourceBlock`
+  5500, so `enriched_context` assembly is byte-identical in shape. `null`-on-any-
+  failure contract preserved, so the existing snippet-fallback path is unchanged.
+- **Known simplification (not a bug):** large annual-report PDFs are truncated to
+  their first 6000 chars like every other source — no smart section extraction.
+  That's a possible future refinement, deliberately not built now.
+- **pdf-parse v2 note:** it's the `PDFParse` *class* API
+  (`new PDFParse({ data: buffer })`), NOT the classic `pdf(buffer)` default
+  function — `@types/pdf-parse@1.x` typings in package.json are stale for this.
+  Same call pattern already proven in `lib/batch/file-parser.ts`.
+- **Verified:** `tsc --noEmit` clean; `npm test` green (27 = 17 existing + 10 new
+  in `tests/enrichment-pdf.test.ts`, covering `isPdfUrl` routing incl. the
+  mid-path-"pdf" false-positive guard + `extractPdfText` against a committed
+  `tests/fixtures/sample.pdf` and graceful `null` on garbage/empty buffers).
+- **NOT yet done — needs a live run** (deferred to a quota-spending session with
+  explicit confirmation): prove a real annual-report PDF that was previously
+  dropped now fetches, parses, and lands in `enriched_context` end-to-end, plus a
+  cached-scrape regression check that gate outcomes are unchanged. Windows
+  dev-server-restart gotcha applies before that run.
 
 **Item 4 (not started)** — add executive-change-announcement query template +
 dedicated investor-call-transcript/filings targeting pass. Explicitly skip

@@ -1,0 +1,2 @@
+# Binary fixtures — never apply EOL conversion (would corrupt PDF xref byte offsets).
+*.pdf binary

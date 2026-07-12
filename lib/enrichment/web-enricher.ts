@@ -31,6 +31,7 @@
 //     whenever Tavily/Serper keys were present.
 // ============================================================
 
+import { PDFParse } from 'pdf-parse'
 import { discoverEvidenceSources, type DiscoveredSource } from './discovery-engine'
 import {
   prioritizeSources,
@@ -156,6 +157,77 @@ async function fetchWithFirecrawl(url: string, timeoutMs = 12_000): Promise<stri
   }
 }
 
+// ── ITEM 3: PDF fetch route ──────────────────────────────────
+// Firecrawl's markdown conversion is unreliable on raw PDFs, so annual reports
+// / investor presentations / earnings releases (the highest-value, very_high
+// source types, disproportionately PDF-published) used to be dropped by
+// isFetchable(). They now route here instead: download the bytes and extract
+// text via pdf-parse v2 (same PDFParse API already used server-side in
+// lib/batch/file-parser.ts). Contract matches fetchWithFirecrawl: returns
+// capped text, or null on any failure (so the snippet-fallback path still fires).
+
+const MAX_PDF_BYTES = 10 * 1024 * 1024   // skip reports larger than 10 MB
+
+/** Extension check, tolerant of query strings / fragments (e.g. `…/ar.pdf?x=1`). */
+export function isPdfUrl(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.toLowerCase()
+    return path.endsWith('.pdf')
+  } catch {
+    return url.toLowerCase().split(/[?#]/)[0].endsWith('.pdf')
+  }
+}
+
+/**
+ * Pure text extraction from PDF bytes — no I/O, so it's unit-testable without
+ * the network. Returns capped text, or null if extraction fails or is empty.
+ */
+export async function extractPdfText(buffer: Buffer): Promise<string | null> {
+  let parser: PDFParse | null = null
+  try {
+    parser = new PDFParse({ data: buffer })
+    const result = await parser.getText()
+    const text = (result?.text ?? '').trim()
+    if (text.length < 100) return null
+    return text.slice(0, 6_000)   // same per-source cap as fetchWithFirecrawl
+  } catch {
+    return null
+  } finally {
+    if (parser) { try { await parser.destroy() } catch { /* ignore */ } }
+  }
+}
+
+async function fetchPdfText(url: string, timeoutMs = 15_000): Promise<string | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: 'follow' })
+    if (!res.ok) return null
+
+    // Guard against non-PDF responses (a .pdf URL that 404s to an HTML page) and
+    // against downloading an enormous report we'd only slice the first 6 KB of.
+    const contentType = (res.headers.get('content-type') ?? '').toLowerCase()
+    if (contentType && !contentType.includes('pdf') && !contentType.includes('octet-stream')) return null
+    const declaredLen = Number(res.headers.get('content-length') ?? '0')
+    if (declaredLen && declaredLen > MAX_PDF_BYTES) return null
+
+    const arrayBuf = await res.arrayBuffer()
+    if (arrayBuf.byteLength === 0 || arrayBuf.byteLength > MAX_PDF_BYTES) return null
+
+    return await extractPdfText(Buffer.from(arrayBuf))
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Dispatch by URL type: PDFs go through pdf-parse, everything else via Firecrawl. */
+async function fetchSourceContent(url: string, timeoutMs?: number): Promise<string | null> {
+  if (isPdfUrl(url)) return fetchPdfText(url, timeoutMs ?? 15_000)
+  return fetchWithFirecrawl(url, timeoutMs ?? 12_000)
+}
+
 // ── Source block formatter ────────────────────────────────────
 
 function formatSourceBlock(
@@ -200,7 +272,7 @@ async function fetchPrioritizedSources(
 
   for (const chunk of chunks) {
     const results = await Promise.all(
-      chunk.map(async src => ({ src, content: await fetchWithFirecrawl(src.url) }))
+      chunk.map(async src => ({ src, content: await fetchSourceContent(src.url) }))
     )
     for (const { src, content } of results) {
       if (content && content.length > 100) {
@@ -253,7 +325,7 @@ export async function probeRecoveryPaths(
     const settled = await Promise.all(
       batch.map(async path => {
         const url = `https://${domain}${path}`
-        const content = await fetchWithFirecrawl(url, 8_000)
+        const content = await fetchSourceContent(url, 8_000)
         return { path, content: content && content.length >= 200 ? content : null }
       })
     )

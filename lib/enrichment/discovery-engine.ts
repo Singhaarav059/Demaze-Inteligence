@@ -212,7 +212,8 @@ export async function discoverEvidenceSources(
 
       for (const r of raw) {
         if (!r.url || seenUrls.has(r.url)) continue
-        // Skip company's own domain (already scraped) and PDFs that can't be Firecrawled.
+        // Skip only the company's own domain (already scraped). PDFs are kept —
+        // they're fetched via pdf-parse downstream (Item 3), not dropped here.
         // Guard domain being empty/undefined (company-name-only input, no website
         // resolved yet) — `url.includes('')` is always true in JS, which would
         // silently exclude every single result and break discovery entirely.

@@ -10,7 +10,9 @@
 //   - At least 1 from investor category if available
 //   - At least 1 from hiring category if available
 //   - Deduplicate by domain (no two results from same host)
-//   - Skip PDFs (Firecrawl handles them poorly in free tier)
+//   - PDFs ARE fetchable (Item 3): they route through pdf-parse in
+//     web-enricher.ts, not Firecrawl — annual reports / investor decks are
+//     disproportionately PDF-published and must not be dropped here.
 // ============================================================
 
 import { type DiscoveredSource, type SourceType } from './discovery-engine'
@@ -30,8 +32,9 @@ function extractHostname(url: string): string {
 
 function isFetchable(url: string): boolean {
   const u = url.toLowerCase()
-  // Skip direct PDF links — Firecrawl markdown conversion is unreliable for raw PDFs
-  if (u.endsWith('.pdf')) return false
+  // NOTE (Item 3): .pdf URLs are intentionally NOT skipped anymore — web-enricher.ts
+  // routes them through pdf-parse instead of Firecrawl. Dropping them here was
+  // silently discarding annual reports / investor presentations (the top source types).
   // Skip LinkedIn (requires auth)
   if (u.includes('linkedin.com')) return false
   // Skip Glassdoor (requires auth)
