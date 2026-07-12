@@ -679,11 +679,41 @@ Verified: parse+dedupe tested end-to-end against a real generated xlsx fixture
 (4 companies with deliberately similar names to exercise the
 `possibleDuplicateOf` partial-match path — correctly flagged, not
 auto-merged). `tsc --noEmit` clean. All three admin pages load with no
-console/server errors on a live dev-server pass. The "Research Selected"
-sequential-loop + quota-pause path was exercised manually in the prior session
-(hence the now-deleted `benchmarks/debug/_gen_quota_fixture.ts` scratch
-fixture) but not re-verified end-to-end in this session — if quota-pause
-behavior is in question later, re-test with a fresh fixture of fake
+console/server errors on a live dev-server pass.
+
+**"Research Selected" sequential loop — genuinely re-verified 2026-07-12**
+(superseding the "manually exercised in a prior session, not re-verified"
+note this replaced). Real browser test, real API calls, no mocking: 3
+already-benchmarked companies (A-1 Fence Products, AITG, AS Agri & Aqua) run
+through the actual button click (file input driven via native
+File/DataTransfer injection since the available browser tool couldn't drive
+an OS file picker — this still fires React's real `onChange` handler, not a
+shortcut around it). Confirmed by direct observation, not inference: progress
+indicator advanced correctly ("Researching 1 of 3" -> "2 of 3" -> "3 of 3",
+current-company name updated each step), each row's status flipped
+pending -> running -> done in the UI as the corresponding
+`POST /api/admin/test-analysis` calls completed server-side (matched against
+live server logs), each completed result persisted to run-history
+immediately (`POST /api/admin/test-runs 200` fired after each company, not
+batched at the end) — confirmed independently by checking run-history's count
+(21 -> 24) and seeing all 3 new entries at the top with timestamps/domains/
+durations matching what was observed live. `ResearchCard` rendered the real
+5-field output correctly with zero buyer/contact fields present, confirming
+the schema lock holds through this new entry point too. Incidentally
+exercised the `LLM_PARSE_FAIL` retry-with-larger-token-budget fix (from an
+earlier session) live against a real `finishReason=length` truncation — it
+recovered correctly on retry rather than hard-failing.
+**Quota-pause was NOT observed** — none of the 3 real runs produced an actual
+Firecrawl/Tavily/rate-limit error signature (all 3 completed, one with an
+internal LLM parse retry that correctly did NOT get miscounted as a quota
+hit). Deliberately did not force this by burning real API quota against
+already-exhausted limits — genuinely triggering it needs either live quota
+exhaustion (not manufactured on purpose) or a mocked/unit-level test of
+`quotaSignatureIn()`/the consecutive-hit counter in `batch-upload/page.tsx`,
+which hasn't been done. If quota-pause behavior is ever in question, that unit
+test is the safe way to confirm it — re-testing live against real quota
+limits is not a good way to verify this deliberately.
+If parse+dedupe behavior specifically is in question later, re-test with a fresh fixture of fake
 `.example.com` domains rather than assuming the prior manual pass still holds.
 
 ## The actual goal
