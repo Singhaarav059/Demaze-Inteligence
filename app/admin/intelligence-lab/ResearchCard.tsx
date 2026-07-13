@@ -18,7 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { humanizeText, humanizeList } from '@/lib/text/humanize'
 import { downloadBriefPdf, downloadBriefWord } from '@/lib/export/download-brief'
-import type { BriefInput } from '@/lib/export/brief-html'
+import type { BriefInput, BriefExtras } from '@/lib/export/brief-html'
 import type { RunResult } from './_types'
 
 function DownloadIcon({ className }: { className?: string }) {
@@ -163,24 +163,30 @@ export function ResearchCard({ result }: { result: RunResult }) {
     whyNow: whyNow || undefined,
   }
 
+  // Full Analysis-tab detail appended after the brief in the export.
+  const briefExtras: BriefExtras = {
+    analysis: a,
+    signals: result.extractorResult?.signals ?? [],
+  }
+
   return (
     <div className="space-y-3">
       {/* Export toolbar */}
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"
-          onClick={() => downloadBriefPdf(briefInput)}
+          onClick={() => downloadBriefPdf(briefInput, briefExtras)}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="Download this brief as a PDF"
+          title="Download the full brief + analysis as a PDF"
         >
           <DownloadIcon className="size-3.5" />
           PDF
         </button>
         <button
           type="button"
-          onClick={() => downloadBriefWord(briefInput)}
+          onClick={() => downloadBriefWord(briefInput, briefExtras)}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="Download this brief as a Word document"
+          title="Download the full brief + analysis as a Word document"
         >
           <DownloadIcon className="size-3.5" />
           Word

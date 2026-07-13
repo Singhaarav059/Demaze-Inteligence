@@ -8,7 +8,7 @@
 //         HTML-based .doc files and keeps the formatting.
 // ============================================================
 
-import { buildBriefHtml, briefFileBase, type BriefInput } from './brief-html'
+import { buildBriefHtml, briefFileBase, type BriefInput, type BriefExtras } from './brief-html'
 
 function withTimestamp(input: BriefInput): BriefInput {
   if (input.generatedAt) return input
@@ -22,8 +22,8 @@ function withTimestamp(input: BriefInput): BriefInput {
 }
 
 /** Open the brief in a hidden iframe and trigger the print dialog. */
-export function downloadBriefPdf(input: BriefInput): void {
-  const html = buildBriefHtml(withTimestamp(input))
+export function downloadBriefPdf(input: BriefInput, extras?: BriefExtras): void {
+  const html = buildBriefHtml(withTimestamp(input), extras)
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
@@ -66,8 +66,8 @@ export function downloadBriefPdf(input: BriefInput): void {
 }
 
 /** Download the brief as a Word-openable .doc file. */
-export function downloadBriefWord(input: BriefInput): void {
-  const html = buildBriefHtml(withTimestamp(input))
+export function downloadBriefWord(input: BriefInput, extras?: BriefExtras): void {
+  const html = buildBriefHtml(withTimestamp(input), extras)
   const blob = new Blob(['﻿', html], { type: 'application/msword' })
   const url = URL.createObjectURL(blob)
 

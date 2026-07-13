@@ -112,6 +112,29 @@ output only — NOT email generation/send, which stays out of scope.
   .docx because it's zero-dependency and keeps the exact visual layout. Revisit only
   if a true .docx is required.
 
+### Session 2 follow-up — export the full Analysis detail too
+User wanted the download to include the whole Inspector/Analysis-tab content, not
+just the 5-field brief. Added an optional appendix:
+- `buildAnalysisAppendix(BriefExtras)` in `lib/export/brief-html.ts` renders an
+  "Analysis Detail" section (page-break before it) mirroring the on-screen Analysis
+  tab: Executive Brief, Scores, Business Model Analysis, Signal Clusters, Strategic
+  Challenges, Opportunity Engine output, Why Demaze, Outreach Intelligence, structured
+  Pain Points, Reasoning Chains, Signals, detailed AI Opportunities, and the Evidence
+  Bank (from `extractorResult.signals`). `buildBriefHtml(brief, extras?)` appends it
+  when `extras` is passed. Narrative fields are humanized+escaped (`H`); verbatim
+  source quotes are escaped only (`E`), NOT humanized — a real site quote keeps its
+  own dashes. Every section is conditional, so thin analyses just omit sections.
+- `download-brief.ts` funcs take an optional `extras`; `ResearchCard` passes
+  `{ analysis: analysisResult, signals: extractorResult.signals }` to both buttons,
+  so the download is now brief + full analysis on all three surfaces.
+- **New: `vitest.config.ts`** — resolves the `@/` path alias for tests (brief-html
+  imports `@/lib/text/humanize`; vitest had no alias, so the test import chain broke).
+  This unblocks unit-testing any lib module that uses `@/` going forward.
+- Tests: `tests/brief-html.test.ts` now 13 assertions (added appendix coverage:
+  exec-brief/BMA/evidence-bank present, verbatim-quote NOT dash-converted, AI
+  narrative humanized + markup escaped, appendix wired into buildBriefHtml). Suite 52
+  green, `tsc` + `eslint` clean.
+
 ## Why this exists
 The site was built as a testing harness. Once the pipeline worked, the user asked to
 "redesign and restructure completely… rebuild pro." This file is the full record of

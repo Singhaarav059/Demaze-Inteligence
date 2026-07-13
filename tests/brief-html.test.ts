@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildBriefHtml, escapeHtml, briefFileBase, type BriefInput } from '../lib/export/brief-html'
+import { buildBriefHtml, buildAnalysisAppendix, escapeHtml, briefFileBase, type BriefInput } from '../lib/export/brief-html'
 
 const base: BriefInput = {
   companyName: 'Bharat Forge Limited',
@@ -75,5 +75,68 @@ describe('buildBriefHtml', () => {
     expect(minimal).toContain('X Co')
     expect(minimal).not.toContain('Personalization Summary')
     expect(minimal).not.toContain('Recent News')
+  })
+})
+
+describe('buildAnalysisAppendix', () => {
+  it('returns empty when there is no analysis or signals', () => {
+    expect(buildAnalysisAppendix({})).toBe('')
+    // An analysis object with no populated sections yields no appendix.
+    expect(buildAnalysisAppendix({ analysis: {}, signals: [] })).toBe('')
+  })
+
+  it('renders the executive brief, business model, and evidence bank', () => {
+    const html = buildAnalysisAppendix({
+      analysis: {
+        executive_brief: {
+          what_we_observed: ['Three plants in India — verified'],
+          what_it_means: ['Cross-plant visibility gap'],
+          what_to_sell: 'AI Quality Control',
+          why_now: 'AI mandate from leadership',
+          overall_confidence: 'medium',
+        },
+        business_model_analysis: {
+          model_type: 'Manufacturer',
+          core_operational_activities: ['Forging', 'Machining'],
+        },
+        signal_clusters: [
+          { theme: 'Multi-plant ops', description: 'Several facilities', confidence: 'high', tier: 1, signals_present: ['facility_count'] },
+        ],
+      },
+      signals: [
+        {
+          type: 'facility_count',
+          strength: 'strong',
+          validated: true,
+          evidence: [{ quote: 'We operate 6 plants — across India', source_url: 'https://x.com/about', evidence_strength: 'high', source_tier: 'tier1', subject: 'company_operations' }],
+        },
+      ],
+    })
+    expect(html).toContain('Analysis Detail')
+    expect(html).toContain('Executive Brief')
+    expect(html).toContain('AI Quality Control')
+    expect(html).toContain('Business Model Analysis')
+    expect(html).toContain('Forging')
+    expect(html).toContain('Evidence Bank')
+    // Verbatim source quote kept intact (dash NOT converted — it is not AI text)
+    expect(html).toContain('We operate 6 plants — across India')
+  })
+
+  it('humanizes AI narrative but escapes injected markup', () => {
+    const html = buildAnalysisAppendix({
+      analysis: {
+        executive_brief: { what_to_sell: 'Foo — bar <b>x</b>', what_we_observed: [], what_it_means: [] },
+      },
+    })
+    // em dash in AI narrative -> comma; markup escaped
+    expect(html).toContain('Foo, bar')
+    expect(html).toContain('&lt;b&gt;')
+    expect(html).not.toContain('<b>x</b>')
+  })
+
+  it('is appended to buildBriefHtml when extras are passed', () => {
+    const html = buildBriefHtml({ companyName: 'X Co' }, { analysis: { signals: [{ type: 't', category: 'c', strength: 'strong', evidence: 'q' }] } })
+    expect(html).toContain('Analysis Detail')
+    expect(html).toContain('Signals')
   })
 })
