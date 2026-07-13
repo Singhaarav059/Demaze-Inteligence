@@ -450,7 +450,8 @@ export default function IntelligenceLab() {
 
           {/* ── Tabs ──────────────────────────────────────────── */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ActiveTab)}>
-            <TabsList className="border border-border bg-card">
+            <div className="-mx-1 overflow-x-auto px-1 pb-1">
+              <TabsList className="border border-border bg-card">
               <TabsTrigger value="scraper" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Scraper
               </TabsTrigger>
@@ -473,6 +474,7 @@ export default function IntelligenceLab() {
                 Compare {(compareA || compareB) ? '●' : ''}
               </TabsTrigger>
             </TabsList>
+            </div>
 
             {/* ── Scraper Results ──────────────────────────── */}
             <TabsContent value="scraper" className="mt-4 space-y-4">

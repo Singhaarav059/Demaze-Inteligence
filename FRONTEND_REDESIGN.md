@@ -64,6 +64,29 @@ not reach. Both fixed:
   `tests/humanize.test.ts` (12 assertions). Full suite: 39 tests green,
   `tsc --noEmit` clean.
 
+### Session 2 follow-up — mobile responsiveness
+User asked whether the whole site is mobile-compatible. Audit found the layout was
+mostly responsive already (content drops `md:pl-60`, grids collapse to 1–2 cols,
+landing page uses `sm:`/`md:` breakpoints) EXCEPT two gaps, both now fixed:
+- **No mobile navigation** (the real gap) — `Sidebar` is `hidden md:flex`, and the
+  TopBar showed only a brand mark below `md`, so Research/Batch/History were
+  unreachable on a phone. Added `components/shell/MobileNav.tsx`: a hamburger
+  (`md:hidden`) that opens a left slide-in drawer (backdrop, body-scroll-lock, closes
+  on link click) with the same nav items + active state. Extracted the nav list into
+  `components/shell/nav-config.ts` so `Sidebar` and `MobileNav` share ONE source of
+  truth (don't re-add a second copy). New `MenuIcon`/`CloseIcon` in `nav-icons.tsx`.
+  Wired `<MobileNav />` into `TopBar`'s left side. NOTE: intentionally NO
+  route-change `useEffect(() => setOpen(false))` — the React `set-state-in-effect`
+  lint rule flags it and every nav link already closes the drawer via `onClick`, so
+  it's redundant.
+- **7-tab Inspector TabsList overflow** — `inline-flex w-fit` with 7 triggers spilled
+  past a phone viewport. Wrapped it in an `overflow-x-auto` container so it scrolls
+  horizontally on narrow screens instead of breaking layout.
+- Everything else checked (batch-upload, run-history, ComparisonPanel): no raw
+  tables, no fixed-width grids, busy rows already use `flex-wrap`. `tsc` clean,
+  `eslint` clean on touched shell files, 39 tests green. Live mobile screenshot NOT
+  taken (dev server needs the Windows restart to reflect these edits first).
+
 ## Why this exists
 The site was built as a testing harness. Once the pipeline worked, the user asked to
 "redesign and restructure completely… rebuild pro." This file is the full record of

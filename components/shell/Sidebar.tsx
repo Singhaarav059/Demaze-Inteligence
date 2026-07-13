@@ -7,18 +7,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import {
-  ResearchIcon,
-  BatchIcon,
-  HistoryIcon,
-  DotIcon,
-} from './nav-icons'
-
-const NAV = [
-  { href: '/admin/intelligence-lab', label: 'Research', icon: ResearchIcon, hint: 'Single-company brief' },
-  { href: '/admin/batch-upload', label: 'Batch', icon: BatchIcon, hint: 'Lead-list upload' },
-  { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: 'Saved runs' },
-] as const
+import { DotIcon } from './nav-icons'
+import { NAV } from './nav-config'
 
 export function Sidebar() {
   const pathname = usePathname()

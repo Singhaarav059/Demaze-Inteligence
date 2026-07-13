@@ -7,6 +7,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRightIcon } from './nav-icons'
+import { MobileNav } from './MobileNav'
 
 const SECTIONS: Record<string, { section: string; hint: string }> = {
   '/admin/intelligence-lab': { section: 'Research', hint: 'Single-company intelligence brief' },
@@ -21,6 +22,8 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 px-5 backdrop-blur">
       <div className="flex items-center gap-2 text-sm">
+        {/* Mobile nav (sidebar hidden < md) */}
+        <MobileNav />
         {/* Mobile brand (sidebar hidden < md) */}
         <Link href="/admin/intelligence-lab" className="flex items-center gap-2 md:hidden">
           <span className="grid size-6 place-items-center rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-semibold text-white">
