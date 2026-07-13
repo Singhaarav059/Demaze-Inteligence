@@ -87,6 +87,31 @@ landing page uses `sm:`/`md:` breakpoints) EXCEPT two gaps, both now fixed:
   `eslint` clean on touched shell files, 39 tests green. Live mobile screenshot NOT
   taken (dev server needs the Windows restart to reflect these edits first).
 
+### Session 2 follow-up — brief download (PDF + Word)
+User wanted to download the on-screen research brief as a file. Added export,
+dependency-free, from the SAME humanized fields the ResearchCard displays (so the
+file matches the screen). IN SCOPE: this exports the already-generated research
+output only — NOT email generation/send, which stays out of scope.
+- `lib/export/brief-html.ts` (pure, tested) — `buildBriefHtml(BriefInput)` returns a
+  standalone, inline-styled HTML document of the 5-field brief on a clean white/print
+  layout (not the dark app theme — better for paper/PDF). `escapeHtml` guards against
+  markup injection from scraped company data; `briefFileBase` slugifies the filename.
+- `lib/export/download-brief.ts` (client) — `downloadBriefPdf` renders the HTML in a
+  hidden iframe and calls `print()` (browser "Save as PDF"; iframe avoids popup
+  blockers); `downloadBriefWord` downloads the same HTML as a `.doc` blob
+  (`application/msword` + BOM) which Word opens with formatting intact. The office
+  `xmlns` hints in the HTML head improve Word fidelity.
+- `ResearchCard.tsx` — PDF + Word buttons in a top-right toolbar, assembling
+  `BriefInput` from the already-humanized display values. Because the buttons live in
+  ResearchCard, all three surfaces (Research, History, Batch) get export for free.
+- Tests: `tests/brief-html.test.ts` (9 assertions: sections present, list/opp fields,
+  XSS escaping, empty-section omission, filename slug). Suite now 48 green, `tsc` +
+  `eslint` clean.
+- Known trade-off: the `.doc` is HTML-based (Word may show a one-time "different
+  format than .docx" notice on save). Chosen over adding the `docx` dep for a real
+  .docx because it's zero-dependency and keeps the exact visual layout. Revisit only
+  if a true .docx is required.
+
 ## Why this exists
 The site was built as a testing harness. Once the pipeline worked, the user asked to
 "redesign and restructure completely… rebuild pro." This file is the full record of

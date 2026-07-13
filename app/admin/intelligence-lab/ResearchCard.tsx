@@ -17,7 +17,18 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { humanizeText, humanizeList } from '@/lib/text/humanize'
+import { downloadBriefPdf, downloadBriefWord } from '@/lib/export/download-brief'
+import type { BriefInput } from '@/lib/export/brief-html'
 import type { RunResult } from './_types'
+
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  )
+}
 
 function Section({
   label,
@@ -128,8 +139,54 @@ export function ResearchCard({ result }: { result: RunResult }) {
     sizeEstimate && { label: 'Size', value: sizeEstimate },
   ].filter(Boolean) as Array<{ label: string; value: string }>
 
+  // Assemble the export payload from the already-humanized display fields,
+  // so the downloaded PDF/Word match exactly what's on screen.
+  const briefInput: BriefInput = {
+    companyName,
+    industry: industry || undefined,
+    subIndustry: subIndustry || undefined,
+    headquarters: headquarters || undefined,
+    sizeEstimate: sizeEstimate || undefined,
+    confidence: confidence || undefined,
+    signalCount,
+    summary: summary || undefined,
+    businessModel: businessModel || undefined,
+    recentNews: recentActivity,
+    painPoints,
+    opportunities: opportunities.map((o) => ({
+      title: humanizeText(o.title),
+      description: str(o.description) ? humanizeText(o.description) : undefined,
+      entryPoint: str(o.entry_point) ? humanizeText(o.entry_point) : undefined,
+    })),
+    openingAngle: openingAngle || undefined,
+    whatToSell: whatToSell || undefined,
+    whyNow: whyNow || undefined,
+  }
+
   return (
     <div className="space-y-3">
+      {/* Export toolbar */}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => downloadBriefPdf(briefInput)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          title="Download this brief as a PDF"
+        >
+          <DownloadIcon className="size-3.5" />
+          PDF
+        </button>
+        <button
+          type="button"
+          onClick={() => downloadBriefWord(briefInput)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          title="Download this brief as a Word document"
+        >
+          <DownloadIcon className="size-3.5" />
+          Word
+        </button>
+      </div>
+
       {/* AI synthesis failure banner */}
       {aiSynthesisFailed && (
         <Card className="border-destructive/40 bg-destructive/10">
