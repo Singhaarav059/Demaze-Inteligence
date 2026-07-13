@@ -1,223 +1,297 @@
 'use client'
 
 // ============================================================
-// Research Card — shared result display
+// Research Card — shared result display (the SDR-facing hero)
 // ============================================================
-// Extracted from intelligence-lab/page.tsx so run-history and
-// batch-upload pages can render the same output for a saved run.
+// Rendered by intelligence-lab (hero) + run-history + batch.
+// Maps analysisResult onto the locked 5-field output schema:
+//   Company Description · Pain Points · AI Opportunities ·
+//   Recent News · Personalization Summary
+//
+// Layout goal: use the full width. The old card was capped at
+// max-w-3xl, leaving a large empty gutter on the right. This
+// version is full-bleed with a 2-column hero (description +
+// facts rail) and a balanced 2-up grid for the body sections.
 // ============================================================
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import { humanizeText, humanizeList } from '@/lib/text/humanize'
 import type { RunResult } from './_types'
+
+function Section({
+  label,
+  accent,
+  className,
+  children,
+}: {
+  label: string
+  accent?: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <Card className={cn('border-border bg-card', className)}>
+      <CardContent className="px-5 py-4">
+        <p
+          className={cn(
+            'mb-3 text-[11px] font-semibold uppercase tracking-[0.14em]',
+            accent ?? 'text-muted-foreground',
+          )}
+        >
+          {label}
+        </p>
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <span className="shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground/70">{label}</span>
+      <span className="text-right text-xs font-medium text-foreground/90">{value}</span>
+    </div>
+  )
+}
 
 export function ResearchCard({ result }: { result: RunResult }) {
   const a = result.analysisResult as Record<string, unknown> | undefined
-  if (!a) return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="text-4xl mb-4">🔍</div>
-      <p className="text-zinc-400 text-sm max-w-xs">Enter a company URL above and click <strong className="text-white">Analyze</strong> to generate a research brief.</p>
-    </div>
-  )
+  if (!a)
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
+        <div className="mb-3 grid size-11 place-items-center rounded-xl bg-accent text-muted-foreground">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-5">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+          </svg>
+        </div>
+        <p className="max-w-xs text-sm text-muted-foreground">
+          Enter a company URL and run <strong className="text-foreground">Analyze</strong> to generate a research brief.
+        </p>
+      </div>
+    )
 
   const str = (v: unknown) => (v != null && v !== '' ? String(v) : null)
 
-  const companyName   = str(a.company_name) ?? 'Unknown Company'
-  const industry      = str(a.industry) ?? ''
-  const subIndustry   = str(a.sub_industry) ?? ''
-  const sizeEstimate  = str(a.company_size_estimate) ?? ''
-  const headquarters  = str(a.headquarters_location) ?? ''
-  const summary       = str(a.company_summary) ?? ''
-  const confidence    = str(a.confidence_level) ?? 'low'
-  const businessModel = str(a.business_model) ?? ''
+  const companyName = str(a.company_name) ?? 'Unknown Company'
+  const industry = str(a.industry) ?? ''
+  const subIndustry = str(a.sub_industry) ?? ''
+  const sizeEstimate = str(a.company_size_estimate) ?? ''
+  const headquarters = str(a.headquarters_location) ?? ''
+  const summary = humanizeText(a.company_summary)
+  const confidence = str(a.confidence_level) ?? 'low'
+  const businessModel = humanizeText(a.business_model)
 
-  // Recent activity (new field from SDR schema)
-  const recentActivity: string[] = Array.isArray(a.recent_activity)
-    ? (a.recent_activity as unknown[]).map(x => str(x)).filter(Boolean) as string[]
-    : []
+  const recentActivity: string[] = humanizeList(a.recent_activity)
 
-  // Signal quality indicator (replaces 0-10 fit score)
+  // Evidence-strength — driven by extracted signal count
   const signalCount = result.extractorResult?.signals?.length ?? 0
-  const fitLabel = signalCount >= 4 ? 'Strong Signals' : signalCount >= 2 ? 'Some Signals' : 'Inferred'
-  const fitColor = signalCount >= 4 ? 'text-emerald-400' : signalCount >= 2 ? 'text-amber-400' : 'text-blue-400'
-  const fitBg    = signalCount >= 4 ? 'bg-emerald-950/40 border-emerald-900' : signalCount >= 2 ? 'bg-amber-950/40 border-amber-900' : 'bg-blue-950/40 border-blue-900'
-  const confColor = confidence === 'high' ? 'text-emerald-400' : confidence === 'medium' ? 'text-amber-400' : 'text-zinc-500'
+  const tier = signalCount >= 4 ? 'strong' : signalCount >= 2 ? 'medium' : 'weak'
+  const tierMeta = {
+    strong: { label: 'Strong signal', text: 'text-signal-strong', ring: 'border-signal-strong/40 bg-signal-strong/10' },
+    medium: { label: 'Some signal', text: 'text-signal-medium', ring: 'border-signal-medium/40 bg-signal-medium/10' },
+    weak: { label: 'Inferred', text: 'text-signal-none', ring: 'border-border bg-accent/40' },
+  }[tier]
+  const confText =
+    confidence === 'high' ? 'text-signal-strong' : confidence === 'medium' ? 'text-signal-medium' : 'text-muted-foreground'
 
-  // Pain points — can be plain strings or objects
-  const rawPainPoints = Array.isArray(a.pain_points) ? a.pain_points as unknown[] : []
-  const painPoints: string[] = rawPainPoints.slice(0, 5).map(p =>
-    typeof p === 'string' ? p :
-    typeof p === 'object' && p !== null ? (str((p as Record<string, unknown>).title) ?? '') : ''
-  ).filter(Boolean)
+  const rawPainPoints = Array.isArray(a.pain_points) ? (a.pain_points as unknown[]) : []
+  const painPoints: string[] = rawPainPoints
+    .slice(0, 6)
+    .map((p) =>
+      typeof p === 'string'
+        ? p
+        : typeof p === 'object' && p !== null
+          ? (str((p as Record<string, unknown>).title) ?? '')
+          : '',
+    )
+    .map((p) => humanizeText(p))
+    .filter(Boolean)
 
   const opportunities = Array.isArray(a.opportunities)
-    ? (a.opportunities as Array<Record<string, unknown>>).slice(0, 4)
+    ? (a.opportunities as Array<Record<string, unknown>>).slice(0, 6)
     : []
   const aiSynthesisFailed = a.ai_synthesis_status === 'failed'
   const aiSynthesisFailureReason = str(a.ai_synthesis_failure_reason)
 
-  const outreachIntel = a.outreach_intelligence as (Record<string, unknown> | null)
-  const openingAngle  = str(outreachIntel?.opening_angle) ?? str(a.outreach_angle) ?? ''
-  const whyNow        = str(outreachIntel?.why_now)
-    ?? str((a.why_now as Record<string, unknown>)?.explanation)
-    ?? ''
-  const whatToSell    = str((a.executive_brief as Record<string, unknown>)?.what_to_sell) ?? ''
+  const outreachIntel = a.outreach_intelligence as Record<string, unknown> | null
+  const openingAngle = humanizeText(str(outreachIntel?.opening_angle) ?? str(a.outreach_angle) ?? '')
+  const whyNow = humanizeText(str(outreachIntel?.why_now) ?? str((a.why_now as Record<string, unknown>)?.explanation) ?? '')
+  const whatToSell = humanizeText(str((a.executive_brief as Record<string, unknown>)?.what_to_sell) ?? '')
+
+  const facts: Array<{ label: string; value: string }> = [
+    industry && { label: 'Industry', value: industry },
+    subIndustry && subIndustry !== industry && { label: 'Segment', value: subIndustry },
+    headquarters && { label: 'HQ', value: headquarters },
+    sizeEstimate && { label: 'Size', value: sizeEstimate },
+  ].filter(Boolean) as Array<{ label: string; value: string }>
 
   return (
-    <div className="space-y-3 max-w-3xl">
-
-      {/* ── AI Synthesis Failure Banner ──────────────────────── */}
-      {/* Distinct from "genuinely found nothing" — the LLM narrative step itself
-          broke after a retry, so pain_points/opportunities/outreach below are
-          empty because they were never written, not because none exist. */}
+    <div className="space-y-3">
+      {/* AI synthesis failure banner */}
       {aiSynthesisFailed && (
-        <Card className="border border-red-900/60 bg-red-950/20">
+        <Card className="border-destructive/40 bg-destructive/10">
           <CardContent className="px-5 py-3">
-            <p className="text-red-400 text-sm font-semibold">⚠ AI synthesis failed — this report is incomplete</p>
-            <p className="text-red-300/80 text-xs mt-1">
-              The AI narrative step could not produce a valid response after a retry. Challenges,
-              opportunities, and outreach angle below reflect deterministic signal data only —
-              empty sections mean the AI failed to write them, not that nothing was found. Re-run
-              the analysis to retry.
+            <p className="text-sm font-semibold text-destructive">AI synthesis failed, this report is incomplete</p>
+            <p className="mt-1 text-xs text-destructive/80">
+              The AI narrative step could not produce a valid response after a retry. Sections below reflect
+              deterministic signal data only, empty sections mean the AI failed to write them, not that nothing was
+              found. Re-run the analysis to retry.
             </p>
             {aiSynthesisFailureReason && (
-              <p className="text-red-500/60 text-[10px] mt-1.5 font-mono">{aiSynthesisFailureReason}</p>
+              <p className="mt-1.5 font-mono text-[10px] text-destructive/60">{aiSynthesisFailureReason}</p>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* ── Company Header ───────────────────────────────────── */}
-      <Card className="bg-zinc-900 border-zinc-800">
-        <CardContent className="px-5 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold text-white truncate">{companyName}</h2>
-              <p className="text-zinc-400 text-sm mt-0.5">
-                {[industry, subIndustry && subIndustry !== industry ? subIndustry : null]
-                  .filter(Boolean).join(' · ')}
-              </p>
-              {(headquarters || sizeEstimate) && (
-                <p className="text-zinc-600 text-xs mt-0.5">
-                  {[headquarters, sizeEstimate].filter(Boolean).join(' · ')}
+      {/* ── Hero: description (wide) + facts rail (narrow) ─────── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <Card className="border-border bg-card lg:col-span-2">
+          <CardContent className="px-6 py-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">{companyName}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {[industry, subIndustry && subIndustry !== industry ? subIndustry : null].filter(Boolean).join(' · ')}
                 </p>
-              )}
+              </div>
+              <div className={cn('shrink-0 rounded-lg border px-3 py-2 text-right', tierMeta.ring)}>
+                <div className={cn('text-xs font-semibold', tierMeta.text)}>{tierMeta.label}</div>
+                <div className={cn('mt-0.5 text-xs', confText)}>{confidence} confidence</div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground/70">
+                  {signalCount} signal{signalCount !== 1 ? 's' : ''}
+                </div>
+              </div>
             </div>
-            <div className={`text-right shrink-0 rounded-lg border px-3 py-2 min-w-[90px] ${fitBg}`}>
-              <div className={`text-xs font-bold ${fitColor}`}>{fitLabel}</div>
-              <div className={`text-xs mt-0.5 ${confColor}`}>{confidence} confidence</div>
-              <div className="text-[10px] text-zinc-600 mt-0.5">{signalCount} signal{signalCount !== 1 ? 's' : ''}</div>
-            </div>
-          </div>
-          {summary && (
-            <p className="text-zinc-300 text-sm mt-3 leading-relaxed border-t border-zinc-800 pt-3">
-              {summary}
+            {summary && (
+              <p className="mt-4 border-t border-border pt-4 text-[15px] leading-relaxed text-foreground/90">{summary}</p>
+            )}
+            {businessModel && !summary.toLowerCase().includes(businessModel.toLowerCase().slice(0, 20)) && (
+              <p className="mt-2 text-xs italic text-muted-foreground">{businessModel}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Facts rail, fills what used to be dead space on the right */}
+        <Card className="border-border bg-card">
+          <CardContent className="flex h-full flex-col px-5 py-4">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              At a glance
             </p>
-          )}
-          {businessModel && !summary.toLowerCase().includes(businessModel.toLowerCase().slice(0, 20)) && (
-            <p className="text-zinc-500 text-xs mt-2 italic">{businessModel}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Recent Activity ──────────────────────────────────── */}
-      {recentActivity.length > 0 && (
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recent Activity &amp; Signals</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            <ul className="space-y-1.5">
-              {recentActivity.map((item, i) => (
-                <li key={i} className="text-zinc-300 text-sm flex gap-2">
-                  <span className="text-blue-500 shrink-0 mt-0.5">●</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Challenges + Opportunities ───────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Business Challenges</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            {painPoints.length > 0 ? (
-              <ul className="space-y-2">
-                {painPoints.map((p, i) => (
-                  <li key={i} className="text-zinc-300 text-sm flex gap-2">
-                    <span className="text-red-500 shrink-0 mt-0.5">▸</span>
-                    <span>{p}</span>
-                  </li>
+            {facts.length > 0 ? (
+              <div className="divide-y divide-border/60">
+                {facts.map((f) => (
+                  <Fact key={f.label} label={f.label} value={f.value} />
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="text-zinc-600 text-xs italic">
-                {aiSynthesisFailed ? 'AI synthesis failed — see banner above.' : 'No challenges identified — try a fresh scrape.'}
-              </p>
+              <p className="text-xs italic text-muted-foreground">No firmographic detail extracted.</p>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Demaze Opportunities</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            {opportunities.length > 0 ? (
-              <ul className="space-y-2.5">
-                {opportunities.map((o, i) => (
-                  <li key={i} className="text-sm flex gap-2">
-                    <span className="text-emerald-500 shrink-0 mt-0.5">▸</span>
-                    <div>
-                      <span className="text-zinc-200 font-medium">{str(o.title)}</span>
-                      {str(o.description) && (
-                        <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{str(o.description)}</p>
-                      )}
-                      {str(o.entry_point) && (
-                        <p className="text-zinc-600 text-[10px] mt-0.5">Entry: {str(o.entry_point)}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-zinc-600 text-xs italic">
-                {aiSynthesisFailed ? 'AI synthesis failed — see banner above.' : 'No opportunities identified — try a fresh scrape.'}
-              </p>
-            )}
+            <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+              <div className="rounded-lg border border-border bg-background/40 px-3 py-2 text-center">
+                <div className="text-lg font-semibold text-foreground">{painPoints.length}</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Pain points</div>
+              </div>
+              <div className="rounded-lg border border-border bg-background/40 px-3 py-2 text-center">
+                <div className="text-lg font-semibold text-foreground">{opportunities.length}</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Opportunities</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Outreach Angle ───────────────────────────────────── */}
+      {/* Recent News */}
+      {recentActivity.length > 0 && (
+        <Section label="Recent News">
+          <ul className="grid grid-cols-1 gap-x-8 gap-y-2 md:grid-cols-2">
+            {recentActivity.map((item, i) => (
+              <li key={i} className="flex gap-2 text-sm text-foreground/90">
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* Pain Points + AI Opportunities */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Section label="Pain Points" accent="text-signal-medium">
+          {painPoints.length > 0 ? (
+            <ul className="space-y-2.5">
+              {painPoints.map((p, i) => (
+                <li key={i} className="flex gap-2.5 text-sm text-foreground/90">
+                  <span className="mt-0.5 shrink-0 text-signal-medium">▸</span>
+                  <span>{p}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs italic text-muted-foreground">
+              {aiSynthesisFailed ? 'AI synthesis failed, see banner above.' : 'No pain points identified. Try a fresh scrape.'}
+            </p>
+          )}
+        </Section>
+
+        <Section label="AI Opportunities" accent="text-signal-strong">
+          {opportunities.length > 0 ? (
+            <ul className="space-y-3">
+              {opportunities.map((o, i) => (
+                <li key={i} className="flex gap-2.5 text-sm">
+                  <span className="mt-0.5 shrink-0 text-signal-strong">▸</span>
+                  <div>
+                    <span className="font-medium text-foreground">{humanizeText(o.title)}</span>
+                    {str(o.description) && (
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{humanizeText(o.description)}</p>
+                    )}
+                    {str(o.entry_point) && (
+                      <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                        Entry point: <span className="normal-case text-muted-foreground/80">{humanizeText(o.entry_point)}</span>
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs italic text-muted-foreground">
+              {aiSynthesisFailed ? 'AI synthesis failed, see banner above.' : 'No opportunities identified. Try a fresh scrape.'}
+            </p>
+          )}
+        </Section>
+      </div>
+
+      {/* Personalization Summary, full width, the payoff */}
       {(openingAngle || whatToSell) && (
-        <Card className="border border-indigo-900/60 bg-indigo-950/20">
-          <CardHeader className="pb-1 pt-4 px-5">
-            <CardTitle className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Outreach Angle</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4 space-y-3">
-            {openingAngle && (
-              <p className="text-zinc-200 text-sm leading-relaxed border-l-2 border-indigo-600 pl-3">
-                &ldquo;{openingAngle}&rdquo;
-              </p>
-            )}
-            <div className="grid grid-cols-1 gap-1.5 text-xs">
-              {whatToSell && (
-                <div>
-                  <span className="text-zinc-500 uppercase tracking-wider font-medium">Lead with: </span>
-                  <span className="text-zinc-300">{whatToSell}</span>
-                </div>
+        <Card className="border-primary/30 bg-primary/[0.07]">
+          <CardContent className="px-6 py-5">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              Personalization Summary
+            </p>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              {openingAngle && (
+                <p className="border-l-2 border-primary pl-4 text-[15px] leading-relaxed text-foreground/90 lg:col-span-2">
+                  &ldquo;{openingAngle}&rdquo;
+                </p>
               )}
-              {whyNow && (
-                <div>
-                  <span className="text-zinc-500 uppercase tracking-wider font-medium">Why now: </span>
-                  <span className="text-zinc-400">{whyNow}</span>
-                </div>
-              )}
+              <div className="space-y-3 text-xs">
+                {whatToSell && (
+                  <div>
+                    <p className="mb-0.5 font-semibold uppercase tracking-wider text-muted-foreground">Lead with</p>
+                    <p className="text-foreground/90">{whatToSell}</p>
+                  </div>
+                )}
+                {whyNow && (
+                  <div>
+                    <p className="mb-0.5 font-semibold uppercase tracking-wider text-muted-foreground">Why now</p>
+                    <p className="text-muted-foreground">{whyNow}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -184,7 +184,7 @@ export default function BatchUploadPage() {
         consecutiveQuotaHits = nextConsecutiveHits(consecutiveQuotaHits, quotaMsg)
         if (quotaMsg && shouldPauseBatch(consecutiveQuotaHits)) {
           setPausedReason(
-            `Stopped at company ${i + 1} of ${queue.length} — quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
+            `Stopped at company ${i + 1} of ${queue.length}, quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
           )
           break
         }
@@ -210,20 +210,16 @@ export default function BatchUploadPage() {
   const doneCount = companies.filter(c => c.status === 'done').length
 
   return (
-    <div className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
+    <div className="mx-auto max-w-5xl px-6 py-8 space-y-5">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Batch Upload</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Upload a lead list → select companies → research in batch</p>
-        </div>
-        <div className="flex gap-3 text-xs">
-          <a href="/admin/intelligence-lab" className="text-zinc-500 hover:text-zinc-300 transition-colors">Intelligence Lab →</a>
-          <a href="/admin/run-history" className="text-zinc-500 hover:text-zinc-300 transition-colors">Run History →</a>
+          <h1 className="text-xl font-semibold text-foreground">Batch Upload</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Upload a lead list → select companies → research in batch</p>
         </div>
       </div>
 
       {/* ── Upload ──────────────────────────────────────────── */}
-      <Card className="bg-zinc-900 border-zinc-800">
+      <Card className="bg-card border-border">
         <CardContent className="px-5 py-4 space-y-3">
           <div className="flex items-center gap-3">
             <input
@@ -232,27 +228,27 @@ export default function BatchUploadPage() {
               accept=".xlsx,.xls,.csv,.docx,.pdf"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
               disabled={uploading}
-              className="text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-zinc-800 file:text-zinc-300 file:text-xs hover:file:bg-zinc-700"
+              className="text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-accent file:text-foreground/90 file:text-xs hover:file:bg-accent"
             />
-            {uploading && <span className="text-xs text-zinc-500">Parsing…</span>}
+            {uploading && <span className="text-xs text-muted-foreground">Parsing…</span>}
           </div>
-          <p className="text-zinc-600 text-xs">
+          <p className="text-muted-foreground/70 text-xs">
             Supported: .xlsx (priority), .csv, .docx, .pdf. PDF is the least reliable format —
             text extraction can interleave columns from a real table; verify extracted rows carefully.
           </p>
 
           {uploadError && (
-            <div className="rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-xs">
-              <p className="text-red-300">{uploadError}</p>
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
+              <p className="text-destructive">{uploadError}</p>
               {detectedHeaders && detectedHeaders.length > 0 && (
-                <p className="text-red-400/70 mt-1">Headers found: {detectedHeaders.join(', ')}</p>
+                <p className="text-destructive/70 mt-1">Headers found: {detectedHeaders.join(', ')}</p>
               )}
             </div>
           )}
 
           {uploadWarnings.length > 0 && (
-            <div className="rounded-lg border border-yellow-800/50 bg-yellow-950/20 px-3 py-2 text-xs space-y-0.5">
-              {uploadWarnings.map((w, i) => <p key={i} className="text-yellow-500/90">⚠ {w}</p>)}
+            <div className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs space-y-0.5">
+              {uploadWarnings.map((w, i) => <p key={i} className="text-signal-medium">⚠ {w}</p>)}
             </div>
           )}
         </CardContent>
@@ -266,15 +262,15 @@ export default function BatchUploadPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search companies…"
-              className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 max-w-xs text-sm"
+              className="bg-card border-border text-foreground placeholder:text-muted-foreground/60 max-w-xs text-sm"
             />
-            <Button size="sm" variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800" onClick={selectAll}>Select all</Button>
-            <Button size="sm" variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800" onClick={selectNone}>Select none</Button>
-            <span className="text-zinc-500 text-xs">{selectedCount} of {companies.length} selected · {doneCount} done</span>
+            <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={selectAll}>Select all</Button>
+            <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={selectNone}>Select none</Button>
+            <span className="text-muted-foreground text-xs">{selectedCount} of {companies.length} selected · {doneCount} done</span>
 
             <div className="ml-auto flex items-center gap-2">
               {running ? (
-                <Button size="sm" variant="outline" className="border-red-800 bg-red-950/40 text-red-300 hover:bg-red-900/40" onClick={stopBatch}>
+                <Button size="sm" variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={stopBatch}>
                   Stop after current
                 </Button>
               ) : (
@@ -286,47 +282,47 @@ export default function BatchUploadPage() {
           </div>
 
           {progress && (
-            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-950/30 border border-blue-800/40 text-xs">
-              <span className="text-blue-400 font-medium">Researching {progress.done + 1} of {progress.total}</span>
-              <span className="text-zinc-400 truncate">{progress.current}</span>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 border border-primary/40 text-xs">
+              <span className="text-primary font-medium">Researching {progress.done + 1} of {progress.total}</span>
+              <span className="text-muted-foreground truncate">{progress.current}</span>
             </div>
           )}
 
           {pausedReason && (
-            <div className="rounded-lg border border-amber-800 bg-amber-950/30 px-3 py-2.5 text-xs">
-              <p className="text-amber-400 font-medium">⏸ Batch paused</p>
-              <p className="text-amber-300/80 mt-1">{pausedReason}</p>
+            <div className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2.5 text-xs">
+              <p className="text-signal-medium font-medium">⏸ Batch paused</p>
+              <p className="text-signal-medium/80 mt-1">{pausedReason}</p>
             </div>
           )}
 
           <div className="space-y-1.5">
             {filtered.map(({ company, selected, status, result, errorMessage }) => (
-              <div key={company.id} className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
+              <div key={company.id} className="rounded-lg border border-border bg-card overflow-hidden">
                 <div className="flex items-center gap-3 px-3 py-2.5">
                   <input
                     type="checkbox"
                     checked={selected}
                     onChange={() => toggle(company.id)}
                     disabled={running}
-                    className="accent-blue-600"
+                    className="accent-primary"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-white text-sm truncate">{company.companyName}</span>
+                      <span className="text-foreground text-sm truncate">{company.companyName}</span>
                       {company.contacts.length > 1 && (
-                        <Badge className="text-[10px] bg-zinc-800 text-zinc-400">{company.contacts.length} contacts</Badge>
+                        <Badge className="text-[10px] bg-accent text-muted-foreground">{company.contacts.length} contacts</Badge>
                       )}
                       {company.possibleDuplicateOf.length > 0 && (
-                        <Badge className="text-[10px] bg-amber-950/60 text-amber-400 border border-amber-900">
+                        <Badge className="text-[10px] bg-signal-medium/10 text-signal-medium border border-signal-medium/30">
                           possible duplicate of {company.possibleDuplicateOf.join(', ')}
                         </Badge>
                       )}
                     </div>
-                    <p className="text-zinc-600 text-xs truncate">
+                    <p className="text-muted-foreground/70 text-xs truncate">
                       {[company.companyWebsite, company.industry, company.country].filter(Boolean).join(' · ') || 'no website/industry/country given'}
                     </p>
                     {company.contacts.some(c => c.personName) && (
-                      <p className="text-zinc-600 text-xs mt-0.5">
+                      <p className="text-muted-foreground/70 text-xs mt-0.5">
                         {company.contacts.filter(c => c.personName).map(c => `${c.personName}${c.jobTitle ? ` (${c.jobTitle})` : ''}`).join('; ')}
                       </p>
                     )}
@@ -337,7 +333,7 @@ export default function BatchUploadPage() {
                   {status === 'done' && (
                     <button
                       onClick={() => setExpandedId(expandedId === company.id ? null : company.id)}
-                      className="text-zinc-500 hover:text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700 hover:border-zinc-600"
+                      className="text-muted-foreground hover:text-foreground/90 text-xs px-2 py-1 rounded border border-border hover:border-border"
                     >
                       {expandedId === company.id ? 'Hide' : 'View'}
                     </button>
@@ -346,12 +342,12 @@ export default function BatchUploadPage() {
 
                 {status === 'failed' && errorMessage && (
                   <div className="px-3 pb-2 -mt-1">
-                    <p className="text-red-400 text-xs">{errorMessage}</p>
+                    <p className="text-destructive text-xs">{errorMessage}</p>
                   </div>
                 )}
 
                 {expandedId === company.id && result && (
-                  <div className="border-t border-zinc-800 px-4 py-4">
+                  <div className="border-t border-border px-4 py-4">
                     <ResearchCard result={result} />
                   </div>
                 )}
@@ -366,11 +362,11 @@ export default function BatchUploadPage() {
 
 function StatusBadge({ status }: { status: CompanyStatus }) {
   const map: Record<CompanyStatus, { label: string; className: string }> = {
-    pending: { label: 'Pending', className: 'bg-zinc-800 text-zinc-500' },
-    running: { label: 'Researching…', className: 'bg-blue-950/60 text-blue-400 border border-blue-900' },
-    done: { label: 'Done', className: 'bg-emerald-950/60 text-emerald-400 border border-emerald-900' },
-    failed: { label: 'Failed', className: 'bg-red-950/60 text-red-400 border border-red-900' },
-    skipped: { label: 'Skipped', className: 'bg-zinc-800 text-zinc-500' },
+    pending: { label: 'Pending', className: 'bg-accent text-muted-foreground' },
+    running: { label: 'Researching…', className: 'bg-primary/10 text-primary border border-primary/40' },
+    done: { label: 'Done', className: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30' },
+    failed: { label: 'Failed', className: 'bg-destructive/10 text-destructive border border-destructive/40' },
+    skipped: { label: 'Skipped', className: 'bg-accent text-muted-foreground' },
   }
   const { label, className } = map[status]
   return <Badge className={`text-[10px] flex-shrink-0 ${className}`}>{label}</Badge>

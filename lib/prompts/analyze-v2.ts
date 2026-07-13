@@ -30,7 +30,7 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
 
 {
   "company_name": "Company trading name",
-  "company_summary": "3–4 sentence summary: what they do, who they serve, where they operate, approximate scale. Use the website content. If content is sparse, use what is available.",
+  "company_summary": "3 to 4 sentence summary: what they do, who they serve, where they operate, approximate scale. Use the website content. If content is sparse, use what is available. No dashes as connectors.",
   "industry": "Primary industry (e.g. Welding Equipment Manufacturing, Automotive Components)",
   "sub_industry": "Maximum precision (e.g. Welding Consumables & Robotic Welding Systems)",
   "business_model": "B2B — one sentence. Who they sell to and what they sell.",
@@ -38,16 +38,16 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
   "headquarters_location": "City, Country — or 'Not stated'",
 
   "recent_activity": [
-    "Bullet describing a specific observed or inferred signal — expansion, automation investment, digital initiative, hiring, certification, acquisition, etc.",
+    "Bullet describing a specific observed or inferred signal, such as an expansion, automation investment, digital initiative, hiring, certification, or acquisition.",
     "Another specific activity. Use content evidence where available. Infer from industry context where not stated.",
-    "(3–5 bullets total)"
+    "(3 to 5 bullets total)"
   ],
 
   "pain_points": [
-    "Operational challenge 1 — specific to their business model. Mark as (observed) or (inferred).",
+    "Operational challenge 1, specific to their business model. Mark as (observed) or (inferred).",
     "Operational challenge 2",
     "Operational challenge 3",
-    "(3–5 items total. NEVER return an empty array. Infer from business model if no direct evidence.)"
+    "(3 to 5 items total. NEVER return an empty array. Infer from business model if no direct evidence.)"
   ],
 
   "ai_opportunities": [
@@ -108,11 +108,17 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
 }
 
 RULES:
-- pain_points: ALWAYS generate 3–5. Mark each as (observed) if directly stated, (inferred) if based on business model/industry reasoning. NEVER return [].
-- ai_opportunities: ALWAYS generate 3–5. Use pre-extracted signals if available. Use inference if not. NEVER return [].
-- opening_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes → good.
+- pain_points: ALWAYS generate 3-5. Mark each as (observed) if directly stated, (inferred) if based on business model/industry reasoning. NEVER return [].
+- ai_opportunities: ALWAYS generate 3-5. Use pre-extracted signals if available. Use inference if not. NEVER return [].
+- opening_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes, good.
 - why_now: Must be company-specific. "Digital transformation is accelerating in manufacturing" = REJECTED. "Ador Welding is scaling robotic welding across 3 plants" = VALID.
 - For thin-content sites: use what you have, infer what you can, state your confidence level honestly.
+
+WRITING STYLE (applies to every text field above):
+- Write like a human SDR, not an AI. Direct, specific, confident.
+- NEVER use em dashes (—) or en dashes (–), and never " -- " as a connector. Use commas, periods, or two shorter sentences instead.
+- No filler openers ("It's worth noting", "In today's fast-paced world", "Furthermore", "Moreover", "In conclusion") and no "I hope this finds you well".
+- Plain verbs: "use" not "leverage/utilize". Contractions are fine.
 `
 
 // ── Main export ────────────────────────────────────────────────

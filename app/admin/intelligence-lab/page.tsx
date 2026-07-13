@@ -12,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
+import { humanizeText } from '@/lib/text/humanize'
 import type { RunResult, Operation, AnalysisMode, ActiveTab } from './_types'
 import { ComparisonPanel } from './ComparisonPanel'
 import { ResearchCard } from './ResearchCard'
@@ -57,7 +59,7 @@ interface ScrapeCache {
   url: string             // the normalized URL this cache is for
   quality: { score: number; note: string }
   pagesScraped: number
-  cachedAt: string        // ISO — when the scrape was saved
+  cachedAt: string        // ISO, when the scrape was saved
   source: 'fresh' | 'database' // where it came from
 }
 
@@ -82,12 +84,12 @@ function isCacheStale(iso: string): boolean {
 
 export default function IntelligenceLab() {
   const [url, setUrl] = useState('https://bharatforge.com')
-  const [mode, setMode] = useState<AnalysisMode>('lightweight')
+  const [mode, setMode] = useState<AnalysisMode>('full')
   const [running, setRunning] = useState(false)
   const [activeOp, setActiveOp] = useState<string | null>(null)
   const [result, setResult] = useState<RunResult | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
-  const [activeTab, setActiveTab] = useState<ActiveTab>('research_card')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('analysis')
   const [activePageIdx, setActivePageIdx] = useState(0)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
 
@@ -206,7 +208,7 @@ export default function IntelligenceLab() {
       if (operation === 'scraper') {
         setActiveTab('scraper')
       } else if (data.analysisResult && !data.parseError) {
-        setActiveTab('research_card')
+        setActiveTab('analysis')
       } else if (data.parseError) {
         setActiveTab('debug')
       } else {
@@ -258,22 +260,14 @@ export default function IntelligenceLab() {
   const hasAnalysis = Boolean(result?.analysisResult && !result?.parseError)
 
   return (
-    <div className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6 px-6 py-8">
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Demaze Research Agent</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Enter a company URL → get a research brief for outbound outreach</p>
-        </div>
-        <div className="flex gap-3 text-xs">
-          <a href="/admin/batch-upload" className="text-zinc-500 hover:text-zinc-300 transition-colors">
-            Batch upload →
-          </a>
-          <a href="/admin/run-history" className="text-zinc-500 hover:text-zinc-300 transition-colors">
-            View run history →
-          </a>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Company Research</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Enter a company URL to generate an outbound research brief.
+        </p>
       </div>
 
       {/* ── URL Input + Mode ───────────────────────────────── */}
@@ -283,48 +277,44 @@ export default function IntelligenceLab() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://company.com"
-            className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 flex-1 font-mono text-sm"
+            className="flex-1 font-mono text-sm"
             disabled={running}
             onKeyDown={(e) => e.key === 'Enter' && run('analysis')}
           />
 
           {/* Mode toggle */}
-          <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded-md px-1">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
             <button
               onClick={() => setMode('lightweight')}
               disabled={running}
-              className={`text-xs px-3 py-1.5 rounded transition-colors ${
-                mode === 'lightweight'
-                  ? 'bg-zinc-700 text-white'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs transition-colors',
+                mode === 'lightweight' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground',
+              )}
             >
-              ⚡ Lightweight
-              <span className="text-zinc-600 ml-1">3k</span>
+              Lightweight <span className="ml-1 opacity-60">3k</span>
             </button>
             <button
               onClick={() => setMode('full')}
               disabled={running}
-              className={`text-xs px-3 py-1.5 rounded transition-colors ${
-                mode === 'full'
-                  ? 'bg-zinc-700 text-white'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs transition-colors',
+                mode === 'full' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground',
+              )}
             >
-              🔬 Full
-              <span className="text-zinc-600 ml-1">15k</span>
+              Full <span className="ml-1 opacity-60">15k</span>
             </button>
           </div>
         </div>
 
         {/* ── Scrape Status ──────────────────────────────────── */}
         {cacheIsValidForUrl ? (
-          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-xs">
-            <span className="text-emerald-400 font-medium">✓ Cached</span>
-            <span className="text-zinc-400">
+          <div className="flex items-center gap-3 rounded-lg border border-signal-strong/30 bg-signal-strong/10 px-3 py-2 text-xs">
+            <span className="font-medium text-signal-strong">✓ Cached</span>
+            <span className="text-muted-foreground">
               {scrapeCache!.pagesScraped} pages · quality {scrapeCache!.quality.score}/100 · {timeAgo(scrapeCache!.cachedAt)}
             </span>
-            <span className="text-zinc-600">Analyze will reuse this scrape.</span>
+            <span className="text-muted-foreground/60">Analyze will reuse this scrape.</span>
             <button
               onClick={async () => {
                 const u = urlNormalized
@@ -332,49 +322,47 @@ export default function IntelligenceLab() {
                 await fetch(`/api/admin/scrape-cache?url=${encodeURIComponent(u)}`, { method: 'DELETE' })
                 setScrapeCache(null)
               }}
-              className="ml-auto text-zinc-500 hover:text-red-400 transition-colors px-1.5 py-0.5 rounded border border-zinc-700 hover:border-red-800"
-              title="Delete cache — next Analyze will scrape fresh"
+              className="ml-auto rounded border border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
+              title="Delete cache, next Analyze will scrape fresh"
             >
               Clear cache
             </button>
           </div>
         ) : scrapeCache && scrapeCache.url !== urlNormalized ? (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40 text-xs">
-            <span className="text-yellow-500">⚠ URL changed — no scrape for this site yet</span>
+          <div className="flex items-center gap-2 rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs">
+            <span className="text-signal-medium">⚠ URL changed, no scrape for this site yet</span>
           </div>
         ) : null}
 
         {/* ── Action Buttons ─────────────────────────────────── */}
         <div className="flex flex-wrap gap-2 items-center">
-          {/* Analyze — uses cached scrape if available, scrapes fresh if not */}
+          {/* Analyze, uses cached scrape if available, scrapes fresh if not */}
           <Button
             onClick={() => run('analysis')}
             disabled={running || !url.trim()}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             {running && (activeOp === 'analysis' || activeOp === 'pipeline')
               ? <><Spinner /> Analyzing…</>
               : cacheIsValidForUrl ? 'Analyze (cached scrape)' : 'Analyze'}
           </Button>
 
-          {/* Scrape only — loads from cache if available, scrapes fresh if not */}
+          {/* Scrape only, loads from cache if available, scrapes fresh if not */}
           <Button
             onClick={() => run('scraper')}
             disabled={running || !url.trim()}
             variant="outline"
-            className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
           >
             {running && activeOp === 'scraper'
               ? <><Spinner /> Scraping…</>
               : cacheIsValidForUrl ? 'Scrape (cached)' : 'Scrape'}
           </Button>
 
-          {/* Re-Scrape — always force fresh, bypasses + overwrites cache */}
+          {/* Re-Scrape, always force fresh, bypasses + overwrites cache */}
           <Button
             onClick={() => run('rescrape')}
             disabled={running || !url.trim()}
             variant="outline"
-            className="border-amber-800/60 bg-zinc-900 text-amber-400 hover:bg-amber-950/40 hover:text-amber-300"
+            className="text-signal-medium hover:text-signal-medium"
           >
             {running && activeOp === 'rescrape'
               ? <><Spinner /> Re-scraping…</>
@@ -382,21 +370,21 @@ export default function IntelligenceLab() {
           </Button>
         </div>
 
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-muted-foreground">
           {mode === 'lightweight'
-            ? '⚡ Lightweight: sends up to 3,000 chars to AI — faster, lower cost.'
-            : '🔬 Full: sends up to 15,000 chars — thorough analysis, higher cost.'}
+            ? 'Lightweight: sends up to 3,000 chars to AI, faster, lower cost.'
+            : 'Full: sends up to 15,000 chars, thorough analysis, higher cost.'}
           {cacheIsValidForUrl
             ? ' Analyze and Scrape will reuse the cached scrape. Use Re-Scrape or Clear Cache to force a fresh scrape.'
-            : ' No cache — will scrape fresh.'}
+            : ' No cache, will scrape fresh.'}
         </p>
       </div>
 
       {/* ── Running indicator ───────────────────────────────── */}
       {running && (
-        <div className="rounded-lg border border-blue-800 bg-blue-950/40 px-4 py-3 flex items-center gap-3">
-          <Spinner className="text-blue-400" />
-          <span className="text-blue-300 text-sm">
+        <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
+          <Spinner className="text-primary" />
+          <span className="text-sm text-primary">
             {activeOp === 'rescrape' ? 'Re-scraping website content…'
               : activeOp === 'scraper' ? 'Scraping website content…'
               : activeOp === 'analysis' || activeOp === 'pipeline'
@@ -408,22 +396,22 @@ export default function IntelligenceLab() {
 
       {/* ── Save status ─────────────────────────────────────── */}
       {saveStatus === 'failed' && (
-        <div className="rounded-lg border border-yellow-800 bg-yellow-950/30 px-4 py-2 flex items-center justify-between">
-          <p className="text-yellow-400 text-xs">
+        <div className="flex items-center justify-between rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-4 py-2">
+          <p className="text-xs text-signal-medium">
             ⚠ Failed to save run to history. Run migration 002_test_runs.sql in Supabase if you haven't.
           </p>
-          <span className="text-yellow-600 text-xs">(non-blocking)</span>
+          <span className="text-xs text-muted-foreground">(non-blocking)</span>
         </div>
       )}
       {saveStatus === 'saved' && (
-        <div className="text-xs text-zinc-600 text-right">✓ Saved to run history</div>
+        <div className="text-right text-xs text-muted-foreground">✓ Saved to run history</div>
       )}
 
       {/* ── Error state ─────────────────────────────────────── */}
       {result && !result.success && (
-        <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3">
-          <p className="text-red-300 text-sm font-medium">Error</p>
-          <p className="text-red-400 text-xs mt-1 font-mono">{result.error}</p>
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <p className="text-sm font-medium text-destructive">Error</p>
+          <p className="mt-1 font-mono text-xs text-destructive/80">{result.error}</p>
         </div>
       )}
 
@@ -431,71 +419,57 @@ export default function IntelligenceLab() {
       {result && result.success && (
         <>
           {result.parseError && (
-            <div className="rounded-lg border border-orange-800 bg-orange-950/30 px-4 py-3">
-              <p className="text-orange-300 text-sm font-medium">AI response received but failed to parse as JSON</p>
-              <p className="text-orange-400 text-xs mt-1 font-mono">{result.parseError}</p>
+            <div className="rounded-lg border border-signal-weak/40 bg-signal-weak/10 px-4 py-3">
+              <p className="text-sm font-medium text-signal-weak">AI response received but failed to parse as JSON</p>
+              <p className="mt-1 font-mono text-xs text-signal-weak/80">{result.parseError}</p>
             </div>
           )}
 
-          {/* ── Summary strip ──────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
-            <StatCard label="Total time" value={`${((result.executionTimeMs ?? 0) / 1000).toFixed(1)}s`} />
-            <StatCard label="Pages scraped" value={String(sr?.successfulUrls.length ?? 0)} />
-            <StatCard label="Pages failed" value={String(sr?.failedUrls.length ?? 0)} dim />
-            <StatCard label="Content sent" value={`${((result.contentCharsUsed ?? sr?.totalCharCount ?? 0) / 1000).toFixed(1)}k`} />
-            <StatCard label="Quality" value={`${result.quality?.score ?? 0}/100`} />
-            <StatCard label="Mode" value={result.mode ?? mode} />
-            <StatCard
-              label="Scrape"
-              value={result.scrapeSource === 'cache' ? '✓ Cached' : '↻ Fresh'}
-              highlight={result.scrapeSource === 'cache'}
-            />
-          </div>
+          {/* ── Inspector (engineer surfaces, collapsed) — TOP ─── */}
+          <details className="group rounded-xl border border-border bg-card/40">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground select-none">
+              <span className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-4 text-muted-foreground transition-transform group-open:rotate-90">
+                  <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Inspector
+                <span className="text-xs font-normal text-muted-foreground">scraper · content · analysis · intelligence · sources · debug</span>
+              </span>
+            </summary>
 
-          {/* Scrape source detail */}
-          {result.scrapeSource === 'cache' && result.cachedAt && (
-            <div className="text-xs text-emerald-600 flex items-center gap-1.5">
-              <span>✓ Used cached scrape from {timeAgo(result.cachedAt)}</span>
-            </div>
-          )}
-
+            <div className="border-t border-border px-4 py-4">
           {/* ── Comparison save ─────────────────────────────── */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-600">Save for comparison:</span>
-            <button onClick={() => saveToCompare('A')} className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-400 hover:bg-zinc-800 transition-colors">→ Slot A</button>
-            <button onClick={() => saveToCompare('B')} className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-400 hover:bg-zinc-800 transition-colors">→ Slot B</button>
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Save for comparison:</span>
+            <button onClick={() => saveToCompare('A')} className="rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">→ Slot A</button>
+            <button onClick={() => saveToCompare('B')} className="rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">→ Slot B</button>
             {(compareA || compareB) && (
-              <button onClick={() => setActiveTab('comparison')} className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-400 hover:bg-zinc-800 transition-colors">View comparison →</button>
+              <button onClick={() => setActiveTab('comparison')} className="rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">View comparison →</button>
             )}
           </div>
 
           {/* ── Tabs ──────────────────────────────────────────── */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ActiveTab)}>
-            <TabsList className="bg-zinc-900 border border-zinc-800">
-              {hasAnalysis && (
-                <TabsTrigger value="research_card" className="data-[state=active]:bg-indigo-700 data-[state=active]:text-white text-zinc-400 text-xs font-medium">
-                  Research Card ✦
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="scraper" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+            <TabsList className="border border-border bg-card">
+              <TabsTrigger value="scraper" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Scraper
               </TabsTrigger>
-              <TabsTrigger value="content" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+              <TabsTrigger value="content" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Content ({successfulPages.length})
               </TabsTrigger>
-              <TabsTrigger value="analysis" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+              <TabsTrigger value="analysis" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Analysis {hasAnalysis ? '✓' : result.parseError ? '⚠' : ''}
               </TabsTrigger>
-              <TabsTrigger value="intelligence" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+              <TabsTrigger value="intelligence" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Intelligence{result?.synthesisResult ? ' ✦' : ''}
               </TabsTrigger>
-              <TabsTrigger value="debug" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+              <TabsTrigger value="debug" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Debug
               </TabsTrigger>
-              <TabsTrigger value="sources" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+              <TabsTrigger value="sources" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Sources{result?.enrichmentMeta ? ` (${result.enrichmentMeta.sources_used})` : result?.recoveryTriggered ? ' ⚡' : ''}
               </TabsTrigger>
-              <TabsTrigger value="comparison" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400 text-xs">
+              <TabsTrigger value="comparison" className="text-xs text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground">
                 Compare {(compareA || compareB) ? '●' : ''}
               </TabsTrigger>
             </TabsList>
@@ -631,11 +605,6 @@ export default function IntelligenceLab() {
               )}
             </TabsContent>
 
-            {/* ── Research Card ─────────────────────────────── */}
-            <TabsContent value="research_card" className="mt-4">
-              <ResearchCard result={result} />
-            </TabsContent>
-
             {/* ── Analysis ──────────────────────────────────── */}
             <TabsContent value="analysis" className="mt-4">
               {hasAnalysis ? (
@@ -669,15 +638,42 @@ export default function IntelligenceLab() {
               <ComparisonPanel a={compareA} b={compareB} />
             </TabsContent>
           </Tabs>
+            </div>
+          </details>
+
+          {/* ── Hero: the SDR research brief ─────────────────── */}
+          {hasAnalysis && <ResearchCard result={result} />}
+
+          {/* ── Summary strip ──────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+            <StatCard label="Total time" value={`${((result.executionTimeMs ?? 0) / 1000).toFixed(1)}s`} />
+            <StatCard label="Pages scraped" value={String(sr?.successfulUrls.length ?? 0)} />
+            <StatCard label="Pages failed" value={String(sr?.failedUrls.length ?? 0)} dim />
+            <StatCard label="Content sent" value={`${((result.contentCharsUsed ?? sr?.totalCharCount ?? 0) / 1000).toFixed(1)}k`} />
+            <StatCard label="Quality" value={`${result.quality?.score ?? 0}/100`} />
+            <StatCard label="Mode" value={result.mode ?? mode} />
+            <StatCard
+              label="Scrape"
+              value={result.scrapeSource === 'cache' ? '✓ Cached' : '↻ Fresh'}
+              highlight={result.scrapeSource === 'cache'}
+            />
+          </div>
+
+          {/* Scrape source detail */}
+          {result.scrapeSource === 'cache' && result.cachedAt && (
+            <div className="flex items-center gap-1.5 text-xs text-signal-strong">
+              <span>✓ Used cached scrape from {timeAgo(result.cachedAt)}</span>
+            </div>
+          )}
         </>
       )}
 
       {/* ── Empty state (no run yet) ─────────────────────────── */}
       {!result && !running && (
-        <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/30 px-6 py-16 text-center">
-          <p className="text-zinc-500 text-sm">Enter a company URL and click a button to begin.</p>
-          <p className="text-zinc-600 text-xs mt-1">
-            Click <strong className="text-zinc-500">Analyze</strong> to scrape and run AI analysis. Use <strong className="text-zinc-500">Re-Scrape</strong> to refresh the website content before re-analyzing.
+        <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center">
+          <p className="text-sm text-muted-foreground">Enter a company URL and click a button to begin.</p>
+          <p className="mt-1 text-xs text-muted-foreground/70">
+            Click <strong className="text-foreground">Analyze</strong> to scrape and run AI analysis. Use <strong className="text-foreground">Re-Scrape</strong> to refresh the website content before re-analyzing.
           </p>
         </div>
       )}
@@ -700,9 +696,9 @@ function Spinner({ className = '' }: { className?: string }) {
 
 function StatCard({ label, value, dim = false, highlight = false }: { label: string; value: string; dim?: boolean; highlight?: boolean }) {
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${highlight ? 'bg-emerald-950/30 border-emerald-800/50' : 'bg-zinc-900 border-zinc-800'}`}>
-      <p className="text-xs text-zinc-500 mb-0.5">{label}</p>
-      <p className={`text-sm font-mono font-medium ${highlight ? 'text-emerald-400' : dim ? 'text-zinc-500' : 'text-white'}`}>{value}</p>
+    <div className={cn('rounded-lg border px-3 py-2.5', highlight ? 'border-signal-strong/30 bg-signal-strong/10' : 'border-border bg-card')}>
+      <p className="mb-0.5 text-xs text-muted-foreground">{label}</p>
+      <p className={cn('font-mono text-sm font-medium', highlight ? 'text-signal-strong' : dim ? 'text-muted-foreground' : 'text-foreground')}>{value}</p>
     </div>
   )
 }
@@ -710,16 +706,16 @@ function StatCard({ label, value, dim = false, highlight = false }: { label: str
 function TimingRow({ label, ms }: { label: string; ms?: number }) {
   return (
     <div className="flex justify-between">
-      <span className="text-zinc-500 text-xs">{label}</span>
-      <span className="text-zinc-300 text-xs font-mono">{ms !== undefined ? `${(ms / 1000).toFixed(2)}s` : '—'}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="font-mono text-xs text-foreground/80">{ms !== undefined ? `${(ms / 1000).toFixed(2)}s` : '—'}</span>
     </div>
   )
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-6 py-12 text-center">
-      <p className="text-zinc-500 text-sm">{message}</p>
+    <div className="rounded-lg border border-border bg-card/50 px-6 py-12 text-center">
+      <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   )
 }
@@ -733,7 +729,9 @@ function AnalysisViewer({ data, extractorResult }: {
   const [showBreakdown, setShowBreakdown] = useState<'fit' | 'opp' | null>(null)
   const [showEvidence, setShowEvidence] = useState(false)
 
-  const s = (val: unknown) => (val != null && val !== '' ? String(val) : '—')
+  // Route non-empty display text through humanizeText so AI-ism dashes/filler
+  // are stripped everywhere in this viewer; keep '—' as the empty placeholder.
+  const s = (val: unknown) => (val != null && val !== '' ? humanizeText(val) : '—')
   const n = (val: unknown): number => (typeof val === 'number' ? val : 0)
 
   const score    = data.company_fit as { value?: number; label?: string; rationale?: string; breakdown?: Array<{factor: string; points: number; present: boolean}> } | undefined
@@ -782,7 +780,7 @@ function AnalysisViewer({ data, extractorResult }: {
       {/* Content quality flags */}
       {contentFlags.length > 0 && (
         <div className="rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-3 space-y-1">
-          <p className="text-red-400 text-xs font-medium mb-1">⚠ Content Quality Issues — Analysis may be limited</p>
+          <p className="text-red-400 text-xs font-medium mb-1">⚠ Content Quality Issues, Analysis may be limited</p>
           {contentFlags.map((f, i) => (
             <p key={i} className="text-red-400 text-xs font-mono">{f}</p>
           ))}
@@ -823,7 +821,7 @@ function AnalysisViewer({ data, extractorResult }: {
                     {executiveBrief.what_we_observed.map((obs, i) => (
                       <li key={i} className="flex gap-2 text-xs text-zinc-300">
                         <span className="text-emerald-500 mt-0.5 flex-shrink-0">●</span>
-                        <span>{obs}</span>
+                        <span>{humanizeText(obs)}</span>
                       </li>
                     ))}
                   </ul>
@@ -836,7 +834,7 @@ function AnalysisViewer({ data, extractorResult }: {
                     {executiveBrief.what_it_means.map((imp, i) => (
                       <li key={i} className="flex gap-2 text-xs text-zinc-400">
                         <span className="text-amber-500 mt-0.5 flex-shrink-0">→</span>
-                        <span>{imp}</span>
+                        <span>{humanizeText(imp)}</span>
                       </li>
                     ))}
                   </ul>
@@ -847,13 +845,13 @@ function AnalysisViewer({ data, extractorResult }: {
               {executiveBrief.what_to_sell && (
                 <div>
                   <p className="text-[10px] text-violet-400 uppercase tracking-wide mb-1">What to sell</p>
-                  <p className="text-violet-200 text-xs font-medium">{executiveBrief.what_to_sell}</p>
+                  <p className="text-violet-200 text-xs font-medium">{humanizeText(executiveBrief.what_to_sell)}</p>
                 </div>
               )}
               {executiveBrief.why_now && (
                 <div>
                   <p className="text-[10px] text-orange-400 uppercase tracking-wide mb-1">Why now</p>
-                  <p className="text-orange-200 text-xs">{executiveBrief.why_now}</p>
+                  <p className="text-orange-200 text-xs">{humanizeText(executiveBrief.why_now)}</p>
                 </div>
               )}
             </div>
@@ -909,7 +907,7 @@ function AnalysisViewer({ data, extractorResult }: {
               <ScoreRow
                 label="Company Fit"
                 value={n(score.value)}
-                label2={`${n(score.value)} — ${score.label}`}
+                label2={`${n(score.value)}, ${score.label}`}
                 note={score.rationale}
                 breakdown={score.breakdown}
                 expandId="fit"
@@ -922,7 +920,7 @@ function AnalysisViewer({ data, extractorResult }: {
               <ScoreRow
                 label="Automation Opportunity"
                 value={n(opp.value)}
-                label2={`${n(opp.value)} — ${opp.label}`}
+                label2={`${n(opp.value)}, ${opp.label}`}
                 breakdown={opp.breakdown}
                 expandId="opp"
                 expanded={showBreakdown === 'opp'}
@@ -934,7 +932,7 @@ function AnalysisViewer({ data, extractorResult }: {
               <ScoreRow
                 label="Why Now"
                 value={n(whyNow.score) * 10}
-                label2={`${whyNow.score}/10 — ${whyNow.urgency_label ?? ''}`}
+                label2={`${whyNow.score}/10, ${whyNow.urgency_label ?? ''}`}
                 note={s(whyNow.explanation)}
               />
             )}
@@ -1094,7 +1092,7 @@ function AnalysisViewer({ data, extractorResult }: {
                 </div>
                 <p className="text-[11px] text-zinc-400">{opp.strategic_challenge}</p>
                 <p className="text-[10px] text-zinc-500 font-mono">→ {opp.entry_point}</p>
-                {/* Score source — which clusters triggered this opportunity */}
+                {/* Score source, which clusters triggered this opportunity */}
                 {opp.triggered_by_clusters && opp.triggered_by_clusters.length > 0 && (
                   <p className="text-[9px] text-zinc-600 pt-0.5">
                     triggered by:{' '}
@@ -1328,7 +1326,7 @@ function AnalysisViewer({ data, extractorResult }: {
         </Card>
       )}
 
-      {/* Evidence Bank — extractor signals with full evidence traces */}
+      {/* Evidence Bank, extractor signals with full evidence traces */}
       {extractorResult && extractorResult.signals.length > 0 && (() => {
         // Flatten all evidence items with their parent signal context
         const allEvidence = extractorResult.signals.flatMap(sig =>
@@ -1443,7 +1441,7 @@ function WhyDemazeCard({ whyDemaze }: { whyDemaze: { reasons?: WhyDemazeReason[]
                 return (
                   <div key={i} className="flex items-start gap-2">
                     <span className="text-emerald-500 text-xs mt-0.5 flex-shrink-0">→</span>
-                    <p className="text-zinc-300 text-sm">{reason}</p>
+                    <p className="text-zinc-300 text-sm">{humanizeText(reason)}</p>
                   </div>
                 )
               }
@@ -1471,7 +1469,7 @@ function WhyDemazeCard({ whyDemaze }: { whyDemaze: { reasons?: WhyDemazeReason[]
                     </p>
                   )}
                   {r.business_implication && (
-                    <p className="text-[11px] text-zinc-300">{r.business_implication}</p>
+                    <p className="text-[11px] text-zinc-300">{humanizeText(r.business_implication)}</p>
                   )}
                   <div className="flex flex-wrap gap-2 pt-0.5">
                     {r.recommended_service && (
@@ -1488,7 +1486,7 @@ function WhyDemazeCard({ whyDemaze }: { whyDemaze: { reasons?: WhyDemazeReason[]
             {(whyDemaze.reasons ?? []).map((reason, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className="text-emerald-500 text-xs mt-0.5 flex-shrink-0">→</span>
-                <p className="text-zinc-300 text-sm">{String(reason)}</p>
+                <p className="text-zinc-300 text-sm">{humanizeText(reason)}</p>
               </div>
             ))}
           </div>
@@ -1672,7 +1670,7 @@ function IntelligencePanel({ result }: { result: RunResult | null }) {
                         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${CONF_COLOR[theme.confidence] ?? ''}`}>{theme.confidence.replace('_', ' ')} confidence</span>
                       </div>
                       <p className="text-sm font-semibold text-zinc-200">{theme.name}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">{theme.tagline}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{humanizeText(theme.tagline)}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-lg font-bold text-zinc-300">{theme.priorityScore}</div>
@@ -1680,8 +1678,8 @@ function IntelligencePanel({ result }: { result: RunResult | null }) {
                     </div>
                   </div>
                   <div className="border-t border-zinc-800 pt-2 space-y-1">
-                    <p className="text-xs text-zinc-400"><span className="text-zinc-600">Impact: </span>{theme.businessImpact}</p>
-                    <p className="text-xs text-violet-300"><span className="text-zinc-600">Angle: </span>{theme.demazeAngle}</p>
+                    <p className="text-xs text-zinc-400"><span className="text-zinc-600">Impact: </span>{humanizeText(theme.businessImpact)}</p>
+                    <p className="text-xs text-violet-300"><span className="text-zinc-600">Angle: </span>{humanizeText(theme.demazeAngle)}</p>
                   </div>
                   {theme.supportingEvidence.slice(0, 2).map((ev, i) => (
                     <div key={i} className="text-[10px] text-zinc-600 mt-1 pl-2 border-l border-zinc-700 line-clamp-1">
@@ -1709,15 +1707,15 @@ function IntelligencePanel({ result }: { result: RunResult | null }) {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <p className="text-sm text-zinc-300 font-medium mb-2">{whyNow.headline}</p>
-            <p className="text-xs text-zinc-400 leading-relaxed mb-3">{whyNow.narrative}</p>
+            <p className="text-sm text-zinc-300 font-medium mb-2">{humanizeText(whyNow.headline)}</p>
+            <p className="text-xs text-zinc-400 leading-relaxed mb-3">{humanizeText(whyNow.narrative)}</p>
             <div className="space-y-1.5">
               {whyNow.triggers.slice(0, 3).map((t, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs">
                   <span className="text-zinc-600 font-mono w-6 shrink-0">+{t.urgency_contribution}</span>
                   <div>
                     <span className="text-zinc-400 font-medium">{t.signal_type.replace(/_/g, ' ')}</span>
-                    {t.evidence_quote && <span className="text-zinc-600"> — &ldquo;{t.evidence_quote.slice(0, 100)}&rdquo;</span>}
+                    {t.evidence_quote && <span className="text-zinc-600">, &ldquo;{t.evidence_quote.slice(0, 100)}&rdquo;</span>}
                     <span className="text-zinc-700"> [{t.source_label}]</span>
                   </div>
                 </div>
@@ -1806,7 +1804,7 @@ function SourcesPanel({ result }: { result: RunResult | null }) {
           <span className="text-amber-400 text-lg mt-0.5">⚡</span>
           <div>
             <p className="text-amber-300 text-sm font-semibold">Evidence Recovery Triggered</p>
-            <p className="text-amber-400/70 text-xs mt-0.5">Content quality was below threshold — external source discovery was activated.</p>
+            <p className="text-amber-400/70 text-xs mt-0.5">Content quality was below threshold, external source discovery was activated.</p>
           </div>
         </div>
       ) : null}

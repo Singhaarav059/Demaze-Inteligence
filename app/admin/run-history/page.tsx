@@ -107,19 +107,13 @@ export default function RunHistoryPage() {
   const filteredRuns = runs
 
   return (
-    <div className="max-w-screen-2xl mx-auto px-4 py-6 space-y-6">
+    <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Run History</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">{runs.length} test runs stored</p>
+          <h1 className="text-xl font-semibold text-foreground">Run History</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{runs.length} test runs stored</p>
         </div>
         <div className="flex items-center gap-2">
-          <a href="/admin/batch-upload" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mr-2">
-            Batch upload →
-          </a>
-          <a href="/admin/intelligence-lab" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mr-2">
-            Intelligence Lab →
-          </a>
           {/* Filter */}
           {['all', 'scraper_only', 'analysis', 'full_pipeline'].map((op) => (
             <button
@@ -127,8 +121,8 @@ export default function RunHistoryPage() {
               onClick={() => setOpFilter(op)}
               className={`text-xs px-3 py-1.5 rounded transition-colors ${
                 opFilter === op
-                  ? 'bg-zinc-700 text-white'
-                  : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 border border-zinc-700'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {op === 'all' ? 'All' : op === 'scraper_only' ? 'Scraper' : op === 'analysis' ? 'Analysis' : 'Pipeline'}
@@ -137,7 +131,7 @@ export default function RunHistoryPage() {
           <Button
             size="sm"
             variant="outline"
-            className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+            className="border-border bg-card text-foreground/90 hover:bg-accent"
             onClick={fetchRuns}
           >
             Refresh
@@ -146,71 +140,71 @@ export default function RunHistoryPage() {
       </div>
 
       {loading && (
-        <div className="text-zinc-500 text-sm">Loading runs…</div>
+        <div className="text-muted-foreground text-sm">Loading runs…</div>
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3">
-          <p className="text-red-300 text-sm">{error}</p>
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <p className="text-destructive text-sm">{error}</p>
         </div>
       )}
 
       {!loading && filteredRuns.length === 0 && (
-        <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/50 px-6 py-12 text-center">
-          <p className="text-zinc-500 text-sm">No runs yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">
-            Go to the <a href="/admin/intelligence-lab" className="text-blue-400 underline">Intelligence Lab</a> and run a test.
+        <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-12 text-center">
+          <p className="text-muted-foreground text-sm">No runs yet.</p>
+          <p className="text-muted-foreground/70 text-xs mt-1">
+            Go to the <a href="/admin/intelligence-lab" className="text-primary underline">Intelligence Lab</a> and run a test.
           </p>
         </div>
       )}
 
       <div className="space-y-2">
         {filteredRuns.map((run) => (
-          <div key={run.id} className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
+          <div key={run.id} className="rounded-lg border border-border bg-card overflow-hidden">
             {/* Row */}
             <div
               onClick={() => fetchDetail(run.id)}
               role="button"
               tabIndex={0}
-              className="w-full text-left px-4 py-3 hover:bg-zinc-800/60 transition-colors cursor-pointer"
+              className="w-full text-left px-4 py-3 hover:bg-accent transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3 flex-wrap">
                 {/* Status dot */}
                 <span
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    run.status === 'completed' ? 'bg-emerald-500' : run.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                    run.status === 'completed' ? 'bg-signal-strong' : run.status === 'error' ? 'bg-destructive' : 'bg-signal-medium'
                   }`}
                 />
 
                 {/* Domain */}
-                <span className="text-white text-sm font-mono min-w-0 truncate">
+                <span className="text-foreground text-sm font-mono min-w-0 truncate">
                   {run.domain ?? run.company_url}
                 </span>
 
                 {/* Operation badge */}
-                <Badge className="text-[10px] bg-zinc-800 text-zinc-400 flex-shrink-0">
+                <Badge className="text-[10px] bg-accent text-muted-foreground flex-shrink-0">
                   {run.operation === 'scraper_only' ? 'Scraper' : run.operation === 'analysis' ? 'Analysis' : 'Pipeline'}
                 </Badge>
 
                 {/* Stats */}
-                <span className="text-zinc-500 text-xs">{run.scraped_pages ?? 0} pages</span>
-                <span className="text-zinc-500 text-xs">Q: {run.quality_score ?? 0}/100</span>
+                <span className="text-muted-foreground text-xs">{run.scraped_pages ?? 0} pages</span>
+                <span className="text-muted-foreground text-xs">Q: {run.quality_score ?? 0}/100</span>
                 {run.token_usage > 0 && (
-                  <span className="text-zinc-500 text-xs">{run.token_usage?.toLocaleString()} tokens</span>
+                  <span className="text-muted-foreground text-xs">{run.token_usage?.toLocaleString()} tokens</span>
                 )}
                 {run.execution_time_ms > 0 && (
-                  <span className="text-zinc-500 text-xs">
+                  <span className="text-muted-foreground text-xs">
                     {(run.execution_time_ms / 1000).toFixed(1)}s
                   </span>
                 )}
 
                 {/* Error indicator */}
                 {run.error_message && (
-                  <span className="text-red-400 text-xs truncate max-w-48">{run.error_message}</span>
+                  <span className="text-destructive text-xs truncate max-w-48">{run.error_message}</span>
                 )}
 
                 {/* Timestamp */}
-                <span className="text-zinc-600 text-xs ml-auto flex-shrink-0">
+                <span className="text-muted-foreground/70 text-xs ml-auto flex-shrink-0">
                   {new Date(run.created_at).toLocaleString()}
                 </span>
 
@@ -218,14 +212,14 @@ export default function RunHistoryPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteRun(run.id) }}
                   disabled={deletingId === run.id}
-                  className="text-zinc-600 hover:text-red-400 transition-colors text-xs flex-shrink-0 px-1.5 py-0.5 rounded border border-transparent hover:border-red-900"
+                  className="text-muted-foreground/70 hover:text-destructive transition-colors text-xs flex-shrink-0 px-1.5 py-0.5 rounded border border-transparent hover:border-destructive/40"
                   title="Delete this run"
                 >
                   {deletingId === run.id ? '…' : '🗑'}
                 </button>
 
                 {/* Expand indicator */}
-                <span className="text-zinc-600 text-xs flex-shrink-0">
+                <span className="text-muted-foreground/70 text-xs flex-shrink-0">
                   {expandedId === run.id ? '▲' : '▼'}
                 </span>
               </div>
@@ -233,9 +227,9 @@ export default function RunHistoryPage() {
 
             {/* Expanded detail */}
             {expandedId === run.id && (
-              <div className="border-t border-zinc-800 px-4 py-4 space-y-4">
+              <div className="border-t border-border px-4 py-4 space-y-4">
                 {loadingDetail ? (
-                  <p className="text-zinc-500 text-xs">Loading detail…</p>
+                  <p className="text-muted-foreground text-xs">Loading detail…</p>
                 ) : (
                   <>
                     {/* Metadata grid */}
@@ -251,17 +245,17 @@ export default function RunHistoryPage() {
                     </div>
 
                     {run.quality_note && (
-                      <p className="text-zinc-500 text-xs">{run.quality_note}</p>
+                      <p className="text-muted-foreground text-xs">{run.quality_note}</p>
                     )}
 
                     {/* Full result JSON if we loaded it */}
                     {expandedDetail && (
-                      <Card className="bg-zinc-950 border-zinc-800">
+                      <Card className="bg-background border-border">
                         <CardHeader className="pb-2 pt-3 px-4">
-                          <CardTitle className="text-xs text-zinc-500">Full Result JSON</CardTitle>
+                          <CardTitle className="text-xs text-muted-foreground">Full Result JSON</CardTitle>
                         </CardHeader>
                         <CardContent className="px-4 pb-4">
-                          <pre className="text-xs text-zinc-400 font-mono whitespace-pre-wrap max-h-80 overflow-y-auto leading-relaxed">
+                          <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap max-h-80 overflow-y-auto leading-relaxed">
                             {JSON.stringify(expandedDetail, null, 2)}
                           </pre>
                         </CardContent>
@@ -281,8 +275,8 @@ export default function RunHistoryPage() {
 function DetailStat({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
-      <p className="text-zinc-600 text-xs mb-0.5">{label}</p>
-      <p className={`text-zinc-300 text-xs truncate ${mono ? 'font-mono' : ''}`}>{value}</p>
+      <p className="text-muted-foreground/70 text-xs mb-0.5">{label}</p>
+      <p className={`text-foreground/90 text-xs truncate ${mono ? 'font-mono' : ''}`}>{value}</p>
     </div>
   )
 }

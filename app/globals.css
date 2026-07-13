@@ -4,12 +4,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================
+   Demaze design system — token map
+   Refined-dark internal SDR tool. Indigo/violet accent +
+   first-class evidence-strength (signal) semantic colors.
+   ============================================================ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-geist-sans);
+
+  /* App-shell surfaces */
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-elevated: var(--elevated);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -18,6 +29,13 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+
+  /* Evidence-strength / signal semantic colors */
+  --color-signal-strong: var(--signal-strong);
+  --color-signal-medium: var(--signal-medium);
+  --color-signal-weak: var(--signal-weak);
+  --color-signal-none: var(--signal-none);
+
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -48,14 +66,20 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ------------------------------------------------------------
+   Light theme (:root) — used by the public landing page.
+   ------------------------------------------------------------ */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  --surface: oklch(0.985 0 0);
+  --surface-foreground: oklch(0.145 0 0);
+  --elevated: oklch(1 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.55 0.22 277);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -66,55 +90,75 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --ring: oklch(0.55 0.22 277);
+
+  --signal-strong: oklch(0.58 0.15 155);
+  --signal-medium: oklch(0.62 0.15 75);
+  --signal-weak: oklch(0.62 0.13 55);
+  --signal-none: oklch(0.556 0 0);
+
+  --chart-1: oklch(0.55 0.22 277);
+  --chart-2: oklch(0.58 0.15 155);
+  --chart-3: oklch(0.62 0.15 75);
+  --chart-4: oklch(0.60 0.18 25);
+  --chart-5: oklch(0.55 0.16 200);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.55 0.22 277);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: oklch(0.55 0.22 277);
 }
 
+/* ------------------------------------------------------------
+   Refined dark theme (.dark) — the internal SDR product.
+   Near-black cool surfaces, vivid indigo/violet accent.
+   ------------------------------------------------------------ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.165 0.006 285);
+  --foreground: oklch(0.96 0.003 285);
+  --surface: oklch(0.205 0.007 285);
+  --surface-foreground: oklch(0.96 0.003 285);
+  --elevated: oklch(0.23 0.008 285);
+  --card: oklch(0.205 0.007 285);
+  --card-foreground: oklch(0.96 0.003 285);
+  --popover: oklch(0.23 0.008 285);
+  --popover-foreground: oklch(0.96 0.003 285);
+  --primary: oklch(0.64 0.19 277);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0.008 285);
+  --secondary-foreground: oklch(0.96 0.003 285);
+  --muted: oklch(0.27 0.008 285);
+  --muted-foreground: oklch(0.68 0.012 285);
+  --accent: oklch(0.28 0.01 285);
+  --accent-foreground: oklch(0.96 0.003 285);
+  --destructive: oklch(0.68 0.2 22);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.64 0.19 277);
+
+  /* Evidence-strength — tuned for legibility on dark surfaces */
+  --signal-strong: oklch(0.74 0.16 158);
+  --signal-medium: oklch(0.8 0.14 78);
+  --signal-weak: oklch(0.72 0.13 55);
+  --signal-none: oklch(0.66 0.01 285);
+
+  --chart-1: oklch(0.64 0.19 277);
+  --chart-2: oklch(0.74 0.16 158);
+  --chart-3: oklch(0.8 0.14 78);
+  --chart-4: oklch(0.68 0.2 22);
+  --chart-5: oklch(0.7 0.14 210);
+  --sidebar: oklch(0.185 0.006 285);
+  --sidebar-foreground: oklch(0.96 0.003 285);
+  --sidebar-primary: oklch(0.64 0.19 277);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.27 0.008 285);
+  --sidebar-accent-foreground: oklch(0.96 0.003 285);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.64 0.19 277);
 }
 
 @layer base {
@@ -126,5 +170,27 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Thin, unobtrusive scrollbars for the dark app shell */
+@layer base {
+  .dark * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .dark *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .dark *::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--input);
+    background-clip: content-box;
   }
 }
