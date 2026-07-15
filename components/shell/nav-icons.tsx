@@ -46,6 +46,15 @@ export function HistoryIcon({ className }: IconProps) {
   )
 }
 
+export function DiscoveryIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
+
 export function ChevronRightIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>

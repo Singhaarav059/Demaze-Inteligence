@@ -8,16 +8,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRightIcon } from './nav-icons'
 import { MobileNav } from './MobileNav'
-
-const SECTIONS: Record<string, { section: string; hint: string }> = {
-  '/admin/intelligence-lab': { section: 'Research', hint: 'Single-company intelligence brief' },
-  '/admin/batch-upload': { section: 'Batch', hint: 'Upload & research a lead list' },
-  '/admin/run-history': { section: 'History', hint: 'Previously saved research runs' },
-}
+import { NAV } from './nav-config'
 
 export function TopBar() {
   const pathname = usePathname()
-  const meta = SECTIONS[pathname] ?? { section: 'Workspace', hint: '' }
+  const entry = NAV.find((n) => n.href === pathname)
+  const meta = { section: entry?.label ?? 'Workspace', hint: entry?.hint ?? '' }
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 px-5 backdrop-blur">
