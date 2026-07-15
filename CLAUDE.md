@@ -2,15 +2,102 @@
 
 ## What this is
 A **Company Intelligence Engine** for Demaze outbound sales — NOT a website
-analyzer, and NOT a lead-discovery tool. Input: a company that has ALREADY been
-identified as a lead by something upstream of Demaze (a Sales Navigator export),
-with a specific named person + title ALREADY attached to that row — buyer
-identity is input data, not something this pipeline determines. Every real lead
-row arrives pre-decided on "who." Target industries: Manufacturing, Automotive,
-Industrial, SaaS, Financial Institutions, SMBs.
+analyzer. Historically also described as "NOT a lead-discovery tool"; as of
+the 2026-07-14 scope pivot below, company-level lead discovery (ICP → matching
+companies) IS in scope. What's still true: a lead row's buyer is input data,
+not something this pipeline determines — a specific named person + title
+arrives ALREADY attached where the row came from a Sales Navigator-style
+export, and this pipeline never infers or ranks WHO the buyer is. Target
+industries: Manufacturing, Automotive, Industrial, SaaS, Financial
+Institutions, SMBs.
 
-## Output schema — LOCKED (2026-07-11), matches the sheet's own column names
-Research each company ONCE. Output is exactly these 5 fields, nothing more:
+## SCOPE PIVOT — 2026-07-14: FULL AutoGTM loop now IN SCOPE (contact + send included)
+Two explicit product-direction decisions made the same day, in sequence —
+recorded as they happened rather than collapsed into one, since the second
+one reverses part of the first:
+
+**Decision A (earlier, 2026-07-14):** company-level lead discovery unlocked
+(given an ICP, find matching companies), 5-field output schema unlocked.
+Buyer/contact discovery and email work were explicitly kept out of scope at
+this point.
+
+**Decision B (later same day, supersedes the "still out of scope" line from
+Decision A):** after being shown live screenshots of explee.com's actual
+AutoGTM product (all 6 phases, run against demazetech.com itself:
+research company → explore competitors → define campaigns/ICP → find
+potential customers → **find decision makers** → **outreach send**), the
+user was asked directly whether phases 5-6 (contact discovery, email
+generation+send) should also come into scope, given they're contact/email
+work the original 2026-07-10 boundary permanently excluded. Answer: **yes,
+the full loop, including send.** This is a full reversal of the original
+scope boundary, not just the company-discovery carve-out from Decision A.
+
+**What this means concretely — the target is now Explee's full 6-phase loop:**
+1. Research company — **HAVE**, this is the existing 4-step pipeline
+2. Explore competitors — not built (Priority 1)
+3. Define campaigns / ICP segments — not built (Priority 2). Distinct from
+   the existing demoted `company_fit` score in `normalize.ts` (that scores
+   "is this company a good lead for Demaze," a single number; this is "who
+   does *the researched company* sell to," a set of named segments with
+   pain/criteria/example companies) — reconcile, don't build a parallel
+   duplicate system
+4. Find potential customers (company discovery) — not built (Priority 3)
+5. **Find decision makers — NOW IN SCOPE, not built.** Named-contact
+   discovery per matched company. Tavily/Serper/Firecrawl (the only search
+   infra this repo has) cannot match Explee's shown accuracy/scale here —
+   Explee's own homepage claims a 105M+ company / 218M+ Google-Maps-scale
+   database. This needs a real people-data API (Apollo/PDL/Proxycurl/Hunter
+   or similar) — a new paid vendor dependency, a separate decision (which
+   provider, what it costs) before any code gets written
+6. **Outreach: personalized email + send — NOW IN SCOPE, not built.**
+   Needs real sending infrastructure: domain warming, deliverability/inbox-
+   rate management, an actual sending provider, reply handling. This is
+   infrastructure and vendor selection, not an LLM prompt — a separate
+   architecture decision, not something to wire up opportunistically inside
+   another item
+
+**Operational rule for when phase 6 gets built (not a scope note, a standing
+safety rule):** once send infrastructure exists, actually sending real
+emails to real prospects requires explicit, per-batch user confirmation
+every time — same as any other action that sends messages on the user's
+behalf. Building the *capability* to send is in scope now; that does not
+imply standing authorization to *actually send* once it exists.
+
+**Reference product**: explee.com (AutoGTM) — the full 6-phase loop above is
+now the literal target, not just UX inspiration for the front half.
+
+**Priority order** (from the "Development Execution Plan" doc, extended with
+phases 5-6 confirmed by Decision B — one deliverable per session, architecture
+before implementation, per that doc's own session-management rules):
+1. Competitor Discovery Engine — competitors, why they compete, market
+   position, differentiators
+2. ICP Generator — target-company ICPs with reason/signals/buying indicators
+3. Company Discovery Engine — given an ICP, find matching companies
+   (search/public-web to start; may need a firmographic API later for
+   Explee-level accuracy — not decided yet)
+4. Research Quality Framework — scoring methodology for signal/pain-point/
+   opportunity/competitor accuracy
+5. Research Evaluation Framework — 0-100 objective scoring for future
+   benchmarking
+6. Market Intelligence Layer — industry trends, growth indicators, market
+   challenges, industry shifts
+7. Outreach Intelligence Layer — why_contact / why_now / likely_problem /
+   recommended_service / conversation_angle. **Already substantially built**
+   — see `OutreachIntelligence` in `lib/pipeline/analysis-sections.ts`
+   (`trigger/problem/service/opening_angle/why_now`), populated live by the
+   prompt in `lib/prompts/analyze-v2.ts` and rendered in `ResearchCard.tsx`.
+   Confirm/rename field alignment with this doc's naming, don't rebuild
+8. **Decision-maker discovery** (Explee phase 5) — needs a people-data
+   vendor decision first, not started
+9. **Outreach send** (Explee phase 6) — needs a sending-infra vendor
+   decision first, not started
+
+Nothing past item 1 (the existing pipeline) is implemented yet. Items 8-9
+specifically cannot start until their vendor questions are answered — that's
+its own near-term session, separate from writing any pipeline code.
+
+## Output schema — SUPERSEDED 2026-07-14 (was LOCKED 2026-07-11), matches the sheet's own column names
+Original 5 fields, still the core of every report:
 - **Company Description**
 - **Pain Points**
 - **AI Opportunities**
@@ -23,7 +110,7 @@ stay permanently out of scope per the boundary below.
 
 This is NOT a chatbot. Output feeds real Demaze sales outreach.
 
-## Scope boundary — LOCKED (2026-07-10, buyer clarification added 2026-07-11)
+## Scope boundary — SUPERSEDED 2026-07-14 for lead discovery only (was LOCKED 2026-07-10, buyer clarification added 2026-07-11)
 The real architecture is:
 ```
 Sales Navigator export (company + named person/title ALREADY attached to the row)
@@ -33,8 +120,10 @@ Sales Navigator export (company + named person/title ALREADY attached to the row
   -> [find person's email -> personalized email generation -> QA agent -> send]  (downstream, NOT built here)
 ```
 
-**Demaze's job is exactly four steps: find website -> enrich -> find problem ->
-AI research.** Everything before that (lead discovery, including WHO the buyer
+**Read this paragraph as history, not current rule — see the "SCOPE PIVOT"
+section above for what actually holds now.** As originally written: Demaze's
+job is exactly four steps: find website -> enrich -> find problem -> AI
+research. Everything before that (lead discovery, including WHO the buyer
 is — that arrives on the row, never inferred or ranked by us) and everything
 after that (finding a person's email, generating a full email, QA'ing it,
 sending it) is **permanently out of scope** — not deferred, not "later,"
@@ -42,8 +131,21 @@ genuinely not ours to build. Do not add buyer-ranking/contact-selection logic,
 email-finding, email-generation, a QA agent, or a send mechanism to this
 codebase without an explicit, separate decision to change this scope boundary.
 If a future session proposes building toward LinkedIn/Sales-Navigator-style lead
-discovery, that's a different business — stop and flag it
-rather than proceeding.
+discovery, that's a different business — stop and flag it rather than
+proceeding.
+
+**What actually changed 2026-07-14**: first, company-level lead discovery
+(ICP → matching companies, search-based) came into scope — this is exactly
+the case the last sentence above told a future session to flag, and it was
+flagged, and the user made the call to proceed. Then, later the same day
+(Decision B in the "SCOPE PIVOT" section above), the user was shown Explee's
+full live product and explicitly extended the decision further: buyer/
+contact-level discovery AND email-finding/generation/send are now **also in
+scope** (as future work, vendor-dependent, not built) — this paragraph's
+"UNCHANGED — still permanently out of scope" no longer holds. LinkedIn
+scraping/automation specifically stays excluded regardless (see below) — the
+reversal is about contact discovery and email/send generally, via
+non-LinkedIn sources (a people-data API), not about LinkedIn access.
 
 **LinkedIn**: stays excluded (see `source-prioritizer.ts`'s `isFetchable()`).
 Explicitly demoted — LinkedIn support is optional and future-only, and must NOT
@@ -443,9 +545,17 @@ Failures are scraping, classification, signals, timeouts, parsing — not reason
 - More regexes as a first resort, EXCEPT the 4 confirmed SIGNAL_PATTERNS gaps
   above — those are validated against real data, not speculative, and are now the
   highest-priority signal-extraction work
-- **Anything past the scope boundary above**: email-finding, email generation,
-  a QA agent, or a send mechanism. Permanently out of scope, not just deferred.
-- **LinkedIn-driven architecture decisions**. LinkedIn stays excluded/optional.
+- **Email-finding, generation, QA, or send implementation** — in scope as of
+  the 2026-07-14 "SCOPE PIVOT" Decision B, but blocked on a sending-infra
+  vendor decision (domain warming, deliverability, sending provider) that
+  hasn't happened yet. Don't wire up a send mechanism opportunistically
+  inside another item — it needs its own architecture session
+- **Decision-maker/contact discovery implementation** — also in scope as of
+  Decision B, but blocked on a people-data vendor decision (Apollo/PDL/
+  Proxycurl/Hunter or similar) that hasn't happened yet, same reasoning
+- **LinkedIn-driven architecture decisions**. LinkedIn scraping/automation
+  stays excluded regardless of the above — contact discovery should go
+  through a people-data API, not LinkedIn
 - Government-filings APIs (EDGAR/MCA) — logged as a future source category
   (item 4's scope note), not being built now.
 - RESOLVED (2026-07-10): the "more enrichment work — needs an explicit decision"
@@ -855,6 +965,393 @@ to force the condition would have been a bad way to verify this deliberately.
 not abandoned — see their own entries above for what's next.
 If parse+dedupe behavior specifically is in question later, re-test with a fresh fixture of fake
 `.example.com` domains rather than assuming the prior manual pass still holds.
+
+**Phase 2 — items 1-2 (Competitor Discovery Engine, ICP Generator) done,
+items 3-9 not started (scope decided 2026-07-14).** See "SCOPE PIVOT" near
+the top of this file for the decision and the 9-item priority order
+(Competitor Discovery Engine → ICP Generator → Company Discovery Engine →
+Research Quality Framework → Research Evaluation Framework → Market
+Intelligence Layer → Outreach Intelligence Layer → Decision-maker discovery
+→ Outreach send). Phase 1's items 2-4 (parallel enrichment repositioning
+already done as Item 2; items 3 PDF done; item 4 executive-change/investor-
+transcript targeting still open) are independent of Phase 2 and can proceed
+in either order — Phase 2 doesn't block on them.
+Living-memory note: `docs/PROJECT_STATE.md`, `docs/ROADMAP.md`,
+`docs/DECISIONS.md`, and `docs/CURRENT_TASK.md` are the current canonical,
+kept-current status/decision record as of 2026-07-15 — check those first for
+"what's true right now," this CLAUDE.md file's own dated history below is
+kept for narrative detail but can lag.
+
+**Item 1, Competitor Discovery Engine — sessions so far:**
+- **Architecture session (done 2026-07-14):** flow design, pipeline
+  placement (parallel with `discoverAndFetchExternalSources()`, same timing
+  as Item 2), search-grounded-not-LLM-narrated discipline, new sibling module
+  `lib/enrichment/competitor-discovery.ts`, filtering/confidence-tiering
+  rules, output shape, LLM integration via the existing single narrative
+  call, new non-critical `COMPETITOR` gate, explicit non-goals (no
+  market-share data, no scraping competitor sites, not recursive). No code
+  written. Full detail in `Latest Session Handoff.md`'s history (superseded
+  by the schema session below, but the design itself still holds).
+- **Schema session (done 2026-07-14):** formalized the architecture as real
+  TypeScript — `CompetitorProfile`, `CompetitorCandidate`,
+  `CompetitorDiscoveryResult`, `CompetitorConfidence`,
+  `CompetitorSufficiency` in the new `lib/enrichment/competitor-discovery.ts`
+  (types only, no search/HTTP logic — that's the next session). Wired into
+  `NormalizedAnalysis` (`lib/pipeline/normalize.ts`): added `competitors:
+  CompetitorProfile[]` and `competitor_sufficiency: CompetitorSufficiency`
+  fields, populated with safe "nothing found" defaults (`[]` /
+  `'insufficient'`) since no producer exists yet — same "insufficient means
+  no forced output" discipline as `evidence_sufficiency`. Marked
+  `competitive_context` `@deprecated` in place (confirmed dead/unrendered by
+  grep, per the architecture session) rather than removing it, since nothing
+  produces `competitors` yet — premature removal now would just be a
+  regression with no replacement live. Added the matching loose-optional
+  `CompetitorProfile` type + `getCompetitors()` / `getCompetitorSufficiency()`
+  getters to `lib/pipeline/analysis-sections.ts`, following that file's
+  existing getter convention, so both `AnalysisViewer` and
+  `buildAnalysisAppendix` can pick this section up later without another
+  shape-plumbing pass — the actual "Competitors" UI section itself is still
+  deferred, not built this session. Verified: `tsc --noEmit` clean, all 52
+  `vitest` assertions still pass.
+- **Prompt Design session (done 2026-07-14):** added the LLM-narration half
+  of the deterministic-list + LLM-merge pattern to
+  `lib/prompts/analyze-v2.ts`, mirroring how `opportunities` already merges
+  `deterministic_opportunities` with LLM enrichment in `normalize.ts`
+  (~line 646, `titleMatch()`). `NarrativePromptInput` gained
+  `competitorCandidates: CompetitorCandidate[]` (imported from
+  `competitor-discovery.ts`). `buildNarrativePrompt()` renders a new
+  `[COMPETITOR CANDIDATES]` block (name, mention count, explicit-vs-framing
+  tag, up to 2 truncated snippets per candidate; defensive `.slice(0, 5)`
+  mirroring the architecture's confidence-tiering cap even though the
+  not-yet-built producer should already enforce it; "None found" text when
+  empty). `NARRATIVE_SCHEMA` gained a `"competitors"` output array
+  (`name`/`why_they_compete`/`market_position`/`differentiator`) plus a
+  RULES bullet requiring one output entry per input candidate name, in the
+  same order, nothing added or dropped, and explicitly forbidding the model
+  from adding competitors "known" from its own training data — the same
+  anti-hallucination shape as the opportunity catalog's discard-LLM-only-
+  misses rule. Confidence is deliberately NOT an LLM-output field here (same
+  as `opportunities`' `relevance`) — it stays code-derived, set later by the
+  Implementation session's confidence-tiering step, not narrated.
+  `buildNarrativeInput()` gained a 5th, optional, defaulted (`= []`)
+  parameter so the one real call site (`app/api/admin/test-analysis/route.ts`)
+  needed zero changes — there is still no `discoverCompetitors()` producer,
+  so every live prompt today renders the "None found" branch of the new
+  block. Verified: `tsc --noEmit` clean, all 52 `vitest` assertions still
+  pass (prompt-text-only change, no new test file — nothing here is
+  behavior to unit-test yet since the candidate list is always empty until
+  Implementation lands). Not a UI-observable change, browser verification
+  skipped per this repo's own guidance (no producer wired, no UI section
+  reads it yet).
+- **Implementation session (done 2026-07-15) — Competitor Discovery Engine
+  is now COMPLETE.** Real logic added to
+  `lib/enrichment/competitor-discovery.ts`: `discoverCompetitors()` runs 4
+  Tavily/Serper-fallback search queries (`"${name}" competitors`, `"vs"`,
+  `"alternatives"`, `top competitors of`), extracts candidate names via two
+  regex strategies — `extractVsPair()` ("X vs Y" title pattern, case-
+  insensitive on the trigger word only, names stay case-sensitive/proper-
+  noun-shaped) and `extractListAfterTrigger()` (capitalized-word list
+  following "competitors include"/"alternatives to"/"rivals are"/etc,
+  window-bounded to the next sentence so it can't bleed into unrelated
+  text) — then filters via `classifyRejection()` (self-name via
+  `isSelfName()`'s word-overlap check, a `NON_COMPETITOR_NAMES` list of
+  known directories/aggregators/news outlets/certifying bodies checked
+  BEFORE the generic length/stopword checks so e.g. "G2" reports the
+  specific reason not just "too short", and `RELATIONSHIP_DISQUALIFIER_PATTERNS`
+  for customer/supplier/certifying-body/association/partner framing found
+  in the candidate's own snippets), tiers confidence via `tierConfidence()`
+  (high = 2+ mentions AND "vs"-framing; medium = either alone; low =
+  neither), caps at 5. `why_they_compete` on the returned `CompetitorProfile[]`
+  is a code-derived fallback (`fallbackWhyTheyCompete()`) — same
+  "LLM-narrative, code-text-as-fallback" shape as
+  `DeterministicOpportunity.strategic_challenge`. `CompetitorDiscoveryResult`
+  gained a `candidates: CompetitorCandidate[]` field (same survivors as
+  `competitors`, pre-final-shaping) not anticipated by the Schema session —
+  needed because the prompt block (Prompt Design session) consumes the
+  richer `CompetitorCandidate` shape (mention_count/snippets/
+  explicit_vs_framing) while the merge step needs the tiered `CompetitorProfile`
+  shape, and both come from the same call.
+  Wired into `app/api/admin/test-analysis/route.ts`: `competitorDiscoveryPromise`
+  kicked off at the same point as `discoveryPromise` (parallel with
+  `discoverAndFetchExternalSources()`, before Stage 1 SCRAPE starts, per
+  architecture decision 1), awaited with its own bounded 12s race (simpler
+  than ENRICHMENT's soft/hard/late-arrival machinery — deliberately NOT
+  entangled with that existing timing-critical code, since competitor
+  discovery is a handful of search calls, not a multi-stage pipeline, and
+  has no "late" continuation path) right before the narrative prompt is
+  built, feeding `buildNarrativeInput()`'s `competitorCandidates` param.
+  New non-critical `COMPETITOR` gate added (WARN-only, same tier as
+  `ENRICHMENT`). Result threaded to `normalize.ts` via `merged._competitor_discovery`
+  (same underscore-prefixed internal-passthrough convention as `_extractor`/
+  `_service_evidence_content`).
+  `normalize.ts`'s merge step replaced the old hardcoded `[]` default:
+  code-derived `CompetitorProfile` skeletons are matched against the LLM's
+  parsed `competitors` narration (`flat.competitors`) via a new
+  `competitorNameMatch()` (normalized near-exact match — lowercase, strip
+  punctuation, collapse whitespace — deliberately NOT the fuzzy keyword-
+  overlap `titleMatch()` opportunities use, since two different companies
+  sharing one word, e.g. two "X Industries", must never cross-merge
+  narration). LLM-only names with no code-derived match are discarded, same
+  anti-hallucination discipline as the opportunities merge.
+  `ResearchCard.tsx` gained a "Competitors" section using the existing
+  `getCompetitors()` getter, rendered only when the list is non-empty (same
+  "no forced empty-state message" pattern as Recent News).
+  New `tests/competitor-discovery.test.ts` (27 assertions) caught two real
+  bugs during this session: `extractVsPair()`'s "vs" trigger was
+  case-sensitive (missed "Company A Vs. Company B") — fixed by making only
+  the trigger characters case-insensitive, not the name-shape requirement;
+  and `classifyRejection()`'s check order reported "too short" for
+  known-2-char directory names like "G2" instead of the more specific
+  directory reason — fixed by moving the `NON_COMPETITOR_NAMES` check before
+  the length check.
+  **Verified**: `tsc --noEmit` clean, full suite 79/79 pass (52 pre-existing
+  + 27 new). Live dev-server pass over `/admin/intelligence-lab` — page
+  compiles and renders with zero console/server errors (empty state only;
+  no live `discoverCompetitors()` call was exercised, since that spends
+  real Tavily/Serper quota and needs the same explicit-confirmation
+  discipline as every other quota-spending run in this repo).
+  **Live end-to-end run — done (2026-07-15).** Ran `discoverCompetitors()`
+  against real benchmark companies via the actual `/admin/intelligence-lab`
+  UI with real Tavily/Serper + LLM quota (explicit user confirmation given
+  first). Confirmed the full path works: real search → filtered candidates
+  → LLM narration → merged `competitors` rendered in `ResearchCard`, with
+  `COMPETITOR:PASS` firing correctly. Two real bugs found and fixed in the
+  same session (both now covered by regression tests, 81/81 passing):
+  1. **Trigger word extracted as a candidate name.** A "Top Alternatives to
+     Bharat Forge" -style heading caused `extractListAfterTrigger()` to
+     re-match "Alternatives" itself (the trigger word) as a proper-noun
+     candidate, surfaced at medium confidence with no real company behind
+     it. Fixed: `STOPWORDS` in `competitor-discovery.ts` now includes the
+     `LIST_TRIGGER` vocabulary itself (alternative/alternatives/competitor/
+     competitors/rival/rivals), so a name that reduces to just the trigger
+     word is rejected as "generic/stopword phrase."
+  2. **Self-name filter missed a domain-derived company-name guess.**
+     Running Ace Pipeline listed "Ace Pipeline" as its own competitor.
+     Root cause: `guessCompanyNameFromDomain("acepipeline.com")` (route.ts)
+     produces the single word `"Acepipeline"` — there's no case boundary in
+     an all-lowercase domain for the camelCase-split regex to act on — while
+     search results use the real two-word "Ace Pipeline". `isSelfName()`'s
+     word-overlap check requires shared individual words, so `["ace",
+     "pipeline"]` vs `["acepipeline"]` shares zero words and never matched.
+     Fixed: `isSelfName()` now also checks the space-collapsed form of both
+     names (`"ace pipeline"` vs `"acepipeline"` → equal → self-match), same
+     "domain-guess-is-imprecise" limitation class as Item 1's single-word
+     company-name handling in `website-discovery.ts`.
+  **Separately observed, not a code bug, not fixed**: Ace Pipeline's real
+  search results repeatedly named "Ace Pipeline Contracts Pvt. Ltd." (an
+  unrelated Indian company with a near-identical name) as the entity Bechtel/
+  Fugro/Geosyntec compete with — a genuine name-collision limitation of a
+  generic two-word company name, same class of ambiguity `website-discovery.ts`
+  already documents and handles by refusing to guess. Competitor discovery
+  has no equivalent disambiguation step today; worth a future look if this
+  recurs, not blocking.
+
+**Competitor Discovery Engine (Phase 2 item 1) is now COMPLETE, including
+live verification.**
+
+**Item 2, ICP Generator — done (2026-07-15), code + unit tests; live
+end-to-end run pending.** Given an already-researched company, surfaces
+0-5 real, search-grounded target-customer segments (who the researched
+company itself sells to — distinct from `company_fit`, which scores
+whether this company is a good lead FOR DEMAZE, a single 0-100 number; see
+`lib/enrichment/icp-generator.ts` header for the full reconciliation note).
+Architecture is a direct mirror of Competitor Discovery Engine (documented
+as the reference pattern for this repo's deterministic-list + LLM-narration
+features — see `docs/DECISIONS.md`), done in one session rather than four
+separate architecture/schema/prompt/implementation sessions, since the
+pattern was already proven and the risk of re-deriving it from scratch was
+low.
+- New `lib/enrichment/icp-generator.ts`: `ICPSegment`/`ICPCandidate`/
+  `ICPDiscoveryResult` types, `discoverICPSegments()`. Search queries built
+  around explicit serve/customer framing (`"we serve"`, `"clients
+  include"`, `"industries served"`, `"customers include"`). Extraction
+  (`extractSegmentsAfterTrigger`) differs from competitor extraction in one
+  real way: segment names are frequently lowercase industry terms
+  ("automotive manufacturers", "food and beverage"), not proper nouns, so
+  extraction splits a comma/and-delimited list after the trigger phrase
+  rather than matching PROPER_NOUN shapes. A real gap found while writing
+  this: a trigger match sometimes leaves a leftover connector word right
+  after it (e.g. "industries we serve" matches, but the source text
+  continues "...serve include automotive..." since "include" wasn't part of
+  the matched trigger) — fixed with a `LEFTOVER_CONNECTOR` post-processing
+  strip rather than trying to enumerate every trigger+connector combination
+  in the regex itself. Self-name filtering reuses the exported `isSelfName()`
+  from `competitor-discovery.ts` directly (not duplicated) — segment names
+  can occasionally collide with the researched company's own name via a
+  loose trigger match, same failure mode competitor discovery already
+  solved.
+- `lib/pipeline/normalize.ts`: `icp_segments`/`icp_sufficiency` added to
+  `NormalizedAnalysis`. Merge-by-name step reuses the same normalized-exact-
+  match identity check the competitors merge uses — the function was
+  renamed `competitorNameMatch` → `identityNameMatch` since it's now shared
+  by both, rather than duplicating it under a second name.
+- `lib/pipeline/analysis-sections.ts`: `getICPSegments()`/
+  `getICPSufficiency()` getters, same convention as `getCompetitors()`.
+- `lib/prompts/analyze-v2.ts`: new `[ICP CANDIDATES]` block and
+  `icp_segments` output array in `NARRATIVE_SCHEMA`, with the same
+  anti-hallucination RULES bullet shape as `competitors` (one entry per
+  candidate name, same order, nothing invented, no populating from general
+  industry knowledge).
+- `app/api/admin/test-analysis/route.ts`: `icpDiscoveryPromise` kicked off
+  at the same point as `competitorDiscoveryPromise` (before Stage 1 SCRAPE
+  starts), bounded 12s race, new non-critical `ICP` gate (WARN-only, same
+  tier as `COMPETITOR`/`ENRICHMENT`), threaded to `normalize.ts` via
+  `merged._icp_discovery`.
+- `app/admin/intelligence-lab/ResearchCard.tsx`: new "Target Customer
+  Segments" section using `getICPSegments()`, rendered only when non-empty
+  (same discipline as "Competitors").
+- New `tests/icp-generator.test.ts` (19 assertions): extraction (including
+  the leftover-connector-stripping fix), self-name/generic-term filtering,
+  confidence tiering, fallback-text generation.
+- **Verified**: `tsc --noEmit` clean, full suite 98/98 pass (79 pre-existing
+  + 19 new). Live dev-server pass over `/admin/intelligence-lab` — page
+  compiles and renders with zero console/server errors (empty state only;
+  no live `discoverICPSegments()` call was exercised, since that spends
+  real Tavily/Serper quota — same "verify via tsc+tests+dev-server, defer
+  live run" pattern as Competitor Discovery Engine's own implementation
+  session and Phase 1 Item 3).
+**Live end-to-end run — done (2026-07-15).** Ran `discoverICPSegments()`
+against Ador Welding via the real `/api/admin/test-analysis` endpoint with
+real Tavily/Serper/LLM quota (explicit user confirmation given first).
+Confirmed the full path works: real search → filtered candidates → LLM
+narration → merged `icp_segments` in the API response, `icp_sufficiency:
+"sufficient"`, 5 segments (`shipbuilding`, `oil and gas`, `infrastructure`,
+`power`, `railways`), all `confidence: "high"`, each with real source URLs
+(adorwelding.com, trendlyne.com). Incidentally re-verified Competitor
+Discovery Engine stays regression-free on the same run (ESAB, CenterLine,
+Autometers Alliance, Telsonic, Migatronic, all medium confidence,
+`competitor_sufficiency: "sufficient"`).
+**One real bug found and fixed in the same session**: `splitSegmentList()`
+in `icp-generator.ts` split on every `\band\b`, so idiomatic two-word
+industry terms broke apart — "oil and gas" surfaced as two separate
+segments, `oil` and `gas`. Fixed by swapping each of a known-idiom list
+(`COMPOUND_SEGMENT_IDIOMS` — oil and gas, food and beverage, textile and
+apparel, iron and steel, pulp and paper, health and wellness, travel and
+tourism, media and entertainment, sales and marketing, research and
+development, arts and crafts, hotels and resorts) for an "and"-free token
+before the list split, then restoring the original text afterward. A first
+attempt (replacing only the idiom's internal spaces with a placeholder
+character) did not work — `\b` is a `\w`/`\W` transition, so `\band\b` still
+matched "and" on either side of a non-word placeholder character; the fix
+needed a full-idiom token swap instead. Re-verified live after the fix: "oil
+and gas" now surfaces as one segment. Two new regression tests added to
+`tests/icp-generator.test.ts` (100 total, up from 98).
+
+**ICP Generator (Phase 2 item 2) is now COMPLETE, including live
+verification.**
+
+**Item 3, Company Discovery Engine — done (2026-07-15), code + unit tests;
+live end-to-end run pending.** Reverse direction from Competitor Discovery
+Engine / ICP Generator: given an ICP segment (free text — typed, or copied
+from a prior run's `icp_segments`), finds NEW candidate companies to
+research, rather than enriching a report for a company already being
+researched. No LLM narration step at all in this module — every candidate
+name comes from search-result regex extraction only.
+New `lib/enrichment/company-discovery.ts`: `discoverCompanies(icpSegment,
+excludeCompanyName?)`. Two extraction strategies — trigger-phrase list
+(`extractCompaniesAfterTrigger`, "top companies in X"/"companies like
+X, Y, Z") and numbered-list (`extractNumberedListCompanies`, "1. Zoho
+2. Freshworks…" — real "Top 10 X Companies" search snippets frequently
+flatten to this shape with no single trigger sentence). Filtering
+(`classifyCompanyRejection`) reuses `isSelfName()` from
+`competitor-discovery.ts` directly, plus a local directory/aggregator name
+list (G2/Crunchbase/LinkedIn/etc., same duplication-over-sharing precedent
+as the other discovery modules). Confidence tiers by mention count only
+(no "vs"/"serve"-framing signal exists for company-list results). Domain
+resolution — the one genuinely expensive new step — reuses
+`discoverCompanyWebsite()` from `website-discovery.ts` directly, run
+sequentially against only the capped (6) survivor set; a candidate with no
+confirmed domain still surfaces (name + reason), just gets researched by
+name instead of URL downstream.
+New route `POST /api/admin/company-discovery`
+(`{ icpSegment, excludeCompanyName? }`). New standalone page
+`/admin/company-discovery` (added to `nav-config.ts` between Research and
+Batch) rather than embedding into `ResearchCard` — the ICP Generator
+session already flagged company-matching as a separate later milestone.
+The page's "Research Selected" loop is copied verbatim in shape from
+`batch-upload/page.tsx` (`DedupedCompany` handoff type, `quota-pause.ts`
+detection, as-you-go `persistResult` to run-history).
+New `tests/company-discovery.test.ts` (20 assertions): both extraction
+strategies, self-name/directory/generic-term rejection, confidence
+tiering, fallback-reason text.
+**Verified**: `tsc --noEmit` clean, full suite 120/120 pass (100
+pre-existing + 20 new). Live dev-server pass over the new
+`/admin/company-discovery` page — compiles and renders with zero
+console/server errors (empty state only; no live `discoverCompanies()`
+call was exercised, since that spends real Tavily/Serper quota — same
+"verify via tsc+tests+dev-server, defer live run" pattern as every prior
+discovery-module implementation session).
+**Live end-to-end run — done (2026-07-15).** Ran `discoverCompanies()`
+against the real `/api/admin/company-discovery` endpoint with real Tavily/
+Serper quota (explicit user confirmation given first), segment "oil and
+gas", excluding "Ador Welding" (the company this segment was copied from,
+per the ICP Generator's own live run earlier the same day). Confirmed the
+full path works: real search → both extraction strategies exercised on real
+snippets → self-name/directory filtering → confidence tiering → sequential
+`discoverCompanyWebsite()` domain-resolution pass. Result: 2 of 2 raw
+candidates survived filtering (`Anadarko Petroleum` high confidence,
+`Hess Corp` high confidence), `sufficiency: "sufficient"`.
+**One real false positive found, not fixed (same known bug class, not new
+code)**: `discoverCompanyWebsite()` resolved Anadarko Petroleum to
+`petroleum.gov.gy` (a Guyana government petroleum-industry info site, not
+Anadarko's real corporate domain) at `medium` confidence — the same loose
+body-text-match limitation `website-discovery.ts` already documents
+elsewhere in this file (e.g. the AITG/miraheze false positive), now
+confirmed manifesting through the Company Discovery Engine's reuse of that
+function too. Hess Corp correctly returned with no domain (`domain not
+confirmed`) rather than guessing. Not blocking, not fixed this session —
+logged as a precision gap in the shared `discoverCompanyWebsite()` path,
+same "known, not urgent" status as ATE Group's unresolved domain case above.
+
+**Company Discovery Engine (Phase 2 item 3) is now COMPLETE, including live
+verification.**
+
+Items 1-3 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
+Discovery Engine) are all now complete with live verification.
+
+**Stale pointer corrected (2026-07-15)**: this used to say "next session
+should move to item 4." Items 4 (Research Quality Framework) and 5 (Research
+Evaluation Framework) are now also COMPLETE with live/verified checks. This
+file's own narrative history is allowed to lag — `docs/CURRENT_TASK.md`,
+`docs/ROADMAP.md`, and `docs/DECISIONS.md` are the canonical, kept-current
+record; check those first, not this section, for what's actually done.
+
+**Item 6, Market Intelligence Layer — live end-to-end run done (2026-07-15).**
+Code + unit tests were already complete going into this session (pure
+deterministic search -> regex-classify -> dedupe -> confidence-tier module,
+see `lib/enrichment/market-intelligence.ts` header for why this one
+diverges from the competitor/ICP "code extracts, LLM narrates" pattern — no
+LLM layer here). Ran `discoverMarketIntelligence()` against Ador Welding via
+the real `/api/admin/test-analysis` endpoint (real Tavily/Serper quota,
+explicit user confirmation given first, reusing the existing scrape cache
+for that company). A dev server for this project was already running on
+port 3000 from another session — hit its API directly via `curl` rather
+than starting a second `next dev` instance (which the directory-scoped lock
+would have refused anyway); no process was started or killed to do this.
+Confirmed the full path works: `MARKET_INTEL:PASS`, `4 item(s) found | 4 of
+4 raw candidate(s) survived filtering`, `market_intelligence_sufficiency:
+"sufficient"` in the normalized `analysisResult`. All 4 surfaced items were
+real, source-attributed `growth_indicator` statements at `medium`
+confidence (mention_count=1 each, so correctly short of `high` per
+`tierConfidence`'s >=2-mentions requirement) — e.g. "growing from USD 18.86
+billion in 2025 to USD 22.53 billion by 2030...CAGR of 3.62%" sourced to a
+real Yahoo Finance article, and a CAGR growth-forecast sourced to Ador's own
+2021-22 annual-report PDF. No `challenge`/`trend`/`shift` items surfaced
+this run — plausible given real search results, not evidence of a category
+bug. Competitor Discovery and ICP Generator both stayed regression-free on
+the same run (`COMPETITOR:PASS` 5 found, `ICP:PASS` 5 found — consistent
+with their own prior live runs against this company). Verified the
+`ResearchCard.tsx` render path (`marketIntel.length > 0` gate, `statement`/
+`category`/`confidence` fields) matches the live response shape exactly by
+reading the component against the actual returned JSON, rather than
+re-spending quota on a second UI-driven run just to see the same data
+rendered — a full browser-driven pass with real data was already done for
+Competitor Discovery/ICP Generator earlier this phase, establishing that
+`ResearchCard`'s render conventions work; this module's section follows the
+identical pattern.
+
+**Market Intelligence Layer (Phase 2 item 6) is now COMPLETE, including live
+verification.**
 
 ## The actual goal
 NOT "6/6 benchmark PASS." The goal is: any company URL -> pipeline always returns
