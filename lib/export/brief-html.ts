@@ -9,6 +9,22 @@
 // ============================================================
 
 import { humanizeText } from '@/lib/text/humanize'
+import {
+  getCompanyFit,
+  getAutomationOpportunity,
+  getWhyNow,
+  getSignals,
+  getOpportunities,
+  getPainPointsStructured,
+  getReasoningChains,
+  getWhyDemaze,
+  getOutreachIntelligence,
+  getBusinessModelAnalysis,
+  getSignalClusters,
+  getStrategicChallenges,
+  getExecutiveBrief,
+  getDeterministicOpportunities,
+} from '@/lib/pipeline/analysis-sections'
 
 export interface BriefOpportunity {
   title: string
@@ -101,8 +117,12 @@ function list(items: string[]): string {
 // S: raw string. H: humanized + escaped (narrative). E: escaped only
 // (verbatim quotes / short labels). A: safe array.
 const S = (v: unknown): string => (v == null ? '' : String(v).trim())
-const H = (v: unknown): string => escapeHtml(humanizeText(v))
-const E = (v: unknown): string => escapeHtml(v)
+// Branded so kv() can require "already escaped" at the type level instead of
+// by caller convention — a raw scraped string won't type-check as a row value.
+type Html = string & { readonly __html: unique symbol }
+const asHtml = (s: string): Html => s as Html
+const H = (v: unknown): Html => asHtml(escapeHtml(humanizeText(v)))
+const E = (v: unknown): Html => asHtml(escapeHtml(v))
 const A = <T = unknown>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
@@ -118,7 +138,7 @@ function chips(items: string[]): string {
   return `<div class="chips">${clean.map((c) => `<span class="chip">${E(c)}</span>`).join('')}</div>`
 }
 
-function kv(pairs: Array<[string, string]>): string {
+function kv(pairs: Array<[string, Html]>): string {
   const rows = pairs.filter(([, v]) => v && v.trim())
   if (!rows.length) return ''
   return `<table class="kvt">${rows
@@ -130,6 +150,13 @@ function kv(pairs: Array<[string, string]>): string {
  * Build the "Analysis Detail" appendix from the raw analysisResult and the
  * extractor signals — mirrors the on-screen Analysis tab. Narrative fields are
  * humanized; verbatim source quotes are kept as-is (escaped only).
+ *
+ * Field extraction is shared with AnalysisViewer (app/admin/intelligence-lab/
+ * page.tsx) via lib/pipeline/analysis-sections.ts, so the two renderers can't
+ * drift on *which* field a section reads. Rendering itself (JSX vs. this
+ * HTML-string builder) is still separate on purpose — one is interactive, one
+ * is a static export — so a new section still needs a render-side addition in
+ * both places, just not a second copy of the extraction/casting.
  */
 export function buildAnalysisAppendix(extras: BriefExtras): string {
   const a = extras.analysis
@@ -139,7 +166,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   const parts: string[] = []
 
   // Executive Brief
-  const eb = obj(data.executive_brief)
+  const eb = getExecutiveBrief(data) ?? {}
   const observed = A<string>(eb.what_we_observed)
   const means = A<string>(eb.what_it_means)
   if (observed.length || means.length || S(eb.what_to_sell) || S(eb.why_now)) {
@@ -160,26 +187,28 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Scores
-  const fit = obj(data.company_fit)
-  const auto = obj(data.automation_opportunity)
-  const wn = obj(data.why_now)
-  const scoreRows: Array<[string, string]> = []
+  const fit = getCompanyFit(data) ?? {}
+  const auto = getAutomationOpportunity(data) ?? {}
+  const wn = getWhyNow(data) ?? {}
+  const scoreRows: Array<[string, Html]> = []
   if (S(fit.value) || S(fit.label))
-    scoreRows.push(['Company fit', `${E(fit.value)}${fit.label ? ` — ${E(fit.label)}` : ''}`])
+    scoreRows.push(['Company fit', asHtml(`${E(fit.value)}${fit.label ? ` — ${E(fit.label)}` : ''}`)])
   if (S(auto.value) || S(auto.label))
-    scoreRows.push(['Automation opportunity', `${E(auto.value)}${auto.label ? ` — ${E(auto.label)}` : ''}`])
+    scoreRows.push(['Automation opportunity', asHtml(`${E(auto.value)}${auto.label ? ` — ${E(auto.label)}` : ''}`)])
   if (S(wn.score))
-    scoreRows.push(['Why now', `${E(wn.score)}/10${wn.urgency_label ? ` — ${E(wn.urgency_label)}` : ''}`])
+    scoreRows.push(['Why now', asHtml(`${E(wn.score)}/10${wn.urgency_label ? ` — ${E(wn.urgency_label)}` : ''}`)])
   if (S(data.outreach_priority_score))
     scoreRows.push([
       'Outreach priority',
-      `${E(Math.round(Number(data.outreach_priority_score)))}/100${data.outreach_priority_label ? ` (${E(data.outreach_priority_label)})` : ''}`,
+      asHtml(
+        `${E(Math.round(Number(data.outreach_priority_score)))}/100${data.outreach_priority_label ? ` (${E(data.outreach_priority_label)})` : ''}`,
+      ),
     ])
   if (S(data.confidence_level)) scoreRows.push(['Overall confidence', E(data.confidence_level)])
   parts.push(detail('Scores', kv(scoreRows)))
 
   // Business Model Analysis
-  const bma = obj(data.business_model_analysis)
+  const bma = getBusinessModelAnalysis(data) ?? {}
   if (S(bma.model_type)) {
     parts.push(
       detail(
@@ -202,7 +231,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Signal Clusters
-  const clusters = A<Record<string, unknown>>(data.signal_clusters)
+  const clusters = getSignalClusters(data)
   if (clusters.length) {
     parts.push(
       detail(
@@ -220,7 +249,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Strategic Challenges
-  const challenges = A<Record<string, unknown>>(data.strategic_challenges)
+  const challenges = getStrategicChallenges(data)
   if (challenges.length) {
     parts.push(
       detail(
@@ -239,7 +268,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Opportunity Engine Output (deterministic)
-  const detOpps = A<Record<string, unknown>>(data.deterministic_opportunities)
+  const detOpps = getDeterministicOpportunities(data)
   if (detOpps.length) {
     parts.push(
       detail(
@@ -257,7 +286,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Why Demaze
-  const wd = obj(data.why_demaze)
+  const wd = getWhyDemaze(data) ?? {}
   const wdReasons = A<unknown>(wd.reasons)
   if (wdReasons.length || S(wd.summary)) {
     const reasonHtml = wdReasons
@@ -280,7 +309,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Outreach Intelligence
-  const oi = obj(data.outreach_intelligence)
+  const oi = getOutreachIntelligence(data) ?? {}
   if (S(oi.opening_angle)) {
     parts.push(
       detail(
@@ -299,7 +328,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Pain Points (structured)
-  const painPts = A<Record<string, unknown>>(data.pain_points_structured)
+  const painPts = getPainPointsStructured(data)
   if (painPts.length) {
     parts.push(
       detail(
@@ -317,7 +346,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Reasoning Chains
-  const chains = A<Record<string, unknown>>(data.reasoning_chains)
+  const chains = getReasoningChains(data)
   if (chains.length) {
     parts.push(
       detail(
@@ -338,7 +367,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // Signals (LLM)
-  const sigs = A<Record<string, unknown>>(data.signals)
+  const sigs = getSignals(data)
   if (sigs.length) {
     parts.push(
       detail(
@@ -356,7 +385,7 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   }
 
   // AI Opportunities (detailed)
-  const aiOpps = A<Record<string, unknown>>(data.opportunities)
+  const aiOpps = getOpportunities(data)
   if (aiOpps.length) {
     parts.push(
       detail(
@@ -477,6 +506,7 @@ export function buildBriefHtml(b: BriefInput, extras?: BriefExtras): string {
   .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; margin: 0 0 8px; }
   p { margin: 0 0 8px; }
   .summary { font-size: 15px; color:#26262e; }
+  .model-note { font-size: 12px; font-style: italic; color:#8a8a97; margin: 6px 0 0; }
   ul { margin: 0; padding-left: 18px; }
   li { margin: 0 0 6px; }
   ul.opps { list-style: none; padding-left: 0; }
@@ -530,7 +560,17 @@ export function buildBriefHtml(b: BriefInput, extras?: BriefExtras): string {
       ${badgeBits ? `<span class="badge">${badgeBits}</span>` : ''}
     </header>
 
-    ${section('Company Description', '#55555f', b.summary ? `<p class="summary">${escapeHtml(b.summary)}</p>` : '')}
+    ${section(
+      'Company Description',
+      '#55555f',
+      b.summary
+        ? `<p class="summary">${escapeHtml(b.summary)}</p>${
+            b.businessModel && !b.summary.toLowerCase().includes(b.businessModel.toLowerCase().slice(0, 20))
+              ? `<p class="model-note">${escapeHtml(b.businessModel)}</p>`
+              : ''
+          }`
+        : '',
+    )}
     ${section('Recent News', '#4f46e5', list(b.recentNews ?? []))}
     ${section('Pain Points', '#b45309', list(b.painPoints ?? []))}
     ${section('AI Opportunities', '#15803d', oppsHtml)}

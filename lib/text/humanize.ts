@@ -44,8 +44,9 @@ function replaceConnectorDashes(input: string): string {
   s = s.replace(/\s+--\s+/g, ', ')
 
   // Em dash (—) or en dash (–) surrounded by spaces → comma.
-  // Collapse a stray double-space the replacement might create.
-  s = s.replace(/\s*[—–]\s*/g, ', ')
+  // Require spaces on both sides so unspaced numeric ranges like
+  // "30–50%" are left alone (only \s* here would eat those too).
+  s = s.replace(/\s+[—–]\s+/g, ', ')
 
   // A comma immediately before another comma / period from stacked
   // replacements → single mark.
@@ -75,8 +76,9 @@ export function humanizeText(input: unknown): string {
   s = s.replace(/\s+([.,;:!?])/g, '$1')
   s = s.trim()
 
-  // Re-capitalize if a removed filler phrase left a lowercase opener.
-  if (s.length > 0) s = s[0].toUpperCase() + s.slice(1)
+  // Re-capitalize sentence openers a removed filler phrase left lowercase
+  // (start of string, or right after a ".", "!" or "?").
+  s = s.replace(/(^|[.!?]\s+)([a-z])/g, (_m, prefix, letter) => prefix + letter.toUpperCase())
 
   return s
 }
