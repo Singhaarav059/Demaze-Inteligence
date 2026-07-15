@@ -14,6 +14,22 @@ import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { humanizeText } from '@/lib/text/humanize'
+import {
+  getCompanyFit,
+  getAutomationOpportunity,
+  getWhyNow,
+  getSignals,
+  getOpportunities,
+  getPainPointsStructured,
+  getReasoningChains,
+  getWhyDemaze,
+  getOutreachIntelligence,
+  getBusinessModelAnalysis,
+  getSignalClusters,
+  getStrategicChallenges,
+  getExecutiveBrief,
+  getDeterministicOpportunities,
+} from '@/lib/pipeline/analysis-sections'
 import type { RunResult, Operation, AnalysisMode, ActiveTab } from './_types'
 import { ComparisonPanel } from './ComparisonPanel'
 import { ResearchCard } from './ResearchCard'
@@ -723,6 +739,9 @@ function EmptyState({ message }: { message: string }) {
 }
 
 // ── Analysis Viewer ───────────────────────────────────────────
+// Mirrored by buildAnalysisAppendix (lib/export/brief-html.ts), which
+// independently re-extracts these same analysisResult fields for the
+// downloaded brief. Keep both in sync when sections change here.
 
 function AnalysisViewer({ data, extractorResult }: {
   data: Record<string, unknown>
@@ -734,47 +753,29 @@ function AnalysisViewer({ data, extractorResult }: {
   // Route non-empty display text through humanizeText so AI-ism dashes/filler
   // are stripped everywhere in this viewer; keep '—' as the empty placeholder.
   const s = (val: unknown) => (val != null && val !== '' ? humanizeText(val) : '—')
+  // Verbatim source quotes must never be humanized — keep them exactly as
+  // scraped, same rule brief-html.ts's export appendix already follows.
+  const raw = (val: unknown) => (val == null ? '' : String(val))
   const n = (val: unknown): number => (typeof val === 'number' ? val : 0)
 
-  const score    = data.company_fit as { value?: number; label?: string; rationale?: string; breakdown?: Array<{factor: string; points: number; present: boolean}> } | undefined
-  const opp      = data.automation_opportunity as { value?: number; label?: string; breakdown?: Array<{factor: string; points: number; present: boolean}> } | undefined
-  const whyNow   = data.why_now as { explanation?: string; score?: number; urgency_label?: string } | undefined
-  const signals  = Array.isArray(data.signals) ? (data.signals as Array<Record<string, unknown>>) : []
-  const opps     = Array.isArray(data.opportunities) ? (data.opportunities as Array<Record<string, unknown>>) : []
+  const score    = getCompanyFit(data)
+  const opp      = getAutomationOpportunity(data)
+  const whyNow   = getWhyNow(data)
+  const signals  = getSignals(data)
+  const opps     = getOpportunities(data)
   const evidence = Array.isArray(data.evidence) ? (data.evidence as Array<Record<string, unknown>>) : []
-  const painPts  = Array.isArray(data.pain_points_structured) ? (data.pain_points_structured as Array<Record<string, unknown>>) : []
-  const chains   = Array.isArray(data.reasoning_chains) ? (data.reasoning_chains as Array<Record<string, unknown>>) : []
+  const painPts  = getPainPointsStructured(data)
+  const chains   = getReasoningChains(data)
   const warnings = Array.isArray(data.validation_warnings) ? (data.validation_warnings as string[]) : []
   const contentFlags = Array.isArray(data.content_quality_flags) ? (data.content_quality_flags as string[]) : []
-  const whyDemaze = data.why_demaze as {
-    reasons?: Array<string | {
-      signal?: string; evidence?: string; evidence_tier?: string;
-      business_implication?: string; strategic_challenge?: string;
-      recommended_service?: string; confidence?: string
-    }>;
-    relevant_services?: string[];
-    summary?: string;
-  } | undefined
-  const outreachIntel = data.outreach_intelligence as { trigger?: string; problem?: string; service?: string; opening_angle?: string; why_now?: string } | undefined
-  const bma = data.business_model_analysis as { model_type?: string; value_chain_position?: string; primary_customers?: string; core_operational_activities?: string[]; strategic_pressures?: string[] } | undefined
+  const whyDemaze = getWhyDemaze(data)
+  const outreachIntel = getOutreachIntelligence(data)
+  const bma = getBusinessModelAnalysis(data)
   const businessModelType = data.business_model_type as string | undefined
-  const signalClusters = Array.isArray(data.signal_clusters)
-    ? (data.signal_clusters as Array<{ id: string; theme: string; description: string; signals_present: string[]; confidence: string; tier: number }>)
-    : []
-  const strategicChallenges = Array.isArray(data.strategic_challenges)
-    ? (data.strategic_challenges as Array<{ id: string; title: string; description: string; service: string; priority: string }>)
-    : []
-  const executiveBrief = (data.executive_brief && typeof data.executive_brief === 'object')
-    ? (data.executive_brief as { what_we_observed?: string[]; what_it_means?: string[]; what_to_sell?: string; why_now?: string; overall_confidence?: string })
-    : null
-  const deterministicOpps = Array.isArray(data.deterministic_opportunities)
-    ? (data.deterministic_opportunities as Array<{
-        id: string; title: string; service: string; category: string
-        strategic_challenge: string; relevance: string; priority: number; entry_point: string
-        triggered_by_clusters?: Array<{ id: string; name: string; confidence: string }>
-        priority_source?: string
-      }>)
-    : []
+  const signalClusters = getSignalClusters(data)
+  const strategicChallenges = getStrategicChallenges(data)
+  const executiveBrief = getExecutiveBrief(data)
+  const deterministicOpps = getDeterministicOpportunities(data)
 
   return (
     <div className="space-y-4">
@@ -1187,7 +1188,7 @@ function AnalysisViewer({ data, extractorResult }: {
                   <p className="text-zinc-400 text-xs leading-relaxed">{s(pp.reasoning)}</p>
                 )}
                 {Boolean(pp.evidence) && (
-                  <p className="text-zinc-600 text-xs italic border-l-2 border-zinc-700 pl-2">&ldquo;{s(pp.evidence)}&rdquo;</p>
+                  <p className="text-zinc-600 text-xs italic border-l-2 border-zinc-700 pl-2">&ldquo;{raw(pp.evidence)}&rdquo;</p>
                 )}
               </div>
             ))}
@@ -1232,7 +1233,7 @@ function AnalysisViewer({ data, extractorResult }: {
                   </Badge>
                   <span className="text-zinc-300 text-xs font-medium">{s(sig.type)}</span>
                 </div>
-                <p className="text-zinc-600 text-xs italic">&ldquo;{s(sig.evidence)}&rdquo;</p>
+                <p className="text-zinc-600 text-xs italic">&ldquo;{raw(sig.evidence)}&rdquo;</p>
               </div>
             ))}
           </CardContent>
@@ -1309,7 +1310,7 @@ function AnalysisViewer({ data, extractorResult }: {
 
                 {/* Supporting evidence quote */}
                 {Boolean(o.evidence) && (
-                  <p className="text-zinc-600 text-[11px] italic border-l-2 border-zinc-700 pl-2">&ldquo;{s(o.evidence)}&rdquo;</p>
+                  <p className="text-zinc-600 text-[11px] italic border-l-2 border-zinc-700 pl-2">&ldquo;{raw(o.evidence)}&rdquo;</p>
                 )}
 
                 {/* Impact + entry point */}

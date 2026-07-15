@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { humanizeText, humanizeList } from '@/lib/text/humanize'
 import { downloadBriefPdf, downloadBriefWord } from '@/lib/export/download-brief'
 import type { BriefInput, BriefExtras } from '@/lib/export/brief-html'
+import { getCompetitors, getICPSegments, getMarketIntelligence, getResearchQuality } from '@/lib/pipeline/analysis-sections'
 import type { RunResult } from './_types'
 
 function DownloadIcon({ className }: { className?: string }) {
@@ -127,6 +128,11 @@ export function ResearchCard({ result }: { result: RunResult }) {
   const aiSynthesisFailed = a.ai_synthesis_status === 'failed'
   const aiSynthesisFailureReason = str(a.ai_synthesis_failure_reason)
 
+  const competitors = getCompetitors(a)
+  const icpSegments = getICPSegments(a)
+  const marketIntel = getMarketIntelligence(a)
+  const researchQuality = getResearchQuality(a)
+
   const outreachIntel = a.outreach_intelligence as Record<string, unknown> | null
   const openingAngle = humanizeText(str(outreachIntel?.opening_angle) ?? str(a.outreach_angle) ?? '')
   const whyNow = humanizeText(str(outreachIntel?.why_now) ?? str((a.why_now as Record<string, unknown>)?.explanation) ?? '')
@@ -216,7 +222,7 @@ export function ResearchCard({ result }: { result: RunResult }) {
           <CardContent className="px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-2xl font-semibold tracking-tight text-foreground">{companyName}</h2>
+                <h2 className="truncate text-2xl font-semibold tracking-tight text-foreground">{companyName}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {[industry, subIndustry && subIndustry !== industry ? subIndustry : null].filter(Boolean).join(' · ')}
                 </p>
@@ -327,6 +333,186 @@ export function ResearchCard({ result }: { result: RunResult }) {
           )}
         </Section>
       </div>
+
+      {/* Competitors (Phase 2 item 1) — additive to the locked 5-field
+          schema above, same "only render when there's something real"
+          discipline as Recent News: an empty/insufficient result shows no
+          section at all rather than a "no competitors found" message. */}
+      {competitors.length > 0 && (
+        <Section label="Competitors" accent="text-signal-medium">
+          <ul className="space-y-3">
+            {competitors.map((c, i) => {
+              const confClass =
+                c.confidence === 'high'
+                  ? 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+                  : c.confidence === 'medium'
+                    ? 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+                    : 'border-border bg-accent/40 text-muted-foreground'
+              return (
+                <li key={i} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-medium text-foreground">{c.name}</span>
+                    {c.why_they_compete && (
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {humanizeText(c.why_they_compete)}
+                      </p>
+                    )}
+                    {(c.market_position || c.differentiator) && (
+                      <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                        {c.market_position && (
+                          <>Position: <span className="normal-case text-muted-foreground/80">{c.market_position}</span></>
+                        )}
+                        {c.market_position && c.differentiator && ' · '}
+                        {c.differentiator && (
+                          <>Differentiator: <span className="normal-case text-muted-foreground/80">{c.differentiator}</span></>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {c.confidence && (
+                    <span className={cn('shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium capitalize', confClass)}>
+                      {c.confidence}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
+      )}
+
+      {/* Target Customer Segments (ICP Generator, Phase 2 item 2) — who
+          THIS company sells to, not company_fit (that's a separate score of
+          how well this company fits Demaze's own ICP). Same "only render
+          when there's something real" discipline as Competitors above. */}
+      {icpSegments.length > 0 && (
+        <Section label="Target Customer Segments" accent="text-signal-medium">
+          <ul className="space-y-3">
+            {icpSegments.map((s, i) => {
+              const confClass =
+                s.confidence === 'high'
+                  ? 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+                  : s.confidence === 'medium'
+                    ? 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+                    : 'border-border bg-accent/40 text-muted-foreground'
+              return (
+                <li key={i} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-medium text-foreground">{s.name}</span>
+                    {s.reason && (
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {humanizeText(s.reason)}
+                      </p>
+                    )}
+                    {(s.criteria || s.buying_indicators) && (
+                      <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                        {s.criteria && (
+                          <>Criteria: <span className="normal-case text-muted-foreground/80">{s.criteria}</span></>
+                        )}
+                        {s.criteria && s.buying_indicators && ' · '}
+                        {s.buying_indicators && (
+                          <>Buying signal: <span className="normal-case text-muted-foreground/80">{s.buying_indicators}</span></>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {s.confidence && (
+                    <span className={cn('shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium capitalize', confClass)}>
+                      {s.confidence}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
+      )}
+
+      {/* Market Intelligence (Phase 2 item 6) — industry-level trends/
+          growth indicators/challenges/shifts for the sector the researched
+          company operates in. Pure passthrough (no LLM narration layer, see
+          lib/enrichment/market-intelligence.ts header) — each item is
+          rendered as-extracted. Same "only render when there's something
+          real" discipline as Competitors/Target Customer Segments. */}
+      {marketIntel.length > 0 && (
+        <Section label="Market Intelligence" accent="text-signal-medium">
+          <ul className="space-y-3">
+            {marketIntel.map((m, i) => {
+              const confClass =
+                m.confidence === 'high'
+                  ? 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+                  : m.confidence === 'medium'
+                    ? 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+                    : 'border-border bg-accent/40 text-muted-foreground'
+              const categoryLabel =
+                m.category === 'growth_indicator' ? 'Growth Indicator'
+                : m.category === 'challenge' ? 'Challenge'
+                : m.category === 'shift' ? 'Industry Shift'
+                : 'Trend'
+              return (
+                <li key={i} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                      {categoryLabel}
+                    </span>
+                    <p className="mt-0.5 text-xs leading-relaxed text-foreground/90">{m.statement}</p>
+                  </div>
+                  {m.confidence && (
+                    <span className={cn('shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium capitalize', confClass)}>
+                      {m.confidence}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
+      )}
+
+      {/* Research Quality (Phase 2 item 4) — a per-item confidence audit
+          cross-checking whether an item's stated confidence is actually
+          justified by its evidence. Informational only, never gates or
+          suppresses anything above it. Same "only render when there's
+          something real" discipline as Competitors/Target Customer
+          Segments — an audit with zero flags shows no section at all. */}
+      {researchQuality && (researchQuality.items_flagged ?? 0) > 0 && (
+        <Section label="Research Quality" accent="text-signal-medium">
+          <p className="mb-3 text-xs text-muted-foreground">
+            {researchQuality.items_flagged} of {researchQuality.items_audited} audited item
+            {researchQuality.items_audited !== 1 ? 's' : ''} flagged for review — informational only, nothing above
+            was suppressed or downgraded.
+          </p>
+          <ul className="space-y-2.5">
+            {(researchQuality.flags ?? []).map((f, i) => {
+              const severityClass =
+                f.severity === 'warn'
+                  ? 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+                  : 'border-border bg-accent/40 text-muted-foreground'
+              return (
+                <li key={i} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-medium text-foreground">{f.item_ref}</span>
+                    {f.reason && <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{f.reason}</p>}
+                    <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                      {f.item_type}
+                    </p>
+                  </div>
+                  {f.severity && (
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium capitalize',
+                        severityClass,
+                      )}
+                    >
+                      {f.severity}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
+      )}
 
       {/* Personalization Summary, full width, the payoff */}
       {(openingAngle || whatToSell) && (

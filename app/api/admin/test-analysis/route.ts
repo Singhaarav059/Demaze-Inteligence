@@ -34,6 +34,9 @@ import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enric
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
+import { discoverCompetitors, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
+import { discoverICPSegments, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
+import { discoverMarketIntelligence, type MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
 import { synthesizeIntelligence } from '@/lib/synthesis'
 import type { SynthesisResult } from '@/lib/synthesis'
 
@@ -222,6 +225,56 @@ export async function POST(req: NextRequest) {
         return { discovered: [], prioritized: [], contextBlocks: [] }
       }
     })()
+
+  // ── Competitor Discovery (Phase 2 item 1) — kicked off at the same point
+  // as discoveryPromise (architecture decision 1: parallel with
+  // discoverAndFetchExternalSources(), before Stage 1 SCRAPE even starts).
+  // Same companyGuess/domain, same non-fatal-on-error discipline. Awaited
+  // (bounded) right before the narrative prompt is built, below — unlike
+  // ENRICHMENT there's no soft/late-arrival split: if it's not ready in
+  // time the prompt just renders an empty [COMPETITOR CANDIDATES] block.
+  const competitorDiscoveryPromise: Promise<CompetitorDiscoveryResult> =
+    discoverCompetitors(companyGuess, domain).catch(e => {
+      console.warn('[CompetitorDiscovery] Non-fatal:', e instanceof Error ? e.message : String(e))
+      return {
+        competitors: [], candidates: [], sufficiency: 'insufficient' as const,
+        reason: `discoverCompetitors threw: ${e instanceof Error ? e.message : String(e)}`,
+        candidates_considered: 0,
+      }
+    })
+
+  // ── ICP Generator (Phase 2 item 2) — kicked off at the same point as
+  // competitorDiscoveryPromise, same reasoning: no soft/late-arrival split,
+  // if it's not ready in time the prompt just renders an empty
+  // [ICP CANDIDATES] block.
+  const icpDiscoveryPromise: Promise<ICPDiscoveryResult> =
+    discoverICPSegments(companyGuess, domain).catch(e => {
+      console.warn('[ICPGenerator] Non-fatal:', e instanceof Error ? e.message : String(e))
+      return {
+        segments: [], candidates: [], sufficiency: 'insufficient' as const,
+        reason: `discoverICPSegments threw: ${e instanceof Error ? e.message : String(e)}`,
+        candidates_considered: 0,
+      }
+    })
+
+  // ── Market Intelligence Layer (Phase 2 item 6) — kicked off at the same
+  // point as competitorDiscoveryPromise/icpDiscoveryPromise. Only needs
+  // companyName+domain (same as those two), not primary_type/classification
+  // — search queries are anchored on the company name itself ("<name>
+  // industry trends" etc.), so this doesn't need to wait for Stage 1 SCRAPE
+  // or evidence extraction to know the company's industry. No LLM
+  // narration step exists for this module (see market-intelligence.ts
+  // header), so unlike ENRICHMENT there's nothing to "arrive late" into —
+  // it's either ready by the bounded await below or it times out.
+  const marketIntelPromise: Promise<MarketIntelligenceResult> =
+    discoverMarketIntelligence(companyGuess, domain).catch(e => {
+      console.warn('[MarketIntelligence] Non-fatal:', e instanceof Error ? e.message : String(e))
+      return {
+        items: [], sufficiency: 'insufficient' as const,
+        reason: `discoverMarketIntelligence threw: ${e instanceof Error ? e.message : String(e)}`,
+        candidates_considered: 0,
+      }
+    })
 
   try {
     // ── Stage 1: SCRAPE ───────────────────────────────────────
@@ -519,6 +572,79 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Step 4b: Await competitor discovery (bounded) ──────────────
+    // Kicked off before Stage 1 SCRAPE started (see competitorDiscoveryPromise
+    // above) — by this point it's usually already resolved, same overlap
+    // win as discoveryPromise (Item 2). The race is a safety net, not the
+    // common path: competitor discovery is a handful of search calls, not
+    // the multi-stage enrichment pipeline, so it rarely needs the full cap.
+    const COMPETITOR_DISCOVERY_TIMEOUT_MS = 12_000
+    const competitorDiscoveryStart = Date.now()
+    const competitorDiscoveryResult: CompetitorDiscoveryResult = await Promise.race([
+      competitorDiscoveryPromise,
+      new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
+        competitors: [], candidates: [], sufficiency: 'insufficient',
+        reason: `timed out after ${COMPETITOR_DISCOVERY_TIMEOUT_MS}ms — kicked off in parallel with scrape, still not resolved by prompt-build time`,
+        candidates_considered: 0,
+      }), COMPETITOR_DISCOVERY_TIMEOUT_MS)),
+    ])
+    timing.competitorDiscovery = Date.now() - competitorDiscoveryStart
+    console.log(`[Timing] Competitor Discovery: ${t(timing.competitorDiscovery)} | sufficiency=${competitorDiscoveryResult.sufficiency} | ${competitorDiscoveryResult.competitors.length} competitor(s)`)
+
+    // Gate: COMPETITOR (non-critical — WARN only, same tier as ENRICHMENT)
+    if (competitorDiscoveryResult.sufficiency === 'sufficient') {
+      gate(pipelineGates, 'COMPETITOR', 'PASS',
+        `${competitorDiscoveryResult.competitors.length} competitor(s) found | ${competitorDiscoveryResult.reason}`)
+    } else {
+      gate(pipelineGates, 'COMPETITOR', 'WARN', competitorDiscoveryResult.reason)
+    }
+
+    // ── Step 4c: Await ICP discovery (bounded) ──────────────────────
+    // Same shape and reasoning as Step 4b above.
+    const ICP_DISCOVERY_TIMEOUT_MS = 12_000
+    const icpDiscoveryStart = Date.now()
+    const icpDiscoveryResult: ICPDiscoveryResult = await Promise.race([
+      icpDiscoveryPromise,
+      new Promise<ICPDiscoveryResult>(resolve => setTimeout(() => resolve({
+        segments: [], candidates: [], sufficiency: 'insufficient',
+        reason: `timed out after ${ICP_DISCOVERY_TIMEOUT_MS}ms — kicked off in parallel with scrape, still not resolved by prompt-build time`,
+        candidates_considered: 0,
+      }), ICP_DISCOVERY_TIMEOUT_MS)),
+    ])
+    timing.icpDiscovery = Date.now() - icpDiscoveryStart
+    console.log(`[Timing] ICP Discovery: ${t(timing.icpDiscovery)} | sufficiency=${icpDiscoveryResult.sufficiency} | ${icpDiscoveryResult.segments.length} segment(s)`)
+
+    // Gate: ICP (non-critical — WARN only, same tier as COMPETITOR/ENRICHMENT)
+    if (icpDiscoveryResult.sufficiency === 'sufficient') {
+      gate(pipelineGates, 'ICP', 'PASS',
+        `${icpDiscoveryResult.segments.length} segment(s) found | ${icpDiscoveryResult.reason}`)
+    } else {
+      gate(pipelineGates, 'ICP', 'WARN', icpDiscoveryResult.reason)
+    }
+
+    // ── Step 4d: Await Market Intelligence discovery (bounded) ──────
+    // Same shape and reasoning as Steps 4b/4c above.
+    const MARKET_INTEL_TIMEOUT_MS = 12_000
+    const marketIntelStart = Date.now()
+    const marketIntelResult: MarketIntelligenceResult = await Promise.race([
+      marketIntelPromise,
+      new Promise<MarketIntelligenceResult>(resolve => setTimeout(() => resolve({
+        items: [], sufficiency: 'insufficient',
+        reason: `timed out after ${MARKET_INTEL_TIMEOUT_MS}ms — kicked off in parallel with scrape, still not resolved by prompt-build time`,
+        candidates_considered: 0,
+      }), MARKET_INTEL_TIMEOUT_MS)),
+    ])
+    timing.marketIntel = Date.now() - marketIntelStart
+    console.log(`[Timing] Market Intelligence: ${t(timing.marketIntel)} | sufficiency=${marketIntelResult.sufficiency} | ${marketIntelResult.items.length} item(s)`)
+
+    // Gate: MARKET_INTEL (non-critical — WARN only, same tier as COMPETITOR/ICP/ENRICHMENT)
+    if (marketIntelResult.sufficiency === 'sufficient') {
+      gate(pipelineGates, 'MARKET_INTEL', 'PASS',
+        `${marketIntelResult.items.length} item(s) found | ${marketIntelResult.reason}`)
+    } else {
+      gate(pipelineGates, 'MARKET_INTEL', 'WARN', marketIntelResult.reason)
+    }
+
     // ── Step 5: Build narrative prompt ──────────────────────
     const promptStart = Date.now()
     const narrativeInput = buildNarrativeInput(
@@ -526,6 +652,8 @@ export async function POST(req: NextRequest) {
       extractorResult,
       scrapeResult.successfulUrls,
       contentQualityWarning,
+      competitorDiscoveryResult.candidates,
+      icpDiscoveryResult.candidates,
     )
     const userPrompt = buildNarrativePrompt(narrativeInput)
     const systemTokens = estimateTokenCount(SYSTEM_PROMPT_V2)
@@ -820,6 +948,21 @@ export async function POST(req: NextRequest) {
         // extractSignals() already builds internally, so evidence detection sees
         // exactly what signal extraction saw, not just the 3,000-char preview.
         _service_evidence_content: enrichedContent ? `${fullContent}\n\n${enrichedContent}` : fullContent,
+        // Code-derived CompetitorProfile skeletons (name/confidence/source_urls
+        // + fallback why_they_compete) from discoverCompetitors() — normalize.ts
+        // merges the LLM's `competitors` narration (rawParsed.competitors, from
+        // the [COMPETITOR CANDIDATES] prompt block) onto these by name, same
+        // pattern as the opportunities merge.
+        _competitor_discovery: competitorDiscoveryResult,
+        // Code-derived ICPSegment skeletons (name/confidence/source_urls/
+        // signals + fallback reason) from discoverICPSegments() — normalize.ts
+        // merges the LLM's `icp_segments` narration onto these by name, same
+        // pattern as the competitors merge above.
+        _icp_discovery: icpDiscoveryResult,
+        // Market Intelligence Layer result from discoverMarketIntelligence() —
+        // unlike the two above, normalize.ts passes this straight through
+        // (no LLM narration/merge step, see market-intelligence.ts header).
+        _market_intelligence: marketIntelResult,
       }
 
       // Gate S6: Normalization

@@ -38,6 +38,10 @@ import {
   DeterministicOpportunity,
 } from '@/lib/pipeline/opportunity-engine'
 import type { CompanyProfile, ExtractorResult } from '@/lib/pipeline/evidence-extractor'
+import type { CompetitorProfile, CompetitorSufficiency, CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
+import type { ICPSegment, ICPSufficiency, ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
+import type { MarketIntelItem, MarketIntelSufficiency, MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
+import { auditResearchQuality, ResearchQualityAudit } from '@/lib/pipeline/research-quality'
 
 // Converts a BusinessModelType string to a minimal CompanyProfile for
 // backward compatibility when companyProfile is not available from extractor.
@@ -148,7 +152,7 @@ export interface ExecutiveBrief {
 }
 
 // Re-export for consumers
-export type { ScoreWithBreakdown, ScoreBreakdownItem, DetectedFactors, SignalCluster, DeterministicOpportunity, BusinessModelType, StrategicChallenge }
+export type { ScoreWithBreakdown, ScoreBreakdownItem, DetectedFactors, SignalCluster, DeterministicOpportunity, BusinessModelType, StrategicChallenge, CompetitorProfile, CompetitorSufficiency, ICPSegment, ICPSufficiency, ResearchQualityAudit }
 
 // ── Stable internal schema ─────────────────────────────────────
 
@@ -247,7 +251,53 @@ export interface NormalizedAnalysis {
   // See EVIDENCE_SOURCE_STRATEGY.md, "Insufficient Evidence" outcome.
   evidence_sufficiency: 'sufficient' | 'insufficient'
 
+  /**
+   * @deprecated Dead field — confirmed unrendered by ResearchCard.tsx or the
+   * brief export (grep-verified). Superseded by `competitors` /
+   * `competitor_sufficiency` below (Competitor Discovery Engine, Phase 2 item
+   * 1 — see CLAUDE.md "SCOPE PIVOT" and Latest Session Handoff.md). Left in
+   * place, still populated from the LLM prompt, until the new engine is
+   * actually implemented and wired — removing it now would be premature
+   * given nothing produces `competitors` yet.
+   */
   competitive_context: string
+
+  // Competitor Discovery Engine output (Phase 2 item 1). Code-derived
+  // candidate list with LLM-narrated why_they_compete/market_position per
+  // candidate — same deterministic-list + LLM-narration-merge discipline as
+  // `opportunities` below, once the merge step is implemented. Schema only
+  // for now: normalizeAnalysisResult() below wires these to safe empty
+  // defaults ('insufficient', []) since no producer exists yet — see
+  // lib/enrichment/competitor-discovery.ts.
+  competitors: CompetitorProfile[]
+  competitor_sufficiency: CompetitorSufficiency
+
+  // ICP Generator output (Phase 2 item 2) — who the RESEARCHED COMPANY
+  // sells to (named target-customer segments), NOT company_fit above (which
+  // scores whether this company is a good lead FOR DEMAZE, a single
+  // number). See lib/enrichment/icp-generator.ts header for the full
+  // reconciliation note. Same code-derived-skeleton + LLM-narration-merge
+  // discipline as `competitors`.
+  icp_segments: ICPSegment[]
+  icp_sufficiency: ICPSufficiency
+
+  // Market Intelligence Layer (Phase 2 item 6) — industry-level context
+  // (trends/growth indicators/challenges/shifts) for the sector the
+  // researched company operates in. Unlike competitors/icp_segments, this
+  // is pure passthrough from discoverMarketIntelligence() — no LLM
+  // narration/merge step exists (see lib/enrichment/market-intelligence.ts
+  // header for why: each item is already a full statement extracted from a
+  // real search snippet, not a name needing explanation).
+  market_intelligence: MarketIntelItem[]
+  market_intelligence_sufficiency: MarketIntelSufficiency
+
+  // Research Quality Framework (Phase 2 item 4) — per-item confidence audit,
+  // informational only, never gates. Computed last, from the fully-assembled
+  // NormalizedAnalysis, since it cross-checks fields (evidence subject vs.
+  // opportunity/pain-point confidence, competitor/ICP confidence vs. source
+  // count, self-name collisions) that only exist once everything else above
+  // is built. See lib/pipeline/research-quality.ts.
+  research_quality: ResearchQualityAudit
 
   // Why Demaze (v4: structured reasons)
   why_demaze: WhyDemaze
@@ -652,6 +702,80 @@ export function normalizeAnalysisResult(
 
   const competitive_context = str(flat.competitive_context)
 
+  // ── Competitors (Phase 2 item 1, Implementation session) ──────
+  // route.ts's discoverCompetitors() call supplies code-derived skeletons
+  // (name/confidence/source_urls + a fallback why_they_compete) via
+  // `_competitor_discovery`. The LLM's `competitors` narration (from the
+  // [COMPETITOR CANDIDATES] prompt block, analyze-v2.ts) is matched onto
+  // them by name and, when found, overwrites why_they_compete/
+  // market_position/differentiator — same "LLM narrative, code text as
+  // fallback" pattern as the opportunities merge above
+  // (`llmMatch?.description || d.strategic_challenge`). An LLM entry whose
+  // name doesn't match any code-derived skeleton is discarded — same
+  // anti-hallucination discipline as deterministic_opportunities' titleMatch
+  // discard, just exact-ish (normalized) name matching instead of keyword
+  // overlap, since competitor identity needs higher precision than a title.
+  const competitorDiscovery = flat._competitor_discovery as CompetitorDiscoveryResult | undefined
+  const llmCompetitors = arr<Record<string, unknown>>(flat.competitors)
+
+  let competitorsLlmEnrichedCount = 0
+  const competitors: CompetitorProfile[] = (competitorDiscovery?.competitors ?? []).map(c => {
+    const llmMatch = llmCompetitors.find(l => identityNameMatch(str(l.name), c.name))
+    if (llmMatch) competitorsLlmEnrichedCount++
+    return {
+      name: c.name,
+      domain: c.domain,
+      why_they_compete: (llmMatch && str(llmMatch.why_they_compete)) || c.why_they_compete,
+      market_position:  llmMatch?.market_position ? str(llmMatch.market_position) : undefined,
+      differentiator:   llmMatch?.differentiator ? str(llmMatch.differentiator) : undefined,
+      confidence: c.confidence,
+      source_urls: c.source_urls,
+    }
+  })
+  const competitor_sufficiency: CompetitorSufficiency = competitorDiscovery?.sufficiency ?? 'insufficient'
+  console.log(`[normalize:competitors] discovered=${competitorDiscovery?.competitors.length ?? 0} | llm_parsed=${llmCompetitors.length} | llm_enriched=${competitorsLlmEnrichedCount}`)
+
+  // ── ICP Segments (Phase 2 item 2) ──────────────────────────────
+  // Same shape as the competitors merge above: route.ts's
+  // discoverICPSegments() supplies code-derived skeletons
+  // (name/confidence/source_urls/signals + a fallback reason) via
+  // `_icp_discovery`. The LLM's `icp_segments` narration (from the
+  // [ICP CANDIDATES] prompt block, analyze-v2.ts) is matched onto them by
+  // normalized name and, when found, overwrites reason/criteria/
+  // buying_indicators/example_companies. An LLM entry whose name doesn't
+  // match any code-derived skeleton is discarded — same anti-hallucination
+  // discipline as the competitors merge.
+  const icpDiscovery = flat._icp_discovery as ICPDiscoveryResult | undefined
+  const llmIcpSegments = arr<Record<string, unknown>>(flat.icp_segments)
+
+  let icpLlmEnrichedCount = 0
+  const icp_segments: ICPSegment[] = (icpDiscovery?.segments ?? []).map(s => {
+    const llmMatch = llmIcpSegments.find(l => identityNameMatch(str(l.name), s.name))
+    if (llmMatch) icpLlmEnrichedCount++
+    return {
+      name: s.name,
+      reason: (llmMatch && str(llmMatch.reason)) || s.reason,
+      criteria: llmMatch?.criteria ? str(llmMatch.criteria) : undefined,
+      signals: s.signals,
+      buying_indicators: llmMatch?.buying_indicators ? str(llmMatch.buying_indicators) : undefined,
+      example_companies: Array.isArray(llmMatch?.example_companies) ? arr<string>(llmMatch.example_companies) : undefined,
+      confidence: s.confidence,
+      source_urls: s.source_urls,
+    }
+  })
+  const icp_sufficiency: ICPSufficiency = icpDiscovery?.sufficiency ?? 'insufficient'
+  console.log(`[normalize:icp] discovered=${icpDiscovery?.segments.length ?? 0} | llm_parsed=${llmIcpSegments.length} | llm_enriched=${icpLlmEnrichedCount}`)
+
+  // ── Market Intelligence (Phase 2 item 6) ───────────────────────
+  // route.ts's discoverMarketIntelligence() call supplies the final items
+  // directly via `_market_intelligence` — no LLM narration layer, so
+  // (unlike competitors/icp_segments above) there is no name-match merge
+  // step here, just a passthrough with a safe empty default.
+  const marketIntelligence = flat._market_intelligence as MarketIntelligenceResult | undefined
+  const market_intelligence: MarketIntelItem[] = marketIntelligence?.items ?? []
+  const market_intelligence_sufficiency: MarketIntelSufficiency = marketIntelligence?.sufficiency ?? 'insufficient'
+  console.log(`[normalize:market_intelligence] items=${market_intelligence.length} | sufficiency=${market_intelligence_sufficiency}`)
+
   // ── Why Demaze V4 ────────────────────────────────────────────
   const rawWhyDemaze = flat.why_demaze
   let why_demaze: WhyDemaze = { reasons: [], relevant_services: [] }
@@ -741,7 +865,7 @@ export function normalizeAnalysisResult(
     }
   }
 
-  return {
+  const withoutQuality: Omit<NormalizedAnalysis, 'research_quality'> = {
     company_name, company_summary, industry, sub_industry, company_type,
     company_size_estimate, headquarters_location,
     evidence,
@@ -760,6 +884,12 @@ export function normalizeAnalysisResult(
     deterministic_opportunities,
     evidence_sufficiency,
     competitive_context,
+    competitors,
+    competitor_sufficiency,
+    icp_segments,
+    icp_sufficiency,
+    market_intelligence,
+    market_intelligence_sufficiency,
     why_demaze,
     outreach_angle, outreach_intelligence,
     validation_warnings, content_quality_flags,
@@ -772,6 +902,11 @@ export function normalizeAnalysisResult(
     ai_synthesis_status: 'ok',
     _raw: raw,
   }
+
+  const research_quality = auditResearchQuality(withoutQuality as NormalizedAnalysis)
+  console.log(`[normalize:quality] audited=${research_quality.items_audited} | flagged=${research_quality.items_flagged}`)
+
+  return { ...withoutQuality, research_quality }
 }
 
 // ── Signal merger ──────────────────────────────────────────────
@@ -811,6 +946,22 @@ function titleMatch(detTitle: string, llmTitle: string): boolean {
     t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 4)
   const detWords = new Set(words(detTitle))
   return words(llmTitle).some(w => detWords.has(w))
+}
+
+// ── LLM name → deterministic identity name matcher ────────────
+// Unlike titleMatch (fuzzy keyword overlap, appropriate for free-text
+// opportunity titles), identity fields (competitor names, ICP segment
+// names) need higher precision — a keyword-overlap match could wrongly
+// merge narration meant for one entity onto a different one that happens to
+// share a word (e.g. two "X Industries" companies, or "automotive" vs
+// "automotive aftermarket" segments). Normalized exact match instead:
+// lowercase, strip punctuation, collapse whitespace — tolerates
+// casing/punctuation drift from the LLM without accepting a
+// same-word-different-entity match. Shared by both the competitors merge
+// and the icp_segments merge below.
+function identityNameMatch(llmName: string, detName: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
+  return norm(llmName) === norm(detName)
 }
 
 // ── Opportunity normalizer ─────────────────────────────────────

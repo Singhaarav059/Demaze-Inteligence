@@ -9,6 +9,8 @@
 // ============================================================
 
 import type { ExtractorResult, OpportunityDraft } from '@/lib/pipeline/evidence-extractor'
+import type { CompetitorCandidate } from '@/lib/enrichment/competitor-discovery'
+import type { ICPCandidate } from '@/lib/enrichment/icp-generator'
 
 export interface NarrativePromptInput {
   domain: string
@@ -19,6 +21,21 @@ export interface NarrativePromptInput {
   analyzedAt: string
   contentQualityWarning?: string
   pagesAnalyzed: string[]
+  // Competitor Discovery (Phase 2 item 1) — code-derived, already filtered
+  // and confidence-tiered (cap ~5, see competitor-discovery.ts architecture
+  // decision 4). The LLM only narrates why_they_compete/market_position/
+  // differentiator for names already in this list; it never introduces a
+  // new name. Same discard-LLM-only-misses discipline as
+  // generateDeterministicOpportunities() (opportunity-engine.ts). Defaults
+  // to [] via buildNarrativeInput until discoverCompetitors() exists.
+  competitorCandidates: CompetitorCandidate[]
+  // ICP Generator (Phase 2 item 2) — code-derived, already filtered and
+  // confidence-tiered (cap ~5, see icp-generator.ts). The LLM only narrates
+  // reason/criteria/buying_indicators/example_companies for segment names
+  // already in this list; it never introduces a new segment. Same
+  // discard-LLM-only-misses discipline as competitorCandidates above.
+  // Defaults to [] via buildNarrativeInput until discoverICPSegments() is wired.
+  icpCandidates: ICPCandidate[]
 }
 
 // ── SDR Research Output Schema ─────────────────────────────────
@@ -94,6 +111,23 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
     "relevant_services": ["Service 1", "Service 2"]
   },
 
+  "competitors": [
+    {
+      "name": "Must be copied EXACTLY (same spelling/casing) from a name listed in [COMPETITOR CANDIDATES]. Never invent, guess, or add a competitor not in that list.",
+      "why_they_compete": "1-2 sentences: what the candidate's snippets show that makes them a competitor (same product/service category, same target market, named directly as an alternative). Base this ONLY on the snippets given for that name.",
+      "market_position": "Only if a snippet explicitly states this (e.g. 'market leader', 'budget alternative', 'largest player in India'). Empty string if not explicitly stated. Never guess.",
+      "differentiator": "Only if a snippet explicitly states a concrete difference between them and the researched company. Empty string if not explicitly stated. Never guess."
+    }
+  ],
+  "icp_segments": [
+    {
+      "name": "Must be copied EXACTLY (same spelling/casing) from a name listed in [ICP CANDIDATES]. Never invent, guess, or add a segment not in that list.",
+      "reason": "1-2 sentences: what the candidate's snippets show that makes this a customer segment the researched company sells to. Base this ONLY on the snippets given for that name.",
+      "criteria": "Only if a snippet explicitly states qualifying criteria (e.g. 'multi-location', 'revenue $10M+'). Empty string if not explicitly stated. Never guess.",
+      "buying_indicators": "Only if a snippet explicitly states what triggers this segment's purchase interest. Empty string if not explicitly stated. Never guess.",
+      "example_companies": ["Only named companies explicitly mentioned in the snippets as belonging to this segment. Empty array if none named. Never invent example companies."]
+    }
+  ],
   "signal_summary": "1–2 sentence narrative of the most important signals detected, or what was inferred.",
   "competitive_context": "Brief industry context relevant to Demaze's pitch. Prefix 'Industry context:' if not from website.",
   "confidence_level": "high | medium | low",
@@ -113,6 +147,8 @@ RULES:
 - opening_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes, good.
 - why_now: Must be company-specific. "Digital transformation is accelerating in manufacturing" = REJECTED. "Ador Welding is scaling robotic welding across 3 plants" = VALID.
 - For thin-content sites: use what you have, infer what you can, state your confidence level honestly.
+- competitors: ONE entry per name in [COMPETITOR CANDIDATES], same order, nothing added or dropped. If [COMPETITOR CANDIDATES] says "None found", return "competitors": []. Do NOT populate competitors from general industry knowledge, do NOT list companies you personally know compete in this space if they aren't in the candidate list — only the search-derived list, never the model's own knowledge of the market.
+- icp_segments: ONE entry per name in [ICP CANDIDATES], same order, nothing added or dropped. If [ICP CANDIDATES] says "None found", return "icp_segments": []. Do NOT populate segments from general industry knowledge of who a company like this "probably" sells to — only the search-derived list, never the model's own guess.
 
 WRITING STYLE (applies to every text field above):
 - Write like a human SDR, not an AI. Direct, specific, confident.
@@ -132,6 +168,8 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     analyzedAt,
     contentQualityWarning,
     pagesAnalyzed,
+    competitorCandidates,
+    icpCandidates,
   } = input
 
   // Pre-detected signals as context hints (not constraints)
@@ -141,6 +179,37 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
         `  ${i + 1}. ${o.service} — evidence hint: "${o.evidence_anchor.slice(0, 120)}"`
       ).join('\n')
     : `PRE-DETECTED SIGNALS: None detected deterministically. Use business model inference to generate challenges and opportunities.`
+
+  // [COMPETITOR CANDIDATES] — code-derived, already filtered by
+  // discoverCompetitors() (self-name/customer/supplier/certifying-body/
+  // news-outlet/association rejected before this point). Defensive
+  // slice(0, 5) mirrors the confidence-tiering cap from the architecture
+  // decision even though the upstream producer should already enforce it —
+  // same belt-and-suspenders pattern as pagesAnalyzed.slice(0, 15) above.
+  // The LLM narrates these names only; it never introduces a new one
+  // (enforced in NARRATIVE_SCHEMA's "competitors" field + RULES).
+  const candidates = competitorCandidates.slice(0, 5)
+  const competitorBlock = candidates.length > 0
+    ? candidates.map((c, i) => {
+        const snippets = c.snippets.slice(0, 2).map(s => `"${s.slice(0, 150)}"`).join(' / ')
+        return `  ${i + 1}. ${c.name} (${c.mention_count} mention${c.mention_count === 1 ? '' : 's'}, ` +
+          `${c.explicit_vs_framing ? 'named directly as an alternative' : 'inferred from framing'})\n` +
+          `     evidence: ${snippets || '(no snippet captured)'}`
+      }).join('\n')
+    : '  None found. Return "competitors": [] — do not invent competitors from general knowledge of this industry.'
+
+  // [ICP CANDIDATES] — code-derived, already filtered by discoverICPSegments()
+  // (self-name/generic-term rejected before this point). Same defensive
+  // slice(0, 5) as competitorBlock above.
+  const icpCands = icpCandidates.slice(0, 5)
+  const icpBlock = icpCands.length > 0
+    ? icpCands.map((c, i) => {
+        const snippets = c.snippets.slice(0, 2).map(s => `"${s.slice(0, 150)}"`).join(' / ')
+        return `  ${i + 1}. ${c.name} (${c.mention_count} mention${c.mention_count === 1 ? '' : 's'}, ` +
+          `${c.explicit_serve_framing ? 'named directly as a served segment' : 'inferred from framing'})\n` +
+          `     evidence: ${snippets || '(no snippet captured)'}`
+      }).join('\n')
+    : '  None found. Return "icp_segments": [] — do not invent segments from general knowledge of this industry.'
 
   return `
 Research this company for Demaze Technologies outbound prospecting.
@@ -161,6 +230,12 @@ ${signalSummary || 'No deterministic signals extracted. Rely on website content 
 
 [${signalHints}]
 
+[COMPETITOR CANDIDATES -- search-derived, already filtered. Narrate ONLY these names in the "competitors" output field, never add or omit one]
+${competitorBlock}
+
+[ICP CANDIDATES -- search-derived, already filtered. Narrate ONLY these names in the "icp_segments" output field, never add or omit one]
+${icpBlock}
+
 [REQUIRED OUTPUT -- See schema below]
 ${NARRATIVE_SCHEMA}
 
@@ -177,6 +252,13 @@ export function buildNarrativeInput(
   extractorResult: ExtractorResult,
   pagesAnalyzed: string[],
   contentQualityWarning?: string,
+  // Optional + defaulted: no discoverCompetitors() producer exists yet
+  // (Implementation session, not this one). Once it does, route.ts passes
+  // its filtered/tiered candidates here — no other call-site change needed.
+  competitorCandidates: CompetitorCandidate[] = [],
+  // Optional + defaulted, same reasoning as competitorCandidates — route.ts
+  // passes discoverICPSegments()'s filtered/tiered candidates here.
+  icpCandidates: ICPCandidate[] = [],
 ): NarrativePromptInput {
   return {
     domain,
@@ -186,6 +268,8 @@ export function buildNarrativeInput(
     analyzedAt: new Date().toISOString(),
     contentQualityWarning,
     pagesAnalyzed,
+    competitorCandidates,
+    icpCandidates,
   }
 }
 
