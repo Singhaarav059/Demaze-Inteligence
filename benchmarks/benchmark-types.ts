@@ -71,4 +71,39 @@ export interface BenchmarkResult {
   error?: string
   /** Evidence captured by captureFlag() -- keyed by flag name. */
   profileEvidence?: Record<string, ProfileFlagMatch[]>
+  /** Research Evaluation Framework score (Roadmap Phase 2, item 5). */
+  evaluation: ResearchEvaluationScore
+}
+
+// ============================================================
+// Research Evaluation Framework (Roadmap Phase 2, item 5)
+// ============================================================
+// A single 0-100 objective score per company run, built from named,
+// independently-scored dimensions — for comparing pipeline versions over
+// time, not for gating any individual run. See
+// benchmarks/research-evaluation.ts for the scoring logic and
+// docs/DECISIONS.md for the rubric rationale.
+
+/** One scored dimension within a ResearchEvaluationScore. */
+export interface EvaluationDimensionResult {
+  name: string
+  score: number
+  max: number
+  note?: string
+}
+
+/** Full 0-100 evaluation for one company's benchmark run. */
+export interface ResearchEvaluationScore {
+  name: string
+  score: number
+  dimensions: EvaluationDimensionResult[]
+}
+
+/** Roll-up across every company in one benchmark run. */
+export interface AggregateEvaluation {
+  runAt: string
+  companyScores: Array<{ name: string; score: number }>
+  meanScore: number
+  minScore: number
+  maxScore: number
 }

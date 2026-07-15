@@ -14,7 +14,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { createHmac } from 'crypto'
 import { config as loadDotenv } from 'dotenv'
-import type { BenchmarkSpec, BenchmarkResult, CheckResult, CheckStatus, ProfileFlagMatch } from './benchmark-types'
+import type { BenchmarkSpec, BenchmarkResult, CheckResult, CheckStatus, ProfileFlagMatch, ResearchEvaluationScore, AggregateEvaluation } from './benchmark-types'
+import { evaluateResearch, aggregateEvaluations, type EvaluationInput } from './research-evaluation'
 
 // ── Environment ───────────────────────────────────────────────
 const cwd = process.cwd()
@@ -79,10 +80,18 @@ interface ApiResponse {
     company_name?: string
     company_summary?: string
     pain_points?: string[]
+    pain_points_structured?: Array<{
+      evidence_id?: string
+      confidence?: string
+    }>
     opportunities?: Array<{
       title?: string
       description?: string
       source?: string
+      evidence_id?: string
+      confidence?: string
+      opportunity_confidence?: string
+      relevance?: string
     }>
     outreach_intelligence?: {
       opening_angle?: string
@@ -95,6 +104,13 @@ interface ApiResponse {
     }
     why_demaze?: {
       outreach_angle?: string
+    }
+    evidence_sufficiency?: 'sufficient' | 'insufficient'
+    competitor_sufficiency?: 'sufficient' | 'insufficient'
+    icp_sufficiency?: 'sufficient' | 'insufficient'
+    research_quality?: {
+      items_audited: number
+      items_flagged: number
     }
   }
 }
@@ -257,6 +273,25 @@ function runChecks(spec: BenchmarkSpec, apiResponse: ApiResponse): CheckResult[]
   return checks
 }
 
+// ── Build Research Evaluation Framework input from a company's run ──
+function buildEvaluationInput(spec: BenchmarkSpec, apiResponse: ApiResponse, checks: CheckResult[]): EvaluationInput {
+  return {
+    name: spec.name,
+    success: apiResponse.success === true,
+    validationOverall: apiResponse.validation?.overall ?? 'UNKNOWN',
+    signals: apiResponse.extractorResult?.signals?.length ?? 0,
+    minSignals: spec.expectations.minSignals,
+    opportunities: apiResponse.analysisResult?.opportunities ?? [],
+    painPointsStructured: apiResponse.analysisResult?.pain_points_structured ?? [],
+    painPointsTotal: (apiResponse.analysisResult?.pain_points ?? []).length,
+    evidenceSufficiency: apiResponse.analysisResult?.evidence_sufficiency,
+    competitorSufficiency: apiResponse.analysisResult?.competitor_sufficiency,
+    icpSufficiency: apiResponse.analysisResult?.icp_sufficiency,
+    researchQuality: apiResponse.analysisResult?.research_quality,
+    checks,
+  }
+}
+
 // ── Derive overall status from checks ────────────────────────
 function deriveOverall(checks: CheckResult[]): CheckStatus {
   if (checks.some(c => c.status === 'FAIL')) return 'FAIL'
@@ -279,6 +314,70 @@ function printCompanyDetail(result: BenchmarkResult): void {
   }
   console.log(`    ${C.dim}────────────────────────────────────────────────────────${C.reset}`)
   console.log(`    Result: ${colorStatus(result.overall)}  ${C.dim}(${result.durationMs}ms)${C.reset}`)
+  console.log(`    ${C.bold}Research Evaluation Score: ${scoreColor(result.evaluation.score)}${C.reset}${C.dim}/100${C.reset}`)
+  for (const d of result.evaluation.dimensions) {
+    const note = d.note ? ` ${C.dim}— ${d.note}${C.reset}` : ''
+    console.log(`      ${C.dim}${pad(d.name, 38)}${d.score}/${d.max}${C.reset}${note}`)
+  }
+}
+
+function scoreColor(score: number): string {
+  const color = score >= 80 ? C.green : score >= 60 ? C.yellow : C.red
+  return `${color}${score}${C.reset}`
+}
+
+// ── Print Research Evaluation Framework summary ───────────────
+function printEvaluationSummary(aggregate: AggregateEvaluation, previous: AggregateEvaluation | null): void {
+  const sep = `  ${'─'.repeat(74)}`
+  console.log(`\n${C.bold}  RESEARCH EVALUATION FRAMEWORK${C.reset}`)
+  console.log(sep)
+  for (const c of aggregate.companyScores) {
+    console.log(`  ${pad(c.name, 30)}${scoreColor(c.score)}${C.dim}/100${C.reset}`)
+  }
+  console.log(sep)
+  console.log(`  Mean: ${C.bold}${scoreColor(aggregate.meanScore)}${C.dim}/100${C.reset}  ${C.dim}(min ${aggregate.minScore}, max ${aggregate.maxScore})${C.reset}`)
+
+  if (previous) {
+    const delta = Math.round((aggregate.meanScore - previous.meanScore) * 100) / 100
+    const deltaStr = delta > 0 ? `+${delta}` : `${delta}`
+    const deltaColor = delta > 5 ? C.green : delta < -5 ? C.red : C.yellow
+    console.log(`  ${C.dim}vs previous run (${previous.runAt}): mean ${previous.meanScore} → ${deltaColor}${deltaStr}${C.reset}`)
+    if (delta < -5) {
+      console.log(`  ${C.red}${C.bold}⚠ Regression: mean score dropped by more than 5 points${C.reset}`)
+    }
+  } else {
+    console.log(`  ${C.dim}No previous evaluation history to compare against.${C.reset}`)
+  }
+  console.log(`  ${'═'.repeat(74)}\n`)
+}
+
+// ── Read most recent previous evaluation history file, if any ────
+function readPreviousEvaluation(): AggregateEvaluation | null {
+  const historyDir = path.resolve(cwd, 'benchmarks', 'evaluation-history')
+  if (!fs.existsSync(historyDir)) return null
+  const files = fs.readdirSync(historyDir).filter(f => f.endsWith('.json')).sort()
+  if (files.length === 0) return null
+  const latest = files[files.length - 1]
+  try {
+    const raw = fs.readFileSync(path.join(historyDir, latest), 'utf-8')
+    return JSON.parse(raw) as AggregateEvaluation
+  } catch {
+    return null
+  }
+}
+
+// ── Write evaluation history file ─────────────────────────────
+function writeEvaluationHistory(aggregate: AggregateEvaluation, results: BenchmarkResult[]): void {
+  const historyDir = path.resolve(cwd, 'benchmarks', 'evaluation-history')
+  fs.mkdirSync(historyDir, { recursive: true })
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const outPath = path.join(historyDir, `eval-${ts}.json`)
+  const dump = {
+    ...aggregate,
+    perCompany: results.map(r => ({ name: r.name, evaluation: r.evaluation })),
+  }
+  fs.writeFileSync(outPath, JSON.stringify(dump, null, 2), 'utf-8')
+  console.log(`  ${C.dim}Evaluation history → ${outPath}${C.reset}\n`)
 }
 
 // ── Print summary table ───────────────────────────────────────
@@ -411,6 +510,7 @@ async function main(): Promise<void> {
     const opportunities = (apiResponse.analysisResult?.opportunities ?? []).length
     const challenges    = (apiResponse.analysisResult?.pain_points ?? []).length
     const validationOverall = apiResponse.validation?.overall ?? (apiResponse.success ? 'UNKNOWN' : 'FAIL')
+    const evaluation = evaluateResearch(buildEvaluationInput(spec, apiResponse, checks))
 
     const result: BenchmarkResult = {
       name: spec.name,
@@ -424,6 +524,7 @@ async function main(): Promise<void> {
       durationMs,
       error: apiError,
       profileEvidence: apiResponse.extractorResult?.companyProfileEvidence,
+      evaluation,
     }
 
     results.push(result)
@@ -433,6 +534,11 @@ async function main(): Promise<void> {
 
   printSummary(results)
   writeDump(results)
+
+  const previousEvaluation = readPreviousEvaluation()
+  const aggregate = aggregateEvaluations(results.map(r => r.evaluation))
+  printEvaluationSummary(aggregate, previousEvaluation)
+  writeEvaluationHistory(aggregate, results)
 
   const anyFail = results.some(r => r.overall === 'FAIL')
   process.exit(anyFail ? 1 : 0)
