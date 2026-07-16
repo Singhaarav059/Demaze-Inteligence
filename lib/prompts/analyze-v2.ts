@@ -102,7 +102,7 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
     "trigger": "The strongest single signal — what specifically makes this company a prospect right now",
     "problem": "The operational implication this signal creates for their business",
     "service": "The ONE Demaze service best matched to their situation",
-    "opening_angle": "2–3 sentences a sales rep could use verbatim as a cold email opener. Start with the company signal. No 'I hope this finds you well.' No generic openers.",
+    "opening_angle": "2–3 sentences a sales rep could use verbatim as a cold LinkedIn/email opener. Follow the REAL DEMAZE OUTREACH VOICE below exactly, same as outreach_draft — this is NOT a consulting-pitch paragraph, it's a casual first-person note. No 'I hope this finds you well.' No generic openers.",
     "why_now": "ONE specific reason urgency is real — a company event, a scaling challenge, a market pressure. Not an industry trend."
   },
 
@@ -154,9 +154,9 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
   ],
   "outreach_draft": {
     "matched_proof_point_id": "Must be copied EXACTLY from an id listed in [DEMAZE PROOF POINTS] (e.g. 'volvo-executive-intelligence'), or empty string if [DEMAZE PROOF POINTS] says none found. Never invent an id.",
-    "connection_note": "A short LinkedIn connection request note, under 300 characters. Structure: personalized mention of the researched company -> one sentence citing the matched proof point's real outcome -> soft overlap statement. No CTA here, connection notes stay light.",
-    "first_message": "The first message sent after the connection is accepted. Structure: brief warm opener -> reason for reaching out, tied to the researched company's industry -> cite the matched proof point's outcome again with more detail -> light CTA (offer to share case studies or a quick call). 3-5 sentences.",
-    "follow_up": "A follow-up message for if the first message gets no reply. Structure: reference that case studies were shared with a similar company (using the matched proof point's client framing) -> state there could be similar opportunities for the researched company -> direct CTA (quick intro call). 2-4 sentences."
+    "connection_note": "A LinkedIn connection request note, under 300 characters. MUST follow the REAL DEMAZE OUTREACH VOICE template below exactly (connection-note pattern). No CTA question here, connection notes stay light and end on the soft overlap line.",
+    "first_message": "The first message sent after the connection is accepted. MUST follow the REAL DEMAZE OUTREACH VOICE template below exactly (first-message pattern). 3-5 sentences, ends on the light case-studies offer, not a hard CTA.",
+    "follow_up": "A follow-up message for if the first message gets no reply. MUST follow the REAL DEMAZE OUTREACH VOICE template below exactly (follow-up pattern). 2-4 sentences, ends on a direct but low-friction call-to-action."
   },
   "signal_summary": "1–2 sentence narrative of the most important signals detected, or what was inferred.",
   "competitive_context": "Brief industry context relevant to Demaze's pitch. Prefix 'Industry context:' if not from website.",
@@ -179,7 +179,19 @@ RULES:
 - For thin-content sites: use what you have, infer what you can, state your confidence level honestly.
 - competitors: ONE entry per name in [COMPETITOR CANDIDATES], same order, nothing added or dropped. If [COMPETITOR CANDIDATES] says "None found", return "competitors": []. Do NOT populate competitors from general industry knowledge, do NOT list companies you personally know compete in this space if they aren't in the candidate list — only the search-derived list, never the model's own knowledge of the market. Use [BUSINESS PROFILE] only to help judge category/similarities, never to add a competitor name.
 - icp_segments: ONE entry per name in [ICP CANDIDATES], same order, nothing added or dropped. If [ICP CANDIDATES] says "None found", return "icp_segments": []. Do NOT populate segments from general industry knowledge of who a company like this "probably" sells to — only the search-derived list, never the model's own guess. Use [BUSINESS PROFILE] only to help judge use_cases/market_attractiveness/priority, never to add a segment name.
-- outreach_draft: matched_proof_point_id must be copied exactly from an id in [DEMAZE PROOF POINTS], or left as "" if none found there. Never invent a Demaze client name, case study, or stat that isn't in that list. If the matched proof point's provenance is "composite/illustrative example", describe it the way the source material does (e.g. "one of Africa's largest tile manufacturers", "a mid-market manufacturer running 4 plants") — never attach a specific company name to it, since none was given. Follow the structural anatomy described in each field, but write fresh wording for this specific lead; do not copy phrasing from any other outreach example verbatim, since those were written for a different company.
+- outreach_draft: matched_proof_point_id must be copied exactly from an id in [DEMAZE PROOF POINTS], or left as "" if none found there. Never invent a Demaze client name, case study, or stat that isn't in that list. If the matched proof point's provenance is "composite/illustrative example", describe it the way the source material does (e.g. "one of Africa's largest tile manufacturers", "a mid-market manufacturer running 4 plants") — never attach a specific company name to it, since none was given. Fill in the REAL DEMAZE OUTREACH VOICE templates below with THIS company's specifics; do not reuse a name/company from the template examples verbatim, those are illustrative only.
+- outreach_intelligence.opening_angle: same REAL DEMAZE OUTREACH VOICE below, not a separate style — this field and outreach_draft.connection_note should read like they came from the same person.
+
+REAL DEMAZE OUTREACH VOICE — this is not a suggestion, it is the required template. These are real Demaze LinkedIn messages that got real replies. Casual, first-person, short sentences, no corporate jargon ("unlock," "leverage," "visibility problem," "scale creates"), no consulting-pitch tone. Fill in the bracketed parts with THIS company's real details; keep everything else structurally identical.
+
+Connection note pattern:
+"Hi [first name if known, otherwise omit and start here], came across [Company] and thought to connect since we're working closely with [their industry]. We recently helped [matched proof point's client, worded per its provenance] [achieve the matched proof point's real stat]. Thought there could be good overlap."
+
+First-message-after-connect pattern:
+"[one-line warm opener, e.g. 'Good to connect, thanks for accepting']. Btw the reason I reached out was because we've been working quite a bit around AI in [their industry] lately, especially around [1-2 relevant capability areas from the matched proof point]. We recently helped [matched proof point's client] [achieve the matched proof point's real stat], so I felt there could be relevant overlap with what's happening at [Company]. Happy to share a few case studies if you're open to it."
+
+Follow-up pattern (if no reply):
+"Recently, we shared these case studies with [matched proof point's client], and they found real use cases they could apply. I feel there could be similar opportunities for [Company] as well, especially around [one specific signal from this company's research]. Can we connect for a quick intro call next week?"
 
 WRITING STYLE (applies to every text field above):
 - Write like a human SDR, not an AI. Direct, specific, confident.
