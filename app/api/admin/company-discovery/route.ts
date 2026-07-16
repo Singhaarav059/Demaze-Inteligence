@@ -10,7 +10,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
-import { discoverCompanies } from '@/lib/enrichment/company-discovery'
+import { discoverCompanies, filterAlreadyResearched } from '@/lib/enrichment/company-discovery'
+import { createServerClient } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -18,13 +19,46 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const icpSegment = typeof body?.icpSegment === 'string' ? body.icpSegment.trim() : ''
-  const excludeCompanyName = typeof body?.excludeCompanyName === 'string' ? body.excludeCompanyName.trim() : undefined
+  // Comma-separated so the existing single-field UI can pass more than one
+  // exclude name without a UI rework (see app/admin/company-discovery/page.tsx).
+  const excludeCompanyNames = typeof body?.excludeCompanyName === 'string'
+    ? body.excludeCompanyName.split(',').map((s: string) => s.trim()).filter(Boolean)
+    : []
 
   if (!icpSegment) {
     return NextResponse.json({ success: false, error: 'icpSegment is required' }, { status: 400 })
   }
 
-  const result = await discoverCompanies(icpSegment, excludeCompanyName || undefined)
+  const result = await discoverCompanies(icpSegment, excludeCompanyNames.length > 0 ? excludeCompanyNames : undefined)
+
+  // Cross-search dedup: drop candidates already sent through the research
+  // pipeline in a prior run (same or different ICP segment), using
+  // pipeline_test_runs as the source of truth. Non-fatal on DB error — an
+  // already-researched company resurfacing once is far cheaper than the
+  // whole discovery request failing.
+  if (result.companies.length > 0) {
+    try {
+      const supabase = createServerClient()
+      const { data: history } = await supabase
+        .from('pipeline_test_runs')
+        .select('company_url, domain')
+
+      const { survivors, filteredOut } = filterAlreadyResearched(
+        result.companies,
+        (history ?? []).map(h => ({ companyUrl: h.company_url, domain: h.domain })),
+      )
+
+      if (filteredOut.length > 0) {
+        result.companies = survivors
+        result.reason = `${result.reason} | ${filteredOut.length} already-researched duplicate(s) filtered`
+        if (result.companies.length === 0) {
+          result.sufficiency = 'insufficient'
+        }
+      }
+    } catch (e) {
+      console.warn('[CompanyDiscovery] already-researched dedup skipped:', e instanceof Error ? e.message : String(e))
+    }
+  }
 
   return NextResponse.json({ success: true, ...result })
 }

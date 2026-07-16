@@ -15,10 +15,17 @@ import {
   classifyRejection,
   extractVsPair,
   extractListAfterTrigger,
+  extractNumberedListCandidates,
+  extractTitleCompanyName,
   tierConfidence,
   fallbackWhyTheyCompete,
+  buildOfferingCompetitorQueries,
+  buildBusinessProfileCompetitorQueries,
+  mergeCompetitorResults,
   type CompetitorCandidate,
+  type CompetitorDiscoveryResult,
 } from '../lib/enrichment/competitor-discovery'
+import { emptyBusinessProfile } from '../lib/pipeline/business-profile'
 
 describe('isSelfName — word-boundary self-match', () => {
   it('matches an exact name', () => {
@@ -93,6 +100,11 @@ describe('classifyRejection — filtering rules', () => {
     expect(classifyRejection('Alternatives', company, [])).toMatch(/generic\/stopword/)
     expect(classifyRejection('Competitors', company, [])).toMatch(/generic\/stopword/)
   })
+
+  it('rejects a sentence-fragment/asset-filename candidate (found live against demazetech.com)', () => {
+    expect(classifyRejection('Alternative-H2s-48x48', company, [])).toMatch(/sentence fragment/)
+    expect(classifyRejection('at Codemech Solutions', company, [])).toMatch(/sentence fragment/)
+  })
 })
 
 describe('extractVsPair — "X vs Y" title extraction', () => {
@@ -139,6 +151,50 @@ describe('extractListAfterTrigger — competitor-list extraction', () => {
   })
 })
 
+describe('extractNumberedListCandidates — listicle extraction (2026-07-16, business-understanding rebuild)', () => {
+  it('extracts names from a numbered list with no trigger sentence', () => {
+    const names = extractNumberedListCandidates('Top Companies Offering Welding Automation\n1. ESAB\n2. CenterLine\n3. Autometers Alliance')
+    expect(names).toEqual(expect.arrayContaining(['ESAB', 'CenterLine', 'Autometers Alliance']))
+  })
+
+  it('handles ")" style numbering', () => {
+    const names = extractNumberedListCandidates('1) Lincoln Electric 2) Panasonic 3) Fronius')
+    expect(names).toEqual(expect.arrayContaining(['Lincoln Electric', 'Panasonic', 'Fronius']))
+  })
+
+  it('returns [] when there is no numbered list at all', () => {
+    expect(extractNumberedListCandidates('Ador Welding manufactures welding consumables in India.')).toEqual([])
+  })
+})
+
+describe('extractTitleCompanyName — title-prefix extraction (2026-07-16, business-understanding rebuild)', () => {
+  it('extracts the company name before a colon separator', () => {
+    expect(extractTitleCompanyName('Linde Gas & Equipment: Welding Supply Store')).toEqual(['Linde Gas & Equipment'])
+  })
+
+  it('extracts the company name before a pipe separator', () => {
+    expect(extractTitleCompanyName('ESAB | Welding and Cutting Products')).toEqual(['ESAB'])
+  })
+
+  it('returns [] when there is no colon/pipe separator at all', () => {
+    expect(extractTitleCompanyName('Welding Supplies, Tools & Consumables')).toEqual([])
+  })
+
+  it('rejects a listicle title even though it has a colon separator', () => {
+    expect(extractTitleCompanyName('Top 10 Welding Companies: A Complete Guide')).toEqual([])
+    expect(extractTitleCompanyName('Best Alternatives to Ador Welding: A Comparison')).toEqual([])
+  })
+
+  it('rejects a market-research report title (real false positive found live 2026-07-16)', () => {
+    expect(extractTitleCompanyName('Welding Consumables Market Size, Share: Growth Report 2030')).toEqual([])
+    expect(extractTitleCompanyName('Deep Tech Market Outlook: Trends 2035')).toEqual([])
+  })
+
+  it('does not misfire on a lowercase-starting title', () => {
+    expect(extractTitleCompanyName('welding equipment: buyer\'s guide')).toEqual([])
+  })
+})
+
 describe('tierConfidence — confidence tiering', () => {
   const base: Omit<CompetitorCandidate, 'mention_count' | 'explicit_vs_framing'> = {
     name: 'Bharat Forge',
@@ -179,5 +235,93 @@ describe('fallbackWhyTheyCompete — code-derived narration fallback', () => {
     })
     expect(text).toMatch(/no snippet captured/)
     expect(text).toMatch(/listed among competitors/)
+  })
+})
+
+describe('buildOfferingCompetitorQueries — offering-grounded query building', () => {
+  it('builds one query per offering, capped at 2', () => {
+    const queries = buildOfferingCompetitorQueries(['robotic welding automation', 'weld quality inspection', 'a third offering'])
+    expect(queries).toHaveLength(2)
+    expect(queries[0]).toContain('robotic welding automation')
+    expect(queries[1]).toContain('weld quality inspection')
+  })
+
+  it('returns no queries when there are no offerings', () => {
+    expect(buildOfferingCompetitorQueries([])).toEqual([])
+  })
+})
+
+describe('buildBusinessProfileCompetitorQueries — business-understanding rebuild (2026-07-16)', () => {
+  it('builds one query per service, capped at 3, plus one positioning query', () => {
+    const profile = {
+      ...emptyBusinessProfile(),
+      services: ['AI development', 'custom software', 'web applications', 'a 4th service'],
+      market_positioning: 'premium AI specialist',
+    }
+    const queries = buildBusinessProfileCompetitorQueries(profile)
+    expect(queries).toHaveLength(4)
+    expect(queries[0]).toContain('AI development')
+    expect(queries[1]).toContain('custom software')
+    expect(queries[2]).toContain('web applications')
+    expect(queries[3]).toContain('premium AI specialist')
+    expect(queries[3]).toMatch(/competitors/)
+  })
+
+  it('omits the positioning query when market_positioning is empty', () => {
+    const profile = { ...emptyBusinessProfile(), services: ['AI development'] }
+    const queries = buildBusinessProfileCompetitorQueries(profile)
+    expect(queries).toHaveLength(1)
+  })
+
+  it('never mentions the company name — grounded only in services/positioning', () => {
+    const profile = { ...emptyBusinessProfile(), services: ['automation'], market_positioning: 'budget provider' }
+    const queries = buildBusinessProfileCompetitorQueries(profile)
+    for (const q of queries) {
+      expect(q.toLowerCase()).not.toContain('acme corp')
+    }
+  })
+
+  it('returns no queries when the profile is entirely empty', () => {
+    expect(buildBusinessProfileCompetitorQueries(emptyBusinessProfile())).toEqual([])
+  })
+})
+
+describe('mergeCompetitorResults — folding the offering-grounded pass into the base result', () => {
+  const makeResult = (names: string[]): CompetitorDiscoveryResult => ({
+    competitors: names.map(name => ({
+      name, why_they_compete: `why ${name}`, confidence: 'medium' as const, source_urls: [],
+    })),
+    candidates: names.map(name => ({
+      name, mention_count: 1, source_urls: [], snippets: [], explicit_vs_framing: false,
+    })),
+    sufficiency: names.length > 0 ? 'sufficient' : 'insufficient',
+    reason: 'base reason',
+    candidates_considered: names.length,
+  })
+
+  it('returns the base unchanged when the supplement found nothing', () => {
+    const base = makeResult(['Bharat Forge'])
+    const merged = mergeCompetitorResults(base, makeResult([]))
+    expect(merged).toBe(base)
+  })
+
+  it('appends new, non-duplicate competitors from the supplement', () => {
+    const base = makeResult(['Bharat Forge'])
+    const merged = mergeCompetitorResults(base, makeResult(['ESAB']))
+    expect(merged.competitors.map(c => c.name)).toEqual(expect.arrayContaining(['Bharat Forge', 'ESAB']))
+    expect(merged.sufficiency).toBe('sufficient')
+    expect(merged.reason).toMatch(/supplementary pass added 1 more/)
+  })
+
+  it('does not duplicate a competitor already found by the base (normalized-name match)', () => {
+    const base = makeResult(['Bharat Forge Ltd.'])
+    const merged = mergeCompetitorResults(base, makeResult(['bharat forge']))
+    expect(merged.competitors).toHaveLength(1)
+  })
+
+  it('caps the merged list at MAX_COMPETITORS (5)', () => {
+    const base = makeResult(['A', 'B', 'C', 'D', 'E'])
+    const merged = mergeCompetitorResults(base, makeResult(['F']))
+    expect(merged.competitors.length).toBeLessThanOrEqual(5)
   })
 })

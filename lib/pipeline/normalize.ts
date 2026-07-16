@@ -42,6 +42,7 @@ import type { CompetitorProfile, CompetitorSufficiency, CompetitorDiscoveryResul
 import type { ICPSegment, ICPSufficiency, ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
 import type { MarketIntelItem, MarketIntelSufficiency, MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
 import { auditResearchQuality, ResearchQualityAudit } from '@/lib/pipeline/research-quality'
+import { emptyBusinessProfile, type CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 
 // Converts a BusinessModelType string to a minimal CompanyProfile for
 // backward compatibility when companyProfile is not available from extractor.
@@ -141,6 +142,18 @@ export interface OutreachIntelligence {
   service: string
   opening_angle: string
   why_now: string
+}
+
+// Outreach message drafting (2026-07-16, lib/knowledge/demaze-proof-points.ts
+// + proof-point-matcher.ts) — literal LinkedIn connection note / first
+// message / follow-up drafts, grounded in a real Demaze proof point matched
+// by industry-tag overlap. Drafting only, never sending — see DECISIONS.md's
+// standing send-is-blocked-on-vendor-decision boundary, unaffected by this.
+export interface OutreachDraft {
+  matched_proof_point_id: string
+  connection_note: string
+  first_message: string
+  follow_up: string
 }
 
 export interface ExecutiveBrief {
@@ -291,6 +304,26 @@ export interface NormalizedAnalysis {
   market_intelligence: MarketIntelItem[]
   market_intelligence_sufficiency: MarketIntelSufficiency
 
+  // What the researched company itself says it sells, extracted from its own
+  // self-referential website language (see lib/pipeline/service-offerings.ts).
+  // Superseded as the primary Competitor Discovery / ICP Generator query
+  // anchor by business_profile below (2026-07-16 rebuild) — kept as a
+  // display field and as the fallback query source when business_profile is
+  // empty. Distinct from `competitive_context` (Demaze-pitch industry
+  // framing) and `business_model` prose. Pure passthrough, same as
+  // market_intelligence above — content-derived only, no LLM narration step.
+  company_offerings: string[]
+
+  // Business Profile (2026-07-16 rebuild) — structured "what does this
+  // company actually do" extraction (services/problems solved/ideal
+  // customers/industries served/target company size/market positioning/
+  // technical capabilities/business outcomes), see
+  // lib/pipeline/business-profile.ts. This is what Competitor Discovery and
+  // ICP Generator ground their primary search queries in, replacing the old
+  // company-name-based competitor search. Pure passthrough — it IS an LLM
+  // output already, no further narration/merge step applies to it.
+  business_profile: CompanyBusinessProfile
+
   // Research Quality Framework (Phase 2 item 4) — per-item confidence audit,
   // informational only, never gates. Computed last, from the fully-assembled
   // NormalizedAnalysis, since it cross-checks fields (evidence subject vs.
@@ -308,6 +341,13 @@ export interface NormalizedAnalysis {
   // Outreach
   outreach_angle: string
   outreach_intelligence: OutreachIntelligence
+  // Literal drafted outreach messages, grounded in a matched Demaze proof
+  // point — see OutreachDraft above. Pure passthrough-with-safety-net, same
+  // shape as market_intelligence: no name-match merge step (there's only
+  // one draft object per report, not a list), but matched_proof_point_id is
+  // validated against the real candidate list before being trusted (see
+  // the "Outreach Draft" section below).
+  outreach_draft: OutreachDraft
 
   // Validation
   validation_warnings: string[]
@@ -702,12 +742,12 @@ export function normalizeAnalysisResult(
 
   const competitive_context = str(flat.competitive_context)
 
-  // ── Competitors (Phase 2 item 1, Implementation session) ──────
-  // route.ts's discoverCompetitors() call supplies code-derived skeletons
-  // (name/confidence/source_urls + a fallback why_they_compete) via
-  // `_competitor_discovery`. The LLM's `competitors` narration (from the
-  // [COMPETITOR CANDIDATES] prompt block, analyze-v2.ts) is matched onto
-  // them by name and, when found, overwrites why_they_compete/
+  // ── Competitors (Phase 2 item 1, business-understanding rebuild 2026-07-16) ──
+  // route.ts's discoverCompetitorsFromBusinessProfile() call supplies
+  // code-derived skeletons (name/confidence/source_urls/website + a fallback
+  // why_they_compete) via `_competitor_discovery`. The LLM's `competitors`
+  // narration (from the [COMPETITOR CANDIDATES] prompt block, analyze-v2.ts)
+  // is matched onto them by name and, when found, overwrites why_they_compete/
   // market_position/differentiator — same "LLM narrative, code text as
   // fallback" pattern as the opportunities merge above
   // (`llmMatch?.description || d.strategic_challenge`). An LLM entry whose
@@ -722,12 +762,19 @@ export function normalizeAnalysisResult(
   const competitors: CompetitorProfile[] = (competitorDiscovery?.competitors ?? []).map(c => {
     const llmMatch = llmCompetitors.find(l => identityNameMatch(str(l.name), c.name))
     if (llmMatch) competitorsLlmEnrichedCount++
+    const category = llmMatch?.category ? str(llmMatch.category) : ''
     return {
       name: c.name,
       domain: c.domain,
+      // website is resolved directly onto the code-derived skeleton in
+      // route.ts (discoverCompanyWebsite()) — never part of the LLM merge.
+      website: c.website,
       why_they_compete: (llmMatch && str(llmMatch.why_they_compete)) || c.why_they_compete,
       market_position:  llmMatch?.market_position ? str(llmMatch.market_position) : undefined,
       differentiator:   llmMatch?.differentiator ? str(llmMatch.differentiator) : undefined,
+      category: (category === 'direct' || category === 'growing' || category === 'established') ? category : undefined,
+      similarities:     llmMatch?.similarities ? str(llmMatch.similarities) : undefined,
+      relative_size:    llmMatch?.relative_size ? str(llmMatch.relative_size) : undefined,
       confidence: c.confidence,
       source_urls: c.source_urls,
     }
@@ -748,6 +795,9 @@ export function normalizeAnalysisResult(
   const icpDiscovery = flat._icp_discovery as ICPDiscoveryResult | undefined
   const llmIcpSegments = arr<Record<string, unknown>>(flat.icp_segments)
 
+  const validTier = (v: unknown): 'high' | 'medium' | 'low' | undefined =>
+    (v === 'high' || v === 'medium' || v === 'low') ? v : undefined
+
   let icpLlmEnrichedCount = 0
   const icp_segments: ICPSegment[] = (icpDiscovery?.segments ?? []).map(s => {
     const llmMatch = llmIcpSegments.find(l => identityNameMatch(str(l.name), s.name))
@@ -759,6 +809,9 @@ export function normalizeAnalysisResult(
       signals: s.signals,
       buying_indicators: llmMatch?.buying_indicators ? str(llmMatch.buying_indicators) : undefined,
       example_companies: Array.isArray(llmMatch?.example_companies) ? arr<string>(llmMatch.example_companies) : undefined,
+      use_cases: llmMatch?.use_cases ? str(llmMatch.use_cases) : undefined,
+      market_attractiveness: validTier(llmMatch?.market_attractiveness),
+      priority: validTier(llmMatch?.priority),
       confidence: s.confidence,
       source_urls: s.source_urls,
     }
@@ -775,6 +828,16 @@ export function normalizeAnalysisResult(
   const market_intelligence: MarketIntelItem[] = marketIntelligence?.items ?? []
   const market_intelligence_sufficiency: MarketIntelSufficiency = marketIntelligence?.sufficiency ?? 'insufficient'
   console.log(`[normalize:market_intelligence] items=${market_intelligence.length} | sufficiency=${market_intelligence_sufficiency}`)
+
+  // ── Company Offerings — what the researched company itself sells ──────
+  // Pure passthrough from extractSignals() via `_extractor` (extractorData,
+  // computed above), same shape as market_intelligence — no LLM merge step.
+  const company_offerings: string[] = extractorData?.companyOfferings ?? []
+
+  // ── Business Profile — passthrough from extractBusinessProfile() via
+  // `_business_profile` (route.ts), same passthrough shape as
+  // market_intelligence above — it's already an LLM output, nothing to merge.
+  const business_profile: CompanyBusinessProfile = (flat._business_profile as CompanyBusinessProfile | undefined) ?? emptyBusinessProfile()
 
   // ── Why Demaze V4 ────────────────────────────────────────────
   const rawWhyDemaze = flat.why_demaze
@@ -822,6 +885,31 @@ export function normalizeAnalysisResult(
     }
   }
   const outreach_angle = str(flat.outreach_angle ?? outreach_intelligence.opening_angle)
+
+  // ── Outreach draft (2026-07-16) ──────────────────────────────
+  // Safety net: matched_proof_point_id is only trusted if it echoes a real
+  // id from the candidate list route.ts actually gave the LLM
+  // (_proof_point_candidates, from matchProofPoints()) — same
+  // belt-and-suspenders discipline as research-quality.ts's self-name-
+  // collision check, protecting against the LLM echoing a malformed or
+  // invented id despite the prompt's "copy exactly or leave empty" rule.
+  const proofPointCandidateIds = new Set(
+    (arr<{ id?: unknown }>(flat._proof_point_candidates)).map(p => str(p?.id)).filter(Boolean)
+  )
+  const rawOD = flat.outreach_draft
+  let outreach_draft: OutreachDraft = {
+    matched_proof_point_id: '', connection_note: '', first_message: '', follow_up: '',
+  }
+  if (rawOD && typeof rawOD === 'object') {
+    const od = rawOD as Record<string, unknown>
+    const claimedId = str(od.matched_proof_point_id)
+    outreach_draft = {
+      matched_proof_point_id: proofPointCandidateIds.has(claimedId) ? claimedId : '',
+      connection_note: str(od.connection_note),
+      first_message:   str(od.first_message),
+      follow_up:        str(od.follow_up),
+    }
+  }
 
   // ── Flags & warnings ─────────────────────────────────────────
   const content_quality_flags: string[] = arr<string>(flat.content_quality_flags)
@@ -890,8 +978,10 @@ export function normalizeAnalysisResult(
     icp_sufficiency,
     market_intelligence,
     market_intelligence_sufficiency,
+    company_offerings,
+    business_profile,
     why_demaze,
-    outreach_angle, outreach_intelligence,
+    outreach_angle, outreach_intelligence, outreach_draft,
     validation_warnings, content_quality_flags,
     business_model_analysis,
     executive_brief,

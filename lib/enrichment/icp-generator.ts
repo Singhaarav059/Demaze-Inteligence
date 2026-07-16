@@ -34,6 +34,8 @@
 
 import { searchTavily, searchSerper } from './discovery-engine'
 import { isSelfName } from './competitor-discovery'
+import { filterRelevantResults, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
+import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 
 export type ICPConfidence = 'high' | 'medium' | 'low'
 export type ICPSufficiency = 'sufficient' | 'insufficient'
@@ -63,6 +65,14 @@ export interface ICPSegment {
   signals: string[]             // evidence snippets backing this segment
   buying_indicators?: string    // what would trigger this segment's interest — only if evidence states it
   example_companies?: string[]  // named companies only if explicitly mentioned in evidence, never invented
+  // Business-understanding rebuild (2026-07-16) — LLM-narrated, tier must be
+  // justified by the segment's evidence + fit with the researched company's
+  // business profile (services/capabilities), never an arbitrary guess.
+  // Tiers only (no raw 0-100 score) — consistent with every other
+  // confidence-style field in this codebase.
+  use_cases?: string
+  market_attractiveness?: 'high' | 'medium' | 'low'
+  priority?: 'high' | 'medium' | 'low'
   confidence: ICPConfidence
   source_urls: string[]
 }
@@ -94,9 +104,14 @@ const GENERIC_SEGMENT_TERMS = new Set([
   'industries', 'sectors', 'verticals', 'markets', 'partners', 'users',
   'them', 'us', 'you', 'various', 'multiple', 'several', 'many', 'others',
   'products', 'services', 'solutions', 'the world', 'the globe', 'worldwide',
+  // Possessive pronouns — same filler-word class as 'various'/'multiple'
+  // above. Found live 2026-07-16 against demazetech.com: "our clients"
+  // survived because 'our' wasn't in this set, so the all-words-generic
+  // check ('clients' alone is generic) never triggered on the full phrase.
+  'our', 'their', 'its', 'your', 'my', 'his', 'her',
 ])
 
-function normalizeSegmentName(name: string): string {
+export function normalizeSegmentName(name: string): string {
   return name.toLowerCase().replace(/[^\w\s&-]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
@@ -106,6 +121,9 @@ function normalizeSegmentName(name: string): string {
 export function classifySegmentRejection(name: string, companyName: string): string | null {
   if (isSelfName(name, companyName)) {
     return 'self-name (this is the researched company itself, not a customer segment)'
+  }
+  if (looksLikeSentenceFragment(name)) {
+    return 'looks like a sentence fragment, not a real segment name'
   }
   const normalized = normalizeSegmentName(name)
   if (!normalized || normalized.length < 3) {
@@ -184,10 +202,55 @@ function splitSegmentList(text: string): string[] {
 // enumerate every trigger+connector combination in the regex itself.
 const LEFTOVER_CONNECTOR = /^\s*(?:include[sd]?|including|are|range\s+from|across|spanning|of|[:\-])\s*/i
 
+// Heading-style list content — the trigger phrase IS the whole heading
+// ("Industries We Serve.") and each list item is its own short "sentence"
+// afterward ("Healthcare. Telemedicine Platforms. Electronic Health
+// Records (EHR)...") rather than a comma-separated list inside one
+// sentence. Found live 2026-07-16 against demazetech.com's real scraped
+// content: the inline-list window in extractSegmentsAfterTrigger came back
+// empty because the character right after the trigger match IS the period
+// ending the heading itself, so `after.search(/[.!?]/)` returns 0 before
+// any real content is captured — a real, reproducible false negative, not
+// a hypothetical case.
+// Requires at least one sentence-ending mark right after (optional)
+// leading whitespace — NOT bare whitespace alone, which would wrongly
+// swallow the normal "Customers include hospitals..." case (the space
+// between "include" and "hospitals" is whitespace with no punctuation,
+// and must fall through to the inline comma-list branch below).
+const LEADING_HEADING_PUNCTUATION = /^\s*[.!?]+\s*/
+
+// A period-delimited "sentence" this far into the heading either isn't a
+// list item anymore (real prose resumed) or is page-chrome boilerplate —
+// stop collecting rather than risk absorbing junk. Checked BEFORE the
+// word-count cutoff since boilerplate like "Demaze Technologies © 2025" is
+// short enough to otherwise pass it.
+const BOILERPLATE_LIST_ITEM = /©|all rights reserved/i
+const MAX_HEADING_LIST_WORDS = 6
+const MAX_HEADING_LIST_ITEMS = 8
+
+function extractHeadingStyleList(after: string): string[] {
+  const items: string[] = []
+  for (const raw of after.split(/[.!?]+/)) {
+    const item = raw.trim()
+    if (!item) continue
+    if (BOILERPLATE_LIST_ITEM.test(item)) break
+    if (item.split(/\s+/).filter(Boolean).length > MAX_HEADING_LIST_WORDS) break
+    items.push(item)
+    if (items.length >= MAX_HEADING_LIST_ITEMS) break
+  }
+  return items
+}
+
 export function extractSegmentsAfterTrigger(text: string): string[] {
   const m = SEGMENT_LIST_TRIGGER.exec(text)
   if (!m) return []
   const after = text.slice(m.index + m[0].length, m.index + m[0].length + 200)
+
+  const leadingPunct = LEADING_HEADING_PUNCTUATION.exec(after)
+  if (leadingPunct && leadingPunct[0].length > 0) {
+    return extractHeadingStyleList(after.slice(leadingPunct[0].length)).filter(s => s.length >= 3 && s.length <= 50)
+  }
+
   const stopAt = after.search(/[.!?]/)
   const window = (stopAt >= 0 ? after.slice(0, stopAt) : after).replace(LEFTOVER_CONNECTOR, '')
   return splitSegmentList(window).filter(s => s.length >= 3 && s.length <= 50)
@@ -238,14 +301,50 @@ function buildICPQueries(companyName: string): string[] {
   ]
 }
 
+// Grounds ICP search in what the researched company actually SELLS
+// (lib/pipeline/service-offerings.ts) instead of relying only on the
+// company's own site explicitly stating "we serve X" — a company that never
+// uses that phrasing can still surface real buyer segments this way. Same
+// bounded-supplement shape as competitor-discovery.ts's
+// buildOfferingCompetitorQueries.
+export function buildOfferingICPQueries(offerings: string[]): string[] {
+  return offerings.slice(0, 2).map(o => `who needs "${toQueryPhrase(o)}"`)
+}
+
+// Business-understanding rebuild (2026-07-16) — richer "who needs X" query
+// set drawn from business-profile.ts's structured extraction (services +
+// problems solved + business outcomes) instead of the narrower
+// service-offerings.ts phrase list. Runs ALONGSIDE discoverICPSegments()'s
+// self-referential "we serve X" base pass (that pass is a legitimate,
+// separate source — Target Segments genuinely does include industries the
+// company states it serves — not the flagged problem; only Competitor
+// Discovery's name-based pass was). Supersedes buildOfferingICPQueries as
+// the default supplementary source in route.ts; that function stays
+// exported as a fallback for when no business profile is available.
+export function buildBusinessProfileICPQueries(profile: CompanyBusinessProfile): string[] {
+  const phrases = [...profile.services, ...profile.problems_solved, ...profile.business_outcomes]
+  return phrases.slice(0, 3).map(p => `who needs "${toQueryPhrase(p)}"`)
+}
+
 // ── Main export ───────────────────────────────────────────────────
 
 const MAX_SEGMENTS = 5
 const MAX_SNIPPETS_PER_CANDIDATE = 2
 
-export async function discoverICPSegments(
+// Shared core, same split as competitor-discovery.ts's runCompetitorDiscovery.
+// requireCompanyMention must be OFF for the offering-grounded pass, same
+// reasoning as runCompetitorDiscovery's header comment: a query like
+// `who needs "cloud architecture"` is deliberately searching for OTHER
+// companies' pages, so requiring the researched company's own name to
+// appear discards every legitimate result by construction. Found live
+// 2026-07-16 running demazetech.com: the offering pass returned 15 real
+// results, 100% filtered out by this gate before extraction ran.
+async function runICPDiscovery(
+  queries: string[],
   companyName: string,
   domain: string,
+  emptyQueriesReason: string,
+  requireCompanyMention: boolean = true,
 ): Promise<ICPDiscoveryResult> {
   const tavilyKey = process.env.TAVILY_API_KEY
   const serperKey = process.env.SERPER_API_KEY
@@ -256,12 +355,14 @@ export async function discoverICPSegments(
   if (!companyName || companyName.trim().length === 0) {
     return { segments: [], candidates: [], sufficiency: 'insufficient', reason: 'no company name available to search for customer segments', candidates_considered: 0 }
   }
+  if (queries.length === 0) {
+    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: emptyQueriesReason, candidates_considered: 0 }
+  }
 
   // domain unused for extraction itself (segments are names, not URLs) but
   // kept as a parameter for parity with discoverCompetitors/discoverAndFetchExternalSources.
   void domain
 
-  const queries = buildICPQueries(companyName)
   let allResults: Array<{ title: string; url: string; content: string }>
   try {
     const resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
@@ -276,6 +377,24 @@ export async function discoverICPSegments(
 
   if (allResults.length === 0) {
     return { segments: [], candidates: [], sufficiency: 'insufficient', reason: 'search returned no results for any ICP query', candidates_considered: 0 }
+  }
+
+  // Relevance gate — drop any result that doesn't actually mention the
+  // researched company. Tavily/Serper's quoted-phrase queries don't
+  // reliably enforce this themselves (see extraction-guards.ts header for
+  // the live 2026-07-16 failure this fixes); without it, extraction runs
+  // on off-topic pages (a different company's own "industries we serve"
+  // page, unrelated social posts) and pulls their prose as if it described
+  // the researched company's customers. Skipped for the offering-grounded
+  // pass (requireCompanyMention = false) — see this function's header comment.
+  const rawResultCount = allResults.length
+  if (requireCompanyMention) allResults = filterRelevantResults(allResults, companyName)
+  if (allResults.length === 0) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `${rawResultCount} result(s) found but none mention "${companyName}" by name`,
+      candidates_considered: 0,
+    }
   }
 
   // ── Extract + group raw candidates by normalized name ─────────────
@@ -359,5 +478,83 @@ export async function discoverICPSegments(
     reason: `${segments.length} of ${grouped.size} raw candidate(s) survived filtering`,
     candidates_considered: grouped.size,
     rejected_candidates: rejected,
+  }
+}
+
+export async function discoverICPSegments(
+  companyName: string,
+  domain: string,
+): Promise<ICPDiscoveryResult> {
+  return runICPDiscovery(
+    buildICPQueries(companyName),
+    companyName,
+    domain,
+    'no company name available to search for customer segments',
+  )
+}
+
+// Supplementary pass (see route.ts) — run once evidence extraction has
+// surfaced what the researched company actually sells. Same pipeline as
+// discoverICPSegments, grounded in offering phrases instead of "we serve"
+// framing alone.
+export async function discoverICPSegmentsFromOfferings(
+  companyName: string,
+  domain: string,
+  offerings: string[],
+): Promise<ICPDiscoveryResult> {
+  return runICPDiscovery(
+    buildOfferingICPQueries(offerings),
+    companyName,
+    domain,
+    'no company offerings extracted to search from',
+    false,
+  )
+}
+
+// Business-understanding rebuild (2026-07-16) — preferred supplementary pass
+// in route.ts going forward (discoverICPSegmentsFromOfferings above is the
+// fallback when no business profile is available). Merged alongside
+// discoverICPSegments()'s self-referential base pass, never replacing it.
+export async function discoverICPSegmentsFromBusinessProfile(
+  companyName: string,
+  domain: string,
+  profile: CompanyBusinessProfile,
+): Promise<ICPDiscoveryResult> {
+  return runICPDiscovery(
+    buildBusinessProfileICPQueries(profile),
+    companyName,
+    domain,
+    'no business profile available to search from',
+    false,
+  )
+}
+
+// Merges a supplementary result into a base result — same
+// dedupe-by-normalized-name + re-rank shape as
+// competitor-discovery.ts's mergeCompetitorResults.
+export function mergeICPResults(
+  base: ICPDiscoveryResult,
+  supplement: ICPDiscoveryResult,
+): ICPDiscoveryResult {
+  if (supplement.segments.length === 0) return base
+
+  const existingNames = new Set(base.segments.map(s => normalizeSegmentName(s.name)))
+  const newSegments = supplement.segments.filter(s => !existingNames.has(normalizeSegmentName(s.name)))
+  const newCandidates = supplement.candidates.filter(c => !existingNames.has(normalizeSegmentName(c.name)))
+  if (newSegments.length === 0) return base
+
+  const rank: Record<ICPConfidence, number> = { high: 2, medium: 1, low: 0 }
+  const mergedSegments = [...base.segments, ...newSegments]
+    .sort((a, b) => rank[b.confidence] - rank[a.confidence])
+    .slice(0, MAX_SEGMENTS)
+  const mergedNames = new Set(mergedSegments.map(s => normalizeSegmentName(s.name)))
+
+  return {
+    segments: mergedSegments,
+    candidates: [...base.candidates, ...newCandidates].filter(c => mergedNames.has(normalizeSegmentName(c.name))),
+    sufficiency: 'sufficient',
+    reason: `${base.reason} | supplementary pass added ${newSegments.length} more`,
+    candidates_considered: base.candidates_considered + supplement.candidates_considered,
+    rejected_candidates: [...(base.rejected_candidates ?? []), ...(supplement.rejected_candidates ?? [])],
   }
 }

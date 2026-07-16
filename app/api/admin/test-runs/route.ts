@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from('pipeline_test_runs')
     .select(
-      'id, company_url, domain, operation, status, scraped_pages, failed_pages, quality_score, quality_note, token_usage, provider_used, model_used, execution_time_ms, scrape_time_ms, analysis_time_ms, discovery_method, website_discovery, error_message, created_at'
+      'id, company_url, domain, operation, status, scraped_pages, failed_pages, quality_score, quality_note, token_usage, provider_used, model_used, execution_time_ms, scrape_time_ms, analysis_time_ms, discovery_method, website_discovery, error_message, created_at, final_result'
     )
     .order('created_at', { ascending: false })
     .limit(limit)

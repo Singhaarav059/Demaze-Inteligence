@@ -127,6 +127,7 @@ function buildDiscoveryQueries(companyName: string): Array<{ query: string; cate
 export async function searchTavily(
   query: string,
   apiKey: string,
+  maxResults: number = 3,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
   try {
     const resp = await fetch('https://api.tavily.com/search', {
@@ -136,7 +137,7 @@ export async function searchTavily(
         api_key: apiKey,
         query,
         search_depth: 'basic',
-        max_results: 3,
+        max_results: maxResults,
         include_answer: false,
       }),
       signal: AbortSignal.timeout(10000),
@@ -155,12 +156,13 @@ export async function searchTavily(
 export async function searchSerper(
   query: string,
   apiKey: string,
+  numResults: number = 3,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
   try {
     const resp = await fetch('https://google.serper.dev/search', {
       method: 'POST',
       headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: query, num: 3 }),
+      body: JSON.stringify({ q: query, num: numResults }),
       signal: AbortSignal.timeout(10000),
     })
     if (!resp.ok) return []

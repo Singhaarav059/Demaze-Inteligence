@@ -115,17 +115,18 @@
 
 /* ------------------------------------------------------------
    Refined dark theme (.dark) — the internal SDR product.
-   Near-black cool surfaces, vivid indigo/violet accent.
+   Near-neutral-black surfaces (Explee-aligned), glass-layered
+   cards via alpha-white border/input, vivid indigo/violet accent.
    ------------------------------------------------------------ */
 .dark {
-  --background: oklch(0.165 0.006 285);
+  --background: oklch(0.145 0.003 285);
   --foreground: oklch(0.96 0.003 285);
-  --surface: oklch(0.205 0.007 285);
+  --surface: oklch(0.19 0.004 285);
   --surface-foreground: oklch(0.96 0.003 285);
-  --elevated: oklch(0.23 0.008 285);
-  --card: oklch(0.205 0.007 285);
+  --elevated: oklch(0.22 0.005 285);
+  --card: oklch(0.19 0.004 285);
   --card-foreground: oklch(0.96 0.003 285);
-  --popover: oklch(0.23 0.008 285);
+  --popover: oklch(0.22 0.005 285);
   --popover-foreground: oklch(0.96 0.003 285);
   --primary: oklch(0.64 0.19 277);
   --primary-foreground: oklch(0.99 0 0);
@@ -136,8 +137,8 @@
   --accent: oklch(0.28 0.01 285);
   --accent-foreground: oklch(0.96 0.003 285);
   --destructive: oklch(0.68 0.2 22);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 11%);
   --ring: oklch(0.64 0.19 277);
 
   /* Evidence-strength — tuned for legibility on dark surfaces */
@@ -146,18 +147,21 @@
   --signal-weak: oklch(0.72 0.13 55);
   --signal-none: oklch(0.66 0.01 285);
 
+  /* Also doubles as the per-wizard-step categorical accent:
+     chart-1 research, chart-5 competitors/market, chart-2 ICP,
+     chart-3 company discovery. See components/wizard/. */
   --chart-1: oklch(0.64 0.19 277);
   --chart-2: oklch(0.74 0.16 158);
   --chart-3: oklch(0.8 0.14 78);
   --chart-4: oklch(0.68 0.2 22);
   --chart-5: oklch(0.7 0.14 210);
-  --sidebar: oklch(0.185 0.006 285);
+  --sidebar: oklch(0.125 0.003 285);
   --sidebar-foreground: oklch(0.96 0.003 285);
   --sidebar-primary: oklch(0.64 0.19 277);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.27 0.008 285);
   --sidebar-accent-foreground: oklch(0.96 0.003 285);
-  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.64 0.19 277);
 }
 
@@ -193,4 +197,17 @@
     background-color: var(--input);
     background-clip: content-box;
   }
+}
+
+/* Glass-layered surfaces (Explee-aligned alpha-white-over-dark
+   elevation) — additive utilities, only applied where opted in. */
+@utility glass-panel {
+  background-color: color-mix(in oklab, var(--card) 88%, white 4%);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+@utility glass-panel-strong {
+  background-color: color-mix(in oklab, var(--card) 80%, white 8%);
+  backdrop-filter: blur(16px);
+  border: 1px solid oklch(1 0 0 / 15%);
 }

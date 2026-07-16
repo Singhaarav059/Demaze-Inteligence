@@ -52,6 +52,16 @@ export interface CompetitorProfile {
   why_they_compete: string
   market_position?: string        // only set if evidence states it, never guessed
   differentiator?: string
+  // Business-understanding rebuild (2026-07-16) — LLM-classified, grounded in
+  // the candidate's own snippets + the researched company's business profile.
+  // 'unclear' rather than a guess when the snippets don't support a tier.
+  category?: 'direct' | 'growing' | 'established' | 'unclear'
+  // Resolved via website-discovery.ts's discoverCompanyWebsite(), same reuse
+  // Company Discovery Engine already does — undefined if not confidently
+  // resolved, never a guessed domain.
+  website?: string
+  similarities?: string           // only set if evidence states it, never guessed
+  relative_size?: string          // only set if evidence states it, never guessed
   confidence: CompetitorConfidence
   source_urls: string[]
 }
@@ -101,6 +111,8 @@ export interface CompetitorDiscoveryResult {
 // ============================================================
 
 import { searchTavily, searchSerper } from './discovery-engine'
+import { filterRelevantResults, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
+import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 
 // ── Company-name word-boundary matching ─────────────────────────
 // Same LEGAL_SUFFIXES list as website-discovery.ts, deliberately NOT
@@ -111,7 +123,7 @@ import { searchTavily, searchSerper } from './discovery-engine'
 
 const LEGAL_SUFFIXES = /\b(?:pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|corp\.?|corporation|co\.?)\b/gi
 
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   return name
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
@@ -200,6 +212,9 @@ export function classifyRejection(name: string, companyName: string, snippets: s
       return 'known directory/aggregator/news-outlet/certifying-body name, not a competitor'
     }
   }
+  if (looksLikeSentenceFragment(name)) {
+    return 'looks like a sentence fragment or asset filename, not a company name'
+  }
   const normalized = normalizeName(name)
   if (!normalized || normalized.length < 3) {
     return 'too short/generic to be a real candidate name'
@@ -246,6 +261,76 @@ export function extractListAfterTrigger(text: string): string[] {
   const window = stopAt >= 0 ? after.slice(0, stopAt) : after
   const names = window.match(PROPER_NOUN) ?? []
   return names.map(n => n.trim()).filter(n => n.length >= 3 && n.length <= 60)
+}
+
+// Numbered-list extraction — same pattern as company-discovery.ts's
+// extractNumberedListCompanies. Added 2026-07-16 alongside the
+// business-understanding rebuild: `top companies offering "X"` style
+// queries (buildBusinessProfileCompetitorQueries/buildOfferingCompetitorQueries)
+// return "Top N Companies" listicle-shaped results that flatten to
+// "1. ESAB  2. CenterLine  3. ..." with no single trigger sentence for
+// extractListAfterTrigger to anchor on — found live 2026-07-16 running
+// adorwelding.com through the rebuilt pipeline: a real, populated business
+// profile (6 services) still produced 0 raw candidates because neither
+// extractVsPair nor extractListAfterTrigger recognize this shape at all.
+// Same classifyRejection() safety net applies afterward regardless of which
+// extractor found the name.
+const NUMBERED_ITEM = /(?:^|\n|\s)(?:\d{1,2}[.)]\s+)([A-Z][a-zA-Z0-9&.'-]*(?:\s+[A-Z][a-zA-Z0-9&.'-]*){0,3})/g
+
+export function extractNumberedListCandidates(text: string): string[] {
+  const names: string[] = []
+  let match: RegExpExecArray | null
+  const re = new RegExp(NUMBERED_ITEM)
+  while ((match = re.exec(text)) !== null) {
+    const name = match[1].trim()
+    if (name.length >= 3 && name.length <= 60) names.push(name)
+  }
+  return names
+}
+
+// Title-prefix extraction — a "top companies offering X" search mostly
+// returns one DIFFERENT COMPANY'S OWN page per result, not a single listicle
+// page (that's what extractNumberedListCandidates above is for). The real
+// company name sits in that page's own SEO title, e.g. "Linde Gas &
+// Equipment: Welding Supply Store" or "ESAB | Welding and Cutting Products".
+// Found live 2026-07-16 running adorwelding.com through the rebuilt
+// pipeline: a real, populated business profile (6 services) still produced
+// 0 raw candidates even with numbered-list extraction added, because a
+// diagnostic peek at the actual search results showed exactly this shape —
+// distinct company homepages, not listicles.
+// Deliberately only matches ":" and "|" separators, not "-"/"–"/"—" — a
+// bare hyphen is ambiguous with a hyphenated word inside the company name
+// itself (e.g. "E-commerce Platforms"), and this is a narrow, safe-by-
+// default heuristic, not an attempt to catch every title shape. Same
+// classifyRejection() safety net applies afterward regardless of which
+// extractor found the name.
+const TITLE_PREFIX = /^([A-Z][\w&.,']*(?:\s+[A-Z&][\w&.,']*){0,4})\s*[:|]\s+(\S.*)$/
+
+// A listicle title itself often looks like a proper-noun prefix followed by
+// a colon ("Top 10 Welding Companies: A Complete Guide") — LIST_TRIGGER's
+// vocabulary (top/competitor/alternative/rival) appearing anywhere in the
+// captured prefix is a strong signal this is the LISTICLE'S title, not a
+// real company name, so it's rejected here directly rather than relying on
+// classifyRejection's STOPWORDS check (which only rejects when EVERY word
+// is a stopword — "Top 10 X" survives that check since "10"/"X" aren't).
+const LISTICLE_PREFIX_WORDS = /\b(?:top|best|leading|competitors?|alternatives?|rivals?)\b/i
+
+// Same market-research-report-title fingerprint market-intelligence.ts
+// already fixed for growth_indicator statements ("Deep Tech Market Size,
+// Share, Growth, Outlook, Trends 2035" satisfies a pattern but is a title,
+// not real content) — found live 2026-07-16 running adorwelding.com through
+// this new extractor: "Welding Consumables Market Size, Share" (a market-
+// research report title, not a company) slipped past the listicle-word
+// check above since it contains none of that vocabulary.
+const MARKET_REPORT_TITLE_WORDS = /\bmarket\s+(?:size|share|growth|report|outlook|forecast)\b|\bindustry\s+report\b/i
+
+export function extractTitleCompanyName(title: string): string[] {
+  const m = TITLE_PREFIX.exec(title.trim())
+  if (!m) return []
+  const name = m[1].trim()
+  if (name.length < 3 || name.length > 60) return []
+  if (LISTICLE_PREFIX_WORDS.test(name) || MARKET_REPORT_TITLE_WORDS.test(name)) return []
+  return [name]
 }
 
 // ── Confidence tiering ────────────────────────────────────────────
@@ -296,14 +381,64 @@ function buildCompetitorQueries(companyName: string): string[] {
   ]
 }
 
+// Grounds competitor search in what the researched company actually SELLS
+// (lib/pipeline/service-offerings.ts) rather than only its brand name — a
+// company with no existing "X vs Y" comparison article or press coverage
+// still surfaces real same-level competitors this way, since the query no
+// longer depends on someone else having already written about this specific
+// company. Capped at the top 2 extracted offerings x 1 query each (bounded
+// supplementary pass, not a full second base-query set).
+export function buildOfferingCompetitorQueries(offerings: string[]): string[] {
+  return offerings.slice(0, 2).map(o => `top companies offering "${toQueryPhrase(o)}"`)
+}
+
+// Primary competitor query builder (2026-07-16 rebuild) — grounds search in
+// the researched company's actual business (services + market positioning,
+// from business-profile.ts's structured 8-question extraction) rather than
+// its name OR the narrower service-offerings.ts phrase list. This replaces
+// the old name-based discoverCompetitors() as the sole primary pass in
+// route.ts (buildCompetitorQueries/discoverCompetitors stay exported for
+// their still-used extraction/filtering internals, just no longer wired
+// into the pipeline as a competitor SOURCE — see route.ts wiring comment).
+// Same 2-3 items x 1 query shape as buildOfferingCompetitorQueries, just
+// drawing from richer, more reliably-populated fields.
+export function buildBusinessProfileCompetitorQueries(profile: CompanyBusinessProfile): string[] {
+  const queries: string[] = profile.services
+    .slice(0, 3)
+    .map(s => `top companies offering "${toQueryPhrase(s)}"`)
+  if (profile.market_positioning.trim().length > 0) {
+    queries.push(`"${toQueryPhrase(profile.market_positioning)}" competitors`)
+  }
+  return queries
+}
+
 // ── Main export ───────────────────────────────────────────────────
 
 const MAX_COMPETITORS = 5
 const MAX_SNIPPETS_PER_CANDIDATE = 2
 
-export async function discoverCompetitors(
+// Shared core: search -> relevance-filter -> extract -> group -> reject ->
+// tier -> cap. Both the name-only pass (discoverCompetitors) and the
+// offering-grounded supplementary pass (discoverCompetitorsFromOfferings)
+// call this with a different query set — everything after "what are the
+// queries" is identical, so it lives here once rather than duplicated.
+//
+// requireCompanyMention gates the mentionsCompany relevance filter below.
+// It must be OFF for the offering-grounded pass: a query like
+// `top companies offering "cloud architecture"` is deliberately searching
+// for OTHER companies, so requiring the researched company's own name to
+// appear in each result is self-defeating — it discards every legitimate
+// result by construction. Found live 2026-07-16 running demazetech.com:
+// the offering pass returned real results but 100% were filtered out by
+// this gate before extraction ever ran. Self-name/directory/disqualifier
+// rejection (classifyRejection, below) still applies either way — that's
+// the correct place to exclude the researched company itself.
+async function runCompetitorDiscovery(
+  queries: string[],
   companyName: string,
   domain: string,
+  emptyQueriesReason: string,
+  requireCompanyMention: boolean = true,
 ): Promise<CompetitorDiscoveryResult> {
   const tavilyKey = process.env.TAVILY_API_KEY
   const serperKey = process.env.SERPER_API_KEY
@@ -314,8 +449,10 @@ export async function discoverCompetitors(
   if (!companyName || companyName.trim().length === 0) {
     return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'no company name available to search for competitors', candidates_considered: 0 }
   }
+  if (queries.length === 0) {
+    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: emptyQueriesReason, candidates_considered: 0 }
+  }
 
-  const queries = buildCompetitorQueries(companyName)
   let allResults: Array<{ title: string; url: string; content: string }>
   try {
     const resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
@@ -332,6 +469,23 @@ export async function discoverCompetitors(
     return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'search returned no results for any competitor query', candidates_considered: 0 }
   }
 
+  // Relevance gate — drop any result that doesn't actually mention the
+  // researched company. Tavily/Serper's quoted-phrase queries don't
+  // reliably enforce this themselves (see extraction-guards.ts header for
+  // the live 2026-07-16 failure this fixes); without it, extraction runs
+  // on off-topic pages and pulls page-chrome as if it were a competitor.
+  // Skipped entirely for the offering-grounded pass (requireCompanyMention
+  // = false) — see this function's header comment.
+  const rawResultCount = allResults.length
+  if (requireCompanyMention) allResults = filterRelevantResults(allResults, companyName)
+  if (allResults.length === 0) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `${rawResultCount} result(s) found but none mention "${companyName}" by name`,
+      candidates_considered: 0,
+    }
+  }
+
   // ── Extract + group raw candidates by normalized name ─────────────
   // domain is unused for extraction itself (candidates are names, not
   // URLs) but kept as a parameter for parity with discoverAndFetchExternalSources
@@ -345,12 +499,14 @@ export async function discoverCompetitors(
   for (const r of allResults) {
     const vsNames = extractVsPair(r.title)
     const listNames = [...extractListAfterTrigger(r.title), ...extractListAfterTrigger(r.content)]
+    const numberedNames = [...extractNumberedListCandidates(r.title), ...extractNumberedListCandidates(r.content)]
+    const titleNames = extractTitleCompanyName(r.title)
     const explicitSet = new Set(vsNames)
     // Dedupe within this single result first — a name appearing in both the
     // "vs" title match and the list match for the SAME result must only
     // increment mention_count once (mention_count counts distinct search
     // results, per the CompetitorCandidate field comment).
-    const namesInThisResult = new Set([...vsNames, ...listNames].map(n => n.trim()).filter(Boolean))
+    const namesInThisResult = new Set([...vsNames, ...listNames, ...numberedNames, ...titleNames].map(n => n.trim()).filter(Boolean))
 
     for (const name of namesInThisResult) {
       const key = normalizeName(name)
@@ -425,5 +581,92 @@ export async function discoverCompetitors(
     reason: `${competitors.length} of ${grouped.size} raw candidate(s) survived filtering`,
     candidates_considered: grouped.size,
     rejected_candidates: rejected,
+  }
+}
+
+export async function discoverCompetitors(
+  companyName: string,
+  domain: string,
+): Promise<CompetitorDiscoveryResult> {
+  return runCompetitorDiscovery(
+    buildCompetitorQueries(companyName),
+    companyName,
+    domain,
+    'no company name available to search for competitors',
+  )
+}
+
+// Supplementary pass (see route.ts) — run once evidence extraction has
+// surfaced what the researched company actually sells. Same search/extract/
+// filter/tier pipeline as discoverCompetitors, just grounded in offering
+// phrases instead of the company name alone. Returns the same "insufficient"
+// shape rather than throwing when there are no offerings to search from.
+export async function discoverCompetitorsFromOfferings(
+  companyName: string,
+  domain: string,
+  offerings: string[],
+): Promise<CompetitorDiscoveryResult> {
+  return runCompetitorDiscovery(
+    buildOfferingCompetitorQueries(offerings),
+    companyName,
+    domain,
+    'no company offerings extracted to search from',
+    false,
+  )
+}
+
+// Business-understanding rebuild (2026-07-16) — the sole PRIMARY competitor
+// pass wired into route.ts going forward. Grounds search entirely in what
+// the researched company does (services + market positioning), never its
+// name — the flaw a real user session flagged in the old
+// discoverCompetitors() base pass (name-collision risk, e.g. an unrelated
+// same-named company winning the search). discoverCompetitorsFromOfferings()
+// above is kept as a fallback merge-in when the business profile is empty/
+// times out (see route.ts), and the old name-based discoverCompetitors() is
+// no longer called from the pipeline at all (kept only for its still-used
+// extraction/filtering internals and existing unit test coverage).
+export async function discoverCompetitorsFromBusinessProfile(
+  companyName: string,
+  domain: string,
+  profile: CompanyBusinessProfile,
+): Promise<CompetitorDiscoveryResult> {
+  return runCompetitorDiscovery(
+    buildBusinessProfileCompetitorQueries(profile),
+    companyName,
+    domain,
+    'no business profile available to search from',
+    false,
+  )
+}
+
+// Merges a supplementary result into a base result — new survivors are
+// appended and re-ranked, duplicates (by normalized name, same identity
+// check as self-name filtering) are dropped in favor of the base entry so
+// an already-found competitor isn't overwritten by a lower-quality
+// duplicate from the second pass.
+export function mergeCompetitorResults(
+  base: CompetitorDiscoveryResult,
+  supplement: CompetitorDiscoveryResult,
+): CompetitorDiscoveryResult {
+  if (supplement.competitors.length === 0) return base
+
+  const existingNames = new Set(base.competitors.map(c => normalizeName(c.name)))
+  const newCompetitors = supplement.competitors.filter(c => !existingNames.has(normalizeName(c.name)))
+  const newCandidates = supplement.candidates.filter(c => !existingNames.has(normalizeName(c.name)))
+  if (newCompetitors.length === 0) return base
+
+  const rank: Record<CompetitorConfidence, number> = { high: 2, medium: 1, low: 0 }
+  const mergedCompetitors = [...base.competitors, ...newCompetitors]
+    .sort((a, b) => rank[b.confidence] - rank[a.confidence])
+    .slice(0, MAX_COMPETITORS)
+  const mergedNames = new Set(mergedCompetitors.map(c => normalizeName(c.name)))
+
+  return {
+    competitors: mergedCompetitors,
+    candidates: [...base.candidates, ...newCandidates].filter(c => mergedNames.has(normalizeName(c.name))),
+    sufficiency: 'sufficient',
+    reason: `${base.reason} | supplementary pass added ${newCompetitors.length} more`,
+    candidates_considered: base.candidates_considered + supplement.candidates_considered,
+    rejected_candidates: [...(base.rejected_candidates ?? []), ...(supplement.rejected_candidates ?? [])],
   }
 }

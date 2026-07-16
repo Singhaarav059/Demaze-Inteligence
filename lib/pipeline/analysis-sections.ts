@@ -100,6 +100,18 @@ export interface OutreachIntelligence {
   why_now?: string
 }
 
+// Outreach message drafting (2026-07-16, schema in lib/pipeline/normalize.ts
+// — this is that file's OutreachDraft, loosened to optional fields per this
+// file's convention). Literal LinkedIn connection note / first message /
+// follow-up drafts grounded in a matched lib/knowledge/demaze-proof-points.ts
+// entry. Drafting only, never sending.
+export interface OutreachDraft {
+  matched_proof_point_id?: string
+  connection_note?: string
+  first_message?: string
+  follow_up?: string
+}
+
 // Competitor Discovery Engine output (Phase 2 item 1, schema formalized in
 // lib/enrichment/competitor-discovery.ts — this is that file's CompetitorProfile,
 // loosened to optional fields per this file's convention since it reads off
@@ -110,6 +122,10 @@ export interface CompetitorProfile {
   why_they_compete?: string
   market_position?: string
   differentiator?: string
+  category?: string
+  website?: string
+  similarities?: string
+  relative_size?: string
   confidence?: string
   source_urls?: string[]
 }
@@ -125,8 +141,27 @@ export interface ICPSegment {
   signals?: string[]
   buying_indicators?: string
   example_companies?: string[]
+  use_cases?: string
+  market_attractiveness?: string
+  priority?: string
   confidence?: string
   source_urls?: string[]
+}
+
+// Business Profile (2026-07-16 rebuild, schema in
+// lib/pipeline/business-profile.ts — this is that file's
+// CompanyBusinessProfile, loosened to optional fields per this file's
+// convention). What Competitor Discovery / ICP Generator ground their
+// primary search queries in — see that file's header.
+export interface CompanyBusinessProfile {
+  services?: string[]
+  problems_solved?: string[]
+  ideal_customers?: string
+  industries_served?: string[]
+  target_company_size?: string
+  market_positioning?: string
+  technical_capabilities?: string[]
+  business_outcomes?: string[]
 }
 
 // Market Intelligence Layer output (Phase 2 item 6, schema in
@@ -168,6 +203,9 @@ export const getWhyDemaze = (data: Record<string, unknown>): WhyDemaze | undefin
 export const getOutreachIntelligence = (data: Record<string, unknown>): OutreachIntelligence | undefined =>
   data.outreach_intelligence as OutreachIntelligence | undefined
 
+export const getOutreachDraft = (data: Record<string, unknown>): OutreachDraft | undefined =>
+  data.outreach_draft as OutreachDraft | undefined
+
 export const getBusinessModelAnalysis = (data: Record<string, unknown>): BusinessModelAnalysis | undefined =>
   data.business_model_analysis as BusinessModelAnalysis | undefined
 
@@ -207,6 +245,16 @@ export const getMarketIntelligence = (data: Record<string, unknown>): MarketInte
 
 export const getMarketIntelligenceSufficiency = (data: Record<string, unknown>): string | undefined =>
   data.market_intelligence_sufficiency ? String(data.market_intelligence_sufficiency) : undefined
+
+// What the researched company itself says it sells (lib/pipeline/service-offerings.ts).
+// Same "add now, UI section built alongside this session" pattern as the getters above.
+export const getCompanyOfferings = (data: Record<string, unknown>): string[] =>
+  arr<string>(data.company_offerings)
+
+// Business Profile (2026-07-16 rebuild). Same "add now, UI section built
+// alongside this session" pattern as the getters above.
+export const getBusinessProfile = (data: Record<string, unknown>): CompanyBusinessProfile | undefined =>
+  data.business_profile as CompanyBusinessProfile | undefined
 
 // Research Quality Framework (Phase 2 item 4, schema in
 // lib/pipeline/research-quality.ts — this is that file's QualityFlag/

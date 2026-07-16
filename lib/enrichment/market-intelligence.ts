@@ -100,6 +100,17 @@ function splitSentences(text: string): string[] {
     .filter(Boolean)
 }
 
+// Report/page-title fingerprint: market-research report titles ("Deep Tech
+// Market Size, Share, Growth, Outlook, Trends 2035") satisfy
+// GROWTH_INDICATOR_PATTERN via "market size" but are titles, not written
+// statements — real prose about a number always has a connecting verb/
+// preposition. Found live 2026-07-16 running demazetech.com: two report
+// titles from marketresearchfuture.com/grandviewresearch.com surfaced as
+// duplicate, lower-quality growth_indicator items alongside the real
+// (correctly-extracted) CAGR sentences from the same pages.
+const ENDS_WITH_BARE_YEAR = /\b\d{4}(?:-\d{2,4})?\s*$/
+const PROSE_CONNECTOR = /\b(?:is|are|was|were|will|has|have|had|can|could|would|projected|expected|forecast|valued|grow|growing|grew|reach|reaching|reached|exhibit|exhibiting|during|between|from)\b/i
+
 // Returns a rejection reason, or null if the sentence survives. Only called
 // on sentences that already matched a category pattern — this is a sanity
 // filter on THOSE, not a second classification pass.
@@ -115,6 +126,9 @@ export function classifyStatementRejection(sentence: string): string | null {
   const letters = trimmed.replace(/[^a-zA-Z]/g, '')
   if (letters.length > 0 && letters === letters.toUpperCase() && letters.length > 8) {
     return 'looks like a navigation/heading fragment, not a sentence'
+  }
+  if (ENDS_WITH_BARE_YEAR.test(trimmed) && !PROSE_CONNECTOR.test(trimmed)) {
+    return 'looks like a report/page title, not a written statement'
   }
   return null
 }

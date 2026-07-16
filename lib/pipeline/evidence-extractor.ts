@@ -17,6 +17,8 @@
 //   8. Build compact signalSummary string for LLM prompt injection
 // ============================================================
 
+import { extractCompanyOfferings } from './service-offerings'
+
 // ── Types ────────────────────────────────────────────────────
 
 export type SignalType =
@@ -174,6 +176,10 @@ export interface ExtractorResult {
   websitePreview: string      // first 3,000 chars for LLM company identification
   companyProfileEvidence: CompanyProfileEvidence  // which patterns fired per flag
   leadershipContacts: LeadershipContact[]  // named individuals + stated existing portfolio
+  /** What the researched company itself says it sells, extracted from its own
+   *  self-referential ("we offer", "our services include") website language.
+   *  Content-derived only, never LLM-invented. See lib/pipeline/service-offerings.ts. */
+  companyOfferings: string[]
 }
 
 // ── LeadershipContact — named leadership evidence ────────────────
@@ -1272,6 +1278,12 @@ export function extractSignals(
   // ── Leadership contacts ────────────────────────────────────────────────
   const leadershipContacts = extractLeadershipEvidence(segments)
 
+  // ── Company offerings — what THIS company sells (see service-offerings.ts) ──
+  // Own-site content only (websiteContent, not the enriched/third-party blend)
+  // — a "we offer" phrase inside a third-party press release more often
+  // describes that source's own business, not the researched company's.
+  const companyOfferings = extractCompanyOfferings(websiteContent)
+
   // ── Signal summary for LLM prompt ────────────────────────────────────────────
   const signalSummary = buildSignalSummary(signals, detectedFactors, companyProfile, opportunityDrafts)
 
@@ -1295,6 +1307,7 @@ export function extractSignals(
     companySubjectCount,
     websitePreview,
     leadershipContacts,
+    companyOfferings,
   }
 }
 

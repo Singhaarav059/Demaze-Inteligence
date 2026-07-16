@@ -34,9 +34,11 @@ import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enric
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
-import { discoverCompetitors, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
-import { discoverICPSegments, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
+import { discoverCompetitorsFromOfferings, discoverCompetitorsFromBusinessProfile, mergeCompetitorResults, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
+import { discoverICPSegments, discoverICPSegmentsFromOfferings, discoverICPSegmentsFromBusinessProfile, mergeICPResults, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
 import { discoverMarketIntelligence, type MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
+import { extractBusinessProfile, emptyBusinessProfile, isEmptyBusinessProfile, type CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
+import { matchProofPoints } from '@/lib/knowledge/proof-point-matcher'
 import { synthesizeIntelligence } from '@/lib/synthesis'
 import type { SynthesisResult } from '@/lib/synthesis'
 
@@ -226,27 +228,24 @@ export async function POST(req: NextRequest) {
       }
     })()
 
-  // ── Competitor Discovery (Phase 2 item 1) — kicked off at the same point
-  // as discoveryPromise (architecture decision 1: parallel with
-  // discoverAndFetchExternalSources(), before Stage 1 SCRAPE even starts).
-  // Same companyGuess/domain, same non-fatal-on-error discipline. Awaited
-  // (bounded) right before the narrative prompt is built, below — unlike
-  // ENRICHMENT there's no soft/late-arrival split: if it's not ready in
-  // time the prompt just renders an empty [COMPETITOR CANDIDATES] block.
-  const competitorDiscoveryPromise: Promise<CompetitorDiscoveryResult> =
-    discoverCompetitors(companyGuess, domain).catch(e => {
-      console.warn('[CompetitorDiscovery] Non-fatal:', e instanceof Error ? e.message : String(e))
-      return {
-        competitors: [], candidates: [], sufficiency: 'insufficient' as const,
-        reason: `discoverCompetitors threw: ${e instanceof Error ? e.message : String(e)}`,
-        candidates_considered: 0,
-      }
-    })
+  // ── Competitor Discovery (Phase 2 item 1) — business-understanding rebuild
+  // (2026-07-16): there is no pre-scrape name-based pass anymore (a real user
+  // session flagged the old name-based discoverCompetitors() as fundamentally
+  // wrong — it collides with unrelated same-named companies and never
+  // reflects what the company actually does). Competitor discovery now
+  // always waits for extraction + extractBusinessProfile() below, since it
+  // needs to know the company's services/positioning before it can build a
+  // meaningful query. See businessProfilePromise / offeringCompetitorPromise
+  // and the Step 4b block further down for the actual kickoff+await.
 
-  // ── ICP Generator (Phase 2 item 2) — kicked off at the same point as
-  // competitorDiscoveryPromise, same reasoning: no soft/late-arrival split,
-  // if it's not ready in time the prompt just renders an empty
-  // [ICP CANDIDATES] block.
+  // ── ICP Generator (Phase 2 item 2) — kicked off pre-scrape, same as before
+  // the business-understanding rebuild. This self-referential "we serve X"
+  // base pass is NOT the pattern the user flagged (Target Segments genuinely
+  // does include industries the company states it serves) so it's unchanged
+  // — a business-profile-driven supplementary pass is added later (Step 4c)
+  // once extractBusinessProfile() resolves, merged in alongside this base,
+  // never replacing it. No soft/late-arrival split: if it's not ready in
+  // time the prompt just renders an empty [ICP CANDIDATES] block.
   const icpDiscoveryPromise: Promise<ICPDiscoveryResult> =
     discoverICPSegments(companyGuess, domain).catch(e => {
       console.warn('[ICPGenerator] Non-fatal:', e instanceof Error ? e.message : String(e))
@@ -258,8 +257,8 @@ export async function POST(req: NextRequest) {
     })
 
   // ── Market Intelligence Layer (Phase 2 item 6) — kicked off at the same
-  // point as competitorDiscoveryPromise/icpDiscoveryPromise. Only needs
-  // companyName+domain (same as those two), not primary_type/classification
+  // point as icpDiscoveryPromise. Only needs companyName+domain (same as
+  // that), not primary_type/classification
   // — search queries are anchored on the company name itself ("<name>
   // industry trends" etc.), so this doesn't need to wait for Stage 1 SCRAPE
   // or evidence extraction to know the company's industry. No LLM
@@ -491,6 +490,38 @@ export async function POST(req: NextRequest) {
     timing.extraction = Date.now() - extractStart
     console.log(`[Timing] Evidence Extraction (website): ${t(timing.extraction)} | ${extractorResult.signals.length} signals | primary=${extractorResult.companyProfile.primary_type}`)
 
+    // ── Business Profile + offering-grounded fallback discovery (kicked
+    // off, not awaited) ──────────────────────────────────────────────
+    // extractBusinessProfile() (business-profile.ts) is the primary source
+    // for competitor/ICP query construction going forward — a dedicated LLM
+    // call answering "what does this company actually do" (services,
+    // problems solved, positioning, etc.), grounded in the just-scraped
+    // fullContent. Kicked off here (right after extraction) rather than
+    // awaited immediately, so it overlaps with the ENRICHMENT soft-wait
+    // race below instead of adding new sequential wall-clock time.
+    // extractorResult.companyOfferings (service-offerings.ts's narrower "we
+    // offer X" phrase list) still feeds a fallback pass for when the
+    // business-profile call is empty/times out — see Step 4b/4c below.
+    const businessProfilePromise: Promise<CompanyBusinessProfile> =
+      extractBusinessProfile(fullContent, companyNameFromScrape).catch(e => {
+        console.warn('[BusinessProfile] Non-fatal:', e instanceof Error ? e.message : String(e))
+        return emptyBusinessProfile()
+      })
+    const offeringCompetitorPromise: Promise<CompetitorDiscoveryResult | null> =
+      extractorResult.companyOfferings.length > 0
+        ? discoverCompetitorsFromOfferings(companyNameFromScrape, domain, extractorResult.companyOfferings).catch(e => {
+            console.warn('[CompetitorDiscovery] Offering-grounded fallback pass non-fatal:', e instanceof Error ? e.message : String(e))
+            return null
+          })
+        : Promise.resolve(null)
+    const offeringIcpPromise: Promise<ICPDiscoveryResult | null> =
+      extractorResult.companyOfferings.length > 0
+        ? discoverICPSegmentsFromOfferings(companyNameFromScrape, domain, extractorResult.companyOfferings).catch(e => {
+            console.warn('[ICPGenerator] Offering-grounded fallback pass non-fatal:', e instanceof Error ? e.message : String(e))
+            return null
+          })
+        : Promise.resolve(null)
+
     // Gate S2: CompanyProfile viability
     const profileUnknown = extractorResult.companyProfile.primary_type === 'unknown'
     const noCompanyContent = extractorResult.companySubjectCount === 0
@@ -572,22 +603,91 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Step 4b: Await competitor discovery (bounded) ──────────────
-    // Kicked off before Stage 1 SCRAPE started (see competitorDiscoveryPromise
-    // above) — by this point it's usually already resolved, same overlap
-    // win as discoveryPromise (Item 2). The race is a safety net, not the
-    // common path: competitor discovery is a handful of search calls, not
-    // the multi-stage enrichment pipeline, so it rarely needs the full cap.
-    const COMPETITOR_DISCOVERY_TIMEOUT_MS = 12_000
-    const competitorDiscoveryStart = Date.now()
-    const competitorDiscoveryResult: CompetitorDiscoveryResult = await Promise.race([
-      competitorDiscoveryPromise,
-      new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
-        competitors: [], candidates: [], sufficiency: 'insufficient',
-        reason: `timed out after ${COMPETITOR_DISCOVERY_TIMEOUT_MS}ms — kicked off in parallel with scrape, still not resolved by prompt-build time`,
-        candidates_considered: 0,
-      }), COMPETITOR_DISCOVERY_TIMEOUT_MS)),
+    // ── Step 4a2: Await Business Profile (bounded) ──────────────────
+    // Kicked off right after extraction (see businessProfilePromise above) —
+    // usually overlaps with the ENRICHMENT soft-wait race just above, so this
+    // rarely blocks for the full cap. Competitor/ICP business-profile-driven
+    // queries below need this result before they can be built, so (unlike
+    // ENRICHMENT) this genuinely is awaited before proceeding, not raced
+    // against a "continue without it" path.
+    // 30s, not 10s: found live 2026-07-16 running demazetech.com that the
+    // NVIDIA NIM reasoning model (nemotron-3-ultra) in this repo's provider
+    // chain routinely takes 18-25s for a single completion here (chain-of-
+    // thought preamble before JSON) — a 10s bound discarded an eventually-
+    // successful result every single time, silently defeating the whole
+    // feature. 30s covers one real attempt with margin; if it still isn't
+    // enough, extractBusinessProfile()'s own internal retry continues in the
+    // background and the offering-grounded fallback below covers this run.
+    const BUSINESS_PROFILE_TIMEOUT_MS = 30_000
+    const businessProfileStart = Date.now()
+    const businessProfile: CompanyBusinessProfile = await Promise.race([
+      businessProfilePromise,
+      new Promise<CompanyBusinessProfile>(resolve => setTimeout(() => resolve(emptyBusinessProfile()), BUSINESS_PROFILE_TIMEOUT_MS)),
     ])
+    timing.businessProfile = Date.now() - businessProfileStart
+    console.log(`[Timing] Business Profile: ${t(timing.businessProfile)} | services=${businessProfile.services.length} | positioning=${businessProfile.market_positioning ? 'yes' : 'no'}`)
+
+    // ── Step 4b: Competitor Discovery ────────────────────────────────
+    // Business-understanding rebuild (2026-07-16): the business-profile-
+    // driven pass (services + market positioning) is now the sole PRIMARY
+    // source — never the company name. When the business profile came back
+    // empty (LLM call failed/timed out/found nothing), fall back to the
+    // narrower offering-grounded pass instead of returning no competitors
+    // at all.
+    const COMPETITOR_DISCOVERY_TIMEOUT_MS = 12_000
+    const OFFERING_DISCOVERY_TIMEOUT_MS = 8_000
+    const competitorDiscoveryStart = Date.now()
+    let competitorDiscoveryResult: CompetitorDiscoveryResult
+    if (!isEmptyBusinessProfile(businessProfile)) {
+      competitorDiscoveryResult = await Promise.race([
+        discoverCompetitorsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => ({
+          competitors: [], candidates: [], sufficiency: 'insufficient' as const,
+          reason: `discoverCompetitorsFromBusinessProfile threw: ${e instanceof Error ? e.message : String(e)}`,
+          candidates_considered: 0,
+        })),
+        new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
+          competitors: [], candidates: [], sufficiency: 'insufficient',
+          reason: `timed out after ${COMPETITOR_DISCOVERY_TIMEOUT_MS}ms`,
+          candidates_considered: 0,
+        }), COMPETITOR_DISCOVERY_TIMEOUT_MS)),
+      ])
+    } else {
+      competitorDiscoveryResult = {
+        competitors: [], candidates: [], sufficiency: 'insufficient',
+        reason: 'no business profile available — falling back to offering-grounded pass',
+        candidates_considered: 0,
+      }
+    }
+
+    // Fold in the offering-grounded pass — the real fallback base when the
+    // business-profile pass above was empty/insufficient, or an additional
+    // supplement (still merged, base wins on duplicates) when it wasn't.
+    const offeringCompetitors = await Promise.race([
+      offeringCompetitorPromise,
+      new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+    ])
+    if (offeringCompetitors) {
+      competitorDiscoveryResult = competitorDiscoveryResult.sufficiency === 'sufficient'
+        ? mergeCompetitorResults(competitorDiscoveryResult, offeringCompetitors)
+        : offeringCompetitors
+    }
+
+    // Resolve a website per surfaced competitor (reuses website-discovery.ts's
+    // discoverCompanyWebsite() exactly as Company Discovery Engine already
+    // does — sequential, capped list, only set when confirmed). Set directly
+    // on the code-derived skeleton here, before normalize.ts's LLM merge —
+    // website is never part of the LLM narration.
+    for (const c of competitorDiscoveryResult.competitors) {
+      try {
+        const site = await discoverCompanyWebsite(c.name)
+        if (site.status === 'confirmed' && site.confidence !== 'none' && site.domain) {
+          c.website = site.domain
+        }
+      } catch (e) {
+        console.warn(`[CompetitorDiscovery] Website resolution non-fatal for "${c.name}":`, e instanceof Error ? e.message : String(e))
+      }
+    }
+
     timing.competitorDiscovery = Date.now() - competitorDiscoveryStart
     console.log(`[Timing] Competitor Discovery: ${t(timing.competitorDiscovery)} | sufficiency=${competitorDiscoveryResult.sufficiency} | ${competitorDiscoveryResult.competitors.length} competitor(s)`)
 
@@ -600,10 +700,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Step 4c: Await ICP discovery (bounded) ──────────────────────
-    // Same shape and reasoning as Step 4b above.
+    // Base pass (self-referential "we serve X") kicked off pre-scrape, same
+    // as before the business-understanding rebuild — unchanged.
     const ICP_DISCOVERY_TIMEOUT_MS = 12_000
     const icpDiscoveryStart = Date.now()
-    const icpDiscoveryResult: ICPDiscoveryResult = await Promise.race([
+    let icpDiscoveryResult: ICPDiscoveryResult = await Promise.race([
       icpDiscoveryPromise,
       new Promise<ICPDiscoveryResult>(resolve => setTimeout(() => resolve({
         segments: [], candidates: [], sufficiency: 'insufficient',
@@ -612,6 +713,28 @@ export async function POST(req: NextRequest) {
       }), ICP_DISCOVERY_TIMEOUT_MS)),
     ])
     timing.icpDiscovery = Date.now() - icpDiscoveryStart
+
+    // ── Step 4c-2: fold in a supplementary pass, business-profile-driven
+    // when available, offering-grounded otherwise ─────────────────────
+    // Merged alongside the self-referential base above, never replacing it —
+    // Target Segments genuinely includes industries the company states it
+    // serves, so unlike competitors there's no "wrong primary pass" to fix
+    // here, just a richer second source to add.
+    const icpSupplementResult = !isEmptyBusinessProfile(businessProfile)
+      ? await Promise.race([
+          discoverICPSegmentsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => {
+            console.warn('[ICPGenerator] Business-profile pass non-fatal:', e instanceof Error ? e.message : String(e))
+            return null
+          }),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+        ])
+      : await Promise.race([
+          offeringIcpPromise,
+          new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+        ])
+    if (icpSupplementResult) {
+      icpDiscoveryResult = mergeICPResults(icpDiscoveryResult, icpSupplementResult)
+    }
     console.log(`[Timing] ICP Discovery: ${t(timing.icpDiscovery)} | sufficiency=${icpDiscoveryResult.sufficiency} | ${icpDiscoveryResult.segments.length} segment(s)`)
 
     // Gate: ICP (non-critical — WARN only, same tier as COMPETITOR/ENRICHMENT)
@@ -645,6 +768,17 @@ export async function POST(req: NextRequest) {
       gate(pipelineGates, 'MARKET_INTEL', 'WARN', marketIntelResult.reason)
     }
 
+    // ── Step 4e: Match Demaze proof points (pure, zero I/O) ─────────
+    // Unlike Steps 4a-4d above, this has no network call to bound/race —
+    // matchProofPoints() is a pure local function over the static
+    // DEMAZE_PROOF_POINTS catalog (lib/knowledge/demaze-proof-points.ts),
+    // so it just runs synchronously right before the prompt is built.
+    const proofPointMatches = matchProofPoints(
+      enrichedContent ? `${fullContent}\n\n${enrichedContent}` : fullContent,
+      extractorResult.companyProfile,
+    )
+    console.log(`[ProofPoints] ${proofPointMatches.length} match(es): ${proofPointMatches.map(p => p.id).join(', ') || 'none'}`)
+
     // ── Step 5: Build narrative prompt ──────────────────────
     const promptStart = Date.now()
     const narrativeInput = buildNarrativeInput(
@@ -654,6 +788,8 @@ export async function POST(req: NextRequest) {
       contentQualityWarning,
       competitorDiscoveryResult.candidates,
       icpDiscoveryResult.candidates,
+      businessProfile,
+      proofPointMatches,
     )
     const userPrompt = buildNarrativePrompt(narrativeInput)
     const systemTokens = estimateTokenCount(SYSTEM_PROMPT_V2)
@@ -948,10 +1084,11 @@ export async function POST(req: NextRequest) {
         // extractSignals() already builds internally, so evidence detection sees
         // exactly what signal extraction saw, not just the 3,000-char preview.
         _service_evidence_content: enrichedContent ? `${fullContent}\n\n${enrichedContent}` : fullContent,
-        // Code-derived CompetitorProfile skeletons (name/confidence/source_urls
-        // + fallback why_they_compete) from discoverCompetitors() — normalize.ts
-        // merges the LLM's `competitors` narration (rawParsed.competitors, from
-        // the [COMPETITOR CANDIDATES] prompt block) onto these by name, same
+        // Code-derived CompetitorProfile skeletons (name/confidence/source_urls/
+        // website + fallback why_they_compete) from
+        // discoverCompetitorsFromBusinessProfile() — normalize.ts merges the
+        // LLM's `competitors` narration (rawParsed.competitors, from the
+        // [COMPETITOR CANDIDATES] prompt block) onto these by name, same
         // pattern as the opportunities merge.
         _competitor_discovery: competitorDiscoveryResult,
         // Code-derived ICPSegment skeletons (name/confidence/source_urls/
@@ -963,6 +1100,17 @@ export async function POST(req: NextRequest) {
         // unlike the two above, normalize.ts passes this straight through
         // (no LLM narration/merge step, see market-intelligence.ts header).
         _market_intelligence: marketIntelResult,
+        // Business Profile from extractBusinessProfile() (business-profile.ts)
+        // — passed straight through, no LLM merge step (it IS an LLM output
+        // already, there's nothing to narrate onto it).
+        _business_profile: businessProfile,
+        // Demaze Proof Points from matchProofPoints() (proof-point-matcher.ts)
+        // — the real candidate list the LLM was given for outreach_draft.
+        // normalize.ts uses this as a safety net: if rawParsed.outreach_draft
+        // .matched_proof_point_id doesn't match a real id here, it's nulled
+        // out rather than trusted, same belt-and-suspenders pattern as
+        // research-quality.ts's self-name-collision check.
+        _proof_point_candidates: proofPointMatches,
       }
 
       // Gate S6: Normalization

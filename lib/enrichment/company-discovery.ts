@@ -32,6 +32,7 @@
 import { searchTavily, searchSerper } from './discovery-engine'
 import { isSelfName } from './competitor-discovery'
 import { discoverCompanyWebsite } from './website-discovery'
+import { getCompletion } from '../ai/provider-factory'
 
 export type CompanyMatchConfidence = 'high' | 'medium' | 'low'
 export type CompanyDiscoverySufficiency = 'sufficient' | 'insufficient'
@@ -72,7 +73,7 @@ export interface CompanyDiscoveryResult {
 
 const LEGAL_SUFFIXES = /\b(?:pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|corp\.?|corporation|co\.?)\b/gi
 
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   return name
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
@@ -83,6 +84,26 @@ function normalizeName(name: string): string {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ── Input-shape guard ──────────────────────────────────────────────
+// Real failure mode found live 2026-07-15: a user pasted a company URL
+// (https://www.tcs.com/) into the ICP-segment field instead of a segment
+// phrase. Nothing downstream catches this — the URL becomes 8 nonsense
+// queries ("top companies in https://www.tcs.com/"), and a stray word from
+// an unrelated job-posting snippet ("Provide") survived
+// classifyCompanyRejection() (it's not a stopword or directory name) and
+// came back as a lone low-confidence "result." An ICP segment is always a
+// multi-word phrase or a bare industry term — never a single URL/domain
+// token — so this is safe to reject outright rather than spend 8 queries
+// producing a near-guaranteed-garbage result. Same "prefer under-confidence,
+// honest empty output" discipline as the rest of this codebase.
+const URL_OR_DOMAIN_SHAPE = /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/\S*)?$/i
+
+export function looksLikeUrlOrDomain(input: string): boolean {
+  const trimmed = input.trim()
+  if (!trimmed || /\s/.test(trimmed)) return false
+  return URL_OR_DOMAIN_SHAPE.test(trimmed)
 }
 
 // ── Rejection rules ───────────────────────────────────────────────
@@ -115,9 +136,13 @@ const NON_COMPANY_NAMES = [
 // Returns a rejection reason, or null if the candidate survives. Order
 // matters for diagnostic quality, same discipline as the sibling modules'
 // classifyRejection()/classifySegmentRejection().
-export function classifyCompanyRejection(name: string, excludeCompanyName: string | undefined): string | null {
-  if (excludeCompanyName && isSelfName(name, excludeCompanyName)) {
-    return 'self-name (matches the excluded/researched company)'
+export function classifyCompanyRejection(name: string, excludeCompanyNames: string[] | undefined): string | null {
+  if (excludeCompanyNames) {
+    for (const exclude of excludeCompanyNames) {
+      if (exclude && isSelfName(name, exclude)) {
+        return 'self-name (matches an excluded/researched company)'
+      }
+    }
   }
   for (const bad of NON_COMPANY_NAMES) {
     if (new RegExp(`\\b${escapeRegex(bad)}\\b`, 'i').test(name)) {
@@ -193,45 +218,241 @@ export function fallbackReason(candidate: CompanyDiscoveryCandidate, icpSegment:
 // matching this codebase's existing precedent (see website-discovery.ts /
 // competitor-discovery.ts / icp-generator.ts, each has its own copy).
 
+// Results-per-query bumped from the sibling modules' default of 3 to 10 —
+// company discovery specifically wants breadth (as many raw candidates as
+// possible to filter down), unlike competitor/ICP discovery which only need
+// a handful of high-signal snippets. Scoped locally via the new maxResults
+// param on searchTavily/searchSerper rather than changing their defaults,
+// so competitor-discovery.ts/icp-generator.ts/website-discovery.ts are
+// unaffected.
+const RESULTS_PER_QUERY = 10
+
 async function searchWithFallback(
   query: string,
   tavilyKey: string | undefined,
   serperKey: string | undefined,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
   if (tavilyKey) {
-    const results = await searchTavily(query, tavilyKey)
+    const results = await searchTavily(query, tavilyKey, RESULTS_PER_QUERY)
     if (results.length > 0) return results
   }
-  if (serperKey) return searchSerper(query, serperKey)
+  if (serperKey) return searchSerper(query, serperKey, RESULTS_PER_QUERY)
   return []
 }
 
+// 4 generic queries (as before) + 4 site:-restricted queries against known
+// structured B2B/company directories. Serper is a Google SERP wrapper so
+// `site:` operators work natively; Tavily's own index respects them loosely
+// (may return fewer/no results — searchWithFallback already tolerates that).
+// These directories were picked to match this repo's actual target
+// industries (manufacturing/industrial/automotive/SaaS/SMB, see CLAUDE.md) —
+// not an attempt at universal coverage.
 function buildCompanyDiscoveryQueries(icpSegment: string): string[] {
   return [
     `top companies in ${icpSegment}`,
     `leading ${icpSegment} companies`,
     `list of ${icpSegment} companies`,
     `${icpSegment} companies list`,
+    `${icpSegment} site:crunchbase.com`,
+    `${icpSegment} site:thomasnet.com`,
+    `${icpSegment} site:indiamart.com`,
+    `${icpSegment} site:kompass.com`,
   ]
+}
+
+// ── LLM-based extraction (validation layer, not a generator) ───────
+// Regex extraction alone was the direct cause of the "India"/"Number"/
+// "Employees" false positives found live 2026-07-15 — it has zero semantic
+// understanding, it just matches capitalization + a numbered/trigger shape.
+// This adds a second, independent extraction pass over the SAME raw search
+// text via the LLM, instructed to extract only names literally present in
+// the text (never invent from training knowledge). Names it finds still
+// flow through the exact same classifyCompanyRejection() filter as regex
+// names — this is a second candidate SOURCE, not a replacement for
+// filtering, and not a narration step (contrast with competitor-discovery.ts/
+// icp-generator.ts, which narrate LLM-approved candidates; this module still
+// has no narration, per its original design).
+// Prompt-building and response-parsing are pure/testable; the network call
+// itself fails soft (timeout, missing key, bad JSON -> null, caller falls
+// back to regex-only results, never hard-fails discovery).
+
+const LLM_EXTRACTION_RESULT_CAP = 25
+const LLM_EXTRACTION_TIMEOUT_MS = 25000
+
+export function buildLLMExtractionPrompt(
+  results: Array<{ title: string; content: string }>,
+  icpSegment: string,
+): { systemPrompt: string; userPrompt: string } {
+  const systemPrompt = [
+    'You are a strict text-extraction tool, not a knowledge base.',
+    'You extract real company/business names that are LITERALLY PRESENT in the given search-result text.',
+    'Never invent, infer, or add a company name from your own training knowledge, even if you recognize the industry — only names that appear verbatim in the text below.',
+    'Reject anything that is not the proper name of an actual business: generic words, country/region names, industry or category terms, numbers, dates, page filters/navigation text, or the names of directories/aggregators/news sites/social networks themselves (e.g. Crunchbase, LinkedIn, ThomasNet, IndiaMART, Kompass, G2, Wikipedia).',
+    'Respond with ONLY valid JSON, no prose, no markdown fences.',
+  ].join(' ')
+
+  const blocks = results
+    .map((r, i) => `[${i}] TITLE: ${r.title || '(no title)'}\nCONTENT: ${(r.content || '').slice(0, 500)}`)
+    .join('\n\n')
+
+  const userPrompt = [
+    `ICP segment being researched: "${icpSegment}"`,
+    '',
+    `Below are ${results.length} search-result snippets, each labeled with an index in brackets.`,
+    'For EACH index, list any real company names literally present in that snippet that plausibly belong to or serve this segment.',
+    'If none, use an empty array for that index. Every index from 0 to ' + (results.length - 1) + ' must appear exactly once in the output.',
+    '',
+    blocks,
+    '',
+    'Respond with a JSON array in exactly this shape:',
+    '[{"index": 0, "companies": ["Name A", "Name B"]}, {"index": 1, "companies": []}]',
+  ].join('\n')
+
+  return { systemPrompt, userPrompt }
+}
+
+export function parseLLMExtractionResponse(raw: string, expectedCount: number): string[][] {
+  const result: string[][] = Array.from({ length: expectedCount }, () => [])
+  try {
+    const cleaned = raw
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim()
+    const start = cleaned.indexOf('[')
+    const end = cleaned.lastIndexOf(']')
+    const jsonText = start !== -1 && end > start ? cleaned.slice(start, end + 1) : cleaned
+    const parsed: unknown = JSON.parse(jsonText)
+    if (!Array.isArray(parsed)) return result
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue
+      const { index, companies } = item as { index?: unknown; companies?: unknown }
+      if (typeof index !== 'number' || index < 0 || index >= expectedCount) continue
+      if (!Array.isArray(companies)) continue
+      result[index] = companies
+        .filter((n): n is string => typeof n === 'string' && n.trim().length >= 2)
+        .map(n => n.trim())
+    }
+  } catch {
+    return Array.from({ length: expectedCount }, () => [])
+  }
+  return result
+}
+
+// Returns names per result index (parallel to `results`), or null if the LLM
+// step is unavailable/failed entirely — caller treats null as "skip this
+// layer," not as an error.
+async function tryExtractCompaniesWithLLM(
+  results: Array<{ title: string; url: string; content: string }>,
+  icpSegment: string,
+): Promise<string[][] | null> {
+  const llmAvailable = !!(process.env.NVIDIA_NIM_API_KEY || process.env.OPENROUTER_API_KEY)
+  if (!llmAvailable || results.length === 0) return null
+
+  const capped = results.slice(0, LLM_EXTRACTION_RESULT_CAP)
+  const { systemPrompt, userPrompt } = buildLLMExtractionPrompt(capped, icpSegment)
+
+  try {
+    const response = await Promise.race([
+      getCompletion({ systemPrompt, userPrompt, maxTokens: 1500, temperature: 0, jsonMode: true }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('LLM extraction timeout')), LLM_EXTRACTION_TIMEOUT_MS)
+      ),
+    ])
+    const perCappedResult = parseLLMExtractionResponse(response.content, capped.length)
+    // Pad back out to the full results length — anything beyond the cap
+    // simply wasn't sent to the LLM, not a parse failure.
+    return results.map((_, i) => perCappedResult[i] ?? [])
+  } catch (e) {
+    console.warn('[CompanyDiscovery] LLM extraction skipped:', e instanceof Error ? e.message : String(e))
+    return null
+  }
+}
+
+// ── Already-researched dedup (cross-search) ─────────────────────────
+// discoverCompanies() itself has no DB access (kept Supabase-free, same as
+// every other lib/enrichment module — I/O happens at the route layer). This
+// is the pure matching logic the API route calls after fetching
+// pipeline_test_runs, so a repeat search (same segment re-run, or a
+// different segment surfacing an overlapping company) doesn't resurface a
+// company already sent through the research pipeline.
+
+export interface AlreadyResearchedRecord {
+  companyUrl: string | null
+  domain: string | null
+}
+
+export function normalizeDomain(input: string): string {
+  let s = input.trim().toLowerCase()
+  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '')
+  s = s.split('/')[0]
+  return s
+}
+
+export function filterAlreadyResearched(
+  companies: CompanyMatch[],
+  history: AlreadyResearchedRecord[],
+): { survivors: CompanyMatch[]; filteredOut: Array<{ name: string; reason: string }> } {
+  const seenDomains = new Set<string>()
+  const seenNames = new Set<string>()
+
+  for (const h of history) {
+    if (h.domain) seenDomains.add(normalizeDomain(h.domain))
+    if (h.companyUrl) {
+      const looksLikeDomainOrUrl = /^https?:\/\//i.test(h.companyUrl) || h.companyUrl.includes('.')
+      if (looksLikeDomainOrUrl) {
+        seenDomains.add(normalizeDomain(h.companyUrl))
+      } else {
+        const key = normalizeName(h.companyUrl)
+        if (key) seenNames.add(key)
+      }
+    }
+  }
+
+  const survivors: CompanyMatch[] = []
+  const filteredOut: Array<{ name: string; reason: string }> = []
+
+  for (const c of companies) {
+    const domainMatch = !!c.domain && seenDomains.has(normalizeDomain(c.domain))
+    const nameMatch = !c.domain && seenNames.has(normalizeName(c.name))
+    if (domainMatch || nameMatch) {
+      filteredOut.push({ name: c.name, reason: 'already researched in a prior run' })
+    } else {
+      survivors.push(c)
+    }
+  }
+
+  return { survivors, filteredOut }
 }
 
 // ── Main export ───────────────────────────────────────────────────
 
-const MAX_COMPANIES = 6
+// Raised from 6 — wider search net (more queries, more results/query) should
+// actually surface more candidates to the user, not get truncated back down.
+const MAX_COMPANIES = 10
 const MAX_SNIPPETS_PER_CANDIDATE = 2
 
 export async function discoverCompanies(
   icpSegment: string,
-  excludeCompanyName?: string,
+  excludeCompanyNames?: string[],
 ): Promise<CompanyDiscoveryResult> {
+  if (!icpSegment || icpSegment.trim().length === 0) {
+    return { companies: [], sufficiency: 'insufficient', reason: 'no ICP segment given to search for', candidates_considered: 0 }
+  }
+  if (looksLikeUrlOrDomain(icpSegment)) {
+    return {
+      companies: [],
+      sufficiency: 'insufficient',
+      reason: `"${icpSegment.trim()}" looks like a company URL/domain, not an ICP segment. This field expects a segment description (e.g. "oil and gas", "automotive manufacturers", "mid-size SaaS companies") — not the company itself. To find companies similar to a specific company, research that company first and copy one of its "Target Customer Segments," or use Competitor Discovery on that company's report.`,
+      candidates_considered: 0,
+    }
+  }
+
   const tavilyKey = process.env.TAVILY_API_KEY
   const serperKey = process.env.SERPER_API_KEY
 
   if (!tavilyKey && !serperKey) {
     return { companies: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
-  }
-  if (!icpSegment || icpSegment.trim().length === 0) {
-    return { companies: [], sufficiency: 'insufficient', reason: 'no ICP segment given to search for', candidates_considered: 0 }
   }
 
   const queries = buildCompanyDiscoveryQueries(icpSegment.trim())
@@ -252,13 +473,21 @@ export async function discoverCompanies(
   }
 
   // ── Extract + group raw candidates by normalized name ─────────────
+  // LLM extraction is a second, independent pass over the same raw text
+  // (see tryExtractCompaniesWithLLM above) — soft-fails to null if
+  // unavailable, in which case this falls back to regex-only exactly like
+  // before.
+  const llmNamesByResult = await tryExtractCompaniesWithLLM(allResults, icpSegment.trim())
+
   const grouped = new Map<string, { displayName: string; mention_count: number; source_urls: Set<string>; snippets: string[] }>()
 
-  for (const r of allResults) {
+  for (let i = 0; i < allResults.length; i++) {
+    const r = allResults[i]
     const names = [
       ...extractCompaniesAfterTrigger(r.title),
       ...extractCompaniesAfterTrigger(r.content),
       ...extractNumberedListCompanies(r.content),
+      ...(llmNamesByResult?.[i] ?? []),
     ]
     const namesInThisResult = new Set(names.map(n => n.trim()).filter(Boolean))
 
@@ -287,7 +516,7 @@ export async function discoverCompanies(
   const survivors: CompanyDiscoveryCandidate[] = []
 
   for (const c of grouped.values()) {
-    const rejectReason = classifyCompanyRejection(c.displayName, excludeCompanyName)
+    const rejectReason = classifyCompanyRejection(c.displayName, excludeCompanyNames)
     if (rejectReason) {
       rejected.push({ name: c.displayName, reason: rejectReason })
       continue
@@ -322,15 +551,23 @@ export async function discoverCompanies(
   // PER candidate via discoverCompanyWebsite()) — deliberately sequential,
   // not Promise.all, same "respect real quota limits" discipline as
   // batch-upload's researchSelected() loop (CLAUDE.md Item 7).
+  // A candidate with no confirmable domain is capped at 'low' confidence
+  // regardless of mention count — same "prefer under-confidence" discipline
+  // as the rest of this codebase (e.g. website-discovery.ts's single-word-
+  // name rule). This is a second, independent defense against the
+  // "India"/"Number"/"Employees" false-positive class: even if a junk name
+  // slipped past both extraction and the name-based filter, it almost
+  // certainly won't resolve to a real confirmed company domain either.
   const companies: CompanyMatch[] = []
   for (const { candidate, confidence } of tiered) {
     const site = await discoverCompanyWebsite(candidate.name)
+    const domainConfirmed = site.status === 'confirmed' && site.confidence !== 'none'
     companies.push({
       name: candidate.name,
-      domain: site.status === 'confirmed' ? site.domain ?? undefined : undefined,
+      domain: domainConfirmed ? site.domain ?? undefined : undefined,
       domain_confidence: site.status === 'confirmed' && site.confidence !== 'none' ? site.confidence : undefined,
       reason: fallbackReason(candidate, icpSegment),
-      confidence,
+      confidence: domainConfirmed ? confidence : 'low',
       source_urls: candidate.source_urls,
     })
   }

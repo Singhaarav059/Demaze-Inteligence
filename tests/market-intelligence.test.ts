@@ -99,4 +99,13 @@ describe('classifyStatementRejection — sanity filter on already-classified sen
   it('accepts a real, well-formed statement', () => {
     expect(classifyStatementRejection('The market is projected to grow at a CAGR of 8.2% through 2030 as manufacturers adopt automation.')).toBeNull()
   })
+
+  it('rejects report/page titles ending in a bare year with no prose connector (found live against demazetech.com)', () => {
+    expect(classifyStatementRejection('Deep Tech Market Size, Share, Growth , Outlook, Trends 2035')).toMatch(/report\/page title/)
+    expect(classifyStatementRejection('Deep Tech Market Size, Share & Growth Report 2026-2033')).toMatch(/report\/page title/)
+  })
+
+  it('does not reject a real growth-indicator sentence that happens to end near a year', () => {
+    expect(classifyStatementRejection('The Deep Tech industry is projected to grow from 150.15 USD Billion in 2025 to 476.51 USD Billion by 2035, exhibiting a compound annual growth rate (CAGR) of 12.24% during the forecast period 2025 - 2035')).toBeNull()
+  })
 })
