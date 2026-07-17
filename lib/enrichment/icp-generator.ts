@@ -219,6 +219,18 @@ const LEFTOVER_CONNECTOR = /^\s*(?:include[sd]?|including|are|range\s+from|acros
 // and must fall through to the inline comma-list branch below).
 const LEADING_HEADING_PUNCTUATION = /^\s*[.!?]+\s*/
 
+// Email addresses / bare domains (e.g. "contact@demazetech.com") contain a
+// period that isn't a sentence boundary — splitting on /[.!?]+/ below treats
+// it as one anyway, producing a junk fragment made of just the TLD ("com").
+// Found live 2026-07-16 against demazetech.com's own "Industries We Serve."
+// heading, which is immediately followed by a mailto-style contact line in
+// the same search snippet; confirmed by the LLM's own narration on the bad
+// segment: "Appears to be a parsing artifact from 'contact@demazetech.com'".
+// Stripped before either extraction branch runs, not just the heading-list
+// one, since the same period-inside-a-domain shape could just as easily land
+// in the inline comma-list branch.
+const EMAIL_OR_DOMAIN = /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g
+
 // A period-delimited "sentence" this far into the heading either isn't a
 // list item anymore (real prose resumed) or is page-chrome boilerplate —
 // stop collecting rather than risk absorbing junk. Checked BEFORE the
@@ -244,7 +256,7 @@ function extractHeadingStyleList(after: string): string[] {
 export function extractSegmentsAfterTrigger(text: string): string[] {
   const m = SEGMENT_LIST_TRIGGER.exec(text)
   if (!m) return []
-  const after = text.slice(m.index + m[0].length, m.index + m[0].length + 200)
+  const after = text.slice(m.index + m[0].length, m.index + m[0].length + 200).replace(EMAIL_OR_DOMAIN, ' ')
 
   const leadingPunct = LEADING_HEADING_PUNCTUATION.exec(after)
   if (leadingPunct && leadingPunct[0].length > 0) {

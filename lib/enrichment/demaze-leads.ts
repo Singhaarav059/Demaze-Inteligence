@@ -19,6 +19,7 @@
 
 import type { CompanyMatch, CompanyMatchConfidence } from './company-discovery'
 import { normalizeDomain, normalizeName } from './company-discovery'
+import { normalizeSegmentName, type ICPSegment } from './icp-generator'
 
 export const DEMAZE_URL = 'https://www.demazetech.com/'
 export const DEMAZE_DOMAIN = 'demazetech.com'
@@ -26,6 +27,49 @@ export const DEMAZE_DOMAIN = 'demazetech.com'
 // Demaze never lists itself as its own lead — same isSelfName() word-overlap
 // check every other discovery module already uses for this.
 export const DEMAZE_EXCLUDE_NAMES = ['Demaze', 'Demaze Technologies', 'Demaze Tech', 'Demazetech']
+
+// Demaze's confirmed target industries, given directly (not inferred) — see
+// CLAUDE.md's opening "Target industries" line and DEMAZE_CAPABILITY_MAP.md's
+// "Draft — Ideal Customer Problems" section. Found live 2026-07-17: the
+// Discover page's Target Sectors step was showing ONLY whatever
+// discoverICPSegments() happened to extract from demazetech.com's own
+// homepage copy — a single, thin "Industries We Serve: Healthcare,
+// Telemedicine Platforms, Electronic Health" blurb — which badly
+// under-represents Demaze's actual scope (Demaze is a services company
+// that sells INTO these industries broadly; its 8 confirmed service lines
+// aren't industry-specific). The research-derived pass is still real and
+// kept (a company's own site CAN legitimately state served industries, and
+// might surface a genuinely new one over time) — this list is merged
+// alongside it, not a replacement, so neither source silently overrides
+// the other.
+export const DEMAZE_CONFIRMED_SECTORS = [
+  'Manufacturing', 'Automotive', 'Industrial', 'SaaS', 'Financial Institutions', 'SMBs',
+] as const
+
+function confirmedSectorAsICPSegment(name: string): ICPSegment {
+  return {
+    name,
+    reason: 'Confirmed Demaze target industry (see CLAUDE.md "Target industries" / DEMAZE_CAPABILITY_MAP.md) — not derived from a live search, given directly.',
+    signals: [],
+    confidence: 'high',
+    source_urls: [],
+  }
+}
+
+// Merges the confirmed ground-truth sector list into whatever
+// discoverICPSegments() surfaced from the company's own site, deduping by
+// normalized name so a sector the research already found for real isn't
+// shown twice with two different `reason` strings. Confirmed sectors are
+// appended after the research-derived ones (real search evidence first),
+// same "research first, ground truth fills the gaps" ordering as everywhere
+// else this repo merges a code-derived list with a supplementary one.
+export function withConfirmedSectors(researched: ICPSegment[]): ICPSegment[] {
+  const existing = new Set(researched.map(s => normalizeSegmentName(s.name)))
+  const additions = DEMAZE_CONFIRMED_SECTORS
+    .filter(name => !existing.has(normalizeSegmentName(name)))
+    .map(confirmedSectorAsICPSegment)
+  return [...researched, ...additions]
+}
 
 // One lead, aggregated across however many ICP segments surfaced it. Extends
 // CompanyMatch (rather than duplicating its fields) so this still satisfies

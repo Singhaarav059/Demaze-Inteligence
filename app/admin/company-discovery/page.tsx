@@ -277,7 +277,7 @@ function CompanyDiscoveryInner() {
       {profileStatus === 'ready' && (
         <Card className="bg-card border-border">
           <CardContent className="px-5 py-4 space-y-3">
-            <StepHeader n={2} title="Target Sectors" subtitle="Sectors where Demaze can provide value, surfaced from its own real research." />
+            <StepHeader n={2} title="Target Sectors" subtitle="Demaze's confirmed target industries, plus any additional sectors surfaced from its own real research." />
             <div className="pl-9">
               {demazeSegments.length === 0 ? (
                 <p className="text-muted-foreground/70 text-xs">No target sectors surfaced by Demaze&rsquo;s cached research yet.</p>

@@ -122,6 +122,15 @@ describe('extractSegmentsAfterTrigger — segment-list extraction', () => {
     )
     expect(names).toEqual(['Automotive'])
   })
+
+  it('does not split an email/domain\'s internal period into a junk TLD fragment (live 2026-07-17 bug: "com" surfaced as its own segment from "contact@demazetech.com")', () => {
+    const names = extractSegmentsAfterTrigger(
+      "Industries We Serve. Healthcare. Telemedicine Platforms. Electronic Health ... contact@demazetech.com. Feel free to book a call if that's more convenient ..."
+    )
+    expect(names).toEqual(expect.arrayContaining(['Healthcare', 'Telemedicine Platforms']))
+    expect(names).not.toContain('com')
+    expect(names.some(n => n.includes('@'))).toBe(false)
+  })
 })
 
 describe('tierConfidence — confidence tiering', () => {

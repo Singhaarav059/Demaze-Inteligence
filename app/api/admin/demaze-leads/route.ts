@@ -33,7 +33,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { discoverCompanies, filterAlreadyResearched, type CompanyMatch } from '@/lib/enrichment/company-discovery'
-import { aggregateLeadsAcrossSegments, DEMAZE_DOMAIN, DEMAZE_EXCLUDE_NAMES } from '@/lib/enrichment/demaze-leads'
+import { aggregateLeadsAcrossSegments, withConfirmedSectors, DEMAZE_DOMAIN, DEMAZE_EXCLUDE_NAMES } from '@/lib/enrichment/demaze-leads'
 import type { ICPSegment } from '@/lib/enrichment/icp-generator'
 
 export async function POST(req: NextRequest) {
@@ -71,7 +71,11 @@ export async function POST(req: NextRequest) {
   }
 
   const finalResult = cached.final_result as { icp_segments?: ICPSegment[] }
-  const icpSegments = finalResult.icp_segments ?? []
+  // Merged with Demaze's confirmed, ground-truth target industries (see
+  // withConfirmedSectors()'s own header comment) — the research-derived
+  // pass alone badly under-represents Demaze's real scope when
+  // demazetech.com's own "Industries We Serve" copy is thin/narrow.
+  const icpSegments = withConfirmedSectors(finalResult.icp_segments ?? [])
 
   if (icpSegments.length === 0) {
     return NextResponse.json({
