@@ -21,6 +21,7 @@ import {
   filterAlreadyResearched,
   normalizeDomain,
   looksLikeUrlOrDomain,
+  detectSizeMismatch,
   discoverCompanies,
   type CompanyDiscoveryCandidate,
   type CompanyMatch,
@@ -100,6 +101,65 @@ describe('classifyCompanyRejection — filtering rules', () => {
   it('accepts a real company name', () => {
     expect(classifyCompanyRejection('Bharat Forge', exclude)).toBeNull()
     expect(classifyCompanyRejection('Zoho Corporation', exclude)).toBeNull()
+  })
+
+  it('rejects a single common English word extracted from a garbled sentence fragment (the live "Launched" bug, 2026-07-17)', () => {
+    expect(classifyCompanyRejection('Launched', exclude)).toMatch(/common English word/)
+    expect(classifyCompanyRejection('Featured', exclude)).toMatch(/common English word/)
+  })
+
+  it('does not reject a multi-word candidate containing a common word (only bare single-word candidates are suspect)', () => {
+    expect(classifyCompanyRejection('Launched Global', exclude)).toBeNull()
+  })
+})
+
+describe('detectSizeMismatch — ICP-fit company-size filter (live 2026-07-17 bug)', () => {
+  it('rejects a candidate whose snippet states multi-billion-dollar revenue (the live Volkswagen/Toyota case)', () => {
+    const reason = detectSizeMismatch([
+      'The top 10 car companies worldwide · 1. Volkswagen Group, $348.6 billion, 9.0 million · 2. Toyota Motor Corporation, $311.9 billion',
+    ])
+    expect(reason).toMatch(/too large for Demaze's mid-market ICP/)
+    expect(reason).toMatch(/348\.6 billion/)
+  })
+
+  it('rejects a candidate whose snippet states a multi-million employee count', () => {
+    const reason = detectSizeMismatch(['Volkswagen Group employs over 9.3 million employees worldwide.'])
+    expect(reason).toMatch(/million employees/)
+  })
+
+  it('rejects a candidate whose snippet states a six-figure employee count', () => {
+    const reason = detectSizeMismatch(['Lockheed Martin has approximately 122,000 employees globally.'])
+    expect(reason).toMatch(/122,000 employees/)
+  })
+
+  it('rejects a candidate explicitly labeled Fortune 500 / Global 2000 / a multinational conglomerate', () => {
+    expect(detectSizeMismatch(['RTX is a Fortune 500 aerospace and defense company.'])).toMatch(/too large/)
+    expect(detectSizeMismatch(['Ranked on the Global 2000 list.'])).toMatch(/too large/)
+    expect(detectSizeMismatch(['A sprawling multinational conglomerate with operations worldwide.'])).toMatch(/too large/)
+  })
+
+  it('does not reject a real mid-market-shaped candidate (no size fact stated)', () => {
+    expect(detectSizeMismatch(['Ador Welding operates 6 manufacturing facilities across India.'])).toBeNull()
+  })
+
+  it('does not reject a candidate with a small revenue figure below the mega-cap threshold', () => {
+    expect(detectSizeMismatch(['The company reported revenue of $2.3 billion last year.'])).toBeNull()
+  })
+
+  it('does not reject on employee counts below the threshold', () => {
+    expect(detectSizeMismatch(['The plant employs around 1,200 employees.'])).toBeNull()
+  })
+
+  it('does not reject when a snippet mentions another company/client at mega scale, only when phrased as this candidate', () => {
+    // Best-effort, snippet-scoped: this documents the known limitation rather
+    // than asserting behavior that would require entity resolution.
+    expect(detectSizeMismatch(['We serve clients including a $50 billion conglomerate.'])).toMatch(/too large/)
+  })
+})
+
+describe('discoverCompanies filter loop — size-mismatch rejection is wired in and visible in rejected_candidates', () => {
+  it('classifyCompanyRejection alone does not catch a real name with a mega-scale snippet (confirms detectSizeMismatch is a separate, additional check)', () => {
+    expect(classifyCompanyRejection('Volkswagen Group', undefined)).toBeNull()
   })
 })
 

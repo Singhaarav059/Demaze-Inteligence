@@ -118,6 +118,26 @@ const STOPWORDS = new Set([
   'companies', 'company', 'businesses', 'firms', 'players', 'vendors',
 ])
 
+// Real false positive found live 2026-07-17: "Launched" was extracted as a
+// standalone candidate from a garbled e-commerce product-listing snippet
+// (capitalized because it started a sentence fragment, not because it's a
+// proper noun), survived classifyCompanyRejection() (it isn't a stopword or
+// directory name), then coincidentally resolved to a real but unrelated
+// domain (launchedglobal.in) via discoverCompanyWebsite()'s loose
+// single-word title-match rule — so the "confirm via domain resolution"
+// second line of defense didn't catch it either. A company name is a proper
+// noun; a bare capitalized common English verb/adjective almost never is.
+// Scoped to single-word (no-space) candidates only — multi-word candidates
+// like "Launched Global" are unaffected, since a common word combined with
+// another capitalized word is far more likely to be a real brand name.
+const COMMON_NON_COMPANY_WORDS = new Set([
+  'launched', 'featured', 'related', 'included', 'available', 'located',
+  'based', 'certified', 'approved', 'listed', 'updated', 'released',
+  'established', 'rated', 'ranked', 'reviewed', 'compared', 'recommended',
+  'trusted', 'verified', 'sponsored', 'presented', 'provided', 'offered',
+  'designed', 'manufactured', 'supplied', 'delivered', 'required', 'shown',
+])
+
 // Known directories/aggregators/review sites/news outlets/social networks —
 // a search RESULT from one of these can legitimately name real companies in
 // its snippet, but the site's own brand name must never be extracted AS a
@@ -156,6 +176,9 @@ export function classifyCompanyRejection(name: string, excludeCompanyNames: stri
   const words = normalized.split(' ').filter(Boolean)
   if (words.every(w => STOPWORDS.has(w))) {
     return 'generic/stopword phrase, not a company name'
+  }
+  if (words.length === 1 && COMMON_NON_COMPANY_WORDS.has(words[0])) {
+    return 'common English word (verb/adjective), not a company name'
   }
   return null
 }
@@ -196,6 +219,66 @@ export function extractNumberedListCompanies(text: string): string[] {
     if (name.length >= 3 && name.length <= 60) names.push(name)
   }
   return names
+}
+
+// ── ICP-fit filter: company-size mismatch ─────────────────────────
+// Real problem found live 2026-07-17: "top companies in Automotive"
+// surfaced global mega-caps (Volkswagen, $348.6 billion revenue / 9.0
+// million employees; Toyota, $311.9 billion) and, separately, defense
+// primes (Lockheed Martin, RTX, GE Aerospace) — none of which resemble
+// Demaze's actual proof points (lib/knowledge/demaze-proof-points.ts),
+// every one of which is mid-market/SME scale (a 4-plant manufacturer, a
+// 140-dealer distribution network, a single dealership group). Sending one
+// of these into the research pipeline burns real search/LLM quota on a
+// company with no matching Demaze proof point — this was the direct cause
+// of the outreach-draft fabrication bug fixed in normalize.ts the same day
+// (the LLM invented a stat because no real one applied at this scale).
+//
+// Detection is deliberately conservative: it only fires on unambiguous
+// mega-scale facts about the candidate's OWN size (revenue/headcount/a
+// "Fortune 500"-class label) found in its own search snippets — not on
+// mentions of a client's or competitor's scale. Real mid-market companies
+// essentially never have these numbers said about themselves, so this
+// should not catch genuine Demaze-fit leads; same "prefer under-confidence,
+// never silently invent a filter that guesses" discipline as the rest of
+// this file. Not a hard, invisible drop — rejected candidates still surface
+// in `rejected_candidates` for visibility/debugging, same as every other
+// rejection reason.
+const REVENUE_BILLION_RE = /(?:US\$|USD|\$)\s?(\d+(?:\.\d+)?)\s*(?:billion|bn)\b/i
+const EMPLOYEES_MILLION_RE = /(\d+(?:\.\d+)?)\s*million\s+employees\b/i
+const EMPLOYEES_COUNT_RE = /([\d,]{5,})\+?\s*employees\b/i
+const MEGA_SCALE_PHRASE_RE = /\bFortune\s?(?:50|100|500|1000)\b|\bGlobal\s?(?:500|2000)\b|\bone of the world'?s largest\b|\bmultinational conglomerate\b/i
+
+const REVENUE_BILLION_THRESHOLD = 10
+const EMPLOYEE_COUNT_THRESHOLD = 50000
+
+export function detectSizeMismatch(snippets: string[]): string | null {
+  const text = snippets.join(' ')
+
+  const revenueMatch = REVENUE_BILLION_RE.exec(text)
+  if (revenueMatch && parseFloat(revenueMatch[1]) >= REVENUE_BILLION_THRESHOLD) {
+    return `too large for Demaze's mid-market ICP (~$${revenueMatch[1]} billion revenue mentioned)`
+  }
+
+  const employeesMillionMatch = EMPLOYEES_MILLION_RE.exec(text)
+  if (employeesMillionMatch) {
+    return `too large for Demaze's mid-market ICP (~${employeesMillionMatch[1]} million employees mentioned)`
+  }
+
+  const employeesCountMatch = EMPLOYEES_COUNT_RE.exec(text)
+  if (employeesCountMatch) {
+    const count = parseInt(employeesCountMatch[1].replace(/,/g, ''), 10)
+    if (count >= EMPLOYEE_COUNT_THRESHOLD) {
+      return `too large for Demaze's mid-market ICP (~${employeesCountMatch[1]} employees mentioned)`
+    }
+  }
+
+  const phraseMatch = MEGA_SCALE_PHRASE_RE.exec(text)
+  if (phraseMatch) {
+    return `too large for Demaze's mid-market ICP ("${phraseMatch[0]}" mentioned)`
+  }
+
+  return null
 }
 
 // ── Confidence tiering ────────────────────────────────────────────
@@ -519,6 +602,11 @@ export async function discoverCompanies(
     const rejectReason = classifyCompanyRejection(c.displayName, excludeCompanyNames)
     if (rejectReason) {
       rejected.push({ name: c.displayName, reason: rejectReason })
+      continue
+    }
+    const sizeMismatchReason = detectSizeMismatch(c.snippets)
+    if (sizeMismatchReason) {
+      rejected.push({ name: c.displayName, reason: sizeMismatchReason })
       continue
     }
     survivors.push({

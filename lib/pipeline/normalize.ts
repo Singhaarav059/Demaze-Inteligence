@@ -468,6 +468,15 @@ const num = (v: unknown, fallback = 0): number =>
 const arr = <T>(v: unknown): T[] =>
   Array.isArray(v) ? (v as T[]) : []
 
+// Numeric/stat-shaped tokens (percentages, multipliers, day counts, crore
+// figures) — used by the outreach_draft grounding check below to detect
+// when the LLM cites a stat that doesn't trace back to the matched Demaze
+// proof point's real outcomes. Sign-stripped so "-54%" and "+11%" compare
+// on magnitude, since a paraphrase flipping the sign isn't a fabrication.
+const STAT_TOKEN_RE = /[+-]?\d+(?:\.\d+)?\s?(?:%|x\b|days?\b|hours?\b|hrs?\b|cr\b)/gi
+const extractStatTokens = (text: string): string[] =>
+  (text.match(STAT_TOKEN_RE) ?? []).map(t => t.replace(/^[+-]/, '').replace(/\s+/g, '').toLowerCase())
+
 // ── Section flattening ─────────────────────────────────────────
 
 // SECTION_KEYS maps section wrapper names ONLY — NOT output field names.
@@ -886,15 +895,22 @@ export function normalizeAnalysisResult(
   }
   const outreach_angle = str(flat.outreach_angle ?? outreach_intelligence.opening_angle)
 
+  // ── Flags & warnings ─────────────────────────────────────────
+  // Declared ahead of outreach_draft below so its grounding check (safety
+  // net 2) can push directly into the same array.
+  const content_quality_flags: string[] = arr<string>(flat.content_quality_flags)
+  const validation_warnings: string[]   = arr<string>(flat.validation_warnings)
+
   // ── Outreach draft (2026-07-16) ──────────────────────────────
-  // Safety net: matched_proof_point_id is only trusted if it echoes a real
+  // Safety net 1: matched_proof_point_id is only trusted if it echoes a real
   // id from the candidate list route.ts actually gave the LLM
   // (_proof_point_candidates, from matchProofPoints()) — same
   // belt-and-suspenders discipline as research-quality.ts's self-name-
   // collision check, protecting against the LLM echoing a malformed or
   // invented id despite the prompt's "copy exactly or leave empty" rule.
+  const proofPointCandidatesRaw = arr<{ id?: unknown; outcomes?: unknown }>(flat._proof_point_candidates)
   const proofPointCandidateIds = new Set(
-    (arr<{ id?: unknown }>(flat._proof_point_candidates)).map(p => str(p?.id)).filter(Boolean)
+    proofPointCandidatesRaw.map(p => str(p?.id)).filter(Boolean)
   )
   const rawOD = flat.outreach_draft
   let outreach_draft: OutreachDraft = {
@@ -903,17 +919,45 @@ export function normalizeAnalysisResult(
   if (rawOD && typeof rawOD === 'object') {
     const od = rawOD as Record<string, unknown>
     const claimedId = str(od.matched_proof_point_id)
+    const claimedIdValid = proofPointCandidateIds.has(claimedId)
     outreach_draft = {
-      matched_proof_point_id: proofPointCandidateIds.has(claimedId) ? claimedId : '',
+      matched_proof_point_id: claimedIdValid ? claimedId : '',
       connection_note: str(od.connection_note),
       first_message:   str(od.first_message),
       follow_up:        str(od.follow_up),
     }
-  }
 
-  // ── Flags & warnings ─────────────────────────────────────────
-  const content_quality_flags: string[] = arr<string>(flat.content_quality_flags)
-  const validation_warnings: string[]   = arr<string>(flat.validation_warnings)
+    // Safety net 2 (2026-07-17): even when matched_proof_point_id echoes a
+    // real id, the LLM can still fabricate the stat/client text around it —
+    // confirmed live (an aerospace/defense company run invented "a major
+    // turbine producer" and "45%" for its outreach draft, neither of which
+    // appears anywhere in demaze-proof-points.ts, despite the prompt's
+    // explicit "never invent a stat" rule). Cross-check every numeric/stat-
+    // shaped token in the drafted text against the matched proof point's
+    // REAL outcome values; if the draft cites a stat that doesn't trace back
+    // to real data, the grounding is broken — clear the id so the UI never
+    // implies this text is backed by a real Demaze result, and warn loudly
+    // so a human reviews it before send (send already requires explicit
+    // per-batch confirmation regardless, see CLAUDE.md).
+    if (claimedIdValid) {
+      const matched = proofPointCandidatesRaw.find(p => str(p?.id) === claimedId)
+      const outcomes = arr<{ value?: unknown; window?: unknown }>(matched?.outcomes)
+      const realStatTokens = new Set(
+        outcomes.flatMap(o => extractStatTokens(`${str(o?.value)} ${str(o?.window)}`))
+      )
+      const draftText = `${outreach_draft.connection_note} ${outreach_draft.first_message} ${outreach_draft.follow_up}`
+      const draftStatTokens = extractStatTokens(draftText)
+      const hasUngroundedStat = draftStatTokens.length > 0 && !draftStatTokens.some(
+        t => Array.from(realStatTokens).some(r => r === t || r.includes(t) || t.includes(r))
+      )
+      if (hasUngroundedStat) {
+        outreach_draft.matched_proof_point_id = ''
+        validation_warnings.push(
+          `outreach_draft cites a stat (${draftStatTokens.join(', ')}) not found in the matched proof point's real outcomes — likely fabricated, matched_proof_point_id cleared. Review before sending.`
+        )
+      }
+    }
+  }
 
   const llmFlagsActive     = Object.values(llmFactors).filter(Boolean).length
   const derivedFlagsActive = Object.values(detected_factors).filter(Boolean).length
