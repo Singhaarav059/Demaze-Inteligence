@@ -79,9 +79,20 @@ function wordMatchRatio(words: string[], text: string): number {
 }
 
 // ── Lightweight homepage identity fetch ─────────────────────────
-// Plain fetch + HTML parse, NOT a Firecrawl scrape — this runs against
-// unconfirmed candidates (up to ~4 per request), so it must be cheap. Firecrawl
-// only gets used later, once a domain is actually confirmed.
+// Plain fetch + HTML parse first — this runs against unconfirmed candidates
+// (up to ~4 per request), so the common case must stay cheap. If the plain
+// fetch fails or times out, fall back to a single Firecrawl scrape of the
+// same URL before giving up — plain fetch has no anti-bot handling, JS
+// rendering, or retry logic, so a real, correctly-named candidate domain can
+// still score 'none' purely because the homepage fetch itself failed (this
+// is exactly what happened live for ATE Group: Serper surfaced the right
+// domain, ategroup.com, but the plain-fetch verification step timed out
+// against it, so discovery fell through to 'not_found' instead of
+// confirming a real match — logged in CLAUDE.md as a known, not-yet-fixed
+// precision gap). Firecrawl is already used elsewhere in this pipeline
+// (scraper.ts, web-enricher.ts) for exactly this reliability reason; this
+// reuses the same fetchWithFirecrawl() calling pattern rather than inventing
+// a new one.
 
 interface HomepageIdentity {
   title: string
@@ -89,7 +100,7 @@ interface HomepageIdentity {
   bodySnippet: string
 }
 
-async function fetchHomepageIdentity(url: string): Promise<HomepageIdentity | null> {
+async function fetchHomepageIdentityPlain(url: string): Promise<HomepageIdentity | null> {
   try {
     const resp = await Promise.race([
       fetch(url, {
@@ -116,6 +127,49 @@ async function fetchHomepageIdentity(url: string): Promise<HomepageIdentity | nu
   } catch {
     return null
   }
+}
+
+async function fetchHomepageIdentityViaFirecrawl(url: string): Promise<HomepageIdentity | null> {
+  const firecrawlKey = process.env.FIRECRAWL_API_KEY
+  if (!firecrawlKey) return null
+
+  try {
+    const { default: Firecrawl } = await import('@mendable/firecrawl-js')
+    const app = new Firecrawl({ apiKey: firecrawlKey })
+
+    const result = await Promise.race([
+      app.scrapeUrl(url, { formats: ['markdown'] }),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 12_000)),
+    ])
+
+    if (!result) return null
+    const r = result as Record<string, unknown>
+    // NOTE: the installed @mendable/firecrawl-js version returns the scraped
+    // document directly (just { markdown, metadata, ... }) on success and
+    // throws (caught below) on failure — there is no `.success` field on this
+    // SDK version despite some older call sites in this repo checking for one
+    // (see fetchWithFirecrawl() in web-enricher.ts, same stale assumption,
+    // confirmed live: `r.success` is `undefined` on a real successful scrape).
+    // Presence of markdown/metadata is the actual success signal here.
+    const metadata = (r.metadata ?? {}) as { title?: string; description?: string }
+    const markdown = typeof r.markdown === 'string' ? r.markdown : ''
+    const bodySnippet = markdown
+      .replace(/[#*_`>\-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 2_000)
+
+    if (!metadata.title && !metadata.description && !bodySnippet) return null
+    return { title: metadata.title ?? '', description: metadata.description ?? '', bodySnippet }
+  } catch {
+    return null
+  }
+}
+
+async function fetchHomepageIdentity(url: string): Promise<HomepageIdentity | null> {
+  const plain = await fetchHomepageIdentityPlain(url)
+  if (plain) return plain
+  return fetchHomepageIdentityViaFirecrawl(url)
 }
 
 // ── Confidence scoring ───────────────────────────────────────────

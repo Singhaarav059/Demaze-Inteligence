@@ -132,6 +132,19 @@ const RECOVERY_PATHS_CONSUMER_OVERRIDE = [
 // ── FIX 4: Real Firecrawl timeout via Promise.race ───────────
 // Previous: const timer = setTimeout(() => {}, timeoutMs)  — empty callback, inert.
 // Now: Promise.race cancels the fetch path if the deadline fires first.
+//
+// BUG FOUND AND FIXED (2026-07-17): the installed @mendable/firecrawl-js
+// version does NOT return a `.success` field on a successful scrape — it
+// returns the document directly (`{ markdown, metadata, ... }`) and throws
+// (caught below) on failure, same shape confirmed live in website-discovery.ts's
+// Firecrawl fallback. The old `if (r.success && ...)` check meant `r.success`
+// was always `undefined`, so this function silently returned `null` on every
+// successful scrape — every enrichment source fetch (discoverAndFetchExternalSources,
+// probeRecoveryPaths) was falling through to the snippet-only fallback path
+// this whole time instead of ever using full Firecrawl-fetched content.
+// Also switched scrapeUrl() -> scrape(): this repo's scraper.ts already
+// documents scrapeUrl() as deprecated in the installed v4.x SDK; scrape() is
+// the current method, same return shape.
 
 async function fetchWithFirecrawl(url: string, timeoutMs = 12_000): Promise<string | null> {
   const firecrawlKey = process.env.FIRECRAWL_API_KEY
@@ -142,13 +155,13 @@ async function fetchWithFirecrawl(url: string, timeoutMs = 12_000): Promise<stri
     const app = new Firecrawl({ apiKey: firecrawlKey })
 
     const result = await Promise.race([
-      app.scrapeUrl(url, { formats: ['markdown'] }),
+      app.scrape(url, { formats: ['markdown'] }),
       new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs)),
     ])
 
     if (!result) return null
     const r = result as Record<string, unknown>
-    if (r.success && typeof r.markdown === 'string') {
+    if (typeof r.markdown === 'string' && r.markdown.trim().length > 0) {
       return r.markdown.slice(0, 6_000)  // per-source cap (reasonable); total is not capped
     }
     return null
