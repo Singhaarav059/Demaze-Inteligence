@@ -14,6 +14,7 @@
 // ============================================================
 
 import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { RunResult } from '../intelligence-lab/_types'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { CompanyMatch, CompanyDiscoverySufficiency } from '@/lib/enrichment/company-discovery'
@@ -178,6 +179,8 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
     stopRequested.current = false
 
     let consecutiveQuotaHits = 0
+    let succeededCount = 0
+    let paused = false
 
     for (let i = 0; i < queue.length; i++) {
       if (stopRequested.current) break
@@ -198,6 +201,7 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
         })
         const data: RunResult = await res.json()
 
+        if (data.success) succeededCount += 1
         updateCompany(item.company.id, {
           status: data.success ? 'done' : 'failed',
           result: data,
@@ -209,9 +213,10 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
         const quotaMsg = quotaSignatureIn(data)
         consecutiveQuotaHits = nextConsecutiveHits(consecutiveQuotaHits, quotaMsg)
         if (quotaMsg && shouldPauseBatch(consecutiveQuotaHits)) {
-          setPausedReason(
-            `Stopped at company ${i + 1} of ${queue.length}, quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
-          )
+          const reason = `Stopped at company ${i + 1} of ${queue.length}, quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
+          setPausedReason(reason)
+          toast.warning('Batch paused — quota likely exhausted', { description: `Stopped at company ${i + 1} of ${queue.length}. Already-completed results are saved.` })
+          paused = true
           break
         }
       } catch (e) {
@@ -224,6 +229,9 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
 
     setRunning(false)
     setProgress(null)
+    if (!stopRequested.current && !paused) {
+      toast.success(`Research complete — ${succeededCount} of ${queue.length} succeeded`)
+    }
   }
 
   function stopBatch() {

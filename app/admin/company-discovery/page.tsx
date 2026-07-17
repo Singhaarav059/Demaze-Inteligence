@@ -32,10 +32,16 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
+import { InfoTooltip } from '@/components/ui/tooltip'
+import { fadeSlideUp } from '@/lib/motion'
 import type { RunResult } from '../intelligence-lab/_types'
 import type { ICPSegment } from '@/lib/enrichment/icp-generator'
 import { DEMAZE_URL } from '@/lib/enrichment/demaze-leads'
@@ -44,16 +50,75 @@ import { CompanyMatchList } from './CompanyMatchList'
 
 type ProfileStatus = 'idle' | 'checking' | 'needs_research' | 'researching' | 'ready' | 'error'
 
-function StepHeader({ n, title, subtitle }: { n: number; title: string; subtitle: string }) {
+function StepHeader({ n, title, subtitle, done, tooltip }: { n: number; title: string; subtitle: string; done?: boolean; tooltip?: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 size-6 rounded-full bg-primary/15 text-primary text-xs font-semibold flex items-center justify-center mt-0.5">
-        {n}
+      <div className="relative flex-shrink-0 size-6 mt-0.5 grid place-items-center">
+        <AnimatePresence mode="wait" initial={false}>
+          {done ? (
+            <motion.div
+              key="done"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="size-6 rounded-full bg-signal-strong/15 text-signal-strong flex items-center justify-center"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="size-3.5" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 10.5L8 14.5L16 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="num"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="size-6 rounded-full bg-primary/15 text-primary text-xs font-semibold flex items-center justify-center"
+            >
+              {n}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <div>
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          {title}
+          {tooltip && <InfoTooltip>{tooltip}</InfoTooltip>}
+        </h2>
         <p className="text-muted-foreground/70 text-xs mt-0.5">{subtitle}</p>
       </div>
+    </div>
+  )
+}
+
+// Placeholder rows shown while an async step is in flight, so the layout
+// doesn't jump from "nothing" to "content" — replaces the previous
+// button-text-only loading states ("Checking…", "Finding leads…").
+function ChipSkeletons() {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {[72, 96, 64, 108, 80, 60].map((w, i) => (
+        <Skeleton key={i} className="h-6 rounded-full" style={{ width: w }} />
+      ))}
+    </div>
+  )
+}
+
+function CompanyRowSkeletons() {
+  return (
+    <div className="space-y-1.5">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="rounded-lg border border-border bg-card px-3 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded" />
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-14 rounded-full" />
+          </div>
+          <Skeleton className="h-3 w-2/3" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -147,10 +212,12 @@ function CompanyDiscoveryInner() {
         { id: 'demaze', companyName: 'Demaze', companyWebsite: DEMAZE_URL, contacts: [], possibleDuplicateOf: [] },
         data,
       )
+      toast.success('Demaze research complete')
       await checkDemazeProfile()
     } catch (e) {
       setProfileStatus('error')
       setProfileMessage(e instanceof Error ? e.message : 'Network error while researching Demaze')
+      toast.error('Demaze research failed', { description: e instanceof Error ? e.message : undefined })
     }
   }
 
@@ -193,6 +260,7 @@ function CompanyDiscoveryInner() {
 
       if (!data.success) {
         setSearchError(data.error ?? 'Lead discovery failed')
+        toast.error('Lead discovery failed', { description: data.error })
         return
       }
 
@@ -205,8 +273,12 @@ function CompanyDiscoveryInner() {
         selected: true,
         status: 'pending' as const,
       })))
+      if (matches.length > 0) {
+        toast.success(`${matches.length} lead${matches.length === 1 ? '' : 's'} found`)
+      }
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : 'Network error while finding leads')
+      toast.error('Lead discovery failed', { description: e instanceof Error ? e.message : undefined })
     } finally {
       setDiscovering(false)
     }
@@ -229,19 +301,24 @@ function CompanyDiscoveryInner() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-5">
-      <div>
+      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
         <h1 className="text-xl font-semibold text-foreground">Discover</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Demaze&rsquo;s own lead-generation engine — research Demaze → target sectors → select → find leads → research them</p>
-      </div>
+      </motion.div>
 
       {/* ── Step 1: Research Demaze ─────────────────────────────── */}
       <Card className="bg-card border-primary/30">
         <CardContent className="px-5 py-4 space-y-3">
-          <StepHeader n={1} title="Find Leads for Demaze" subtitle="Build (or reuse) a structured Demaze profile — services, ICPs, industries served." />
+          <StepHeader
+            n={1}
+            title="Find Leads for Demaze"
+            subtitle="Build (or reuse) a structured Demaze profile — services, ICPs, industries served."
+            done={profileStatus === 'ready'}
+          />
 
           <div className="flex items-center gap-2 flex-wrap pl-9">
             <Button size="sm" onClick={checkDemazeProfile} disabled={profileStatus === 'checking' || profileStatus === 'researching'}>
-              {profileStatus === 'checking' ? 'Checking…' : profileStatus === 'ready' ? 'Reload Cached Profile' : 'Check Demaze Profile'}
+              {profileStatus === 'checking' ? <><Spinner /> Checking…</> : profileStatus === 'ready' ? 'Reload Cached Profile' : 'Check Demaze Profile'}
             </Button>
             {(profileStatus === 'needs_research' || profileStatus === 'ready' || profileStatus === 'error') && (
               <Button size="sm" variant="outline" className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20" onClick={runDemazeResearchThenCheckProfile}>
@@ -255,49 +332,71 @@ function CompanyDiscoveryInner() {
             )}
           </div>
 
-          {profileStatus === 'researching' && (
-            <div className="ml-9 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
-              <p className="text-primary">{profileMessage}</p>
-            </div>
-          )}
-          {profileStatus === 'needs_research' && (
-            <div className="ml-9 rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs">
-              <p className="text-signal-medium">{profileMessage}</p>
-            </div>
-          )}
-          {profileStatus === 'error' && (
-            <div className="ml-9 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
-              <p className="text-destructive">{profileMessage}</p>
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {profileStatus === 'researching' && (
+              <motion.div key="researching" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="ml-9 flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
+                <Spinner className="text-primary mr-0" />
+                <p className="text-primary">{profileMessage}</p>
+              </motion.div>
+            )}
+            {profileStatus === 'needs_research' && (
+              <motion.div key="needs_research" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="ml-9 rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs">
+                <p className="text-signal-medium">{profileMessage}</p>
+              </motion.div>
+            )}
+            {profileStatus === 'error' && (
+              <motion.div key="error" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="ml-9 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
+                <p className="text-destructive">{profileMessage}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </CardContent>
       </Card>
 
       {/* ── Step 2: Target Sectors ───────────────────────────────── */}
-      {profileStatus === 'ready' && (
-        <Card className="bg-card border-border">
-          <CardContent className="px-5 py-4 space-y-3">
-            <StepHeader n={2} title="Target Sectors" subtitle="Demaze's confirmed target industries, plus any additional sectors surfaced from its own real research." />
-            <div className="pl-9">
-              {demazeSegments.length === 0 ? (
-                <p className="text-muted-foreground/70 text-xs">No target sectors surfaced by Demaze&rsquo;s cached research yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {demazeSegments.map(seg => (
-                    <Badge key={seg.name} className="text-xs bg-accent text-foreground/90 px-2.5 py-1">{seg.name}</Badge>
-                  ))}
+      <AnimatePresence>
+        {(profileStatus === 'ready' || profileStatus === 'checking') && (
+          <motion.div key="step2" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit">
+            <Card className="bg-card border-border">
+              <CardContent className="px-5 py-4 space-y-3">
+                <StepHeader
+                  n={2}
+                  title="Target Sectors"
+                  subtitle="Demaze's confirmed target industries, plus any additional sectors surfaced from its own real research."
+                  done={profileStatus === 'ready' && demazeSegments.length > 0}
+                  tooltip="Sectors here come from two sources merged together: Demaze's confirmed ground-truth target industries, and any additional sectors its own website research surfaced."
+                />
+                <div className="pl-9">
+                  {profileStatus === 'checking' ? (
+                    <ChipSkeletons />
+                  ) : demazeSegments.length === 0 ? (
+                    <p className="text-muted-foreground/70 text-xs">No target sectors surfaced by Demaze&rsquo;s cached research yet.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {demazeSegments.map(seg => (
+                        <Badge key={seg.name} className="text-xs bg-accent text-foreground/90 px-2.5 py-1">{seg.name}</Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Step 3: Sector Selection ─────────────────────────────── */}
-      {profileStatus === 'ready' && (
-        <Card className="bg-card border-border">
-          <CardContent className="px-5 py-4 space-y-3">
-            <StepHeader n={3} title="Sector Selection" subtitle="Pick one or more sectors to search — discovery runs across everything selected." />
+      <AnimatePresence>
+        {profileStatus === 'ready' && (
+          <motion.div key="step3" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit">
+            <Card className="bg-card border-border">
+              <CardContent className="px-5 py-4 space-y-3">
+                <StepHeader
+                  n={3}
+                  title="Sector Selection"
+                  subtitle="Pick one or more sectors to search — discovery runs across everything selected."
+                  done={selectedSectors.size > 0}
+                />
 
             <div className="pl-9 space-y-3">
               {demazeSegments.length > 0 && (
@@ -306,10 +405,11 @@ function CompanyDiscoveryInner() {
                     {demazeSegments.map(seg => {
                       const isSelected = selectedSectors.has(seg.name)
                       return (
-                        <button
+                        <motion.button
                           key={seg.name}
                           type="button"
                           onClick={() => toggleSector(seg.name)}
+                          whileTap={{ scale: 0.94 }}
                           className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                             isSelected
                               ? 'border-primary/50 bg-primary/15 text-primary'
@@ -317,7 +417,7 @@ function CompanyDiscoveryInner() {
                           }`}
                         >
                           {isSelected ? '✓ ' : ''}{seg.name}
-                        </button>
+                        </motion.button>
                       )
                     })}
                   </div>
@@ -346,42 +446,62 @@ function CompanyDiscoveryInner() {
                     className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
                   />
                   <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={() => handleSearch()} disabled={searching || !icpSegment.trim()}>
-                    {searching ? 'Searching…' : 'Find Companies for This Segment'}
+                    {searching ? <><Spinner /> Searching…</> : 'Find Companies for This Segment'}
                   </Button>
                 </div>
               </details>
             </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Step 4: Lead Discovery ───────────────────────────────── */}
-      {profileStatus === 'ready' && (
-        <Card className="bg-card border-border">
-          <CardContent className="px-5 py-4 space-y-3">
-            <StepHeader n={4} title="Lead Discovery" subtitle="Find companies matching Demaze's services/ICPs across the selected sector(s)." />
-            <div className="pl-9 space-y-2">
-              <Button size="sm" onClick={findLeadsForSelectedSectors} disabled={discovering || selectedSectors.size === 0}>
-                {discovering ? 'Finding leads…' : `Find Leads (${selectedSectors.size} sector${selectedSectors.size === 1 ? '' : 's'})`}
-              </Button>
+      <AnimatePresence>
+        {profileStatus === 'ready' && (
+          <motion.div key="step4" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit">
+            <Card className="bg-card border-border">
+              <CardContent className="px-5 py-4 space-y-3">
+                <StepHeader
+                  n={4}
+                  title="Lead Discovery"
+                  subtitle="Find companies matching Demaze's services/ICPs across the selected sector(s)."
+                  done={sufficiency === 'sufficient'}
+                />
+                <div className="pl-9 space-y-2">
+                  <Button size="sm" onClick={findLeadsForSelectedSectors} disabled={discovering || selectedSectors.size === 0}>
+                    {discovering ? <><Spinner /> Finding leads…</> : `Find Leads (${selectedSectors.size} sector${selectedSectors.size === 1 ? '' : 's'})`}
+                  </Button>
 
-              {searchError && (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
-                  <p className="text-destructive">{searchError}</p>
+                  <AnimatePresence mode="wait">
+                    {discovering && (
+                      <motion.div key="discovering-skeleton" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit">
+                        <CompanyRowSkeletons />
+                      </motion.div>
+                    )}
+                    {searchError && (
+                      <motion.div key="search-error" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs">
+                        <p className="text-destructive">{searchError}</p>
+                      </motion.div>
+                    )}
+                    {sufficiency === 'insufficient' && !searchError && (
+                      <motion.div key="insufficient" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs">
+                        <p className="text-signal-medium">No companies surfaced — {discoveryReason}</p>
+                      </motion.div>
+                    )}
+                    {sufficiency === 'sufficient' && discoveryReason && (
+                      <motion.p key="sufficient-reason" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="text-muted-foreground/70 text-xs">
+                        {discoveryReason}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
                 </div>
-              )}
-              {sufficiency === 'insufficient' && !searchError && (
-                <div className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs">
-                  <p className="text-signal-medium">No companies surfaced — {discoveryReason}</p>
-                </div>
-              )}
-              {sufficiency === 'sufficient' && discoveryReason && (
-                <p className="text-muted-foreground/70 text-xs">{discoveryReason}</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Step 5: Research Selected → Outreach ─────────────────── */}
       <CompanyMatchList search={search} demazeSegments={demazeSegments} />

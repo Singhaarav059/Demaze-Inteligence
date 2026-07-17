@@ -6,6 +6,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { LayoutGroup, motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { DotIcon } from './nav-icons'
 import { NAV } from './nav-config'
@@ -32,35 +33,46 @@ export function Sidebar() {
       </Link>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 px-3 py-4">
-        <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-          Workspace
-        </p>
-        {NAV.map(({ href, label, icon: Icon, hint }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors',
-                active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-              )}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-              )}
-              <Icon className={cn('size-[18px] shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
-              <span className="flex flex-col leading-tight">
-                <span className={cn('font-medium', active && 'text-primary')}>{label}</span>
-                <span className="text-[11px] text-muted-foreground/70">{hint}</span>
-              </span>
-            </Link>
-          )
-        })}
-      </nav>
+      <LayoutGroup id="sidebar-nav">
+        <nav className="flex-1 space-y-0.5 px-3 py-4">
+          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+            Workspace
+          </p>
+          {NAV.map(({ href, label, icon: Icon, hint }) => {
+            const active = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors',
+                  active ? 'text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="sidebar-active-pill"
+                    className="absolute inset-0 rounded-lg bg-primary/10"
+                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                  />
+                )}
+                {active && (
+                  <motion.span
+                    layoutId="sidebar-active-bar"
+                    className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                  />
+                )}
+                <Icon className={cn('relative size-[18px] shrink-0 transition-transform duration-150 group-hover:scale-110', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                <span className="relative flex flex-col leading-tight">
+                  <span className={cn('font-medium', active && 'text-primary')}>{label}</span>
+                  <span className="text-[11px] text-muted-foreground/70">{hint}</span>
+                </span>
+              </Link>
+            )
+          })}
+        </nav>
+      </LayoutGroup>
 
       {/* Footer / env */}
       <div className="border-t border-sidebar-border/60 px-4 py-3">

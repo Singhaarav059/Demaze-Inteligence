@@ -4,6 +4,7 @@
 // (auth removed during build phase)
 // ============================================================
 
+import { Toaster } from 'sonner'
 import { Sidebar } from '@/components/shell/Sidebar'
 import { TopBar } from '@/components/shell/TopBar'
 
@@ -17,6 +18,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <main className="flex-1">{children}</main>
         </div>
       </div>
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          classNames: {
+            toast: 'bg-card! border-border! text-foreground! shadow-lg',
+            title: 'text-foreground!',
+            description: 'text-muted-foreground!',
+            actionButton: 'bg-primary! text-primary-foreground!',
+            cancelButton: 'bg-accent! text-muted-foreground!',
+          },
+        }}
+      />
     </div>
   )
 }
