@@ -165,8 +165,16 @@ export async function extractBusinessProfile(
   // out and discarded the result. Starting straight at 4096 (skipping the
   // near-guaranteed-to-fail small first attempt) cuts that wasted latency
   // roughly in half; one retry at 6144 remains for safety.
+  // Bumped again 2026-07-19: a live run truncated mid-property at position
+  // 17087 (line 252) even at maxTokens=6144 — a genuinely large structured
+  // response hitting the budget ceiling, not the short-preamble case above.
+  // provider-factory.ts's jsonMode empty-content guard (added the same day)
+  // covers the *different* failure mode where a reasoning model abandons
+  // content after 1-2 chars regardless of budget — this escalation is for
+  // real truncation of a long-but-genuine response, which only a bigger
+  // ceiling fixes.
   let lastError: unknown
-  for (const maxTokens of [4096, 6144]) {
+  for (const maxTokens of [6144, 12288]) {
     try {
       const response = await getCompletion({
         systemPrompt: SYSTEM_PROMPT,

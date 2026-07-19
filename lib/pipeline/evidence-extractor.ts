@@ -195,6 +195,15 @@ export interface LeadershipContact {
   title: string
   statedPortfolio: string
   sourceUrl: string
+  // 'high' = markdown-heading name + title + a stated narrative portfolio
+  // clause nearby (the original, stricter extraction strategy). 'medium' =
+  // structural-only match (adjacent name+title, no heading, no narrative
+  // clause required) — catches the common "photo card grid" team-page
+  // layout, but with weaker per-item evidence, so it's tiered lower. Same
+  // confidence-tiering discipline as competitor-discovery.ts's
+  // tierConfidence(). Optional so existing call sites/tests that predate
+  // this field keep compiling; new results always set it.
+  confidence?: 'high' | 'medium'
 }
 
 // ── Constants ─────────────────────────────────────────────────
@@ -623,7 +632,14 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
   // than first-person "we/our" — previously this recognition only fired for
   // pageType==='other', so 'about' pages using third-person self-reference
   // never classified as a company subject even when the evidence was strong.
-  if (pageType === 'other' || pageType === 'about') {
+  // 'homepage' joined this list 2026-07-19, bundled with the detectPageType()
+  // URL-vs-path fix above: before that fix, homepages were mislabeled 'other'
+  // and got this treatment BY ACCIDENT (Ador Welding's homepage evidence only
+  // classified correctly because of the mislabeling) — now that homepages are
+  // correctly labeled 'homepage', they need to reach this same check on
+  // purpose, or they'd fall through to the unconditional generic_marketing
+  // return below and real evidence would be lost. Fixed together per design.
+  if (pageType === 'other' || pageType === 'about' || pageType === 'homepage') {
     const isCustomerFacing = /\b(?:help|enable|your\s+company|our\s+customer)\b/i.test(t)
     if (!isCustomerFacing) {
       // Match the company's own name with word boundaries — same discipline as
@@ -919,10 +935,18 @@ function parseContentSegments(content: string): ContentSegment[] {
     const text = pageMatch[2].trim()
     if (!text) continue
 
-    // Extract URL from "path (https://url)" format
+    // Header format is "path (https://url)" — e.g. "/ (https://adorwelding.com)"
+    // for the homepage (see formatScrapedPages() in scrape-utils.ts). Extract
+    // BOTH: the full url for the segment's own .url field (unchanged), and the
+    // bare path — already present before the parens, no need to re-derive it
+    // from the URL — for detectPageType(), which is path-shaped (leading '/',
+    // no scheme/host) and previously received the full URL by mistake, so its
+    // homepage regex (`^\/?...$`) never matched a real homepage (2026-07-19 fix,
+    // see the classifySubject() 'homepage' branch below for the other half).
     const urlMatch = urlHeader.match(/\(([^)]+)\)/)
     const url = urlMatch ? urlMatch[1] : urlHeader
-    const pageType = detectPageType(url)
+    const path = urlMatch ? urlHeader.slice(0, urlMatch.index).trim() : url
+    const pageType = detectPageType(path)
     const tier = tierFromPageType(pageType)
     segments.push({ url, text, pageType, tier })
   }
@@ -1020,17 +1044,27 @@ function extractJobPostingWorkflowEvidence(segments: ContentSegment[]): Extracte
 // ATE Group's own site has a live bug where /group-executive-lead/a-suresh-5
 // renders the H1 "Anand Mehta" (stale/reused URL slug) — only the rendered
 // heading/body text is trustworthy.
-const LEADERSHIP_TITLE_PATTERN =
-  /#{1,3}\s*([A-Z][^\n]{2,50})\n+\s*#{0,4}\s*(Chairman|Vice\s+Chairman|Managing\s+Director|Administrative\s+Director|Director|CEO|COO|CTO|CFO|President|Vice\s+President|VP|Head\s+of\s+[A-Za-z\s]{2,40}|Chief\s+[A-Za-z]+\s+Officer)\b/g
+// Title vocabulary shared by both the narrative (heading-based) and
+// structural (adjacency-based) extraction strategies below — one place to
+// extend the recognized title list rather than two regexes drifting apart.
+// "Head of [A-Za-z ]" uses a literal space, not \s — \s matches newlines too,
+// which let this branch greedily swallow across line breaks into unrelated
+// following text (e.g. into the next paragraph on a busy team-grid page).
+const LEADERSHIP_TITLE_VOCAB =
+  'Chairman|Vice\\s+Chairman|Managing\\s+Director|Administrative\\s+Director|Director|CEO|COO|CTO|CFO|President|Vice\\s+President|VP|Head\\s+of\\s+[A-Za-z][A-Za-z &]{1,39}|Chief\\s+[A-Za-z]+\\s+Officer'
+
+const LEADERSHIP_TITLE_PATTERN = new RegExp(
+  `#{1,3}\\s*([A-Z][^\\n]{2,50})\\n+\\s*#{0,4}\\s*(${LEADERSHIP_TITLE_VOCAB})\\b`,
+  'g'
+)
 
 const PORTFOLIO_CLAUSE =
   /\b(?:heads?|headed|leads?|led|oversees?|oversaw|chairs?|chaired|manages?|managed)\s+(?:the\s+)?([A-Z][^.]{5,150}?)(?:\.|for\s+the\s+entire|$)/i
 
 const PORTFOLIO_SEARCH_WINDOW = 700   // chars — wide enough to clear 1-2 sentences of bio preamble (see Ace Pipeline: Tarun Singh's portfolio clause lands ~470 chars after his title)
 
-function extractLeadershipEvidence(segments: ContentSegment[]): LeadershipContact[] {
+function extractLeadershipEvidence(segments: ContentSegment[], seenNames: Set<string>): LeadershipContact[] {
   const results: LeadershipContact[] = []
-  const seenNames = new Set<string>()
 
   for (const seg of segments) {
     const regex = new RegExp(LEADERSHIP_TITLE_PATTERN.source, 'g')
@@ -1053,6 +1087,83 @@ function extractLeadershipEvidence(segments: ContentSegment[]): LeadershipContac
         title,
         statedPortfolio: portfolioMatch[1].trim(),
         sourceUrl: seg.url,
+        confidence: 'high',
+      })
+    }
+  }
+
+  return results
+}
+
+// ── Structural leadership extraction (2026-07-18 decision-maker discovery
+// fix) ───────────────────────────────────────────────────────────────────
+// extractLeadershipEvidence() above requires BOTH a markdown heading AND a
+// narrative "heads/leads/oversees" clause nearby — this misses the extremely
+// common "photo card grid" team-page layout: name and title as plain
+// adjacent text (no markdown heading, no sentence describing what they do),
+// which is what most real company leadership pages actually look like. This
+// is a second, parallel strategy — it does NOT replace the narrative one
+// (that one is higher-confidence when it does match) — that only requires
+// tight name+title adjacency. Confidence is tiered lower ('medium' vs.
+// 'high') since a bare name+title pair with nothing further is weaker
+// evidence, same tiering discipline as competitor-discovery.ts's
+// tierConfidence().
+
+// Regex can't tell "John Smith" from "Quality Control" by shape alone — both
+// are two capitalized words. Adjacency to a real title (e.g. "Quality
+// Control\nDirector" in job-posting prose) is the main false-positive risk
+// for this looser strategy, so any candidate "name" containing one of these
+// common department/job-function words is rejected rather than surfaced.
+const NON_NAME_WORDS = new Set([
+  'quality', 'control', 'sales', 'marketing', 'human', 'resources', 'customer',
+  'service', 'product', 'business', 'development', 'technical', 'information',
+  'data', 'global', 'regional', 'national', 'corporate', 'group', 'team',
+  'department', 'division', 'project', 'client', 'account', 'accounts',
+  'operations', 'finance', 'legal', 'supply', 'chain', 'brand', 'digital',
+  'strategy', 'strategic', 'research', 'engineering', 'design', 'creative',
+  'general', 'senior', 'junior', 'assistant', 'associate', 'deputy', 'area',
+  'field', 'plant', 'facility', 'site', 'unit',
+])
+
+function isLikelyPersonName(phrase: string): boolean {
+  const words = phrase.trim().split(/\s+/)
+  if (words.length < 2 || words.length > 4) return false
+  return !words.some(w => NON_NAME_WORDS.has(w.toLowerCase()))
+}
+
+// Name on its own line, title on the very next non-blank line (tolerating
+// light markdown decoration — bold markers, bullet/heading punctuation), OR
+// name and title on the SAME line joined by a comma/dash/pipe (e.g. "John
+// Smith, CEO" or "John Smith | Chief Operating Officer"). Tight adjacency
+// only — no wide-window scanning like PORTFOLIO_SEARCH_WINDOW — specifically
+// to avoid matching an unrelated title elsewhere on a busy page.
+const STRUCTURAL_NAME_TITLE_PATTERN = new RegExp(
+  `^[ \\t]*[*#>\\-]{0,3}[ \\t]*([A-Z][a-zA-Z'.-]+(?:\\s+[A-Z][a-zA-Z'.-]+){1,3})[ \\t]*[*_]{0,2}[ \\t]*(?:\\n+[ \\t]*[*#>\\-]{0,3}[ \\t]*|[ \\t]*[,|\\u2013\\u2014-][ \\t]*)(${LEADERSHIP_TITLE_VOCAB})\\b`,
+  'gm'
+)
+
+function extractStructuralLeadershipEvidence(
+  segments: ContentSegment[],
+  seenNames: Set<string>
+): LeadershipContact[] {
+  const results: LeadershipContact[] = []
+
+  for (const seg of segments) {
+    const regex = new RegExp(STRUCTURAL_NAME_TITLE_PATTERN.source, STRUCTURAL_NAME_TITLE_PATTERN.flags)
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(seg.text)) !== null) {
+      const name = match[1].trim()
+      const title = match[2].trim()
+      if (seenNames.has(name)) continue
+      if (!isLikelyPersonName(name)) continue
+
+      seenNames.add(name)
+      results.push({
+        name,
+        title,
+        statedPortfolio: '',
+        sourceUrl: seg.url,
+        confidence: 'medium',
       })
     }
   }
@@ -1276,7 +1387,16 @@ export function extractSignals(
   if (segments.length <= 1) contentFlags.push('single_page')
 
   // ── Leadership contacts ────────────────────────────────────────────────
-  const leadershipContacts = extractLeadershipEvidence(segments)
+  // Narrative (heading + portfolio-clause) strategy runs first so its
+  // higher-confidence matches claim a name before the looser structural
+  // strategy gets a chance to — both strategies share one seenNames set so
+  // the same person is never surfaced twice at two different confidence
+  // tiers.
+  const leadershipSeenNames = new Set<string>()
+  const leadershipContacts = [
+    ...extractLeadershipEvidence(segments, leadershipSeenNames),
+    ...extractStructuralLeadershipEvidence(segments, leadershipSeenNames),
+  ]
 
   // ── Company offerings — what THIS company sells (see service-offerings.ts) ──
   // Own-site content only (websiteContent, not the enriched/third-party blend)

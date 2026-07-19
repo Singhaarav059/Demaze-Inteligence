@@ -49,6 +49,7 @@ type CategoryCoverage = {
   hiring: number
   expansion: number
   strategy: number
+  leadership: number
 }
 
 // ── Main export ───────────────────────────────────────────────
@@ -63,7 +64,7 @@ export function prioritizeSources(
 ): PrioritizedSource[] {
   const selected: PrioritizedSource[] = []
   const seenHosts = new Set<string>()
-  const coverage: CategoryCoverage = { investor: 0, hiring: 0, expansion: 0, strategy: 0 }
+  const coverage: CategoryCoverage = { investor: 0, hiring: 0, expansion: 0, strategy: 0, leadership: 0 }
 
   // Pass 1: Ensure at least 1 investor + 1 hiring source (highest value)
   const mustHave: SourceType[] = ['annual_report', 'investor_presentation', 'earnings_release']

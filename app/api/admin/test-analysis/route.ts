@@ -22,7 +22,7 @@ import { validateAndNormalizeURL, extractDomain } from '@/lib/utils/url'
 import { SYSTEM_PROMPT_V2 } from '@/lib/prompts/system-v2'
 import { buildNarrativePrompt, buildNarrativeInput, estimateTokenCount } from '@/lib/prompts/analyze-v2'
 import { getCompletion } from '@/lib/ai/provider-factory'
-import { normalizeAnalysisResult } from '@/lib/pipeline/normalize'
+import { normalizeAnalysisResult, shouldWarnEmptyPainPoints } from '@/lib/pipeline/normalize'
 import { getCachedScrape, saveScrapeCache } from '@/lib/cache/scrape-cache'
 import { assessContentQuality } from '@/lib/pipeline/content-quality'
 import {
@@ -41,10 +41,7 @@ import { extractBusinessProfile, emptyBusinessProfile, isEmptyBusinessProfile, t
 import { matchProofPoints } from '@/lib/knowledge/proof-point-matcher'
 import { synthesizeIntelligence } from '@/lib/synthesis'
 import type { SynthesisResult } from '@/lib/synthesis'
-
-// ── Content budget (website preview for LLM) ─────────────────
-// extractor reads the full content; LLM only sees a 3,000-char preview
-const MAX_WEBSITE_PREVIEW_CHARS = 3_000
+import { logger } from '@/lib/logger'
 
 function t(ms: number): string { return `${ms}ms` }
 
@@ -113,13 +110,13 @@ function gate(
   const result: ValidationGate = { stage, status, reason, ...(diagnostics ? { diagnostics } : {}) }
   gates.push(result)
   if (status === 'FAIL') {
-    console.error(`[pipeline:GATE_FAIL] stage=${stage} reason="${reason}"`, diagnostics ? JSON.stringify(diagnostics) : '')
+    logger.error('pipeline', `GATE_FAIL stage=${stage} reason="${reason}"`, diagnostics)
   } else if (status === 'PARTIAL') {
-    console.warn(`[pipeline:GATE_PARTIAL] stage=${stage} reason="${reason}"`, diagnostics ? JSON.stringify(diagnostics) : '')
+    logger.warn('pipeline', `GATE_PARTIAL stage=${stage} reason="${reason}"`, diagnostics)
   } else if (status === 'WARN') {
-    console.warn(`[pipeline:GATE_WARN] stage=${stage} reason="${reason}"`)
+    logger.warn('pipeline', `GATE_WARN stage=${stage} reason="${reason}"`)
   } else {
-    console.log(`[pipeline:GATE_PASS] stage=${stage} reason="${reason}"`)
+    logger.info('pipeline', `GATE_PASS stage=${stage} reason="${reason}"`)
   }
   return result
 }
@@ -173,7 +170,7 @@ export async function POST(req: NextRequest) {
 
   if (!url && rawCompanyName) {
     websiteDiscovery = await discoverCompanyWebsite(rawCompanyName)
-    console.log(`[WebsiteDiscovery] "${rawCompanyName}" -> status=${websiteDiscovery.status} domain=${websiteDiscovery.domain} confidence=${websiteDiscovery.confidence}`)
+    logger.info('WebsiteDiscovery', `"${rawCompanyName}" -> status=${websiteDiscovery.status} domain=${websiteDiscovery.domain} confidence=${websiteDiscovery.confidence}`)
     if (websiteDiscovery.status === 'confirmed' && websiteDiscovery.domain) {
       url = `https://${websiteDiscovery.domain}`
     }
@@ -223,7 +220,7 @@ export async function POST(req: NextRequest) {
         return result
       } catch (e) {
         discoveryActualMs = Date.now() - discoveryStart
-        console.warn('[Enrichment] Discovery/fetch non-fatal:', e instanceof Error ? e.message : String(e))
+        logger.warn('Enrichment', 'Discovery/fetch non-fatal', e instanceof Error ? e.message : String(e))
         return { discovered: [], prioritized: [], contextBlocks: [] }
       }
     })()
@@ -248,7 +245,7 @@ export async function POST(req: NextRequest) {
   // time the prompt just renders an empty [ICP CANDIDATES] block.
   const icpDiscoveryPromise: Promise<ICPDiscoveryResult> =
     discoverICPSegments(companyGuess, domain).catch(e => {
-      console.warn('[ICPGenerator] Non-fatal:', e instanceof Error ? e.message : String(e))
+      logger.warn('ICPGenerator', 'Non-fatal', e instanceof Error ? e.message : String(e))
       return {
         segments: [], candidates: [], sufficiency: 'insufficient' as const,
         reason: `discoverICPSegments threw: ${e instanceof Error ? e.message : String(e)}`,
@@ -267,7 +264,7 @@ export async function POST(req: NextRequest) {
   // it's either ready by the bounded await below or it times out.
   const marketIntelPromise: Promise<MarketIntelligenceResult> =
     discoverMarketIntelligence(companyGuess, domain).catch(e => {
-      console.warn('[MarketIntelligence] Non-fatal:', e instanceof Error ? e.message : String(e))
+      logger.warn('MarketIntelligence', 'Non-fatal', e instanceof Error ? e.message : String(e))
       return {
         items: [], sufficiency: 'insufficient' as const,
         reason: `discoverMarketIntelligence threw: ${e instanceof Error ? e.message : String(e)}`,
@@ -326,7 +323,7 @@ export async function POST(req: NextRequest) {
       saveScrapeCache(normalizedUrl, domain, scrapeResult, quality)
     }
     timing.scrape = Date.now() - scrapeStart
-    console.log(`[Timing] Scrape/Cache: ${t(timing.scrape)} | source=${scrapeSource}`)
+    logger.info('Timing', `Scrape/Cache: ${t(timing.scrape)} | source=${scrapeSource}`)
 
     // Gate S1-A: Did we get any content at all?
     // L1-E: Never hard fail — if scrape is empty, synthesize minimal stub from
@@ -359,7 +356,7 @@ export async function POST(req: NextRequest) {
         totalCharCount: stub.length,
       }
       scrapeStubInjected = true
-      console.warn(`[Scraper] Empty scrape — injected domain stub for "${companyGuess}" (enrichment will be primary)`)
+      logger.warn('Scraper', `Empty scrape — injected domain stub for "${companyGuess}" (enrichment will be primary)`)
     }
 
     // ── Stage 2: Content quality assessment ──────────────────
@@ -367,7 +364,7 @@ export async function POST(req: NextRequest) {
     const fullContent = scrapeResult.combinedContent
     const contentQuality = assessContentQuality(fullContent)
     timing.contentQuality = Date.now() - cqStart
-    console.log(`[Timing] Content Quality: ${t(timing.contentQuality)} | score=${contentQuality.score} | ${contentQuality.recommendation}`)
+    logger.info('Timing', `Content Quality: ${t(timing.contentQuality)} | score=${contentQuality.score} | ${contentQuality.recommendation}`)
 
     // Gate S1-B: Content quality warning (non-critical, pipeline continues)
     if (contentQuality.recommendation === 'low_confidence') {
@@ -421,7 +418,7 @@ export async function POST(req: NextRequest) {
     // specifically to capture that "already done or not yet" state accurately,
     // since awaiting it would force it to resolve before we could observe that.
     const discoveryAlreadyDoneAtScrapeEnd = discoveryActualMs !== null
-    console.log(`[Timing] Discovery+Fetch: ${discoveryAlreadyDoneAtScrapeEnd ? `${t(discoveryActualMs!)} — already resolved before scrape finished (${t(timing.scrape)}), fully overlapped, zero added wait` : `still in flight after scrape finished (${t(timing.scrape)}) — will be awaited below`}`)
+    logger.info('Timing', `Discovery+Fetch: ${discoveryAlreadyDoneAtScrapeEnd ? `${t(discoveryActualMs!)} — already resolved before scrape finished (${t(timing.scrape)}), fully overlapped, zero added wait` : `still in flight after scrape finished (${t(timing.scrape)}) — will be awaited below`}`)
 
     const ENRICHMENT_TIMEOUT_MS = 70_000
     const enrichStart = Date.now()
@@ -451,7 +448,7 @@ export async function POST(req: NextRequest) {
             const probe = await probeRecoveryPaths(domain, isConsumerSite, maxProbe)
             recoveryBlocks = probe.contextBlocks
             recoveryPaths = probe.pathsProbed
-            console.log(`[Enrichment] Recovery: probed ${probe.pathsProbed.length} paths with content`)
+            logger.info('Enrichment', `Recovery: probed ${probe.pathsProbed.length} paths with content`)
           }
 
           const result = buildEnrichmentResult(companyNameFromScrape, domain, discovered, prioritized, externalBlocks, recoveryBlocks, recoveryPaths)
@@ -459,13 +456,13 @@ export async function POST(req: NextRequest) {
           return result
         } catch (e) {
           enrichmentActualMs = Date.now() - enrichStart
-          console.warn('[Enrichment] Non-fatal:', e instanceof Error ? e.message : String(e))
+          logger.warn('Enrichment', 'Non-fatal', e instanceof Error ? e.message : String(e))
           return null
         }
       })(),
       new Promise<null>(resolve => {
         enrichmentTimeoutId = setTimeout(() => {
-          console.warn(`[Enrichment] Hard timeout after ${ENRICHMENT_TIMEOUT_MS}ms — proceeding without external intelligence`)
+          logger.warn('Enrichment', `Hard timeout after ${ENRICHMENT_TIMEOUT_MS}ms — proceeding without external intelligence`)
           enrichmentActualMs = ENRICHMENT_TIMEOUT_MS   // timed out: record the cap
           resolve(null)
         }, ENRICHMENT_TIMEOUT_MS)
@@ -481,14 +478,14 @@ export async function POST(req: NextRequest) {
 
     if (thinContent) {
       recoveryTriggered = true
-      console.log(`[Timing] RECOVERY mode — score=${contentQuality.score}`)
+      logger.info('Timing', `RECOVERY mode — score=${contentQuality.score}`)
     }
 
     // ── Stage 3+2: SIGNAL + PROFILE extraction (website-only) ────────
     const extractStart = Date.now()
     let extractorResult: ExtractorResult = extractSignals(fullContent, undefined, companyNameFromScrape)
     timing.extraction = Date.now() - extractStart
-    console.log(`[Timing] Evidence Extraction (website): ${t(timing.extraction)} | ${extractorResult.signals.length} signals | primary=${extractorResult.companyProfile.primary_type}`)
+    logger.info('Timing', `Evidence Extraction (website): ${t(timing.extraction)} | ${extractorResult.signals.length} signals | primary=${extractorResult.companyProfile.primary_type}`)
 
     // ── Business Profile + offering-grounded fallback discovery (kicked
     // off, not awaited) ──────────────────────────────────────────────
@@ -504,20 +501,20 @@ export async function POST(req: NextRequest) {
     // business-profile call is empty/times out — see Step 4b/4c below.
     const businessProfilePromise: Promise<CompanyBusinessProfile> =
       extractBusinessProfile(fullContent, companyNameFromScrape).catch(e => {
-        console.warn('[BusinessProfile] Non-fatal:', e instanceof Error ? e.message : String(e))
+        logger.warn('BusinessProfile', 'Non-fatal', e instanceof Error ? e.message : String(e))
         return emptyBusinessProfile()
       })
     const offeringCompetitorPromise: Promise<CompetitorDiscoveryResult | null> =
       extractorResult.companyOfferings.length > 0
         ? discoverCompetitorsFromOfferings(companyNameFromScrape, domain, extractorResult.companyOfferings).catch(e => {
-            console.warn('[CompetitorDiscovery] Offering-grounded fallback pass non-fatal:', e instanceof Error ? e.message : String(e))
+            logger.warn('CompetitorDiscovery', 'Offering-grounded fallback pass non-fatal', e instanceof Error ? e.message : String(e))
             return null
           })
         : Promise.resolve(null)
     const offeringIcpPromise: Promise<ICPDiscoveryResult | null> =
       extractorResult.companyOfferings.length > 0
         ? discoverICPSegmentsFromOfferings(companyNameFromScrape, domain, extractorResult.companyOfferings).catch(e => {
-            console.warn('[ICPGenerator] Offering-grounded fallback pass non-fatal:', e instanceof Error ? e.message : String(e))
+            logger.warn('ICPGenerator', 'Offering-grounded fallback pass non-fatal', e instanceof Error ? e.message : String(e))
             return null
           })
         : Promise.resolve(null)
@@ -591,15 +588,15 @@ export async function POST(req: NextRequest) {
           const websiteOnlyCount = extractorResult.signals.length
           extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape)
           timing.reextraction = Date.now() - preExtractStart
-          console.log(`[Bridge] Pre-prompt re-extraction: ${websiteOnlyCount} → ${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlyCount}) in ${timing.reextraction}ms`)
+          logger.info('Bridge', `Pre-prompt re-extraction: ${websiteOnlyCount} → ${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlyCount}) in ${timing.reextraction}ms`)
         }
 
         promptEnriched = true
-        console.log(`[pipeline:PROMPT_ENRICHED] enrichment resolved in ${enrichmentWaitMs}ms — LLM prompt includes ${sourcesUsed.length} external sources + ${_preRecoveryCount} recovery paths`)
+        logger.info('pipeline', `PROMPT_ENRICHED enrichment resolved in ${enrichmentWaitMs}ms — LLM prompt includes ${sourcesUsed.length} external sources + ${_preRecoveryCount} recovery paths`)
       } else {
         // Soft timeout fired — proceed with website-only prompt; enrichment runs in background
         promptEnriched = false
-        console.log(`[pipeline:PROMPT_WEBSITE_ONLY] enrichment not ready within ${ENRICHMENT_SOFT_TIMEOUT_MS}ms — LLM prompt is website-only; enrichment continues in background`)
+        logger.info('pipeline', `PROMPT_WEBSITE_ONLY enrichment not ready within ${ENRICHMENT_SOFT_TIMEOUT_MS}ms — LLM prompt is website-only; enrichment continues in background`)
       }
     }
 
@@ -625,7 +622,7 @@ export async function POST(req: NextRequest) {
       new Promise<CompanyBusinessProfile>(resolve => setTimeout(() => resolve(emptyBusinessProfile()), BUSINESS_PROFILE_TIMEOUT_MS)),
     ])
     timing.businessProfile = Date.now() - businessProfileStart
-    console.log(`[Timing] Business Profile: ${t(timing.businessProfile)} | services=${businessProfile.services.length} | positioning=${businessProfile.market_positioning ? 'yes' : 'no'}`)
+    logger.info('Timing', `Business Profile: ${t(timing.businessProfile)} | services=${businessProfile.services.length} | positioning=${businessProfile.market_positioning ? 'yes' : 'no'}`)
 
     // ── Step 4b: Competitor Discovery ────────────────────────────────
     // Business-understanding rebuild (2026-07-16): the business-profile-
@@ -674,22 +671,33 @@ export async function POST(req: NextRequest) {
 
     // Resolve a website per surfaced competitor (reuses website-discovery.ts's
     // discoverCompanyWebsite() exactly as Company Discovery Engine already
-    // does — sequential, capped list, only set when confirmed). Set directly
-    // on the code-derived skeleton here, before normalize.ts's LLM merge —
-    // website is never part of the LLM narration.
-    for (const c of competitorDiscoveryResult.competitors) {
+    // does — capped list, MAX_COMPETITORS=5 in competitor-discovery.ts, only
+    // set when confirmed). Set directly on the code-derived skeleton here,
+    // before normalize.ts's LLM merge — website is never part of the LLM
+    // narration.
+    // Parallelized (2026-07-18, real latency fix): this used to be a
+    // sequential `for...of` loop — each discoverCompanyWebsite() call has its
+    // own internal domain-verification fetch capped at 8000ms, and there is
+    // no ordering dependency between competitors, so serializing up to 5 of
+    // them could cost ~40s worst-case for something fully parallelizable.
+    // Promise.all (not allSettled) preserves array order and is safe here
+    // because each mapped async fn already catches its own error internally
+    // — same fallback behavior as the old sequential loop (a competitor with
+    // no confirmed domain just keeps `website` unset; nothing ever rejects
+    // out of the batch).
+    await Promise.all(competitorDiscoveryResult.competitors.map(async (c) => {
       try {
         const site = await discoverCompanyWebsite(c.name)
         if (site.status === 'confirmed' && site.confidence !== 'none' && site.domain) {
           c.website = site.domain
         }
       } catch (e) {
-        console.warn(`[CompetitorDiscovery] Website resolution non-fatal for "${c.name}":`, e instanceof Error ? e.message : String(e))
+        logger.warn('CompetitorDiscovery', `Website resolution non-fatal for "${c.name}"`, e instanceof Error ? e.message : String(e))
       }
-    }
+    }))
 
     timing.competitorDiscovery = Date.now() - competitorDiscoveryStart
-    console.log(`[Timing] Competitor Discovery: ${t(timing.competitorDiscovery)} | sufficiency=${competitorDiscoveryResult.sufficiency} | ${competitorDiscoveryResult.competitors.length} competitor(s)`)
+    logger.info('Timing', `Competitor Discovery: ${t(timing.competitorDiscovery)} | sufficiency=${competitorDiscoveryResult.sufficiency} | ${competitorDiscoveryResult.competitors.length} competitor(s)`)
 
     // Gate: COMPETITOR (non-critical — WARN only, same tier as ENRICHMENT)
     if (competitorDiscoveryResult.sufficiency === 'sufficient') {
@@ -723,7 +731,7 @@ export async function POST(req: NextRequest) {
     const icpSupplementResult = !isEmptyBusinessProfile(businessProfile)
       ? await Promise.race([
           discoverICPSegmentsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => {
-            console.warn('[ICPGenerator] Business-profile pass non-fatal:', e instanceof Error ? e.message : String(e))
+            logger.warn('ICPGenerator', 'Business-profile pass non-fatal', e instanceof Error ? e.message : String(e))
             return null
           }),
           new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
@@ -735,7 +743,7 @@ export async function POST(req: NextRequest) {
     if (icpSupplementResult) {
       icpDiscoveryResult = mergeICPResults(icpDiscoveryResult, icpSupplementResult)
     }
-    console.log(`[Timing] ICP Discovery: ${t(timing.icpDiscovery)} | sufficiency=${icpDiscoveryResult.sufficiency} | ${icpDiscoveryResult.segments.length} segment(s)`)
+    logger.info('Timing', `ICP Discovery: ${t(timing.icpDiscovery)} | sufficiency=${icpDiscoveryResult.sufficiency} | ${icpDiscoveryResult.segments.length} segment(s)`)
 
     // Gate: ICP (non-critical — WARN only, same tier as COMPETITOR/ENRICHMENT)
     if (icpDiscoveryResult.sufficiency === 'sufficient') {
@@ -758,7 +766,7 @@ export async function POST(req: NextRequest) {
       }), MARKET_INTEL_TIMEOUT_MS)),
     ])
     timing.marketIntel = Date.now() - marketIntelStart
-    console.log(`[Timing] Market Intelligence: ${t(timing.marketIntel)} | sufficiency=${marketIntelResult.sufficiency} | ${marketIntelResult.items.length} item(s)`)
+    logger.info('Timing', `Market Intelligence: ${t(timing.marketIntel)} | sufficiency=${marketIntelResult.sufficiency} | ${marketIntelResult.items.length} item(s)`)
 
     // Gate: MARKET_INTEL (non-critical — WARN only, same tier as COMPETITOR/ICP/ENRICHMENT)
     if (marketIntelResult.sufficiency === 'sufficient') {
@@ -777,7 +785,7 @@ export async function POST(req: NextRequest) {
       enrichedContent ? `${fullContent}\n\n${enrichedContent}` : fullContent,
       extractorResult.companyProfile,
     )
-    console.log(`[ProofPoints] ${proofPointMatches.length} match(es): ${proofPointMatches.map(p => p.id).join(', ') || 'none'}`)
+    logger.info('ProofPoints', `${proofPointMatches.length} match(es): ${proofPointMatches.map(p => p.id).join(', ') || 'none'}`)
 
     // ── Step 5: Build narrative prompt ──────────────────────
     const promptStart = Date.now()
@@ -797,33 +805,40 @@ export async function POST(req: NextRequest) {
     const totalTokens = systemTokens + userTokens
     timing.promptBuild = Date.now() - promptStart
 
-    console.log(`[Timing] Prompt Build: ${t(timing.promptBuild)}`)
-    console.log(`[PROMPT BREAKDOWN]`)
-    console.log(`  System (v2):         ${SYSTEM_PROMPT_V2.length} chars / ${systemTokens} tokens`)
-    console.log(`  User prompt:         ${userPrompt.length} chars / ${userTokens} tokens`)
-    console.log(`  Signal summary:      ${extractorResult.signalSummary.length} chars`)
-    console.log(`  Website preview:     ${extractorResult.websitePreview.length} chars`)
-    console.log(`  TOTAL TOKENS:        ${totalTokens}`)
+    logger.info('Timing', `Prompt Build: ${t(timing.promptBuild)}`)
+    logger.info('PROMPT BREAKDOWN', 'breakdown', {
+      systemV2: `${SYSTEM_PROMPT_V2.length} chars / ${systemTokens} tokens`,
+      userPrompt: `${userPrompt.length} chars / ${userTokens} tokens`,
+      signalSummary: `${extractorResult.signalSummary.length} chars`,
+      websitePreview: `${extractorResult.websitePreview.length} chars`,
+      totalTokens,
+    })
 
     // ── Stage 4+5: LLM + Enrichment in parallel ──────────────
     const aiStart = Date.now()
-    let [aiResponse, enrichmentRaw] = await Promise.all([
+    const [aiResponseInitial, enrichmentRaw] = await Promise.all([
       getCompletion({
         systemPrompt: SYSTEM_PROMPT_V2,
         userPrompt,
-        maxTokens: 4096,
+        // Was 4096 — live runs kept hitting finishReason='length' truncation
+        // (reasoning models in particular spend real budget on a CoT preamble
+        // before any JSON), forcing a ~20s wasted retry-with-8192 roundtrip
+        // that always succeeded. Starting at 8192 removes that guaranteed
+        // round-trip instead of reacting to it after the fact.
+        maxTokens: 8192,
         temperature: 0.2,
         jsonMode: true,
       }),
       enrichmentPromise,
     ])
+    let aiResponse = aiResponseInitial
     timing.llmAnalysis = Date.now() - aiStart
     // timing.enrichment = actual enrichment work duration, not LLM wall time.
     // enrichmentActualMs is set inside the race branch that completes first:
     //   - enrichment finishes early → real HTTP duration
     //   - timeout fires → ENRICHMENT_TIMEOUT_MS cap
     timing.enrichment = enrichmentActualMs ?? (Date.now() - enrichStart)
-    console.log(`[Timing] LLM Analysis: ${t(timing.llmAnalysis)} | provider=${aiResponse.providerName} | tokens=${aiResponse.tokensUsed}`)
+    logger.info('Timing', `LLM Analysis: ${t(timing.llmAnalysis)} | provider=${aiResponse.providerName} | tokens=${aiResponse.tokensUsed}`)
 
     // Gate S4: Enrichment (non-critical — WARN only)
     // Three cases:
@@ -833,7 +848,7 @@ export async function POST(req: NextRequest) {
     if (promptEnriched) {
       // Case A: captured before prompt — log and gate, no re-capture needed
       const _recoveryCount = enrichmentResult!.recovery_paths_probed?.length ?? 0
-      console.log(`[Timing] Enrichment: ${t(timing.enrichment)} | ${sourcesUsed.length} external + ${_recoveryCount} recovery | ${enrichedContent.length} chars context (pre-prompt)`)
+      logger.info('Timing', `Enrichment: ${t(timing.enrichment)} | ${sourcesUsed.length} external + ${_recoveryCount} recovery | ${enrichedContent.length} chars context (pre-prompt)`)
       gate(pipelineGates, 'ENRICHMENT', 'PASS',
         `${sourcesUsed.length} external sources | ${enrichedContent.length} chars enriched context | reached LLM prompt`)
     } else if (enrichmentRaw) {
@@ -842,14 +857,14 @@ export async function POST(req: NextRequest) {
       sourcesUsed = enrichmentResult.sources_used ?? []
       enrichedContent = enrichmentResult.enriched_context
       const _recoveryCount = enrichmentResult.recovery_paths_probed?.length ?? 0
-      console.log(`[pipeline:ENRICHMENT_LATE] enrichment resolved after LLM prompt was built — feeds re-extraction and synthesis only`)
-      console.log(`[Timing] Enrichment: ${t(timing.enrichment)} | ${sourcesUsed.length} external + ${_recoveryCount} recovery | ${enrichedContent.length} chars context (late)`)
+      logger.info('pipeline', 'ENRICHMENT_LATE enrichment resolved after LLM prompt was built — feeds re-extraction and synthesis only')
+      logger.info('Timing', `Enrichment: ${t(timing.enrichment)} | ${sourcesUsed.length} external + ${_recoveryCount} recovery | ${enrichedContent.length} chars context (late)`)
       gate(pipelineGates, 'ENRICHMENT', 'PASS',
         `${sourcesUsed.length} external sources | ${enrichedContent.length} chars enriched context | LATE — did not reach LLM prompt`)
     } else {
       // Case C: timed out entirely
       timing.enrichment = timing.enrichment || (Date.now() - enrichStart)
-      console.log(`[Timing] Enrichment: ${t(timing.enrichment)} | no results`)
+      logger.info('Timing', `Enrichment: ${t(timing.enrichment)} | no results`)
       gate(pipelineGates, 'ENRICHMENT', 'WARN',
         'Enrichment returned no results (timeout or all sources failed) — intelligence based on website only')
     }
@@ -862,18 +877,18 @@ export async function POST(req: NextRequest) {
       const reextractStart = Date.now()
       extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape)
       timing.reextraction = Date.now() - reextractStart
-      console.log(`[Bridge] Re-extraction (late): website=${websiteOnlySignalCount} → enriched=${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlySignalCount}) in ${timing.reextraction}ms`)
+      logger.info('Bridge', `Re-extraction (late): website=${websiteOnlySignalCount} → enriched=${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlySignalCount}) in ${timing.reextraction}ms`)
     } else if (promptEnriched) {
-      console.log(`[Bridge] Re-extraction skipped — already ran pre-prompt | final signal count: ${extractorResult.signals.length}`)
+      logger.info('Bridge', `Re-extraction skipped — already ran pre-prompt | final signal count: ${extractorResult.signals.length}`)
     } else {
       timing.reextraction = 0
-      console.log(`[Bridge] No enriched content — final signal count: ${websiteOnlySignalCount}`)
+      logger.info('Bridge', `No enriched content — final signal count: ${websiteOnlySignalCount}`)
     }
 
     // ── Step 6c: Signal clustering + deterministic opportunities ────────
     // Clusters: used for logging + passed into synthesis. Opportunity generation happens once in normalize.ts.
     const signalClusters = clusterSignals(extractorResult.detectedFactors as Partial<Record<string, boolean>>, extractorResult.companyProfile)
-    console.log(`[Clustering] ${signalClusters.length} clusters | primary=${extractorResult.companyProfile.primary_type}`)
+    logger.info('Clustering', `${signalClusters.length} clusters | primary=${extractorResult.companyProfile.primary_type}`)
 
     // ── Step 4b: Bridge extractor → pipeline inputs ──────────
     const EXTRACTOR_URGENCY_WEIGHTS: Record<string, number> = {
@@ -963,8 +978,8 @@ export async function POST(req: NextRequest) {
       relevance:   sig.strength === 'strong' ? 'high' : sig.strength === 'moderate' ? 'medium' : 'low',
     }))
 
-    console.log(`[Bridge] why_now=${computed_why_now_score} | growth=${extractor_growth_signals.length} | hiring=${extractor_hiring_signals.length} | digital=${extractor_digital_signals.length} | biz=${extractor_biz_signals.length} | synthesis=${extractorEnrichedSignals.length}`)
-    console.log(`[Bridge] website_signals=${websiteOnlySignalCount} | final_signals=${extractorResult.signals.length} | delta=+${extractorResult.signals.length - websiteOnlySignalCount}`)
+    logger.info('Bridge', `why_now=${computed_why_now_score} | growth=${extractor_growth_signals.length} | hiring=${extractor_hiring_signals.length} | digital=${extractor_digital_signals.length} | biz=${extractor_biz_signals.length} | synthesis=${extractorEnrichedSignals.length}`)
+    logger.info('Bridge', `website_signals=${websiteOnlySignalCount} | final_signals=${extractorResult.signals.length} | delta=+${extractorResult.signals.length - websiteOnlySignalCount}`)
 
     // ── Stage 5+6: LLM parse + normalization ─────────────────
     let analysisResult: unknown = null
@@ -992,8 +1007,9 @@ export async function POST(req: NextRequest) {
           break
         } catch (parseErr) {
           const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
-          console.error(
-            `[pipeline:LLM_PARSE_FAIL] attempt=${attempt} finishReason=${aiResponse.finishReason ?? 'unknown'} provider=${aiResponse.providerName}`,
+          logger.error(
+            'pipeline',
+            `LLM_PARSE_FAIL attempt=${attempt} finishReason=${aiResponse.finishReason ?? 'unknown'} provider=${aiResponse.providerName}`,
             errMsg,
           )
 
@@ -1010,9 +1026,12 @@ export async function POST(req: NextRequest) {
           }
 
           // finishReason:'length' means max_tokens cut the response off mid-string —
-          // retrying with the same budget would very likely truncate at the same spot.
-          const retryMaxTokens = aiResponse.finishReason === 'length' ? 8192 : 4096
-          console.warn(`[pipeline:LLM_PARSE_RETRY] retrying with maxTokens=${retryMaxTokens}`)
+          // retrying with the same budget would very likely truncate at the same
+          // spot, so escalate past the 8192 baseline (see the initial getCompletion
+          // call above). A malformed-but-complete response just gets one retry at
+          // the same baseline, since more budget wouldn't fix a real formatting bug.
+          const retryMaxTokens = aiResponse.finishReason === 'length' ? 12288 : 8192
+          logger.warn('pipeline', `LLM_PARSE_RETRY retrying with maxTokens=${retryMaxTokens}`)
           try {
             aiResponse = await getCompletion({
               systemPrompt: SYSTEM_PROMPT_V2,
@@ -1034,7 +1053,7 @@ export async function POST(req: NextRequest) {
       // Warn if LLM produced no substantive output
       const _llmPainCount    = Array.isArray(rawParsed.pain_points)         ? (rawParsed.pain_points as unknown[]).length : 0
       const _llmOppCount     = Array.isArray(rawParsed.ai_opportunities)    ? (rawParsed.ai_opportunities as unknown[]).length : 0
-      console.log('[pipeline:LLM_OUT]', JSON.stringify({ pain_points_count: _llmPainCount, ai_opportunities_count: _llmOppCount }))
+      logger.info('pipeline', 'LLM_OUT', { pain_points_count: _llmPainCount, ai_opportunities_count: _llmOppCount })
 
       // aiSynthesisFailed already recorded its own PARTIAL gate above with the
       // real reason — don't also emit the generic "no output" WARN here, it
@@ -1065,7 +1084,7 @@ export async function POST(req: NextRequest) {
         : 0
       const _effectiveWhyNowScore = Math.max(computed_why_now_score, _narrativeFloor)
       if (_narrativeFloor > computed_why_now_score) {
-        console.log(`[Bridge] Why Now floor applied: extractor=${computed_why_now_score} → narrative_floor=${_narrativeFloor} → effective=${_effectiveWhyNowScore}`)
+        logger.info('Bridge', `Why Now floor applied: extractor=${computed_why_now_score} → narrative_floor=${_narrativeFloor} → effective=${_effectiveWhyNowScore}`)
       }
 
       const merged = {
@@ -1130,7 +1149,7 @@ export async function POST(req: NextRequest) {
         const errMsg = normErr instanceof Error ? normErr.message : String(normErr)
         gate(pipelineGates, 'NORMALIZATION', 'FAIL',
           `normalizeAnalysisResult threw: ${errMsg}`)
-        console.error('[pipeline:NORMALIZATION_FAIL]', errMsg)
+        logger.error('pipeline', 'NORMALIZATION_FAIL', errMsg)
         return failResponse('NORMALIZATION', `Normalizer failed: ${errMsg}`, {
           signalCount: extractorResult.signals.length,
           primaryType: extractorResult.companyProfile.primary_type,
@@ -1141,10 +1160,10 @@ export async function POST(req: NextRequest) {
       const _norm = analysisResult as Record<string, unknown>
       const _normPainCount    = Array.isArray(_norm.pain_points)           ? (_norm.pain_points as unknown[]).length : 0
       const _normOppCount     = Array.isArray(_norm.opportunities)         ? (_norm.opportunities as unknown[]).length : 0
-      console.log('[pipeline:NORM_OUT]', JSON.stringify({ pain_points_count: _normPainCount, opportunities_count: _normOppCount }))
+      logger.info('pipeline', 'NORM_OUT', { pain_points_count: _normPainCount, opportunities_count: _normOppCount })
 
-      if (_llmPainCount > 0 && _normPainCount === 0) console.warn('[pipeline:DROP] pain_points dropped by normalizer — check flattenSections')
-      if (_llmOppCount > 0 && _normOppCount === 0)   console.warn('[pipeline:DROP] ai_opportunities dropped by normalizer — check flattenSections')
+      if (_llmPainCount > 0 && _normPainCount === 0) logger.warn('pipeline', 'DROP pain_points dropped by normalizer — check flattenSections')
+      if (_llmOppCount > 0 && _normOppCount === 0)   logger.warn('pipeline', 'DROP ai_opportunities dropped by normalizer — check flattenSections')
 
       if (aiSynthesisFailed) {
         // Already gated PARTIAL at LLM_PARSE with the real reason — skip the
@@ -1157,8 +1176,32 @@ export async function POST(req: NextRequest) {
           `Normalized: ${_normPainCount} pain_points | ${_normOppCount} opportunities`)
       }
 
-      console.log('[test-analysis] company_name:', (analysisResult as Record<string, unknown>).company_name)
-      console.log('[test-analysis] signals detected:', extractorResult.signals.length)
+      // Gate: PAIN_POINTS (non-critical — WARN only, same tier as
+      // COMPETITOR/ICP/MARKET_INTEL). The prompt (analyze-v2.ts) instructs
+      // the LLM to always generate 3-5 pain points and never return [], but
+      // nothing previously enforced or even detected a violation. Only warn
+      // when the company had usable evidence (evidence_sufficiency ===
+      // 'sufficient') but pain_points still came back empty — that combo
+      // points at an LLM/parsing gap, not thin data. See
+      // shouldWarnEmptyPainPoints() in normalize.ts for the shared rule.
+      if (aiSynthesisFailed) {
+        // Already gated PARTIAL at LLM_PARSE with the real reason — an empty
+        // pain_points here is an expected consequence of that failure, not a
+        // new problem to flag separately.
+      } else {
+        const _evidenceSufficiency = (_norm.evidence_sufficiency as 'sufficient' | 'insufficient' | undefined) ?? 'insufficient'
+        if (shouldWarnEmptyPainPoints(_normPainCount, _evidenceSufficiency)) {
+          gate(pipelineGates, 'PAIN_POINTS', 'WARN',
+            'pain_points came back empty (0) despite evidence_sufficiency=sufficient — likely an LLM/parsing gap, not genuinely thin data',
+            { painPointsCount: _normPainCount, evidenceSufficiency: _evidenceSufficiency })
+        } else {
+          gate(pipelineGates, 'PAIN_POINTS', 'PASS',
+            `${_normPainCount} pain_point(s) | evidence_sufficiency=${_evidenceSufficiency}`)
+        }
+      }
+
+      logger.info('test-analysis', 'company_name', (analysisResult as Record<string, unknown>).company_name)
+      logger.info('test-analysis', 'signals detected', extractorResult.signals.length)
 
       // ── Stage 7: SYNTHESIS ────────────────────────────────────
       const synthStart = Date.now()
@@ -1170,7 +1213,7 @@ export async function POST(req: NextRequest) {
           companyProfile: extractorResult.companyProfile,
         })
         timing.synthesis = Date.now() - synthStart
-        console.log(`[Timing] Synthesis: ${t(timing.synthesis)} | themes=${synthesisResult.strategicThemes.length} | quality=${synthesisResult.intelligenceQuality.overall}/100`)
+        logger.info('Timing', `Synthesis: ${t(timing.synthesis)} | themes=${synthesisResult.strategicThemes.length} | quality=${synthesisResult.intelligenceQuality.overall}/100`)
 
         if (synthesisResult.strategicThemes.length === 0) {
           gate(pipelineGates, 'SYNTHESIS', 'WARN',
@@ -1208,7 +1251,7 @@ export async function POST(req: NextRequest) {
       const confidence_v2: 'high' | 'medium' | 'low' =
         _confScore >= 70 ? 'high' : _confScore >= 40 ? 'medium' : 'low'
 
-      console.log(`[ConfV2] t1t2=${(_t1t2Ratio*100).toFixed(0)}% rel=${(_relevanceRatio*100).toFixed(0)}% div=${(_diversityScore*100).toFixed(0)}% cls=${(_clusterScore*100).toFixed(0)}% → score=${_confScore.toFixed(1)} → ${confidence_v2}`)
+      logger.info('ConfV2', `t1t2=${(_t1t2Ratio*100).toFixed(0)}% rel=${(_relevanceRatio*100).toFixed(0)}% div=${(_diversityScore*100).toFixed(0)}% cls=${(_clusterScore*100).toFixed(0)}% → score=${_confScore.toFixed(1)} → ${confidence_v2}`)
 
       // ── Executive Brief V2 ────────────────────────────────────
       if (analysisResult) {
@@ -1289,31 +1332,31 @@ export async function POST(req: NextRequest) {
 
         ;(_ar).confidence_level = confidence_v2
 
-        console.log(`[BriefV2] ${_strategicBullets.length} strategic bullets + ${_evidenceBullets.length} evidence quotes | top opp="${_topOppTitle}" | confidence=${confidence_v2} (score=${_confScore.toFixed(1)})`)
+        logger.info('BriefV2', `${_strategicBullets.length} strategic bullets + ${_evidenceBullets.length} evidence quotes | top opp="${_topOppTitle}" | confidence=${confidence_v2} (score=${_confScore.toFixed(1)})`)
       }
     } catch (e) {
       parseError = `Unexpected error in parse/normalize/synthesis: ${e instanceof Error ? e.message : String(e)}`
-      console.error('[test-analysis]', parseError)
+      logger.error('test-analysis', parseError)
     }
 
     timing.total = Date.now() - totalStart
-    console.log('[Timing] ---------------------------------------------------')
-    console.log(`[Timing] Scrape/Cache:        ${t(timing.scrape)}`)
-    console.log(`[Timing] Discovery+Fetch:     ${t(timing.discoveryFetch ?? 0)} (kicked off before scrape, item 2)`)
-    console.log(`[Timing] Content Quality:     ${t(timing.contentQuality)}`)
-    console.log(`[Timing] Evidence Extraction: ${t(timing.extraction)} (website-only)`)
-    console.log(`[Timing] Re-extraction:       ${t(timing.reextraction ?? 0)} (post-enrichment)`)
     const _enrichSummary = enrichmentResult
       ? `${enrichmentResult.sources_used.length} external + ${enrichmentResult.recovery_paths_probed?.length ?? 0} recovery paths${recoveryTriggered ? ' (thin-content recovery active)' : ''}`
       : 'no results'
-    console.log(`[Timing] Enrichment:          ${t(timing.enrichment)} | ${_enrichSummary}`)
-    console.log(`[Timing] Enrichment Wait:     ${t(enrichmentWaitMs)} (soft_timeout=${ENRICHMENT_SOFT_TIMEOUT_MS}ms | prompt_enriched=${promptEnriched})`)
-    console.log(`[Timing] Prompt Build:        ${t(timing.promptBuild)}`)
-    console.log(`[Timing] LLM Analysis:        ${t(timing.llmAnalysis)}`)
-    console.log(`[Timing] Synthesis:           ${t(timing.synthesis ?? 0)}`)
-    console.log(`[Timing] Total:               ${t(timing.total)}`)
-    console.log('[Timing] ---------------------------------------------------')
-    console.log('[pipeline:GATES]', JSON.stringify(pipelineGates.map(g => `${g.stage}:${g.status}`)))
+    logger.info('Timing', 'Pipeline summary', {
+      scrapeCache: t(timing.scrape),
+      discoveryFetch: `${t(timing.discoveryFetch ?? 0)} (kicked off before scrape, item 2)`,
+      contentQuality: t(timing.contentQuality),
+      evidenceExtraction: `${t(timing.extraction)} (website-only)`,
+      reExtraction: `${t(timing.reextraction ?? 0)} (post-enrichment)`,
+      enrichment: `${t(timing.enrichment)} | ${_enrichSummary}`,
+      enrichmentWait: `${t(enrichmentWaitMs)} (soft_timeout=${ENRICHMENT_SOFT_TIMEOUT_MS}ms | prompt_enriched=${promptEnriched})`,
+      promptBuild: t(timing.promptBuild),
+      llmAnalysis: t(timing.llmAnalysis),
+      synthesis: t(timing.synthesis ?? 0),
+      total: t(timing.total),
+    })
+    logger.info('pipeline', 'GATES', pipelineGates.map(g => `${g.stage}:${g.status}`))
 
     // Derive overall validation status from accumulated gates
     const _overallStatus: ValidationStatus =
@@ -1321,7 +1364,7 @@ export async function POST(req: NextRequest) {
       : pipelineGates.some(g => g.status === 'PARTIAL') ? 'PARTIAL'
       : pipelineGates.some(g => g.status === 'WARN') ? 'WARN'
       : 'PASS'
-    console.log(`[pipeline:GATE_OVERALL] overall=${_overallStatus} | gates=${pipelineGates.length}`)
+    logger.info('pipeline', `GATE_OVERALL overall=${_overallStatus} | gates=${pipelineGates.length}`)
 
     return NextResponse.json({
       success: true,
@@ -1404,7 +1447,7 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error('[test-analysis] Fatal error:', message)
+    logger.error('test-analysis', 'Fatal error', message)
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

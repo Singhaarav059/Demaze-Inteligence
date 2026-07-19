@@ -5,6 +5,7 @@
 // ============================================================
 
 import { useState, useCallback, type ReactNode, type ReactElement } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +24,6 @@ import {
   getOpportunities,
   getPainPointsStructured,
   getReasoningChains,
-  getWhyDemaze,
   getOutreachIntelligence,
   getBusinessModelAnalysis,
   getSignalClusters,
@@ -36,41 +36,6 @@ import { ComparisonPanel } from './ComparisonPanel'
 import { ResearchCard } from './ResearchCard'
 
 // ── Types ─────────────────────────────────────────────────────
-
-interface ScrapePageResult {
-  url: string
-  success: boolean
-  markdown: string
-  charCount: number
-  error?: string
-}
-
-interface ScoredLink {
-  url: string
-  score: number
-  tier: string
-}
-
-interface ScrapeResult {
-  pages: ScrapePageResult[]
-  combinedContent: string
-  successfulUrls: string[]
-  failedUrls: string[]
-  totalCharCount: number
-  wasTruncated: boolean
-  discoveryMethod: string
-  scrapedAt: string
-  debug: {
-    homepageLinksRaw: number
-    homepageLinksSameDomain: number
-    linkScores: ScoredLink[]
-    urlsSelectedForScraping: string[]
-    sitemapChecked: boolean
-    sitemapUrlsFound: number
-    warnings: string[]
-    errors: string[]
-  }
-}
 
 interface ScrapeCache {
   url: string             // the normalized URL this cache is for
@@ -112,6 +77,7 @@ export default function IntelligenceLab() {
 
   // Scrape cache — survives between Test Scraper and Test Analysis in same session
   const [scrapeCache, setScrapeCache] = useState<ScrapeCache | null>(null)
+  const [clearingCache, setClearingCache] = useState(false)
 
   // Comparison mode
   const [compareA, setCompareA] = useState<RunResult | null>(null)
@@ -291,6 +257,7 @@ export default function IntelligenceLab() {
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-2">
           <Input
+            aria-label="Company URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://company.com"
@@ -336,12 +303,27 @@ export default function IntelligenceLab() {
               onClick={async () => {
                 const u = urlNormalized
                 if (!u) return
-                await fetch(`/api/admin/scrape-cache?url=${encodeURIComponent(u)}`, { method: 'DELETE' })
-                setScrapeCache(null)
+                setClearingCache(true)
+                try {
+                  const res = await fetch(`/api/admin/scrape-cache?url=${encodeURIComponent(u)}`, { method: 'DELETE' })
+                  const data = await res.json().catch(() => ({ success: res.ok }))
+                  if (!res.ok || data.success === false) {
+                    toast.error(data.error ?? 'Failed to clear cache')
+                    return
+                  }
+                  setScrapeCache(null)
+                  toast.success('Cache cleared — next Analyze will scrape fresh')
+                } catch {
+                  toast.error('Could not reach the scrape-cache API')
+                } finally {
+                  setClearingCache(false)
+                }
               }}
-              className="ml-auto rounded border border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
+              disabled={clearingCache}
+              className="ml-auto flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:opacity-50"
               title="Delete cache, next Analyze will scrape fresh"
             >
+              {clearingCache ? <Spinner className="size-3" /> : null}
               Clear cache
             </button>
           </div>
@@ -415,7 +397,7 @@ export default function IntelligenceLab() {
       {saveStatus === 'failed' && (
         <div className="flex items-center justify-between rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-4 py-2">
           <p className="text-xs text-signal-medium">
-            ⚠ Failed to save run to history. Run migration 002_test_runs.sql in Supabase if you haven't.
+            ⚠ Failed to save run to history. Run migration 002_test_runs.sql in Supabase if you haven&apos;t.
           </p>
           <span className="text-xs text-muted-foreground">(non-blocking)</span>
         </div>
@@ -583,6 +565,7 @@ export default function IntelligenceLab() {
                     <button
                       disabled={activePageIdx === 0}
                       onClick={() => setActivePageIdx((i) => Math.max(0, i - 1))}
+                      aria-label="Previous page"
                       className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-400 hover:bg-zinc-800 disabled:opacity-30"
                     >
                       ← Prev
@@ -599,6 +582,7 @@ export default function IntelligenceLab() {
                     <button
                       disabled={activePageIdx === successfulPages.length - 1}
                       onClick={() => setActivePageIdx((i) => Math.min(successfulPages.length - 1, i + 1))}
+                      aria-label="Next page"
                       className="text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-400 hover:bg-zinc-800 disabled:opacity-30"
                     >
                       Next →
@@ -753,12 +737,10 @@ function AnalysisViewer({ data, extractorResult }: {
   const whyNow   = getWhyNow(data)
   const signals  = getSignals(data)
   const opps     = getOpportunities(data)
-  const evidence = Array.isArray(data.evidence) ? (data.evidence as Array<Record<string, unknown>>) : []
   const painPts  = getPainPointsStructured(data)
   const chains   = getReasoningChains(data)
   const warnings = Array.isArray(data.validation_warnings) ? (data.validation_warnings as string[]) : []
   const contentFlags = Array.isArray(data.content_quality_flags) ? (data.content_quality_flags as string[]) : []
-  const whyDemaze = getWhyDemaze(data)
   const outreachIntel = getOutreachIntelligence(data)
   const bma = getBusinessModelAnalysis(data)
   const businessModelType = data.business_model_type as string | undefined

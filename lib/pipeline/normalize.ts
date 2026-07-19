@@ -37,7 +37,13 @@ import {
   generateDeterministicOpportunities,
   DeterministicOpportunity,
 } from '@/lib/pipeline/opportunity-engine'
-import type { CompanyProfile, ExtractorResult } from '@/lib/pipeline/evidence-extractor'
+import {
+  detectServiceEvidence,
+  type ServiceThresholdResult,
+  type ServiceThreshold,
+  type ServiceEvidenceMatch,
+} from '@/lib/pipeline/service-evidence'
+import type { CompanyProfile, ExtractorResult, LeadershipContact } from '@/lib/pipeline/evidence-extractor'
 import type { CompetitorProfile, CompetitorSufficiency, CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
 import type { ICPSegment, ICPSufficiency, ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
 import type { MarketIntelItem, MarketIntelSufficiency, MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
@@ -166,6 +172,67 @@ export interface ExecutiveBrief {
 
 // Re-export for consumers
 export type { ScoreWithBreakdown, ScoreBreakdownItem, DetectedFactors, SignalCluster, DeterministicOpportunity, BusinessModelType, StrategicChallenge, CompetitorProfile, CompetitorSufficiency, ICPSegment, ICPSufficiency, ResearchQualityAudit }
+
+// ── Service Evidence Debug (diagnostic, internal-only) ─────────
+// detectServiceEvidence() (service-evidence.ts) computes a threshold ('none'
+// | 'weak' | 'medium' | 'strong') per one of the 8 confirmed Demaze
+// services, but generateDeterministicOpportunities() (opportunity-engine.ts)
+// only ever surfaces 'medium'/'strong' matches into deterministic_opportunities
+// — 'weak' matches and disqualification reasons are silently discarded there,
+// with no way to distinguish "genuinely thin evidence" from "a real
+// extraction gap" for a past run without re-deriving everything by hand.
+// This type captures that full per-service picture (including weak-tier
+// evidence) plus the insufficientEvidence 4-condition breakdown below, purely
+// for developer/debug visibility — never rendered in ResearchCard.tsx, never
+// changes any gate's PASS/WARN/FAIL behavior.
+export interface ServiceEvidenceDebugEntry {
+  service: string
+  threshold: ServiceThreshold
+  // true when this service actually reached deterministic_opportunities
+  // (mirrors opportunity-engine.ts's own qualifying filter exactly:
+  // !disqualified && threshold is 'medium' or 'strong').
+  surfaced: boolean
+  disqualified: boolean
+  disqualifier_matched?: string
+  // All matches detectServiceEvidence() collected for this service, across
+  // every pattern tier (strong/medium/weak) — includes weak-tier matches
+  // even when a stronger tier is what actually set `threshold`.
+  evidence: ServiceEvidenceMatch[]
+}
+
+export interface ServiceEvidenceDebug {
+  services: ServiceEvidenceDebugEntry[]
+  insufficient_evidence: {
+    // Whether the "Insufficient Evidence" outcome (see evidence_sufficiency
+    // above) fired and force-suppressed deterministic_opportunities to [].
+    fired: boolean
+    // The 4 individual conditions normalize.ts ANDs together to decide
+    // `fired` — surfaced individually so a developer can see WHICH
+    // condition(s) were true/false, not just the combined result.
+    conditions: {
+      companySubjectCount_zero: boolean
+      signals_zero: boolean
+      leadershipContacts_zero: boolean
+      no_facility_evidence: boolean
+    }
+  }
+}
+
+// ── Pain-points validation-gate logic (pure, unit-testable) ────
+// Extracted so route.ts's PAIN_POINTS gate (added alongside this field) and
+// tests can both call the exact same rule: only warn when the company had
+// usable evidence (evidence_sufficiency === 'sufficient') but pain_points
+// still came back empty — that combination points at an LLM/parsing problem,
+// not a data problem. An empty pain_points array on a genuinely-thin-evidence
+// company (evidence_sufficiency === 'insufficient') is arguably correct and
+// must NOT warn, same "no forced output on thin evidence" discipline
+// deterministic_opportunities already follows via insufficientEvidence above.
+export function shouldWarnEmptyPainPoints(
+  painPointsCount: number,
+  evidenceSufficiency: 'sufficient' | 'insufficient',
+): boolean {
+  return painPointsCount === 0 && evidenceSufficiency === 'sufficient'
+}
 
 // ── Stable internal schema ─────────────────────────────────────
 
@@ -304,6 +371,16 @@ export interface NormalizedAnalysis {
   market_intelligence: MarketIntelItem[]
   market_intelligence_sufficiency: MarketIntelSufficiency
 
+  // Named leadership individuals extracted from the company's own scraped
+  // site (evidence-extractor.ts's leadershipContacts, via _extractor).
+  // Previously only reachable through the internal `_raw._extractor`
+  // passthrough — promoted to a real top-level field (2026-07-19) so any
+  // consumer of a saved run (e.g. the standalone /admin/outbound/contacts
+  // page) can feed it to decision-maker-discovery grounding without reaching
+  // into an internal underscore field. Pure passthrough, same as
+  // market_intelligence/company_offerings — no LLM narration step.
+  leadership_contacts: LeadershipContact[]
+
   // What the researched company itself says it sells, extracted from its own
   // self-referential website language (see lib/pipeline/service-offerings.ts).
   // Superseded as the primary Competitor Discovery / ICP Generator query
@@ -383,6 +460,12 @@ export interface NormalizedAnalysis {
   // 'ok'; route.ts overrides to 'failed' when LLM_PARSE exhausts its retry.
   ai_synthesis_status: 'ok' | 'failed'
   ai_synthesis_failure_reason?: string
+
+  // Diagnostic-only, see ServiceEvidenceDebug above — surfaces per-service
+  // weak-tier matches and the insufficientEvidence condition breakdown so a
+  // past run in run-history can be inspected without re-running the
+  // pipeline. Additive/internal, never rendered in ResearchCard.tsx.
+  _service_evidence_debug: ServiceEvidenceDebug
 
   _raw: Record<string, unknown>
 }
@@ -609,6 +692,37 @@ export function normalizeAnalysisResult(
     !hasFacilityEvidence
   const evidence_sufficiency: 'sufficient' | 'insufficient' = insufficientEvidence ? 'insufficient' : 'sufficient'
   if (insufficientEvidence) deterministic_opportunities = []
+
+  // ── Service Evidence Debug (diagnostic, internal-only) ──────────────
+  // Re-runs detectServiceEvidence() (same call generateDeterministicOpportunities()
+  // already makes above, cheap pure regex, no I/O) purely to keep the full
+  // per-service result — including 'weak'-tier matches and disqualification
+  // reasons that generateDeterministicOpportunities() itself discards after
+  // filtering to 'medium'/'strong'. See ServiceEvidenceDebug's own doc comment.
+  const serviceEvidenceDebugResults: ServiceThresholdResult[] = detectServiceEvidence(
+    serviceEvidenceContent,
+    profileForClustering,
+    growthOrHiringSignal,
+  )
+  const _service_evidence_debug: ServiceEvidenceDebug = {
+    services: serviceEvidenceDebugResults.map(r => ({
+      service: r.service,
+      threshold: r.threshold,
+      surfaced: !r.disqualified && (r.threshold === 'medium' || r.threshold === 'strong'),
+      disqualified: r.disqualified,
+      disqualifier_matched: r.disqualifier_matched,
+      evidence: r.evidence,
+    })),
+    insufficient_evidence: {
+      fired: insufficientEvidence,
+      conditions: {
+        companySubjectCount_zero: (extractorData?.companySubjectCount ?? 0) === 0,
+        signals_zero: (extractorData?.signals?.length ?? 0) === 0,
+        leadershipContacts_zero: (extractorData?.leadershipContacts?.length ?? 0) === 0,
+        no_facility_evidence: !hasFacilityEvidence,
+      },
+    },
+  }
 
   // ── Confidence & why_now ─────────────────────────────────────
   const confidence_level = str(flat.confidence_level) || 'low'
@@ -843,6 +957,13 @@ export function normalizeAnalysisResult(
   // computed above), same shape as market_intelligence — no LLM merge step.
   const company_offerings: string[] = extractorData?.companyOfferings ?? []
 
+  // ── Leadership Contacts — named individuals from the company's own site ─
+  // Pure passthrough, same shape as company_offerings above. Promoted to a
+  // top-level field (2026-07-19) so it survives as a normal part of a saved
+  // run instead of only being reachable via the internal `_raw._extractor`
+  // passthrough — see the interface comment above for why.
+  const leadership_contacts: LeadershipContact[] = extractorData?.leadershipContacts ?? []
+
   // ── Business Profile — passthrough from extractBusinessProfile() via
   // `_business_profile` (route.ts), same passthrough shape as
   // market_intelligence above — it's already an LLM output, nothing to merge.
@@ -1022,6 +1143,7 @@ export function normalizeAnalysisResult(
     icp_sufficiency,
     market_intelligence,
     market_intelligence_sufficiency,
+    leadership_contacts,
     company_offerings,
     business_profile,
     why_demaze,
@@ -1034,6 +1156,7 @@ export function normalizeAnalysisResult(
     confidence_level, data_quality_score, data_quality_notes,
     pages_scraped, analyzed_at,
     ai_synthesis_status: 'ok',
+    _service_evidence_debug,
     _raw: raw,
   }
 

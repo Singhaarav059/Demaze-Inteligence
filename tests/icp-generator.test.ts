@@ -20,6 +20,7 @@ import {
   type ICPDiscoveryResult,
 } from '../lib/enrichment/icp-generator'
 import { emptyBusinessProfile } from '../lib/pipeline/business-profile'
+import { extractQueryTopic, filterTopicallyRelevantResults } from '../lib/enrichment/extraction-guards'
 
 describe('classifySegmentRejection — filtering rules', () => {
   const company = 'Ador Welding'
@@ -217,6 +218,59 @@ describe('buildBusinessProfileICPQueries — business-understanding rebuild (202
 
   it('returns no queries when the profile is entirely empty', () => {
     expect(buildBusinessProfileICPQueries(emptyBusinessProfile())).toEqual([])
+  })
+})
+
+describe('offering-grounded pass topical relevance (2026-07-18, same bug class as competitor-discovery.ts)', () => {
+  // The offering-grounded ICP pass (discoverICPSegmentsFromBusinessProfile /
+  // discoverICPSegmentsFromOfferings) runs with requireCompanyMention=false
+  // for the same reason competitor discovery does — a `who needs "X"` query
+  // is SUPPOSED to return other companies' pages, not the researched
+  // company's own. Confirmed live 2026-07-18 running ATE Group through the
+  // equivalent competitor-discovery.ts pass: with no relevance check at all
+  // on this path, a completely off-topic result was extracted as if it
+  // described the researched company's real customer segments. Same fix
+  // (filterTopicallyRelevantResults/extractQueryTopic, extraction-guards.ts)
+  // applies here.
+  it('the topical-relevance gate rejects a result before extraction ever sees it', () => {
+    const offTopicResult = {
+      title: 'Top Data Analytics Companies to Watch in 2026',
+      content: 'Our clients include Accenture, Deloitte, IBM, Capgemini, and PwC.',
+      url: 'https://example.com/data-analytics-listicle',
+    }
+    // Confirms the extractor WOULD have pulled real-looking segment names
+    // out of this result if it had reached extraction unfiltered.
+    expect(extractSegmentsAfterTrigger(offTopicResult.content)).toEqual(
+      expect.arrayContaining(['Accenture', 'Deloitte', 'IBM', 'Capgemini']),
+    )
+    // The offering-grounded pass searched for "industrial IoT" (query:
+    // `who needs "industrial IoT"`) — the fix rejects this result before
+    // extraction runs, since it has zero topical overlap.
+    const topic = extractQueryTopic('who needs "industrial IoT"')
+    expect(filterTopicallyRelevantResults([offTopicResult], [topic])).toHaveLength(0)
+  })
+
+  it('a genuinely relevant offering-based hit still survives the topical filter (no regression)', () => {
+    const relevantResult = {
+      title: 'Who Needs Industrial IoT Platforms',
+      content: 'Customers include automotive manufacturers and oil and gas operators.',
+      url: 'https://example.com/iot-buyers',
+    }
+    const topic = extractQueryTopic('who needs "industrial IoT"')
+    expect(filterTopicallyRelevantResults([relevantResult], [topic])).toHaveLength(1)
+    expect(extractSegmentsAfterTrigger(relevantResult.content)).toEqual(
+      expect.arrayContaining(['automotive manufacturers', 'oil and gas operators']),
+    )
+  })
+
+  it('a differently-worded but genuinely relevant hit still survives (no false negative)', () => {
+    const relevantResult = {
+      title: 'Buyers of Cooling Solutions',
+      content: 'Customers include data centers and cold storage warehouses.',
+      url: 'https://example.com/cooling-buyers',
+    }
+    const topic = extractQueryTopic('who needs "cooling solutions"')
+    expect(filterTopicallyRelevantResults([relevantResult], [topic])).toHaveLength(1)
   })
 })
 

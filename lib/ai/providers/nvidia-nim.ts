@@ -37,6 +37,17 @@ export class NvidiaProvider implements AIProvider {
     // Build the request options
     // NIM supports response_format: { type: 'json_object' } for structured output.
     // This forces the model to return valid JSON — no parsing guesswork.
+    //
+    // NOTE (2026-07-18): thinkingmachines/inkling reportedly exposes a
+    // `reasoning_effort` param (0.2-0.99) to control chain-of-thought token
+    // spend — relevant here since nemotron's undocumented CoT burn is a known
+    // problem (see lib/pipeline/business-profile.ts ~154-198). NOT added
+    // below: this options object only forwards a fixed, explicit field list
+    // (no passthrough of arbitrary AIProviderConfig keys), and NVIDIA's
+    // OpenAI-compatible endpoint's actual support for this field is
+    // unverified. Wiring it in blind risks breaking the request for an
+    // unconfirmed param name/shape — do this properly (verify against NVIDIA's
+    // docs/a live call) in a follow-up rather than guessing here.
     const options: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
       model: this.config.model,
       messages: [

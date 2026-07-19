@@ -105,6 +105,74 @@ export function filterRelevantResults<T extends { title: string; content: string
   return results.filter(r => mentionsCompany(`${r.title} ${r.content}`, companyName))
 }
 
+// ── Topical relevance for the offering-grounded pass ─────────────────
+// Found live 2026-07-18 running ATE Group (an industrial-IoT/cooling-
+// solutions/precision-components company) through the offering-grounded
+// competitor pass (competitor-discovery.ts's
+// discoverCompetitorsFromBusinessProfile /
+// discoverCompetitorsFromOfferings, and icp-generator.ts's equivalent
+// discoverICPSegmentsFromBusinessProfile / discoverICPSegmentsFromOfferings
+// — both share this exact shape): those passes deliberately run with
+// requireCompanyMention=false (a query like `top companies offering
+// "industrial IoT"` is SUPPOSED to return other companies' pages, so
+// mentionsCompany() above would wrongly reject every legitimate hit — see
+// runCompetitorDiscovery/runICPDiscovery's own header comments). But with
+// that gate off, there was NO relevance check of any kind: a completely
+// unrelated "Top Data Analytics Companies to Watch in 2026" listicle
+// (Accenture/Deloitte/IBM/Capgemini/PwC/Teradata) was extracted as if it
+// named ATE Group's real competitors, because extractNumberedListCandidates
+// blindly pulls any numbered capitalized list out of ANY returned result
+// with zero check that the result is actually about the right
+// industry/offering.
+//
+// extractQueryTopic() pulls the quoted phrase back out of a query string
+// built by the offering-grounded query builders (all shaped `top companies
+// offering "X"` / `"X" competitors` / `who needs "X"`), so a search RESULT
+// can be checked against the specific phrase that produced THAT query,
+// without the caller needing to separately pass the topic down alongside
+// the query string (queries is already the single source of truth for what
+// was searched).
+export function extractQueryTopic(query: string): string {
+  const m = query.match(/"([^"]+)"/)
+  return m ? m[1] : query
+}
+
+// True if `text` shares real topical overlap with `topic` (the offering/
+// positioning phrase a search query was built from), on word boundaries —
+// same word-boundary discipline as mentionsCompany(), not substring
+// matching. Deliberately MORE lenient than mentionsCompany(): the only
+// thing worth catching on this path is a result with essentially nothing to
+// do with the searched topic (the data-analytics-listicle case above), not
+// penalizing a legitimately related result for using different wording
+// ("IoT platforms" vs. "Industrial IoT" must still match — any one shared
+// significant word is enough for a short topic phrase). Longer topic
+// phrases (4+ significant words, e.g. a full market-positioning sentence)
+// require a real fraction of the words to overlap, not just one generic
+// shared word, so an unrelated result can't sneak through on a single
+// coincidental match.
+export function mentionsTopic(text: string, topic: string): boolean {
+  const words = significantWords(topic)
+  if (words.length === 0) return true // nothing meaningful to check against — don't block
+  const haystack = text || ''
+  const present = words.filter(w => new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(haystack))
+  if (present.length === 0) return false // near-zero overlap — the case this exists to catch
+  if (words.length <= 3) return true // any real shared word is enough for a short topic phrase
+  return present.length / words.length >= 0.34
+}
+
+// Filters raw search results down to only those with topical overlap with
+// AT LEAST ONE of the given topics, so the offering-grounded pass (where
+// mentionsCompany-based filterRelevantResults is deliberately skipped)
+// still has some relevance gate instead of none. Same "search-result ->
+// combined text" concatenation as filterRelevantResults.
+export function filterTopicallyRelevantResults<T extends { title: string; content: string }>(
+  results: T[],
+  topics: string[],
+): T[] {
+  if (topics.length === 0) return results
+  return results.filter(r => topics.some(topic => mentionsTopic(`${r.title} ${r.content}`, topic)))
+}
+
 // Shortens a full extracted offering phrase (e.g. "Cloud architectures that
 // ensure scalability, security, and resilience for modern businesses",
 // see lib/pipeline/service-offerings.ts) down to a search-safe noun phrase

@@ -57,13 +57,31 @@ const URL_CATEGORY_CONFIG: Record<
       'shareholder', 'bse', 'nse', 'sec', 'sebi',
     ],
   },
+  // ── Leadership / decision-maker pages — split out from `corporate` ────
+  // (2026-07-18 decision-maker discovery fix). Previously these keywords
+  // lived inside `corporate` (score 90), competing equally with plain
+  // "about us"/"history"/"overview" content for the same score tier — on a
+  // large site with many corporate-ish pages, a real leadership/team page
+  // was not reliably surviving the MAX_DISCOVERED_PAGES=15 cut. Scored
+  // higher (95, just under `investor`) and checked BEFORE `corporate` in
+  // this object (classifyUrl returns on first category match, in insertion
+  // order) so these keywords no longer compete with the generic corporate
+  // bucket at all.
+  leadership: {
+    score: 95, keep_b2c: true,
+    keywords: [
+      'leadership', 'leadership-team', 'management-team', 'senior-management',
+      'executive-team', 'our-team', 'meet-the-team', 'meet-our-team',
+      'core-team', 'board-of-directors', 'board-members', 'management',
+      'board', 'governance', 'executive', 'executives', 'chairman',
+      'md-speak', 'directors', 'founders', 'ceo',
+    ],
+  },
   corporate: {
     score: 90, keep_b2c: true,
     keywords: [
       'about', 'about-us', 'aboutus', 'who-we-are', 'our-story',
-      'company', 'corporate', 'overview', 'history', 'leadership',
-      'management', 'board', 'governance', 'values', 'mission',
-      'executive', 'chairman', 'ceo', 'md-speak',
+      'company', 'corporate', 'overview', 'history', 'values', 'mission',
     ],
   },
   manufacturing: {
@@ -226,15 +244,21 @@ const CORPORATE_SEED_PATHS = [
 // Worst case: 2 batches × 4s probe timeout = 8s total (was 16s).
 // Ordered by intelligence value — most useful paths first so early-exit fires sooner.
 const UNIVERSAL_B2B_PATHS = [
-  // Tier A: Corporate identity (highest signal density)
+  // Tier A: Corporate identity + leadership (highest signal density).
+  // Leadership paths PROMOTED here from the old Tier D (2026-07-18,
+  // decision-maker discovery fix) — probeUniversalPaths() batches candidates
+  // 10 at a time and stops once maxProbe(8) results are found, so paths
+  // sitting last in this array often never got probed at all once an
+  // earlier batch already found 8 hits. Leadership pages are exactly the
+  // kind of page a decision-maker-discovery grounding check needs, so they
+  // can't be left to lowest priority.
   '/about/', '/about-us/', '/company/', '/who-we-are/',
+  '/leadership/', '/management/', '/team/',
   // Tier B: Business operations (core intelligence)
   '/industries/', '/solutions/', '/services/', '/products/', '/capabilities/',
   '/operations/', '/manufacturing/', '/technology/', '/innovation/',
   // Tier C: Signals & hiring
   '/careers/', '/sustainability/', '/newsroom/', '/csr/',
-  // Tier D: Leadership (org context)
-  '/leadership/', '/management/', '/team/',
 ]
 
 // ── Types ─────────────────────────────────────────────────────
@@ -503,7 +527,7 @@ function extractSameDomainLinks(links: string[], baseUrl: string): string[] {
 // 'other' is intentionally excluded — unknown URLs on consumer
 // sites are almost certainly still consumer content.
 const CORPORATE_CATEGORIES_B2C = new Set([
-  'investor', 'corporate', 'manufacturing',
+  'investor', 'leadership', 'corporate', 'manufacturing',
   'sustainability', 'careers', 'technology', 'media',
 ])
 
@@ -1070,7 +1094,7 @@ export async function scrapeCompanyWebsite(baseUrl: string): Promise<ScrapeResul
   const selectedHighValue = selectedSlice.filter(s => s.score > 15).length
 
   const VALUABLE_CATEGORIES = new Set([
-    'investor', 'corporate', 'manufacturing', 'sustainability',
+    'investor', 'leadership', 'corporate', 'manufacturing', 'sustainability',
     'careers', 'technology', 'media', 'b2b_services',
   ])
   const categoriesSeen = new Set(

@@ -26,6 +26,7 @@ import {
   type CompetitorDiscoveryResult,
 } from '../lib/enrichment/competitor-discovery'
 import { emptyBusinessProfile } from '../lib/pipeline/business-profile'
+import { extractQueryTopic, filterTopicallyRelevantResults } from '../lib/enrichment/extraction-guards'
 
 describe('isSelfName — word-boundary self-match', () => {
   it('matches an exact name', () => {
@@ -283,6 +284,63 @@ describe('buildBusinessProfileCompetitorQueries — business-understanding rebui
 
   it('returns no queries when the profile is entirely empty', () => {
     expect(buildBusinessProfileCompetitorQueries(emptyBusinessProfile())).toEqual([])
+  })
+})
+
+describe('offering-grounded pass topical relevance (2026-07-18, real ATE Group bug)', () => {
+  // ATE Group (an industrial-IoT/cooling-solutions/precision-components
+  // company) ran through discoverCompetitorsFromBusinessProfile (which runs
+  // with requireCompanyMention=false, since a `top companies offering "X"`
+  // query is SUPPOSED to return other companies' pages) and surfaced a
+  // completely unrelated "Top Data Analytics Companies to Watch in 2026"
+  // listicle as if it named ATE Group's real competitors — because with
+  // requireCompanyMention off, there was no relevance check of any kind.
+  // filterTopicallyRelevantResults/extractQueryTopic (extraction-guards.ts)
+  // fix this; these tests confirm the fix actually blocks the extraction
+  // path that made the bug possible, not just the isolated guard function.
+  it('the topical-relevance gate rejects a result before extraction ever sees it', () => {
+    const listicleResult = {
+      title: 'Top Data Analytics Companies to Watch in 2026',
+      content: '1. Accenture 2. Deloitte 3. IBM 4. Capgemini 5. PwC 6. Teradata',
+      url: 'https://example.com/data-analytics-listicle',
+    }
+    // Confirms the extractor WOULD have pulled real-looking names out of
+    // this result if it had reached extraction unfiltered — this is what
+    // made the bug possible in the first place.
+    expect(extractNumberedListCandidates(listicleResult.content)).toEqual(
+      expect.arrayContaining(['Accenture', 'Deloitte', 'IBM', 'Capgemini', 'PwC', 'Teradata']),
+    )
+    // The offering-grounded pass searched for "industrial IoT" (query:
+    // `top companies offering "industrial IoT"`) — the fix rejects this
+    // result before extraction runs, since it has zero topical overlap.
+    const topic = extractQueryTopic('top companies offering "industrial IoT"')
+    expect(filterTopicallyRelevantResults([listicleResult], [topic])).toHaveLength(0)
+  })
+
+  it('a genuinely relevant offering-based hit still survives the topical filter (no regression)', () => {
+    const relevantResult = {
+      title: 'Leading Industrial IoT Platforms for Manufacturing',
+      content: '1. PTC ThingWorx 2. Siemens MindSphere 3. GE Predix',
+      url: 'https://example.com/iot-platforms',
+    }
+    const topic = extractQueryTopic('top companies offering "industrial IoT"')
+    expect(filterTopicallyRelevantResults([relevantResult], [topic])).toHaveLength(1)
+    expect(extractNumberedListCandidates(relevantResult.content)).toEqual(
+      expect.arrayContaining(['PTC ThingWorx', 'Siemens MindSphere', 'GE Predix']),
+    )
+  })
+
+  it('a differently-worded but genuinely relevant hit still survives (no false negative)', () => {
+    // "IoT platforms" vs "cooling solutions" query topic — different offering
+    // phrase, but a real hit for it should not be rejected just because the
+    // wording differs from the exact searched phrase.
+    const relevantResult = {
+      title: 'Best Industrial Cooling Systems Compared',
+      content: '1. Munters 2. Trane Technologies 3. Johnson Controls',
+      url: 'https://example.com/cooling-systems',
+    }
+    const topic = extractQueryTopic('top companies offering "cooling solutions"')
+    expect(filterTopicallyRelevantResults([relevantResult], [topic])).toHaveLength(1)
   })
 })
 

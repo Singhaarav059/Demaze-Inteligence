@@ -24,7 +24,7 @@ export type SourceType =
   | 'other'
 
 export type EvidenceStrength = 'very_high' | 'high' | 'medium' | 'low'
-export type QueryCategory = 'investor' | 'hiring' | 'expansion' | 'strategy'
+export type QueryCategory = 'investor' | 'hiring' | 'expansion' | 'strategy' | 'leadership'
 
 export interface DiscoveredSource {
   url: string
@@ -116,6 +116,16 @@ function buildDiscoveryQueries(companyName: string): Array<{ query: string; cate
 
     // ── Recent news (acquisition, partnership, milestone) ────────
     { query: `"${c}" acquisition merger partnership news ${yr}`,    category: 'expansion' },
+
+    // ── Leadership / decision-makers (2026-07-18 decision-maker discovery
+    // fix — real leadership/team pages are frequently thin on the company's
+    // own site or missed entirely by the scraper's page selection; a
+    // dedicated search query surfaces named executives from third-party
+    // coverage — interviews, "leadership team" bios, press mentions — as a
+    // supplementary source, same "search-grounded" discipline as every
+    // other query here) ──────────────────────────────────────────
+    { query: `"${c}" leadership team executives`,                   category: 'leadership' },
+    { query: `"${c}" CEO CTO management team`,                      category: 'leadership' },
   ]
 }
 

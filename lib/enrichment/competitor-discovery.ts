@@ -111,7 +111,7 @@ export interface CompetitorDiscoveryResult {
 // ============================================================
 
 import { searchTavily, searchSerper } from './discovery-engine'
-import { filterRelevantResults, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
+import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 
 // ── Company-name word-boundary matching ─────────────────────────
@@ -453,9 +453,10 @@ async function runCompetitorDiscovery(
     return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: emptyQueriesReason, candidates_considered: 0 }
   }
 
+  let resultsPerQuery: Array<Array<{ title: string; url: string; content: string }>>
   let allResults: Array<{ title: string; url: string; content: string }>
   try {
-    const resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
+    resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
     allResults = resultsPerQuery.flat()
   } catch (e) {
     return {
@@ -469,19 +470,36 @@ async function runCompetitorDiscovery(
     return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'search returned no results for any competitor query', candidates_considered: 0 }
   }
 
-  // Relevance gate — drop any result that doesn't actually mention the
-  // researched company. Tavily/Serper's quoted-phrase queries don't
-  // reliably enforce this themselves (see extraction-guards.ts header for
-  // the live 2026-07-16 failure this fixes); without it, extraction runs
-  // on off-topic pages and pulls page-chrome as if it were a competitor.
-  // Skipped entirely for the offering-grounded pass (requireCompanyMention
-  // = false) — see this function's header comment.
+  // Relevance gate. Two different shapes depending on which pass this is:
+  //  - requireCompanyMention=true (name-based base pass): drop any result
+  //    that doesn't actually mention the researched company. Tavily/Serper's
+  //    quoted-phrase queries don't reliably enforce this themselves (see
+  //    extraction-guards.ts header for the live 2026-07-16 failure this
+  //    fixes); without it, extraction runs on off-topic pages and pulls
+  //    page-chrome as if it were a competitor.
+  //  - requireCompanyMention=false (offering-grounded pass): the researched
+  //    company's own name is deliberately NOT required (see this function's
+  //    header comment) — instead, each query's own results are checked for
+  //    topical overlap with the offering/positioning phrase THAT query
+  //    searched for (filterTopicallyRelevantResults/extractQueryTopic, see
+  //    extraction-guards.ts). Without this, there was no relevance check at
+  //    all on this path — found live 2026-07-18 running ATE Group (an
+  //    industrial-IoT/cooling-solutions company): an unrelated "Top Data
+  //    Analytics Companies to Watch in 2026" listicle (Accenture/Deloitte/
+  //    IBM/Capgemini/PwC/Teradata) was extracted as if it named ATE Group's
+  //    real competitors.
   const rawResultCount = allResults.length
-  if (requireCompanyMention) allResults = filterRelevantResults(allResults, companyName)
+  if (requireCompanyMention) {
+    allResults = filterRelevantResults(allResults, companyName)
+  } else {
+    allResults = resultsPerQuery.flatMap((results, i) => filterTopicallyRelevantResults(results, [extractQueryTopic(queries[i])]))
+  }
   if (allResults.length === 0) {
     return {
       competitors: [], candidates: [], sufficiency: 'insufficient',
-      reason: `${rawResultCount} result(s) found but none mention "${companyName}" by name`,
+      reason: requireCompanyMention
+        ? `${rawResultCount} result(s) found but none mention "${companyName}" by name`
+        : `${rawResultCount} result(s) found but none were topically relevant to the searched offering(s)`,
       candidates_considered: 0,
     }
   }

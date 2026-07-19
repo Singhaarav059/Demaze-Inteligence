@@ -176,6 +176,21 @@ export interface MarketIntelItem {
   source_urls?: string[]
 }
 
+// Named leadership individuals extracted from the company's own scraped site
+// (schema in lib/pipeline/evidence-extractor.ts — this is that file's
+// LeadershipContact, loosened to optional fields per this file's
+// convention). Feeds decision-maker-discovery grounding (see
+// lib/outbound/decision-maker-discovery/grounding.ts) — this getter is what
+// closes the gap where the standalone Contacts page previously had no way
+// to read this data back out of a saved run.
+export interface LeadershipContact {
+  name?: string
+  title?: string
+  statedPortfolio?: string
+  sourceUrl?: string
+  confidence?: string
+}
+
 const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
 
 export const getCompanyFit = (data: Record<string, unknown>): CompanyFit | undefined =>
@@ -245,6 +260,9 @@ export const getMarketIntelligence = (data: Record<string, unknown>): MarketInte
 
 export const getMarketIntelligenceSufficiency = (data: Record<string, unknown>): string | undefined =>
   data.market_intelligence_sufficiency ? String(data.market_intelligence_sufficiency) : undefined
+
+export const getLeadershipContacts = (data: Record<string, unknown>): LeadershipContact[] =>
+  arr(data.leadership_contacts)
 
 // What the researched company itself says it sells (lib/pipeline/service-offerings.ts).
 // Same "add now, UI section built alongside this session" pattern as the getters above.
