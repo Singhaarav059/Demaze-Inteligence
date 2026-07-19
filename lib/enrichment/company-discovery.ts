@@ -429,7 +429,7 @@ async function tryExtractCompaniesWithLLM(
   results: Array<{ title: string; url: string; content: string }>,
   icpSegment: string,
 ): Promise<string[][] | null> {
-  const llmAvailable = !!(process.env.NVIDIA_NIM_API_KEY || process.env.OPENROUTER_API_KEY)
+  const llmAvailable = !!process.env.NVIDIA_NIM_API_KEY
   if (!llmAvailable || results.length === 0) return null
 
   const capped = results.slice(0, LLM_EXTRACTION_RESULT_CAP)

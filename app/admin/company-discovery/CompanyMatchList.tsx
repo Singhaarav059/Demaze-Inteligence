@@ -101,6 +101,7 @@ export function CompanyMatchList({
 
         {showFilter && (
           <Input
+            aria-label="Filter companies by name"
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Filter by name…"
@@ -170,6 +171,7 @@ export function CompanyMatchList({
               <div className="flex items-start gap-3 px-3 py-3">
                 <input
                   type="checkbox"
+                  aria-label={`Select ${match.name}`}
                   checked={selected}
                   onChange={() => toggle(company.id)}
                   disabled={running}

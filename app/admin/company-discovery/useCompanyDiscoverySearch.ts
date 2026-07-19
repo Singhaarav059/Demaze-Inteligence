@@ -164,6 +164,7 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
       })
     } catch (e) {
       console.warn('[CompanyDiscovery] Failed to persist result:', e)
+      toast.warning(`Couldn't save "${company.companyName}" to History — its result is still shown below`)
     }
   }
 

@@ -23,6 +23,7 @@
 
 import Link from 'next/link'
 import { useCallback, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -116,6 +117,7 @@ export default function WizardPage() {
       })
     } catch (e) {
       console.warn('[Wizard] Failed to persist result:', e)
+      toast.warning("Couldn't save this result to History — the report above is still valid")
     }
   }, [url])
 
@@ -135,10 +137,16 @@ export default function WizardPage() {
       })
       const data: RunResult = await res.json()
       setResult(data)
-      if (!data.success) setError(data.error ?? 'Analysis failed')
+      if (!data.success) {
+        const message = data.error ?? 'Analysis failed'
+        setError(message)
+        toast.error(message)
+      }
       await saveRun(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setError(message)
+      toast.error(message)
     } finally {
       setRunning(false)
     }
@@ -230,6 +238,7 @@ export default function WizardPage() {
       // shown in this session, just not saved to history. Same "display
       // unaffected" principle as the single-URL flow.
       console.warn('[Wizard] Failed to persist batch result:', e)
+      toast.warning(`Couldn't save "${company.companyName}" to History — its result is still shown below`)
     }
   }
 
@@ -344,6 +353,7 @@ export default function WizardPage() {
           <div className="glass-panel space-y-3 rounded-xl p-4">
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
+                aria-label="Company URL"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://company.com"

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { discoverCompanies, filterAlreadyResearched } from '@/lib/enrichment/company-discovery'
 import { createServerClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e) {
-      console.warn('[CompanyDiscovery] already-researched dedup skipped:', e instanceof Error ? e.message : String(e))
+      logger.warn('CompanyDiscovery', 'already-researched dedup skipped', e instanceof Error ? e.message : String(e))
     }
   }
 

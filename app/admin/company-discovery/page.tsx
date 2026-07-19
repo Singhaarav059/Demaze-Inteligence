@@ -433,6 +433,7 @@ function CompanyDiscoveryInner() {
                 <summary className="cursor-pointer text-muted-foreground/70 hover:text-foreground/80">Manual / advanced: search a segment by free text instead</summary>
                 <div className="mt-3 space-y-2 max-w-md">
                   <Input
+                    aria-label="ICP segment to search"
                     value={icpSegment}
                     onChange={(e) => setIcpSegment(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !searching) handleSearch() }}
@@ -440,6 +441,7 @@ function CompanyDiscoveryInner() {
                     className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
                   />
                   <Input
+                    aria-label="Exclude companies (optional, comma-separated)"
                     value={excludeCompanyName}
                     onChange={(e) => setExcludeCompanyName(e.target.value)}
                     placeholder="Exclude companies (optional, comma-separated)"

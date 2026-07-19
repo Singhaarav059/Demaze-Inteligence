@@ -12,9 +12,12 @@
 // ============================================================
 
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
+import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { getResearchCardData } from '@/app/admin/intelligence-lab/ResearchCard'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import { humanizeText } from '@/lib/text/humanize'
@@ -74,6 +77,7 @@ export default function RunHistoryPage() {
   const [opFilter, setOpFilter] = useState<string>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   async function fetchRuns() {
     setLoading(true)
@@ -95,6 +99,8 @@ export default function RunHistoryPage() {
   }
 
   useEffect(() => {
+    // Intentional fetch-on-mount/filter-change, not a derived-state anti-pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRuns()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opFilter])
@@ -115,23 +121,31 @@ export default function RunHistoryPage() {
       if (res.ok) {
         const data = await res.json()
         setExpandedDetail(data.run)
+      } else {
+        toast.error('Failed to load report detail')
+        setExpandedId(null)
       }
     } catch {
-      // ignore — show partial data from list
+      toast.error('Could not reach the run-history API')
+      setExpandedId(null)
     } finally {
       setLoadingDetail(false)
     }
   }
 
   async function deleteRun(id: string) {
-    if (!window.confirm('Delete this saved run? This cannot be undone.')) return
     setDeletingId(id)
     try {
       const res = await fetch(`/api/admin/test-runs/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setRuns(prev => prev.filter(r => r.id !== id))
         if (expandedId === id) { setExpandedId(null); setExpandedDetail(null); setShowDebug(false) }
+        toast.success('Run deleted')
+      } else {
+        toast.error('Failed to delete run')
       }
+    } catch {
+      toast.error('Could not reach the run-history API')
     } finally {
       setDeletingId(null)
     }
@@ -166,7 +180,9 @@ export default function RunHistoryPage() {
             variant="outline"
             className="border-border bg-card text-foreground/90 hover:bg-accent"
             onClick={fetchRuns}
+            disabled={loading}
           >
+            {loading ? <Spinner className="size-3.5" /> : null}
             Refresh
           </Button>
         </div>
@@ -207,11 +223,16 @@ export default function RunHistoryPage() {
 
           return (
             <div key={run.id} className="rounded-lg border border-border bg-card overflow-hidden">
-              {/* Card */}
+              {/* Card — click-anywhere is a mouse convenience only; the "View
+                  Report" button below is the real, keyboard-accessible
+                  control for this action. This div previously claimed
+                  role="button"/tabIndex={0} without an onKeyDown handler, so
+                  keyboard users could Tab to it but never activate it — and
+                  it already wraps other real buttons (View Report, Delete),
+                  which is invalid to nest inside an actual <button> anyway
+                  (2026-07-19 fix). */}
               <div
                 onClick={() => fetchDetail(run.id)}
-                role="button"
-                tabIndex={0}
                 className="w-full text-left px-4 py-4 hover:bg-accent transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -277,16 +298,19 @@ export default function RunHistoryPage() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* Delete */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); deleteRun(run.id) }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(run.id) }}
                       disabled={deletingId === run.id}
                       className="text-muted-foreground/70 hover:text-destructive transition-colors text-xs flex-shrink-0 px-1.5 py-0.5 rounded border border-transparent hover:border-destructive/40"
                       title="Delete this run"
+                      aria-label={deletingId === run.id ? 'Deleting run…' : 'Delete this run'}
                     >
                       {deletingId === run.id ? '…' : '🗑'}
                     </button>
 
-                    {/* Expand indicator */}
-                    <span className="text-muted-foreground/70 text-xs flex-shrink-0">
+                    {/* Expand indicator — purely decorative, the state it
+                        conveys is already in the "View Report"/"Hide Report"
+                        button text above. */}
+                    <span className="text-muted-foreground/70 text-xs flex-shrink-0" aria-hidden="true">
                       {isExpanded ? '▲' : '▼'}
                     </span>
                   </div>
@@ -355,6 +379,20 @@ export default function RunHistoryPage() {
           )
         })}
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={open => { if (!open) setConfirmDeleteId(null) }}
+        title="Delete this saved run?"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deletingId !== null}
+        onConfirm={() => {
+          if (confirmDeleteId) void deleteRun(confirmDeleteId)
+          setConfirmDeleteId(null)
+        }}
+      />
     </div>
   )
 }

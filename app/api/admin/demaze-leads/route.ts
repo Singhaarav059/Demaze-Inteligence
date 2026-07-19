@@ -35,6 +35,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { discoverCompanies, filterAlreadyResearched, type CompanyMatch } from '@/lib/enrichment/company-discovery'
 import { aggregateLeadsAcrossSegments, withConfirmedSectors, DEMAZE_DOMAIN, DEMAZE_EXCLUDE_NAMES } from '@/lib/enrichment/demaze-leads'
 import type { ICPSegment } from '@/lib/enrichment/icp-generator'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
     )
     leads = survivors as typeof leads
   } catch (e) {
-    console.warn('[DemazeLeads] already-researched dedup skipped:', e instanceof Error ? e.message : String(e))
+    logger.warn('DemazeLeads', 'already-researched dedup skipped', e instanceof Error ? e.message : String(e))
   }
 
   return NextResponse.json({
