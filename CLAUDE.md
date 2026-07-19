@@ -521,8 +521,8 @@ confirmed SIGNAL_PATTERNS gaps above (job-posting ERP mentions, job-posting task
 lists, training/workshop mentions) affect more companies with stronger evidence per
 company. Sequence this behind those unless it's cheap to fold into the same session.
 
-## Known, deliberately deferred bug — do NOT fix opportunistically
-`detectPageType()` receives the full URL (e.g. `https://adorwelding.com`) instead of
+## RESOLVED 2026-07-19 — detectPageType() URL-vs-path bug + homepage fallback
+Was: `detectPageType()` receives the full URL (e.g. `https://adorwelding.com`) instead of
 a bare path, so the homepage regex never matches — homepages get mislabeled
 `pageType: 'other'` instead of `'homepage'`. This is currently *accidentally helpful*:
 Ador Welding's homepage evidence gets correctly classified only because it qualifies
@@ -533,11 +533,377 @@ isolation — needs a dedicated session that fixes both the URL-path bug AND the
 unconditional homepage->generic_marketing return together, or benchmark regressions
 will follow.
 
-## Model quality verdict — DO NOT relitigate this
-Evaluated whether model quality is the bottleneck. Conclusion: no.
-Estimated impact: architecture fixes ~+30%, model upgrade ~+5-10%.
-Current open/free models (DeepSeek, GLM, Qwen, Llama) are sufficient.
-Failures are scraping, classification, signals, timeouts, parsing — not reasoning quality.
+**Fixed, both halves together, as this note required.** `parseContentSegments()`
+(evidence-extractor.ts) now extracts the bare path already present before the
+`(url)` parens in the `--- PAGE: /path (https://url) ---` header — instead of
+re-passing the full URL — so `detectPageType()`'s homepage regex correctly
+matches. `classifySubject()`'s third-person self-reference block (the one
+`'other'`/`'about'` pages already used) now also runs for `pageType ===
+'homepage'`, so real homepage evidence that used to pass only by accident
+(via the mislabeling) now passes on purpose, and doesn't fall through to the
+unconditional `generic_marketing` return. New regression tests:
+`tests/evidence-extractor-pagetype.test.ts`.
+
+**Verified directly against real cached content, not just synthetically.**
+Pulled Ador Welding's actual cached scrape (`company_scrape_cache` in
+Supabase — only 1 page succeeded: the homepage, 5000 chars, matching this
+repo's own documented scrape-reliability gap for this company) and ran it
+through the fixed `extractSignals()` directly. Confirmed: the homepage is
+now correctly labeled `page_type: 'homepage'`, and its "Ador produces
+world-class products across six manufacturing facilities nationwide"
+sentence is now correctly classified `subject: 'company_strategy'` (not
+`generic_marketing`), producing a real `multi_location_operations` signal —
+exactly the fix this note called for.
+
+**A live full-benchmark run after this fix still showed `min_signals: 0` for
+Ador Welding** (WARN, not FAIL — pipeline never hard-fails). Root-caused
+this directly rather than assuming it was a regression: the third-person
+self-reference match requires the LITERAL resolved company name
+(`companyNameFromScrape`, which for this run resolved to "Ador Welding
+Ltd" — confirmed via a direct Supabase query against the saved run) to
+appear as an exact word-boundary phrase in the text. The real homepage
+copy says "**Ador** produces..." (short form), not "Ador Welding Ltd
+produces...", so the match never fires with the real resolved name even
+though it fires correctly with a shorter name in isolation (verified: works
+with `companyName="Ador"`, fails with `"Ador Welding"` or `"Ador Welding
+Ltd"` against the identical real content). **This is a separate,
+pre-existing precision gap — short-form self-reference vs. a longer
+resolved legal name — not something today's fix introduced or was asked to
+fix.** Same failure class as `website-discovery.ts`'s already-documented
+single-word-name and `isSelfName()`'s domain-guess-imprecision gaps
+elsewhere in this file. Logged here for a future session; not fixed now.
+
+**Same live benchmark run showed a FAIL on ATE Group's `profile_flag:
+manufacturer`** (`company_type.manufacturer: false`, contradicting this
+file's own 2026-07-11 "verified... now correctly `true` for ATE" note).
+Root-caused directly rather than assuming a regression: pulled ATE Group's
+current cached scrape content and confirmed the enumerated-capability-list
+phrase that fix depended on ("fabrication, machining, control system design
+facility") is **not present anywhere in the current scrape** — and
+`buildCompanyProfile()` (the function that sets `company_type.manufacturer`)
+takes a raw content string directly, with zero dependency on
+`detectPageType`/`classifySubject`/`parseContentSegments` (the three
+functions touched by today's fix), so it cannot have been affected by this
+session's change. This is the same "scraper/content non-determinism between
+runs" class of flakiness already documented multiple times elsewhere in this
+file for Ador Welding/AITG/A-1 Fence — ATE Group's site content has evidently
+drifted since the validation run, not a code regression. Not fixed now (out
+of scope — this session's mandate was the detectPageType bug specifically).
+
+## RESOLVED 2026-07-19 — greedy "Head of X" leadership-title regex
+The `LEADERSHIP_TITLE_VOCAB` regex's `Head\s+of\s+[A-Za-z\s]{2,40}` branch
+used `\s` inside a character class, which matches newlines — so a "Head of
+X" title match could greedily swallow across a line break into unrelated
+following body text on a busy leadership page. This was flagged (see the
+2026-07-18 precision-fixes session below) but deliberately left unfixed to
+keep that session scoped. Fixed: the character class now only matches a
+literal space (`[A-Za-z][A-Za-z &]{1,39}`), so it can't cross a line break.
+New regression test in `tests/evidence-extractor-leadership.test.ts`.
+
+## RESOLVED 2026-07-19 — Contacts-page decision-maker grounding backfill gap
+Was: the standalone `/admin/outbound/contacts` page couldn't ground
+decision-maker candidates against a company's own scraped leadership
+evidence, because that data (`extractorResult.leadershipContacts`) was only
+ever threaded through as a live Auto Flow state value, never persisted
+anywhere a saved run could read it back — see the grounding fix's own
+"Known gap, not fixed" note in the 2026-07-18 precision-fixes session below.
+
+**Turned out to be closer than that note assumed.** The data WAS already
+being saved — via `merged._extractor = extractorResult` in
+`test-analysis/route.ts` and `_raw: raw` in `normalize.ts` — just buried
+under an internal `final_result._raw._extractor.leadershipContacts` path
+with no real accessor, the same "reachable only by reaching into an
+underscore-prefixed internal field" shape this file already warns against
+elsewhere. Fixed properly: promoted `leadership_contacts` to a real
+top-level `NormalizedAnalysis` field (`lib/pipeline/normalize.ts`) with a
+`getLeadershipContacts()` getter (`lib/pipeline/analysis-sections.ts`,
+same convention as `getCompetitors()`/`getICPSegments()`), and wired the
+Contacts page to use it. Works for any run saved from now on; a run saved
+before this field existed still shows candidates ungrounded rather than
+erroring (same as before).
+
+## Production polish pass — 2026-07-19, Tracks 1-3 of a 6-track plan
+User asked for a full UI/functionality/accessibility/process polish pass to
+make the app production-ready. Explored current state first (12-component
+design system, no error/loading/not-found boundaries anywhere, 7/41 files
+using any `aria-*`, no CI) and proposed 6 tracks: (1) known-bug fixes —
+see the three RESOLVED sections directly above this one, plus the migration/
+PDF/model live-verification entries elsewhere in this file, (2) error/
+loading states, (3) accessibility, (4) UI/UX consistency, (5) process
+smoothness, (6) production hardening (CI, env validation, logging, auth).
+Tracks 1-3 are done; 4-6 are not started.
+
+**Track 2 — error & loading states (done).** Found and fixed 4 real silent-
+failure bugs, not just added generic boilerplate: (1) `components/wizard/
+WizardShell.tsx`'s `if (!result && !running) return null` guard meant a
+network-error in `wizard/page.tsx`'s `run()` (which only ever set `error`,
+never `result`) rendered nothing at all — the error banner code existed but
+never mounted. Fixed the guard, added a `toast.error` too. Verified live by
+overriding `window.fetch` to force a rejection — confirmed both the banner
+and toast now appear. (2) intelligence-lab's "Clear cache" button had no
+try/catch and no loading state, and worse, `lib/cache/scrape-cache.ts`'s
+`deleteScrapeCache()` swallowed every DB error and the route always
+returned `{success:true}` regardless — fixed both ends, the function now
+returns a real boolean. (3) run-history's `deleteRun`/`fetchDetail` had no
+error feedback at all — added toasts to both. (4) Auto Flow's
+`enqueueAndSend()` (the real email-send path) had zero try/catch around 3
+sequential fetches — a network failure was an unhandled promise rejection
+with the spinner just stopping silently; wrapped it, and fixed
+`sendAllContacts` so it no longer shows a misleading "0 sent, 0 skipped, 0
+failed" success toast when the whole operation actually failed. Also added
+`app/admin/error.tsx`, `app/not-found.tsx`, `app/global-error.tsx` — none
+existed before; a render-time throw anywhere in the app previously had no
+boundary at all. All verified live (real 404, simulated network failure,
+console-error checks on every touched page) — `tsc --noEmit` clean, 780/780
+tests.
+
+**`app/admin/loading.tsx` was added, then removed the same day — real
+regression, root-caused, not guessed.** Added initially as a route-transition
+loading shell (Track 2), it broke `/admin/auto-gtm` specifically: the whole
+page got permanently stuck showing only the loading spinner, forever, no
+console error, no server error, SSR HTML confirmed correct via `curl`, every
+other page fine. This is the EXACT bug class `useAutoGtmFlow.ts`'s own header
+comment already documents in detail: a real Next.js 16 Turbopack dev-mode bug
+where a Suspense boundary around this specific page causes its streamed
+content to get stuck inside a hidden server-streaming placeholder that never
+reveals. That comment's fix was avoiding `useSearchParams()` (which requires
+Suspense) — `loading.tsx` retriggered the identical bug via a different path,
+since Next.js's App Router automatically wraps the whole route subtree in a
+`<Suspense>` when a `loading.tsx` file exists, with no way to opt a single
+nested route out of an ancestor's `loading.tsx` boundary short of moving it
+to a different route grouping (not justified for a "nice to have" loading
+shell). Confirmed by direct removal + re-test: page broke with the file
+present, worked immediately once removed, `tsc`/tests unaffected either way.
+**Do not re-add `app/admin/loading.tsx` (or any `loading.tsx` that would
+wrap `/admin/auto-gtm`) without first re-reading `useAutoGtmFlow.ts`'s
+header comment and either solving the underlying Turbopack bug or
+structurally isolating that route from the boundary.** `error.tsx`/
+`not-found.tsx`/`global-error.tsx` are unaffected — they're React error
+boundaries, a different mechanism from Suspense, and don't wrap children in
+`<Suspense>`.
+
+**Track 3 — accessibility (done).** Delegated the initial audit to a
+sub-agent, then fixed everything it found that was concrete and
+verifiable, not speculative. Real functional blockers fixed: (1)
+run-history's card row used `role="button" tabIndex={0}` with no
+`onKeyDown` — a genuine keyboard dead end (Tab reaches it, Enter/Space do
+nothing) — and it wrapped other real `<button>`s inside it, invalid
+regardless; removed the fake role, the real "View Report" button already
+did the same job accessibly. (2) `components/shell/MobileNav.tsx`'s drawer
+had `aria-modal="true"` (a hint to AT, not real enforcement) but no actual
+focus trap, no Escape handler, and no focus restore — added all three,
+verified live: opening the drawer moves focus to its first link, Escape
+closes it and returns focus to the hamburger trigger, confirmed via
+`document.activeElement` checks in the browser, not just by reading the
+code. Also added: a skip-to-content link (`app/admin/layout.tsx`, none
+existed — every keyboard user had to tab through 9+ sidebar links on every
+page load), `aria-current="page"`/`aria-current="step"` on the Sidebar/
+MobileNav active link and StepIndicator's current step (StepIndicator
+previously communicated current/done purely by color), `aria-label` on
+~10 previously-unlabeled inputs/textareas/checkboxes across auto-gtm,
+wizard, intelligence-lab, company-discovery, campaigns, warmup,
+OutreachStep, and GenerationPanel, and `aria-live`/`role="status"` regions
+on Auto Flow's research-running/batch-progress/drafting-stage text (the
+longest-wait flow in the app — 60-100s research calls — previously gave
+screen reader users zero indication anything was happening or had
+finished). Verified live: `aria-current` values, the skip link, and the
+accessibility tree all confirmed via `read_page`/`javascript_tool` in the
+browser, not inferred from source alone. `tsc --noEmit` clean, 780/780
+tests, zero console errors across every touched page.
+
+**Track 4 — UI/UX consistency (done).** New `components/ui/alert-dialog.tsx`
+(`ConfirmDialog`, built on `@base-ui/react/alert-dialog`, matching the
+existing tooltip.tsx wrapper convention) wired into: Auto Flow's Send Email/
+Send All (previously fired with zero confirmation at all), `ContactRow`'s
+and run-history's delete actions (upgraded from native `window.confirm()`),
+and — the real find of this track — **Decision-Maker Discovery's `autoStart`
+was silently auto-firing a real, credit-spending Prospeo search the instant
+Auto Flow reached that step**, with zero confirmation (confirmed live: the
+`decision_maker_discovery` capability's active provider is `prospeo`, not
+mock). Gated behind a one-time confirm dialog now — the manual "Search
+Again" button stays a single click, since an explicit click is already
+consent. Checked Select/dropdown usage (native `<select>`+`<Label>`, already
+consistent/accessible, no gap) and empty-state patterns (already consistent
+across the app) — neither needed a fix. **A real regression was found and
+fixed during this track's own verification**: `app/admin/loading.tsx`
+(added in Track 2) permanently broke `/admin/auto-gtm` by retriggering a
+documented, pre-existing Next.js 16 Turbopack dev-mode bug — see
+`useAutoGtmFlow.ts`'s header comment and its 2026-07-19 addendum. Fixed by
+removing that file; confirmed via direct add/remove testing, not inferred.
+`tsc --noEmit` clean, 780/780 tests, live-verified end to end.
+
+**Track 5 — process smoothness (done).** Investigated the three planned
+items against actual current behavior rather than assuming the original
+plan's guesses were still accurate: (1) "raw gate codes instead of clear
+failure messaging" — checked, doesn't apply to the production flow (Auto
+Flow already uses human-readable error strings throughout
+`useAutoGtmFlow.ts`); raw codes only appear in `intelligence-lab`, which is
+explicitly the debug/testing harness this file's own Decision 2 says gets
+"no further investment" — correctly left alone. (2) "retry a single failed
+step" — checked, already works via idempotent button-click patterns
+throughout (Research button, decision-maker "Search Again", "Regenerate"
+drafts, Send Email/Send All can all just be re-clicked after a failure) —
+no fix needed. (3) **Session persistence — found a real gap, not just a
+UX nicety.** `resumeFromRun()` (the mid-flow-refresh recovery path) restored
+`runId`/`url`/`result`/`contacts` but never `campaignId` or
+`campaignContactStatus`. Since `ensureCampaignId()` unconditionally creates
+a NEW campaign whenever `campaignId` is null, and send status is scoped
+per-campaign (`outbound_campaign_contacts.status`, not a global per-contact
+flag), a refresh at the Review & Send step followed by clicking Send All
+would create a second campaign and **re-send to contacts already sent under
+the first one** — currently silent since sending is mock-only, but a real
+duplicate-send bug the moment a real vendor is wired up. Fixed: added an
+optional `?source_run_id=` filter to `GET /api/admin/outbound/campaigns`,
+and `resumeFromRun()` now looks up any existing campaign for the resumed
+run, restores `campaignId`, and maps each campaign-contact row's persisted
+status back into `campaignContactStatus` (`'queued'` → not yet sent, stays
+absent/retry-eligible; anything past `'queued'` → `'sent'`). Batch mode
+(`source_run_id: null` for its campaigns) is unaffected — out of scope,
+no single run to key off. **Live-verified with real data, not just unit
+logic**: loaded a saved run at step 5 that had a genuine prior campaign
+with one contact already sent — before the fix this would have shown both
+contacts as sendable; after, the already-sent contact correctly shows
+"Sent" (disabled) and "Send All (1)" correctly excludes it. `tsc --noEmit`
+clean, 780/780 tests.
+
+**Track 6 — production hardening (done 2026-07-19).** A background survey
+first confirmed the actual gaps (not assumed): no `.github/workflows/` at
+all, no env-validation module (Supabase's own `createServerClient()`/
+`createBrowserClient()` already throw lazily on missing vars — the one
+pre-existing pattern), no inbound rate-limiting anywhere, no logger utility
+(84 raw `console.*` calls confirmed across exactly 4 route files, 78 of
+them in `test-analysis/route.ts`), and Gmail OAuth CSRF already solid
+(random `state` + httpOnly cookie, correctly rejects mismatches) with two
+real gaps: a non-timing-safe comparison and zero rate limiting on
+`/start`/`/callback`.
+- **CI**: new `.github/workflows/ci.yml` (checkout → node 20 → `npm ci` →
+  lint → typecheck → test → build). New `"typecheck": "tsc --noEmit"`
+  script (`next.config.ts` sets `ignoreBuildErrors: true`, so `next build`
+  alone proves nothing about types). Lint is `continue-on-error: true`, not
+  blocking — the full-repo `npm run lint` surfaced ~1000+ pre-existing
+  errors with zero overlap with anything touched this session (confirmed by
+  grep), and this repo's own verification discipline has only ever cited
+  `tsc --noEmit` + tests, never lint, so blocking on unrelated debt would
+  just make CI permanently red.
+- **Env validation**: new `lib/env.ts`'s `validateEnv()` — required vars
+  (Supabase URL/anon key/service-role key) throw one aggregated error;
+  everything else (`ADMIN_SECRET`, vendor API keys, Gmail OAuth creds) is
+  optional-with-a-warning, matching this repo's graceful-degradation
+  philosophy. Wired via new `instrumentation.ts`'s `register()`
+  (`NEXT_RUNTIME === 'nodejs'` gated), which only runs at real server boot
+  (`next dev`/`next start`), never during `next build`.
+- **Rate limiting**: new `lib/rate-limit.ts` — in-memory fixed-window
+  counter (no Redis/external store; single-instance `next start`, documented
+  as a known limitation like other gaps in this file). Wired into
+  `verifyAdminRequest()` (`lib/admin/auth.ts`, the one choke point already
+  called by all 32 admin route files) at 120 req/60s per IP, checked before
+  the `ADMIN_SECRET` bail-out so it applies either way. Gmail `/start` and
+  `/callback` (which can't use `verifyAdminRequest` — browser-redirect
+  routes, no `x-admin-token`) each got their own direct 10 req/60s check.
+- **Structured logging**: new `lib/logger.ts` (thin wrapper, not a new
+  dependency — JSON lines in production, human-readable `[scope] message`
+  in dev, preserving the bracket-tag convention already used ad hoc). All
+  84 `console.*` calls in the 4 affected route files converted; `lib/` and
+  every other route file were untouched (zero console calls there to
+  begin with).
+- **Gmail OAuth CSRF**: the `state` comparison in `callback/route.ts` now
+  uses length-check-then-`crypto.timingSafeEqual` instead of `!==` (small
+  `timingSafeEqualStr()` helper, duplicated in `lib/admin/auth.ts` for its
+  own admin-token comparison too — same duplication-over-sharing precedent
+  as the discovery modules). No other change — the state-cookie pattern,
+  `sameSite: 'lax'`, `maxAge: 600`, single-use cookie deletion were already
+  correct.
+- **Verified**: `tsc --noEmit` clean, full suite 792/792 (780 pre-existing +
+  12 new — `tests/rate-limit.test.ts`, `tests/admin-auth.test.ts`, the
+  latter using real `NextRequest` instances, no prior precedent for that in
+  this repo's tests). Live dev-server pass (had to restart a stale `next
+  dev` process from before this session, with explicit user confirmation
+  first, since instrumentation.ts requires a real boot to run): boot log
+  showed `[env] Optional env var(s) not set...: ADMIN_SECRET` then `[env]
+  Env validation complete`, exactly as designed; hammering
+  `DELETE /api/admin/scrape-cache` 125x returned 429 with `Retry-After: 36`
+  starting at request 121; hammering the Gmail `/start` route 12x returned
+  429 starting at request 9 (its own independent 10/60s budget); normal
+  page traffic (`GET /`) unaffected throughout; zero server or console
+  errors.
+- **Not done, real next step for whoever picks this up**: the ~1000+
+  pre-existing lint errors surfaced by this session's `npm run lint` run
+  are untouched (out of scope — Track 6 was production-hardening
+  infrastructure, not a lint-debt cleanup) — worth its own session if lint
+  is ever meant to be a real gate.
+
+## Model quality verdict — SUPERSEDED 2026-07-18, was "DO NOT relitigate"
+Original verdict (kept for history): evaluated whether model quality is the
+bottleneck, concluded no — architecture fixes ~+30% vs model upgrade ~+5-10%,
+current open/free models (DeepSeek, GLM, Qwen, Llama) sufficient, failures
+are scraping/classification/signals/timeouts/parsing not reasoning quality.
+
+**This was already stale before today** — `lib/ai/provider-factory.ts`'s
+actual chain had drifted to `nvidia/nemotron-3-ultra-550b-a55b` (NVIDIA NIM
+primary) + `deepseek-v4-flash`/`deepseek-v4-pro`/`glm-5.2` (OpenRouter
+fallback), not the DeepSeek/GLM/Qwen/Llama set this verdict evaluated. There
+is also live, non-hypothetical evidence the current primary model
+contributes to real failures: a code comment in
+`lib/pipeline/business-profile.ts` (~154-198) documents nemotron-3-ultra
+burning an entire token budget on chain-of-thought preamble with zero JSON
+emitted, and truncating mid-string even at 2048 tokens — a plausible
+contributor to zero-pain-point/zero-opportunity outputs on content-rich
+companies (see the 2026-07-18 precision-fixes session below).
+
+**Changed 2026-07-18**: `minimaxai/minimax-m3` promoted to the default
+NVIDIA NIM model (was second in the chain); `thinkingmachines/inkling`
+(Thinking Machines Lab, reasoning MoE, controllable thinking effort) added
+as second; `nvidia/nemotron-3-ultra-550b-a55b` kept as third fallback, not
+deleted. OpenRouter chain gained `poolside/laguna-xs-2.1` (MoE
+coding/agentic model) as new default first entry, with
+`deepseek-v4-flash`/`deepseek-v4-pro`/`glm-5.2` kept after it. This was a
+config/ordering change only — `getCompletion()`'s try-each-in-order
+fallback logic, per-call `max_tokens: 4096`, and `LLM_TIMEOUT_MS=90000` are
+all unchanged. **Not yet live-verified** — no real NVIDIA/OpenRouter call
+was made against `thinkingmachines/inkling` or `poolside/laguna-xs-2.1`
+through this codebase's actual prompt shapes (JSON-mode expectations,
+4096-token budget) — both are brand-new to this repo, worth a live smoke
+test (real quota, explicit confirmation) before trusting them in a real
+run. A `reasoning_effort`-style control for Inkling was considered and
+deliberately NOT wired in — `nvidia-nim.ts`'s request builder only forwards
+a fixed field list, no passthrough exists, and NVIDIA's actual param name
+for this is unverified; guessing risked breaking every Inkling request.
+
+## RESOLVED 2026-07-19 — model chain live smoke test (was "Not yet live-verified" above)
+**The paragraph above this one is itself stale** — `lib/ai/provider-factory.ts`'s
+actual current chain (its own header comment dated 2026-07-18) had already
+moved on from what's described above: OpenRouter was removed entirely (the
+whole `poolside/laguna-xs-2.1` fallback chain described above no longer
+exists — `lib/ai/providers/openrouter.ts` is deleted), and within NVIDIA NIM,
+both `minimaxai/minimax-m3` and `nvidia/nemotron-3-ultra-550b-a55b` were
+already live-tested and DROPPED for cause (minimax-m3: "consistently hit the
+full 90s LLM_TIMEOUT_MS in live production runs"; nemotron: the documented
+CoT-token-burn bug). The real current chain is `thinkingmachines/inkling`
+(default) → `openai/gpt-oss-120b` → `deepseek-ai/deepseek-v4-pro`, all three
+already claimed "confirmed working" by that same header comment. Lesson: this
+file's own narrative sections can lag actual code by more than a day even
+when both carry the same date — check the file, not just this doc, before
+trusting a "not yet verified" note.
+
+**Live-verified today anyway** (real NVIDIA NIM quota, explicit confirmation
+given first): ran one real `getCompletion()` call through the actual
+production chain with a realistic ~2000-char multi-page scraped-content
+prompt in JSON mode (4096 max_tokens, matching production exactly).
+Result: **`thinkingmachines/inkling` (the current default) failed live** —
+returned reasoning-channel-leaked garbage (`{"{" \t: "company_summary" \t,
+"  : " \t: "`), exactly the failure mode `provider-factory.ts`'s own
+`looksLikeJson()` guard and comment already anticipated and defend against.
+This contradicts that same file's "confirmed working... clean JSON" claim
+for inkling — at minimum, inkling is flaky/inconsistent on this prompt
+shape, not reliably clean. **The fallback mechanism itself worked
+correctly**: the factory caught the malformed response, discarded it, and
+fell through to `openai/gpt-oss-120b`, which succeeded cleanly (3.4s,
+864 tokens, valid JSON matching the requested schema exactly). Net
+takeaway: the chain as a whole is healthy end-to-end (a real completion was
+obtained), but inkling's "default, clean JSON" status should not be trusted
+without a fallback — which, correctly, this code doesn't do. Not changing
+the chain order based on a single sample; flagging for whoever next touches
+this file to weight accordingly if inkling keeps failing.
 
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
@@ -563,6 +929,403 @@ Failures are scraping, classification, signals, timeouts, parsing — not reason
   repositioned to a parallel, always-on stage (item 2), new source categories get
   added (item 4), PDF handling gets fixed (item 3). Work order and status are
   tracked in "Implementation sequence" below.
+
+## Outbound Workflow Modules — scope override (2026-07-17)
+**This section partially supersedes "DO NOT WORK ON RIGHT NOW" above.** The
+user explicitly authorized building architecture + mock providers for the
+full outbound send loop now, on the basis that everything below is
+mock-only — no real vendor calls, no real keys, no real sends — so there is
+no actual vendor risk in building the scaffolding today. This does NOT mean
+the underlying vendor decisions themselves have been made; it means the
+*shape* of the code no longer has to wait for them.
+
+**What this unblocks**: the *"Email-finding, generation, QA, or send
+implementation"* bullet in "DO NOT WORK ON RIGHT NOW" — Email Finder, Email
+Validation, Contact Enrichment, Subject Line/Email/Follow-up generation,
+Email Sending, and Email Warm-up now have real (mock-provider-backed)
+scaffolding, or will as each session below lands.
+
+**What stays blocked, unchanged**: the *"Decision-maker/contact discovery
+implementation"* bullet and the LinkedIn-scraping exclusion. Email Finder
+and Contact Enrichment take a person name as **manual input** — optionally
+pre-filled from already-extracted `leadershipContacts` in existing pipeline
+output — never auto-discovered or ranked by this codebase. `linkedinUrl` is
+a manually-pasted optional field, never scraped. A future session proposing
+real Apollo/PDL/Proxycurl-style *auto-discovery of who to contact* still
+needs its own explicit scope decision — this override doesn't reach that far.
+
+**Standing convention for all 8 modules** (mirrors `lib/ai/types.ts` +
+`lib/ai/provider-factory.ts`, the existing AI-provider template): one
+capability = one `*Provider` interface (`name`, `displayName`, the
+capability's method(s), `isAvailable()`) in `lib/outbound/<module>/types.ts`,
+one file per implementation under `lib/outbound/<module>/providers/`
+(`mock.ts` first, real vendor classes later), one `provider-factory.ts` per
+capability. Provider selection order: (1) `outbound_integrations` DB row
+where `capability=X AND is_active=true` → use its `provider_name`; (2) env
+var `OUTBOUND_<CAPABILITY>_PROVIDER`; (3) `'mock'`. Adding a real vendor
+later is: implement one provider class → add its API key env var → flip
+`is_active` in the `/admin/outbound/integrations` settings page (or the env
+var if no DB row exists) — no other code changes needed.
+
+Credentials are encrypted at rest via AES-256-GCM
+(`lib/outbound/settings/credential-crypto.ts`), keyed by
+`CREDENTIALS_ENCRYPTION_KEY` (32 raw bytes, base64). This is the platform's
+first credential-at-rest store — no other table stores secrets.
+
+**Migrations**: `005_outbound_integrations.sql` (done, 2026-07-17) — the
+`outbound_integrations` settings table, seeded with one active `'mock'` row
+per capability. `006_outbound_contacts.sql` (Email Finder session) through
+`009_outbound_warmup.sql` (Warm-up session) are planned but not yet built —
+see the plan file / session breakdown for the full numbering.
+
+**Sessions so far — all 7 planned sessions are now code-complete
+(2026-07-17).** `tsc --noEmit` clean and full vitest suite passing (402
+tests) after every session. Two things still need the user to do manually
+before this is live end-to-end: (1) run migrations 005-009 in the Supabase
+dashboard SQL editor (same manual-apply process as every prior migration
+in this repo — none of 005-009 have been applied to the live DB yet, only
+005 was spot-checked against a real (pre-migration) 500 response); (2) a
+live click-through of the full contact -> generate -> campaign -> send ->
+warmup flow with a real Supabase connection has not been done — only
+Session 1's page got a live dev-server pass this round; sessions 2-7 were
+verified via `tsc`+tests+dev-server-compiles-cleanly, following this
+repo's own "verify via tsc+tests+dev-server, defer live run" precedent for
+quota/DB-dependent work (see Competitor Discovery Engine's own session
+history above for the same pattern).
+
+- **Session 1** — Integrations Settings foundation:
+  `lib/outbound/settings/{types.ts, credential-crypto.ts,
+  provider-selection.ts}`, migration 005, `GET/PUT /api/admin/outbound/
+  integrations[/capability][/test]`, `/admin/outbound/integrations` settings
+  page (5 stacked capability cards), new nav entry. 7 new
+  `credential-crypto.test.ts` assertions (round-trip, tamper detection via
+  GCM auth failure, wrong-key rejection, missing/malformed-key errors).
+- **Session 2** — Email Finder: `lib/outbound/email-finder/*` +
+  `lib/outbound/shared/mock-utils.ts` (`seededRatio`/`seededPick`, the
+  deterministic-mock helper every later session's mock provider reuses),
+  migration 006 (`outbound_contacts` — created with all finder/validation/
+  enrichment columns up front, only finder columns wired this session),
+  `POST /api/admin/outbound/contacts`, `GET ?source_run_id=`,
+  `POST /[id]/find-email`, new `/admin/outbound/contacts` page + `Contacts`
+  nav entry. Domain comes straight from the selected `pipeline_test_runs.
+  domain` — no new domain-resolution logic.
+- **Session 3** — Email Validation: `lib/outbound/email-validation/*`
+  (role-based inboxes like `info@`/`sales@` forced to `unknown` rather than
+  a random score band), `POST /[id]/validate-email`, Validate button added
+  to the same contact row.
+- **Session 4** — Contact Enrichment: `lib/outbound/enrichment/*` — the one
+  mock that prefers already-known research data
+  (`pipeline_test_runs.final_result.company_size_estimate`/`.industry`)
+  over invented fixtures when available, `POST /[id]/enrich`, Enrich button
+  + expandable detail panel.
+- **Session 5** — Combined Generation (Subject Lines + Email + Follow-ups):
+  `lib/outbound/generation/*` — no vendor abstraction here, calls the
+  existing `getCompletion()` AI chain directly. `assemble-input.ts` builds
+  `EmailGenerationInput` from `lib/pipeline/analysis-sections.ts` getters
+  (`getOpportunities`/`getExecutiveBrief`/`getOutreachIntelligence`/
+  `getPainPointsStructured`) plus `data.recent_activity` — reused exactly
+  as `ResearchCard.tsx` reads them, nothing re-derived. Prompts carry an
+  explicit anti-hallucination rule (only reference facts already in the
+  input). Migration 007 (`outbound_generated_content`, one row per contact,
+  upserted on regenerate). New routes: `generate-subject-lines`,
+  `generate-email` (body: `subjectLine`), `generate-followups` (uses the
+  saved `email_draft` by default, or a `emailDraft` override for SDR-edited
+  copy), plus `GET/PATCH generated-content` for loading state and
+  Approve/Edit. UI: `GenerationPanel.tsx`, a Tabs-based panel (Subject
+  Lines/Email/Follow-ups) opened via a new "Outreach" toggle on the contact
+  row.
+- **Session 6** — Email Sending: `lib/outbound/sending/*` (providers are
+  stateless — `outbound_campaigns`/`_contacts` own all state, mirroring the
+  warmup provider's `startedAt`-passed-in design from Session 7). Migration
+  008 (`outbound_campaigns`, `outbound_campaign_contacts`,
+  `outbound_campaign_events`). `POST /send` is a sequential loop (not
+  `Promise.all`) over queued contacts; a contact missing an email or a
+  generated draft is skipped (stays `queued` for retry), never silently
+  marked sent. New `/admin/outbound/campaigns` page + `Campaigns` nav
+  entry, UI copy explicit that this is mock-only — no real email is
+  delivered by this page.
+- **Session 7** — Email Warm-Up: `lib/outbound/warmup/*` — metrics are a
+  pure function of elapsed time since `started_at` (no randomness): emails
+  sent ramps to 200 over 30 days, inbox rate 0.6→0.97, spam rate 0.15→0.02,
+  domain health 50→95. Migration 009 (`outbound_warmup_mailboxes`,
+  `outbound_warmup_metrics`). Since this app has no background scheduler,
+  `GET /mailboxes/[id]/metrics` appends one fresh snapshot each time it's
+  called rather than on a fixed interval — the trend fills in as the
+  dashboard is viewed. New `/admin/outbound/warmup` page + `Warm-Up` nav
+  entry.
+
+**Standing note for whoever picks up a real vendor next**: every module
+above already has exactly one place to touch — implement a new
+`*Provider` class next to the existing `providers/mock.ts`, register it in
+that module's `provider-factory.ts`'s `PROVIDERS` map, add its API key env
+var to `.env.example`, then select it in `/admin/outbound/integrations`.
+No other file in any of the 7 sessions above should need to change.
+
+**First real vendor — Prospeo (Email Finder + Contact Enrichment), done
+2026-07-18.** User explicitly requested Prospeo for "contact and email
+discovery." Researched Prospeo's actual current API before writing code
+(their original single-purpose `email-finder`/`social-url-enrichment`
+endpoints are deprecated) — the live API is a single unified endpoint,
+`POST https://api.prospeo.io/enrich-person` (`X-KEY` header auth), that
+returns both a verified email AND full person/company enrichment data in
+one call. Both new capabilities call this same endpoint with different
+request shapes and interpret the response differently, so the HTTP client
+itself is shared (`lib/outbound/shared/prospeo-client.ts` —
+`callProspeoEnrichPerson()`, never throws, typed request/response shapes)
+while each capability keeps its own provider file:
+- `lib/outbound/email-finder/providers/prospeo.ts` — sends
+  `only_verified_email: true` (Prospeo only debits a credit when a
+  verified email is actually found, so a miss costs nothing). Maps
+  `error_code: 'NO_MATCH'` → `status: 'not_found'`, any other error code →
+  `status: 'error'`, `person.email.revealed === false` → `not_found`
+  (even if an email string is present), `person.email.status` containing
+  "verif" (case-insensitive) → `confidence: 'high'`, otherwise `'medium'`.
+- `lib/outbound/enrichment/providers/prospeo.ts` — omits
+  `only_verified_email` (we want profile data even without a verified
+  email). Prefers `linkedin_url` as the match key when the contact has one
+  (Prospeo's highest-precision match), else `full_name` + `company_name`.
+  Maps `job_history[current].departments[0]`→`department`,
+  `.seniority`→`seniority`, `location.{city,state,country}`→`location`,
+  `current_job_title`→`roleCategory`, `headline`→`linkedinSummary`,
+  `company.employee_range`→`companySize`, `company.industry`→`industry`.
+  `companySize`/`industry` fall back to the request's
+  `knownCompanySize`/`knownIndustry` hints (this platform's own research)
+  only when Prospeo's own company object is empty — Prospeo's live data is
+  treated as more authoritative than our own guess when both are present.
+- Both providers' `isAvailable()` is a cheap credential-presence check
+  only (`getProspeoApiKey()` !== null) — no network ping before every
+  request, same discipline as `lib/ai/providers/nvidia-nim.ts`'s
+  `isAvailable()`. Credential resolution: `outbound_integrations` DB row
+  first, then a flat `PROSPEO_API_KEY` env var fallback (added to
+  `.env.example`) for local dev without Supabase.
+- `'prospeo'` added to `CAPABILITY_KNOWN_PROVIDERS` for `email_finder` and
+  `enrichment` in `lib/outbound/settings/types.ts` so it's selectable in
+  the Integrations settings page.
+- **Fixed a real gap found while wiring this in**: the Integrations
+  settings page's Test Connection action (`/api/admin/outbound/
+  integrations/[capability]/test`) previously hardcoded
+  `isAvailable = providerName === 'mock'` — meaning it would have reported
+  a correctly-configured Prospeo credential as "not available" forever,
+  since the route never actually checked anything for non-mock providers.
+  Fixed by adding an exported `checkAvailability()` to all 5 capabilities'
+  `provider-factory.ts` files (resolves the active provider, calls its
+  real `isAvailable()`) and having the test route dispatch to the right
+  one per capability. This was a required fix for Prospeo to work
+  correctly, not scope creep — the feature would have been silently broken
+  for any real vendor without it.
+- **Verified, including a real live run (2026-07-18) — user supplied a
+  real Prospeo API key** (added by the user directly to `.env.local` as
+  `PROSPEO_API_KEY`, never handled or entered by the assistant — entering
+  API keys into fields is a hard rule regardless of who provides them).
+  `tsc --noEmit` clean, full suite passing (425 tests — 23 new:
+  `tests/prospeo-client.test.ts` for the shared HTTP client against a
+  mocked `global.fetch`, `tests/prospeo-providers.test.ts` for both
+  providers' request-building/response-interpretation logic).
+  - **Real bug found and fixed via the live run**: `NO_MATCH` (and Prospeo
+    error codes generally) were incorrectly resolving to
+    `EmailFinderResult.status: 'error'` instead of `'not_found'`. Root
+    cause: Prospeo returns a non-2xx HTTP status even for soft
+    business-logic outcomes like "no matching person," with the actual
+    `{ error, error_code }` detail in the JSON body — but
+    `callProspeoEnrichPerson()` originally treated any non-2xx response as
+    a hard transport failure (`ok: false`) before either provider's own
+    `error_code` branch (the one that correctly maps `NO_MATCH` →
+    `not_found`) ever got a chance to run. Fixed: the client now returns
+    `ok: true` with the parsed body whenever *any* JSON comes back,
+    regardless of HTTP status — `ok: false` is reserved for genuine
+    transport/parse failures (no JSON body at all). Verified with the real
+    key: a fabricated test name correctly resolves to
+    `email_finder_status: 'not_found'` with the intended human-readable
+    reason, for both the Email Finder and Contact Enrichment capabilities.
+  - Also confirmed live: `INVALID_API_KEY` (tested first, before the real
+    key was added) and successful auth (`INVALID_DATAPOINTS` — a real
+    Prospeo response for a fabricated name that doesn't meet its minimum
+    matching requirements — once the real key was in place) both surfaced
+    correctly end-to-end through the Contacts page UI, with no crashes.
+  - Found and fixed a related gap while cleaning up test state: there was
+    no way to clear a previously-saved (e.g. accidentally-fake) stored
+    credential back to "unset" so the env-var fallback could take over —
+    the settings PUT route silently left `credential_encrypted` untouched
+    whenever `api_key` was omitted from the request. Added a
+    `clear_credential: true` body flag to
+    `PUT /api/admin/outbound/integrations/[capability]` to null it out
+    explicitly. This is a real, permanent capability gap this feature was
+    missing, not a one-off script — fixed through the app's own API layer,
+    not a direct database write.
+  - Left both capabilities reset to `provider_name: 'mock', is_active:
+    true` after verification, so the app stays on safe defaults — the user
+    needs to re-select "prospeo" in `/admin/outbound/integrations` (or via
+    `OUTBOUND_EMAIL_FINDER_PROVIDER=prospeo` /
+    `OUTBOUND_ENRICHMENT_PROVIDER=prospeo`) whenever they want it live
+    again. The real `PROSPEO_API_KEY` remains set in their `.env.local`.
+
+## Decision-maker auto-discovery — UNBLOCKED 2026-07-18, supersedes the
+## "stays blocked" language above and in every earlier session's notes
+The user showed a target pipeline diagram (Research → Prepare Outbound →
+**Find Decision Makers** (CEO/CTO/VP Operations/Plant Head) → Contact
+Enrichment → Email Validation → Campaign → Replies) and asked whether the
+built system matches it. It mostly does, with one deliberate, previously-
+guarded gap: every contact in this codebase has so far been **manually
+typed in by name** — Email Finder and Contact Enrichment take a person
+name as input, they never search a company for "who holds this title."
+That gap was flagged back explicitly (per this file's own prior instruction
+to "stop and flag it rather than proceeding"), and the user was asked
+directly whether to cross it now. **Answer: yes, build it.**
+
+**What this authorizes**: a new decision-maker discovery capability using
+Prospeo's **Search Person** endpoint (200M+ contacts, 30+ filters,
+searchable by company + job title) — given a researched company + a set of
+target titles (CEO/CTO/VP Operations/Plant Head, etc.), return candidate
+decision-makers. This becomes a new source that FEEDS `outbound_contacts`
+(alongside, not replacing, manual entry) — the existing Email
+Finder/Validation/Enrichment/Generation/Sending modules downstream of a
+contact existing are unaffected and don't need to change.
+
+**What this does NOT authorize**: LinkedIn scraping/automation stays
+excluded regardless (unchanged, see `source-prioritizer.ts`'s
+`isFetchable()`) — Search Person is a non-LinkedIn people-data API, same
+category as the already-approved Prospeo work, not a reversal of the
+LinkedIn boundary.
+
+**Second decision, same session — UI restructuring.** The current
+`/admin/outbound/*` structure is 4 separate top-level nav pages (Contacts,
+Campaigns, Warm-Up, Integrations) plus Research/Discover/History — the
+user compared this against Explee's UX and said they don't want a flat set
+of separate tools; they want **one linear guided flow** that walks through
+the pipeline in order for one company/lead at a time (Research → Find
+Decision Makers → Enrich → Validate → Prepare Outbound → Campaign),
+matching Explee's phase-by-phase feel rather than a page-per-capability
+IA. This is a UI/IA consolidation, not a backend rewrite — the existing
+API routes and provider architecture underneath (Email Finder, Validation,
+Enrichment, Generation, Sending, Warm-up, Integrations settings) stay as
+the implementation layer; this is about presenting them as one guided
+flow instead of separate nav destinations. `/admin/outbound/integrations`
+(the settings page) most likely stays a separate settings surface even
+under this restructuring — it's config, not a pipeline step — confirm this
+assumption at the start of the session rather than assuming it silently.
+
+**Explicitly deferred, not authorized by this decision**: phone/mobile
+enrichment (Prospeo has an `enrich_mobile`/mobile-finder capability we
+did not wire — real cost implication, 10 credits per Prospeo's pricing,
+worth flagging before turning it on) and reply tracking/ingestion (the
+`outbound_campaign_events` schema already has a `replied` event type as a
+placeholder, but nothing ingests replies — this needs either IMAP/inbox
+polling or a real sending vendor's reply webhook, and there is still no
+real sending vendor chosen, only mock — reply tracking is likely blocked
+on that unrelated decision, flag this if it comes up rather than building
+a half-solution).
+
+**Next session should**: (1) confirm the Integrations-page-stays-separate
+assumption above before writing UI code, (2) design the decision-maker
+discovery module following this repo's established provider-abstraction
+pattern (one `DecisionMakerDiscoveryProvider` interface, mock first, real
+Prospeo Search Person provider following the credential-handling
+discipline from the existing Prospeo work — same "assistant never enters
+API keys" rule applies to any future vendor too), (3) design the unified
+flow UI as its own session before or after the discovery module, matching
+this repo's "one deliverable per session, benchmark after each" practice
+— treat "implement all remaining things" as a multi-session arc, not one
+sitting.
+
+## Precision + latency fixes — 2026-07-18, four parallel sessions
+Triggered by a live Auto Flow run against ATE Group/Ador Welding surfacing
+four real problems at once: 0 pain points, 0 opportunities, an obviously
+irrelevant "Competitors" list (Accenture/Deloitte/IBM sourced from an
+unrelated "Top Data Analytics Companies" listicle), and a wrong
+decision-maker list. Root-caused each via a read-only investigation pass
+before any code changed, then fixed all four in parallel (disjoint file
+ownership per session, verified together afterward: `tsc --noEmit` clean,
+33 test files / 481 tests passing).
+
+- **Decision-maker list was never real** — the Auto Flow's "Find Decision
+  Makers" step was showing `provider_name: 'mock'` results
+  (migration 010 seeds it inactive-on-real-vendor by design, same as every
+  other outbound capability's safe default). The real
+  `ProspeoDecisionMakerDiscoveryProvider` already existed and was already
+  wired into the factory — this needs a one-click flip to `prospeo` in
+  `/admin/outbound/integrations` (or `OUTBOUND_DECISION_MAKER_DISCOVERY_PROVIDER=prospeo`),
+  same per-vendor opt-in convention as Email Finder/Enrichment. **Not
+  flipped by this session** — deliberately left as a manual user action
+  (real Prospeo credit cost per lookup, same reasoning as every other
+  vendor activation in this repo).
+- **Competitor/ICP relevance filter fix** (`lib/enrichment/extraction-guards.ts`,
+  `competitor-discovery.ts`, `icp-generator.ts`): the offering-driven
+  discovery pass runs with `requireCompanyMention=false` by design (queries
+  like `top companies offering "X"` are *supposed* to return other
+  companies' pages), but had zero topical-relevance check of any kind, so a
+  same-word-adjacent-but-wrong-industry listicle could leak straight
+  through. New shared `extractQueryTopic()`/`mentionsTopic()`/
+  `filterTopicallyRelevantResults()` in `extraction-guards.ts` filters each
+  query's results against the specific topic phrase that produced that
+  query (lenient word-overlap, not exact match — reworded-but-relevant
+  hits still pass). `requireCompanyMention=true` path untouched.
+- **Pain points had no gate** (`lib/pipeline/normalize.ts`,
+  `app/api/admin/test-analysis/route.ts`): `pain_points` was pure
+  ungated LLM output — the prompt says "never return []" but nothing
+  enforced or even detected a violation. New `shouldWarnEmptyPainPoints()`
+  + `PAIN_POINTS` WARN-only gate (same pattern as `COMPETITOR`/`ICP`/
+  `MARKET_INTEL`), fires only when `evidence_sufficiency: 'sufficient'`
+  AND `pain_points` is empty — a genuinely thin-evidence company still
+  correctly gets no warning.
+- **Service-evidence had no debug visibility** (`normalize.ts`): new
+  underscore-prefixed `_service_evidence_debug` field (same convention as
+  `_extractor`/`_service_evidence_content`) captures per-service weak-tier
+  matches and disqualification reasons that never surfaced in the report,
+  plus the 4-condition breakdown of what triggered `insufficientEvidence`
+  (`companySubjectCount_zero`/`signals_zero`/`leadershipContacts_zero`/
+  `no_facility_evidence`). Purely additive/diagnostic — no UI or gate
+  behavior changed. Flows into `pipeline_test_runs.final_result`
+  automatically (that column is `analysisResult` verbatim). **Not yet used
+  to actually diagnose ATE Group's 0-opportunity result** — that needs a
+  live re-run with this field now available to inspect, still open.
+- **Sequential per-competitor website-resolution loop parallelized**
+  (`route.ts`): was a `for` loop calling `discoverCompanyWebsite()` once
+  per competitor (cap `MAX_COMPETITORS = 5`), each with its own internal
+  8000ms-capped sequential fetch chain — worst case ~40s serial for
+  something with no ordering dependency. Now `Promise.all`, same per-call
+  timeout, same "no domain found still surfaces by name" fallback
+  behavior preserved. Likely the single biggest latency win of this
+  session; not independently timed post-fix.
+- **Leadership scraping gap fixed** (`lib/pipeline/scraper.ts`,
+  `evidence-extractor.ts`, `lib/enrichment/discovery-engine.ts`): leadership
+  keywords were folded into the generic `corporate` category (score 90,
+  no edge over plain "about us" content) and leadership probe paths sat
+  in lowest-priority Tier D. New dedicated `leadership` category (score 95)
+  checked before `corporate`; leadership paths moved into the first probe
+  batch. New `extractStructuralLeadershipEvidence()` alongside the existing
+  narrative-clause extractor — the existing one required a markdown
+  heading + a narrative "heads/leads/oversees" sentence within 700 chars,
+  which misses the extremely common photo-card team-grid layout (name +
+  title, no heading, no narrative sentence) that most real leadership pages
+  actually use. New extraction is tagged `confidence: 'medium'` vs the
+  narrative extractor's `'high'`. New `'leadership'` query-category + two
+  search templates added to `discovery-engine.ts`.
+- **Decision-maker grounding added** (`lib/outbound/decision-maker-discovery/grounding.ts`):
+  new pure `groundCandidate()`/`groundCandidates()`, applied uniformly to
+  every provider (mock and Prospeo alike) via `provider-factory.ts`, tags
+  each candidate `confirmed` / `conflict` / `not_found` against the
+  company's own scraped `leadershipContacts` — same "flag conflicts, don't
+  auto-merge" discipline as `possibleDuplicateOf` in
+  `lib/batch/company-dedup.ts`. Threaded through both Auto Flow call sites
+  (single-company `DecisionMakerFinder.tsx` shows a grounding badge; the
+  batch loop in `useAutoGtmFlow.ts`). **Known gap, not fixed**: the
+  standalone `/admin/outbound/contacts` page loads saved runs whose
+  persisted `final_result` predates this field, so grounding there
+  currently no-ops — would need a DB/persistence backfill, out of scope
+  for this session.
+- **Found, not fixed, flagged separately**: a pre-existing "Head of X" title
+  regex in the leadership extractor that can greedily swallow newlines
+  across multiple lines — a real latent bug, deliberately left out of this
+  session's diff to keep it scoped to the four requested fixes.
+
+**Not done this session, real next steps**: (1) flip the decision-maker
+provider to `prospeo` and re-test against a real company; (2) live re-run
+ATE Group with `_service_evidence_debug` available to settle whether its
+0-opportunity result is genuine thin evidence or a real extraction gap;
+(3) a live smoke test of `minimaxai/minimax-m3` and
+`thinkingmachines/inkling` against this pipeline's actual prompts, since
+neither has been exercised through this codebase yet; (4) fix the
+greedy "Head of X" regex flagged above.
 
 ## Implementation sequence — CURRENT (2026-07-10), supersedes any earlier version
 ## of this section. One item per session, benchmark after each, CLAUDE.md updated
@@ -808,11 +1571,26 @@ discarding exactly the evidence enrichment exists to capture.
   in `tests/enrichment-pdf.test.ts`, covering `isPdfUrl` routing incl. the
   mid-path-"pdf" false-positive guard + `extractPdfText` against a committed
   `tests/fixtures/sample.pdf` and graceful `null` on garbage/empty buffers).
-- **NOT yet done — needs a live run** (deferred to a quota-spending session with
-  explicit confirmation): prove a real annual-report PDF that was previously
-  dropped now fetches, parses, and lands in `enriched_context` end-to-end, plus a
-  cached-scrape regression check that gate outcomes are unchanged. Windows
-  dev-server-restart gotcha applies before that run.
+- **DONE 2026-07-19 — live run confirms this end-to-end.** Called
+  `discoverAndFetchExternalSources('adorwelding.com', 'Ador Welding')`
+  directly (real Tavily quota, explicit confirmation given first) — the
+  cheaper, targeted way to prove this specific path without spending a full
+  scrape+LLM pipeline run. Tavily discovered 8 candidate sources, 2 of them
+  real `.pdf` URLs tagged `annual_report`: a BSE filing PDF
+  (`bsmedia.business-standard.com/.../51600047-....pdf`) and an
+  academic-repository-hosted 2019-20 annual report PDF
+  (`coeptech.ac.in/.../Annual-Report-2019-20-final-draft-1.pdf`). Both were
+  prioritized into the top-5 fetch set and both fetched successfully — 5706
+  and 5679 chars of real parsed text each, correctly formatted as `[SOURCE:
+  Annual Report (VERY HIGH confidence) | tier1 | <url>]` context blocks. The
+  BSE filing's extracted text is legible, correct company content: "ADOR
+  WELDING LIMITED", the real registered address, CIN number
+  (L70100MH1951PLC008647), and BSE filing metadata — confirms `pdf-parse`
+  extraction is working correctly on a real-world filing PDF, not just the
+  committed test fixture. Not re-run against the full pipeline/gate outcomes
+  in the same session (that's a second, separate spend) — this confirms the
+  fetch+parse mechanism itself works; a full cached-scrape regression check
+  is still open if someone wants it.
 
 **Item 4 (not started)** — add executive-change-announcement query template +
 dedicated investor-call-transcript/filings targeting pass. Explicitly skip
