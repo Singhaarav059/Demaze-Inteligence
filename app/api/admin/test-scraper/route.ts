@@ -21,6 +21,7 @@ import { scrapeCompanyWebsite, assessScrapeQuality } from '@/lib/pipeline/scrape
 import { validateAndNormalizeURL, extractDomain } from '@/lib/utils/url'
 import { estimateTokenCount } from '@/lib/prompts/scrape-utils'
 import { getCachedScrape, saveScrapeCache } from '@/lib/cache/scrape-cache'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!force) {
     const cached = await getCachedScrape(normalizedUrl)
     if (cached) {
-      console.log(`[test-scraper] Returning cached result for ${domain}`)
+      logger.info('test-scraper', `Returning cached result for ${domain}`)
       return NextResponse.json({
         success: true,
         domain,
@@ -61,9 +62,9 @@ export async function POST(req: NextRequest) {
         cachedAt: cached.cachedAt,
       })
     }
-    console.log(`[test-scraper] Cache miss for ${domain} — scraping fresh`)
+    logger.info('test-scraper', `Cache miss for ${domain} — scraping fresh`)
   } else {
-    console.log(`[test-scraper] Force refresh for ${domain} — bypassing cache`)
+    logger.info('test-scraper', `Force refresh for ${domain} — bypassing cache`)
   }
 
   // ── Fresh scrape ─────────────────────────────────────────────
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const executionTimeMs = Date.now() - startTime
     const message = err instanceof Error ? err.message : String(err)
-    console.error('[test-scraper] Error:', message)
+    logger.error('test-scraper', 'Error', message)
     return NextResponse.json(
       { success: false, error: message, executionTimeMs },
       { status: 500 }

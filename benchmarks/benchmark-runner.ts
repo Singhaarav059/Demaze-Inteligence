@@ -14,7 +14,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { createHmac } from 'crypto'
 import { config as loadDotenv } from 'dotenv'
-import type { BenchmarkSpec, BenchmarkResult, CheckResult, CheckStatus, ProfileFlagMatch, ResearchEvaluationScore, AggregateEvaluation } from './benchmark-types'
+import type { BenchmarkSpec, BenchmarkResult, CheckResult, CheckStatus, ProfileFlagMatch, AggregateEvaluation } from './benchmark-types'
 import { evaluateResearch, aggregateEvaluations, type EvaluationInput } from './research-evaluation'
 
 // ── Environment ───────────────────────────────────────────────

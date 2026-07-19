@@ -126,7 +126,7 @@ function signalsToConfidence(signals: ValidatedSignal[]): ConfidenceLevel {
 
 export function buildStrategicThemes(
   validatedSignals: ValidatedSignal[],
-  input: SynthesisInput,
+  _input: SynthesisInput,
 ): StrategicTheme[] {
   const activeSignalTypes = new Set(validatedSignals.map(s => s.signal_type))
   const signalByType = new Map(validatedSignals.map(s => [s.signal_type, s]))

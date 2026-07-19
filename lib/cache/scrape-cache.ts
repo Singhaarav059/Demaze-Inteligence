@@ -70,8 +70,11 @@ export async function getCachedScrape(url: string): Promise<CachedScrape | null>
 /**
  * Deletes the cache entry for a URL. Used by Re-Scrape to ensure
  * a full fresh scrape rather than just bypassing read cache.
+ * Returns false on failure instead of swallowing it — the DELETE route
+ * (and the Clear Cache button that calls it) previously always reported
+ * success regardless of whether the delete actually worked (2026-07-19 fix).
  */
-export async function deleteScrapeCache(url: string): Promise<void> {
+export async function deleteScrapeCache(url: string): Promise<boolean> {
   try {
     const supabase = createServerClient()
     const { error } = await supabase
@@ -80,11 +83,13 @@ export async function deleteScrapeCache(url: string): Promise<void> {
       .eq('url', url)
     if (error) {
       console.error('[scrape-cache] Delete error:', error.message)
-    } else {
-      console.log(`[scrape-cache] Deleted cache for ${url}`)
+      return false
     }
+    console.log(`[scrape-cache] Deleted cache for ${url}`)
+    return true
   } catch (err) {
     console.error('[scrape-cache] Delete threw:', err)
+    return false
   }
 }
 

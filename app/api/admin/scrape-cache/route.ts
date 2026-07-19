@@ -14,6 +14,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'url query param required' }, { status: 400 })
   }
 
-  await deleteScrapeCache(url)
+  const deleted = await deleteScrapeCache(url)
+  if (!deleted) {
+    return NextResponse.json({ success: false, error: 'Failed to delete cache entry' }, { status: 500 })
+  }
   return NextResponse.json({ success: true })
 }

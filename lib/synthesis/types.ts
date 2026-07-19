@@ -5,7 +5,7 @@
 // collected evidence. No new data acquisition here.
 // ============================================================
 
-import type { NormalizedAnalysis, EvidenceItem } from '@/lib/pipeline/normalize'
+import type { NormalizedAnalysis } from '@/lib/pipeline/normalize'
 import type { EnrichedSignal } from '@/lib/enrichment/web-enricher'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
 import type { CompanyProfile } from '@/lib/pipeline/evidence-extractor'
