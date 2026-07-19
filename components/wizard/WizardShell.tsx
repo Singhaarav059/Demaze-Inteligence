@@ -26,7 +26,12 @@ export function WizardShell({
 }) {
   const hasAnalysis = Boolean(result?.success && result.analysisResult && !result.parseError)
 
-  if (!result && !running) return null
+  // A network/fetch-throw failure (as opposed to a { success: false } API
+  // response) never produces a `result` at all — only `error` gets set. The
+  // original `!result && !running` guard missed this case entirely, so the
+  // error banner below was built but never mounted; the button just went
+  // back to idle with zero explanation (2026-07-19 fix).
+  if (!result && !running && !error) return null
 
   return (
     <div className="space-y-5">

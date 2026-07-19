@@ -15,7 +15,7 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside aria-label="Primary" className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       {/* Brand */}
       <Link
         href="/admin/intelligence-lab"
@@ -34,7 +34,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <LayoutGroup id="sidebar-nav">
-        <nav className="flex-1 space-y-0.5 px-3 py-4">
+        <nav aria-label="Workspace" className="flex-1 space-y-0.5 px-3 py-4">
           <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
             Workspace
           </p>
@@ -44,6 +44,7 @@ export function Sidebar() {
               <Link
                 key={href}
                 href={href}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
                   'group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors',
                   active ? 'text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',

@@ -86,3 +86,14 @@ export function CloseIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function AutoFlowIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 5h5l2 3h9" />
+      <path d="M4 19h5l2-3h9" />
+      <path d="M17 3l3 3-3 3" />
+      <path d="M17 15l3 3-3 3" />
+    </svg>
+  )
+}

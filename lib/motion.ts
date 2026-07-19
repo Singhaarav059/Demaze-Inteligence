@@ -68,3 +68,12 @@ export const crossfade: Variants = {
   visible: { opacity: 1, transition: { duration: DURATION.fast, ease: EASE } },
   exit: { opacity: 0, transition: { duration: DURATION.fast, ease: EASE } },
 }
+
+// ── Expand/collapse: a details panel animating open by height instead of
+// snapping. Pair with `overflow-hidden` on the animated element (framer
+// motion measures and interpolates to/from `height: 'auto'` itself). ──
+export const expandCollapse: Variants = {
+  hidden: { height: 0, opacity: 0 },
+  visible: { height: 'auto', opacity: 1, transition: { duration: DURATION.base, ease: EASE } },
+  exit: { height: 0, opacity: 0, transition: { duration: DURATION.fast, ease: EASE } },
+}

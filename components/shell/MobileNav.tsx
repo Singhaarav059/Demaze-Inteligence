@@ -8,16 +8,20 @@
 // change, and locks body scroll while open.
 // ============================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { MenuIcon, CloseIcon, DotIcon } from './nav-icons'
 import { NAV } from './nav-config'
 
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled])'
+
 export function MobileNav() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const drawerRef = useRef<HTMLElement>(null)
 
   // Lock body scroll while the drawer is open. Every nav link closes the
   // drawer via its own onClick, so no route-change effect is needed here.
@@ -30,9 +34,50 @@ export function MobileNav() {
     }
   }, [open])
 
+  // Focus management (2026-07-19 fix): move focus into the drawer on open
+  // (so screen reader / keyboard users land somewhere sensible instead of
+  // the still-focused hamburger button behind the backdrop), restore it to
+  // the trigger on close, close on Escape, and trap Tab/Shift+Tab within
+  // the drawer's own focusable elements — aria-modal="true" alone is only a
+  // hint to assistive tech, it doesn't actually prevent the browser from
+  // tabbing out into the page behind the backdrop.
+  useEffect(() => {
+    if (!open) return
+    const drawer = drawerRef.current
+    const trigger = triggerRef.current
+    const firstFocusable = drawer?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+    firstFocusable?.focus()
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        return
+      }
+      if (e.key !== 'Tab' || !drawer) return
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      trigger?.focus()
+    }
+  }, [open])
+
   return (
     <div className="md:hidden">
       <button
+        ref={triggerRef}
         type="button"
         aria-label="Open menu"
         aria-expanded={open}
@@ -43,7 +88,7 @@ export function MobileNav() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation menu">
           {/* Backdrop */}
           <button
             type="button"
@@ -53,7 +98,7 @@ export function MobileNav() {
           />
 
           {/* Drawer */}
-          <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col border-r border-sidebar-border bg-sidebar shadow-2xl">
+          <aside ref={drawerRef} className="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col border-r border-sidebar-border bg-sidebar shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-sidebar-border/60 px-4">
               <Link href="/admin/intelligence-lab" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
                 <span className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white">
@@ -76,7 +121,7 @@ export function MobileNav() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-0.5 px-3 py-4">
+            <nav className="flex-1 space-y-0.5 px-3 py-4" aria-label="Workspace">
               <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                 Workspace
               </p>
@@ -87,6 +132,7 @@ export function MobileNav() {
                     key={href}
                     href={href}
                     onClick={() => setOpen(false)}
+                    aria-current={active ? 'page' : undefined}
                     className={cn(
                       'group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm transition-colors',
                       active
