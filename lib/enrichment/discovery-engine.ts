@@ -10,6 +10,8 @@
 // Gracefully returns [] when no search API is configured.
 // ============================================================
 
+import { getCachedSearch, saveSearchCache } from '@/lib/cache/search-cache'
+
 export type SourceType =
   | 'annual_report'
   | 'investor_presentation'
@@ -133,12 +135,24 @@ function buildDiscoveryQueries(companyName: string): Array<{ query: string; cate
 // Exported for reuse by website-discovery.ts — same search provider, different
 // purpose (identity resolution vs. evidence discovery), no reason to duplicate
 // the HTTP call logic.
+//
+// Cached (2026-07-21): every discovery module in this codebase (Enrichment
+// Discovery, Competitor Discovery, ICP Generator, Market Intelligence,
+// Website Discovery, Company Discovery) funnels through this one function,
+// so caching here covers all of them for free. A cache hit costs one
+// Supabase read instead of one Tavily credit ($0.008) — a repeat run of an
+// already-researched company (batch retries, reprocessing) previously
+// re-paid the full ~40-query search bill from scratch every time. See
+// lib/cache/search-cache.ts for the read/write helpers and TTL.
 
 export async function searchTavily(
   query: string,
   apiKey: string,
   maxResults: number = 3,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
+  const cached = await getCachedSearch('tavily', query, maxResults)
+  if (cached) return cached
+
   try {
     const resp = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -154,20 +168,26 @@ export async function searchTavily(
     })
     if (!resp.ok) return []
     const data = await resp.json() as { results?: Array<{ title: string; url: string; content: string }> }
-    return data.results ?? []
+    const results = data.results ?? []
+    if (results.length > 0) saveSearchCache('tavily', query, maxResults, results)
+    return results
   } catch {
     return []
   }
 }
 
 // ── Serper search (fallback) ──────────────────────────────────
-// Exported for reuse by website-discovery.ts — see note above.
+// Exported for reuse by website-discovery.ts — see note above. Cached the
+// same way as searchTavily() above.
 
 export async function searchSerper(
   query: string,
   apiKey: string,
   numResults: number = 3,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
+  const cached = await getCachedSearch('serper', query, numResults)
+  if (cached) return cached
+
   try {
     const resp = await fetch('https://google.serper.dev/search', {
       method: 'POST',
@@ -177,7 +197,9 @@ export async function searchSerper(
     })
     if (!resp.ok) return []
     const data = await resp.json() as { organic?: Array<{ title: string; link: string; snippet: string }> }
-    return (data.organic ?? []).map(r => ({ title: r.title, url: r.link, content: r.snippet }))
+    const results = (data.organic ?? []).map(r => ({ title: r.title, url: r.link, content: r.snippet }))
+    if (results.length > 0) saveSearchCache('serper', query, numResults, results)
+    return results
   } catch {
     return []
   }

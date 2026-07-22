@@ -104,6 +104,13 @@ const SERVICE_CONTENT: Record<string, { strategic_challenge: string; entry_point
   },
 }
 
+// The literal 8 confirmed service-line names, exported for reuse as a
+// whitelist elsewhere (normalize.ts's evidence-grounded LLM opportunity path
+// — see CLAUDE.md "Research-quality initiative" 2026-07-22 Session 2 — checks
+// an LLM-proposed opportunity's service_line against this exact list so it
+// can never invent a 9th service).
+export const CONFIRMED_SERVICE_NAMES: readonly string[] = Object.keys(SERVICE_CONTENT)
+
 function toOpportunity(r: ServiceThresholdResult): DeterministicOpportunity {
   const content = SERVICE_CONTENT[r.service]
   const evidenceQuotes = r.evidence.map(e => `"${e.matched}" (${e.pattern})`).join('; ')

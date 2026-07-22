@@ -173,7 +173,7 @@ export interface ExtractorResult {
   contentFlags: string[]
   signalSummary: string       // compact, LLM-injectable summary
   companySubjectCount: number
-  websitePreview: string      // first 3,000 chars for LLM company identification
+  websitePreview: string      // up to 16,000 chars of blended scraped+enriched content — the LLM's actual raw-evidence window, not just company identification (see construction comment below)
   companyProfileEvidence: CompanyProfileEvidence  // which patterns fired per flag
   leadershipContacts: LeadershipContact[]  // named individuals + stated existing portfolio
   /** What the researched company itself says it sells, extracted from its own
@@ -1407,13 +1407,25 @@ export function extractSignals(
   // ── Signal summary for LLM prompt ────────────────────────────────────────────
   const signalSummary = buildSignalSummary(signals, detectedFactors, companyProfile, opportunityDrafts)
 
-  // ── Website preview for LLM company identification ────────────────────
-  // Take first 3,000 chars of clean website content (no page markers)
-  const websitePreview = websiteContent
+  // ── Website preview — the LLM's actual raw-content window ──────────────
+  // RESOLVED 2026-07-22: was 3,000 chars of scraped content ONLY — meaning
+  // enriched external-source content (annual reports, investor pages, press,
+  // PDFs — often tens of thousands of real chars, see
+  // discoverAndFetchExternalSources()) was captured into
+  // `_service_evidence_content` for the regex-based service-evidence.ts gate
+  // but never actually shown to the narrative LLM at all. The LLM was writing
+  // pain points/opportunities/outreach copy off a sliver of what the pipeline
+  // actually gathered. Now built from `combined` (scraped + enriched, same
+  // pool signal extraction above already uses) and raised to 16,000 chars —
+  // confirmed via real token-usage logging (PROMPT BREAKDOWN in
+  // test-analysis/route.ts) that this stays well under any real context-
+  // window/latency budget; a real RIL run's full prompt previously used only
+  // 5,770 user-prompt tokens total, nowhere near a binding constraint.
+  const websitePreview = combined
     .replace(/---\s*PAGE:[^\n]*---\n?/g, '\n')
     .replace(/\[SOURCE:[^\]]*\]\n?/g, '\n')
     .replace(/\s{3,}/g, '\n\n')
-    .slice(0, 3_000)
+    .slice(0, 16_000)
 
   return {
     signals,

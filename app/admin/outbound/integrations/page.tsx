@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
 import { staggerList, listItem } from '@/lib/motion'
 import {
   OUTBOUND_CAPABILITIES,
@@ -187,6 +188,7 @@ function OutboundIntegrationsPageInner() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
+      <OutboundToolsNav />
       <div className="mb-6">
         <h1 className="text-lg font-semibold text-foreground">Outbound Integrations</h1>
         <p className="text-sm text-muted-foreground mt-1">

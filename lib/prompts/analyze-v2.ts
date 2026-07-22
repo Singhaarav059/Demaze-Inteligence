@@ -16,7 +16,7 @@ import type { ProofPoint } from '@/lib/knowledge/demaze-proof-points'
 
 export interface NarrativePromptInput {
   domain: string
-  websitePreview: string          // first 3,000 chars for company ID
+  websitePreview: string          // up to 16,000 chars, blended scraped+enriched content — the LLM's primary raw-evidence pool (see evidence-extractor.ts's 2026-07-22 construction note)
   signalSummary: string           // compact code-extracted signal block
   /** @deprecated OPP_TEMPLATES seeding. Will be replaced by OPPORTUNITY_CATALOG titles injected directly. */
   opportunityDrafts: OpportunityDraft[]
@@ -79,18 +79,22 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
   ],
 
   "pain_points": [
-    "Operational challenge 1, specific to their business model. Mark as (observed) or (inferred).",
-    "Operational challenge 2",
-    "Operational challenge 3",
-    "(3 to 5 items total. NEVER return an empty array. Infer from business model if no direct evidence.)"
+    {
+      "title": "Operational challenge, specific to their business model. State it plainly, no inline suffix.",
+      "claim_type": "observed | inferred",
+      "evidence": "If claim_type is observed: a VERBATIM quote copied exactly from [WEBSITE CONTENT] below, at least one full sentence, that a person could Ctrl+F and find. Do not paraphrase or summarize it. If claim_type is inferred: describe the business-model/industry reasoning basis instead (no quote needed).",
+      "confidence": "high | medium | low",
+      "reasoning": "1 sentence: why this matters for this company specifically."
+    }
   ],
 
   "ai_opportunities": [
     {
       "title": "Specific Demaze opportunity title — name the service and the company use-case",
+      "service_line": "Copy EXACTLY one of these 8 names: AI-powered business applications | Custom SaaS platforms | Ecommerce ecosystems | Marketplace platforms | Workflow automation systems | Internal operational software | Analytics and reporting systems | AI integrations and intelligent automation. Never invent a service outside this list, and never leave this blank.",
       "description": "2 sentences: what this is and why it matters specifically for this company's operations.",
       "confidence": "high | medium | low",
-      "evidence": "Quote from the content that supports this, OR describe the inference basis if inferred",
+      "evidence": "If claim_type is observed: a VERBATIM quote copied exactly from [WEBSITE CONTENT] below, at least one full sentence, that a person could Ctrl+F and find. Do not paraphrase or summarize it. If claim_type is inferred: describe the inference basis instead (no quote needed).",
       "expected_impact": "Specific measurable outcome for this company type (e.g. '30-50% reduction in weld defect rate')",
       "entry_point": "Where to start — which department or initiative to attach to",
       "claim_type": "observed | inferred",
@@ -172,8 +176,10 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
 }
 
 RULES:
-- pain_points: ALWAYS generate 3-5. Mark each as (observed) if directly stated, (inferred) if based on business model/industry reasoning. NEVER return [].
+- pain_points: generate as many as you have genuine evidence or sound business-model inference for, typically 2-5. Prefer fewer items, or an empty array on genuinely thin content, over padding the list to hit a target count. Never mark claim_type "observed" without a real quote — if you cannot find one, use claim_type "inferred" instead of inventing a quote.
 - ai_opportunities: ALWAYS generate 3-5. Use pre-extracted signals if available. Use inference if not. NEVER return [].
+- ai_opportunities.service_line: must be one of the exact 8 names listed in the schema above, copied verbatim. Never invent a 9th service or a reworded variant of one of the 8.
+- ai_opportunities.evidence: when claim_type is "observed", this MUST be an exact verbatim quote from [WEBSITE CONTENT] below, not a paraphrase and not a summary — a made-up or reworded "quote" will cause this opportunity to be discarded downstream. If you cannot find a real quote to support a claim, mark it claim_type "inferred" instead of inventing one.
 - opening_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes, good.
 - why_now: Must be company-specific. "Digital transformation is accelerating in manufacturing" = REJECTED. "Ador Welding is scaling robotic welding across 3 plants" = VALID.
 - For thin-content sites: use what you have, infer what you can, state your confidence level honestly.

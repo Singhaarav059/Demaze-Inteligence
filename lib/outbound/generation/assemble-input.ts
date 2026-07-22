@@ -24,7 +24,14 @@ function toStr(value: unknown): string | undefined {
 }
 
 function painPointText(item: Record<string, unknown>): string | null {
-  const text = toStr(item.point) ?? toStr(item.description) ?? toStr(item.text)
+  // item.title is StructuredPainPoint's real field (lib/pipeline/normalize.ts)
+  // — checked first. point/description/text never actually appear on that
+  // shape; this masked a real bug until Session 3 of the research-quality
+  // initiative (2026-07-22, see CLAUDE.md) started producing genuine
+  // structured pain points — before that, pain_points_structured was always
+  // [], so this function was silently a no-op and fallbackPainPoints below
+  // did all the work.
+  const text = toStr(item.title) ?? toStr(item.point) ?? toStr(item.description) ?? toStr(item.text)
   return text ?? null
 }
 

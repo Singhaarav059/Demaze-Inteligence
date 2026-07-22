@@ -11,13 +11,15 @@
 // available, tucked behind a "debug data" toggle.
 // ============================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
+import { History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
+import { EmptyState } from '@/components/ui/empty-state'
 import { getResearchCardData } from '@/app/admin/intelligence-lab/ResearchCard'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import { humanizeText } from '@/lib/text/humanize'
@@ -75,6 +77,7 @@ export default function RunHistoryPage() {
   const [expandedDetail, setExpandedDetail] = useState<Record<string, unknown> | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [opFilter, setOpFilter] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'company'>('newest')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -151,16 +154,30 @@ export default function RunHistoryPage() {
     }
   }
 
-  const filteredRuns = runs
+  // Client-side only — the API already returns everything opFilter asked
+  // for, so no new fetch/route is needed for this. Sorts by domain (not the
+  // fancier report-derived company name) to avoid re-running
+  // getResearchCardData() a second time just for a sort key.
+  const filteredRuns = useMemo(() => {
+    const list = [...runs]
+    if (sortBy === 'oldest') {
+      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    } else if (sortBy === 'company') {
+      list.sort((a, b) => (a.domain || a.company_url).localeCompare(b.domain || b.company_url))
+    } else {
+      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    }
+    return list
+  }, [runs, sortBy])
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Run History</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{runs.length} test runs stored</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Filter */}
           {['all', 'scraper_only', 'analysis', 'full_pipeline'].map((op) => (
             <button
@@ -175,6 +192,16 @@ export default function RunHistoryPage() {
               {op === 'all' ? 'All' : op === 'scraper_only' ? 'Scraper' : op === 'analysis' ? 'Analysis' : 'Pipeline'}
             </button>
           ))}
+          <select
+            aria-label="Sort runs"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="text-xs rounded-md border border-border bg-card px-2 py-1.5 text-muted-foreground"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="company">Company (A–Z)</option>
+          </select>
           <Button
             size="sm"
             variant="outline"
@@ -199,15 +226,19 @@ export default function RunHistoryPage() {
       )}
 
       {!loading && filteredRuns.length === 0 && (
-        <div className="rounded-lg border border-dashed border-border bg-card/50 px-6 py-12 text-center">
-          <p className="text-muted-foreground text-sm">No runs yet.</p>
-          <p className="text-muted-foreground/70 text-xs mt-1">
-            Go to the <a href="/admin/intelligence-lab" className="text-primary underline">Intelligence Lab</a> and run a test.
-          </p>
-        </div>
+        <EmptyState
+          icon={History}
+          title="No runs yet"
+          description="Go to the Intelligence Lab and run a test to see it here."
+          action={
+            <Button size="sm" variant="outline" render={<a href="/admin/intelligence-lab" />}>
+              Open Intelligence Lab
+            </Button>
+          }
+        />
       )}
 
-      <div className="space-y-2">
+      <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
         {filteredRuns.map((run) => {
           const cardData = run.final_result ? getResearchCardData(toRunResult(run)) : null
           const topOpportunity = cardData?.opportunities?.[0]
@@ -222,7 +253,7 @@ export default function RunHistoryPage() {
           const isExpanded = expandedId === run.id
 
           return (
-            <div key={run.id} className="rounded-lg border border-border bg-card overflow-hidden">
+            <div key={run.id}>
               {/* Card — click-anywhere is a mouse convenience only; the "View
                   Report" button below is the real, keyboard-accessible
                   control for this action. This div previously claimed
@@ -233,7 +264,7 @@ export default function RunHistoryPage() {
                   (2026-07-19 fix). */}
               <div
                 onClick={() => fetchDetail(run.id)}
-                className="w-full text-left px-4 py-4 hover:bg-accent transition-colors cursor-pointer"
+                className="w-full text-left px-4 py-3 hover:bg-accent transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -257,13 +288,10 @@ export default function RunHistoryPage() {
 
                     {cardData ? (
                       <>
-                        {industryLine && (
-                          <p className="text-muted-foreground text-xs mt-1">{industryLine}</p>
-                        )}
-                        <p className="text-muted-foreground/70 text-xs mt-2">
-                          Generated: {formatDate(run.created_at)}
+                        <p className="text-muted-foreground/70 text-xs mt-1">
+                          {[industryLine, formatDate(run.created_at)].filter(Boolean).join(' · ')}
                         </p>
-                        <div className="mt-2 space-y-0.5 text-xs">
+                        <div className="mt-1.5 space-y-0.5 text-xs">
                           <p className="text-foreground/80">
                             Signals: <span className="text-foreground">{cardData.signalCount}</span>
                           </p>

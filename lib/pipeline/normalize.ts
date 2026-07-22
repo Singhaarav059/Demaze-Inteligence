@@ -36,7 +36,9 @@ import {
 import {
   generateDeterministicOpportunities,
   DeterministicOpportunity,
+  CONFIRMED_SERVICE_NAMES,
 } from '@/lib/pipeline/opportunity-engine'
+import { verifyQuoteInContent, isQuoteGrounded } from '@/lib/pipeline/quote-verification'
 import {
   detectServiceEvidence,
   type ServiceThresholdResult,
@@ -115,6 +117,11 @@ export interface StructuredPainPoint {
   evidence_id: string
   evidence: string
   reasoning: string
+  // 2026-07-22 (Session 3, research-quality initiative — see CLAUDE.md):
+  // 'observed' claims are quote-verified against the same content pool the
+  // LLM was shown before surviving into the report; 'inferred' claims are
+  // kept as legitimate business-model reasoning without requiring a quote.
+  claim_type?: 'observed' | 'inferred'
 }
 
 export interface ReasoningChain {
@@ -311,9 +318,24 @@ export interface NormalizedAnalysis {
     relevance: string
     evidence_anchor?: string
     estimated_impact?: string
-    // v4: source of this opportunity
-    source?: 'llm' | 'deterministic'
+    // v4: source of this opportunity. 'llm_verified' (2026-07-22, Session 2
+    // of the research-quality initiative — see CLAUDE.md) is an LLM-proposed
+    // opportunity that had no matching deterministic-catalog entry but was
+    // independently quote-verified against the actual content the LLM was
+    // shown (see quote-verification.ts + the merge logic below) — a second,
+    // additive path alongside the existing regex-gated 'deterministic' path,
+    // never replacing it. 'llm_inferred' (found+fixed same day, live RIL
+    // usage) is the same additive path's sibling for `claim_type: 'inferred'`
+    // opportunities with a real stated reasoning basis but no literal quote
+    // to verify — mirrors pain_points' existing observed/inferred split
+    // rather than discarding every inferred opportunity outright.
+    source?: 'llm' | 'deterministic' | 'llm_verified' | 'llm_inferred'
     deterministic_id?: string
+    // Which of the 8 confirmed Demaze services this maps to — only ever
+    // populated for 'llm_verified' entries (the LLM is asked for this
+    // directly in the schema); deterministic entries already carry the same
+    // information in `category`.
+    service_line?: string
     // v5: trust signal fields
     claim_type?: string
     observed_basis?: string
@@ -693,6 +715,15 @@ export function normalizeAnalysisResult(
   const evidence_sufficiency: 'sufficient' | 'insufficient' = insufficientEvidence ? 'insufficient' : 'sufficient'
   if (insufficientEvidence) deterministic_opportunities = []
 
+  // The SAME capped, blended content pool the LLM was actually shown (see
+  // evidence-extractor.ts's 2026-07-22 websitePreview rewrite) — used to
+  // quote-verify both the LLM-verified opportunity path (below) and
+  // pain_points (further below). Deliberately NOT `serviceEvidenceContent`
+  // above, which is the larger unbounded pool service-evidence.ts's regex
+  // gate uses — verifying against that would let a claim pass on content the
+  // LLM never actually saw and couldn't have legitimately quoted from.
+  const llmContentPool = str(extractorData?.websitePreview) || ''
+
   // ── Service Evidence Debug (diagnostic, internal-only) ──────────────
   // Re-runs detectServiceEvidence() (same call generateDeterministicOpportunities()
   // already makes above, cheap pure regex, no I/O) purely to keep the full
@@ -812,15 +843,64 @@ export function normalizeAnalysisResult(
   const signals        = mergeSignals(flat)
   const signal_summary = str(flat.signal_summary)
 
-  // ── Pain points ──────────────────────────────────────────────
+  // ── Pain points (2026-07-22, Session 3 — see CLAUDE.md "Research-quality
+  // initiative") ──────────────────────────────────────────────────────────
+  // Was a pure passthrough of the LLM's flat-string output, no evidence gate
+  // at all — the prompt's old "ALWAYS 3-5, NEVER []" rule meant every company
+  // got an identically-shaped, padded pain-point list regardless of how much
+  // real evidence existed. analyze-v2.ts now asks for structured objects
+  // (title/claim_type/evidence/confidence/reasoning) and no longer forces a
+  // fixed count. Gating here mirrors the opportunities Path B discipline
+  // above: 'observed' claims must quote-verify against llmContentPool (the
+  // exact content the LLM was shown) or they're dropped; 'inferred' claims
+  // are kept as legitimate business-model reasoning without needing a quote.
+  // On genuinely insufficient evidence, force []  — implementing the
+  // "arguably correct" behavior a comment elsewhere in this file (see
+  // "Insufficient Evidence outcome" above) already flagged but never wired up.
   const rawPainPoints = flat.pain_points
   let pain_points_structured: StructuredPainPoint[] = []
   let pain_points: string[] = []
-  if (Array.isArray(rawPainPoints)) {
+  const painPointWarnings: string[] = []
+  if (insufficientEvidence) {
+    // pain_points stays [] — same suppression discipline as
+    // deterministic_opportunities above; genuinely thin evidence gets an
+    // honest empty result, not a padded generic list.
+  } else if (Array.isArray(rawPainPoints)) {
     if (rawPainPoints.length > 0 && typeof rawPainPoints[0] === 'object') {
-      pain_points_structured = rawPainPoints as StructuredPainPoint[]
-      pain_points = pain_points_structured.map(p => p.title ?? str(p))
+      const structuredRaw = rawPainPoints as Array<Record<string, unknown>>
+      let droppedUngrounded = 0
+      pain_points_structured = structuredRaw
+        .map((p): StructuredPainPoint | null => {
+          const title = str(p.title) || str(p)
+          if (!title) return null
+          const claimType = p.claim_type === 'observed' || p.claim_type === 'inferred' ? p.claim_type : undefined
+          const evidence = str(p.evidence)
+          if (claimType === 'observed') {
+            if (!isQuoteGrounded(evidence, llmContentPool)) {
+              droppedUngrounded++
+              return null
+            }
+          }
+          return {
+            title,
+            confidence: (p.confidence === 'high' || p.confidence === 'medium' || p.confidence === 'low') ? p.confidence : 'low',
+            evidence_id: str(p.evidence_id),
+            evidence,
+            reasoning: str(p.reasoning),
+            claim_type: claimType,
+          }
+        })
+        .filter((p): p is StructuredPainPoint => p !== null)
+      if (droppedUngrounded > 0) {
+        painPointWarnings.push(
+          `pain_points: dropped ${droppedUngrounded} item(s) claiming an observed quote that wasn't found in source content`
+        )
+      }
+      pain_points = pain_points_structured.map(p => p.title)
     } else {
+      // Backward-compat: old flat-string shape from a caller/cached run that
+      // predates this session's schema change. No evidence field exists on
+      // a bare string, so it can't be quote-gated — passed through as-is.
       pain_points = rawPainPoints.map(p => str(p))
     }
   }
@@ -836,8 +916,14 @@ export function normalizeAnalysisResult(
   const rawOpps = flat.ai_opportunities ?? flat.opportunities
   const llmOpportunities = normalizeOpportunities(rawOpps)
 
-  const opportunities: NormalizedAnalysis['opportunities'] = deterministic_opportunities.map(d => {
+  // Path A matches are tracked by reference so Path B (below) can operate on
+  // the genuine remainder — LLM opportunities that never matched ANY
+  // deterministic-catalog title — instead of re-considering entries Path A
+  // already consumed.
+  const matchedLlmOpportunities = new Set<NormalizedAnalysis['opportunities'][number]>()
+  const opportunitiesFromDeterministic: NormalizedAnalysis['opportunities'] = deterministic_opportunities.map(d => {
     const llmMatch = llmOpportunities.find(l => titleMatch(d.title, l.title))
+    if (llmMatch) matchedLlmOpportunities.add(llmMatch)
     return {
       title:             d.title,                                         // canonical from OPPORTUNITY_CATALOG
       description:       llmMatch?.description || d.strategic_challenge,  // LLM narrative; catalog challenge as fallback
@@ -861,7 +947,100 @@ export function normalizeAnalysisResult(
       demaze_fit_score:  llmMatch?.demaze_fit_score,
     }
   })
-  console.log(`[normalize:opps] deterministic=${deterministic_opportunities.length} | llm_parsed=${llmOpportunities.length} | llm_enriched=${opportunities.filter(o => o.evidence).length}`)
+
+  // ── Path B: evidence-grounded LLM opportunities (2026-07-22, Session 2;
+  // extended same day after live RIL usage exposed a real gap, see below) ──
+  // Additive to Path A above, which stays completely untouched — this exists
+  // because service-evidence.ts's regex catalog (Path A's gate) was built and
+  // tuned against 6 benchmark companies and doesn't generalize; most real
+  // companies' LLM-proposed opportunities were being silently discarded even
+  // when well-reasoned and evidence-backed. See CLAUDE.md "Research-quality
+  // initiative" for the full root-cause writeup.
+  //
+  // Common gate for both sub-paths below: never already matched by Path A,
+  // service_line must be exactly one of the 8 confirmed Demaze services
+  // (never a 9th invented one), and the whole path is suppressed entirely
+  // when insufficientEvidence fires, same as Path A.
+  const opportunityCandidates = insufficientEvidence
+    ? []
+    : llmOpportunities
+        .filter(l => !matchedLlmOpportunities.has(l))
+        .filter(l => l.service_line && CONFIRMED_SERVICE_NAMES.includes(l.service_line))
+
+  function shapeOpportunity(
+    l: NormalizedAnalysis['opportunities'][number],
+    relevance: string,
+    evidence_anchor: string | undefined,
+    source: 'llm_verified' | 'llm_inferred',
+  ): NormalizedAnalysis['opportunities'][number] {
+    return {
+      title:             l.title,
+      description:       l.description,
+      confidence:        l.confidence,
+      evidence_id:       l.evidence_id,
+      evidence:          l.evidence,
+      reasoning:         l.reasoning,
+      expected_impact:   l.expected_impact ?? '',
+      entry_point:       l.entry_point,
+      category:          l.service_line,
+      pain_point_mapped: l.pain_point_mapped,
+      relevance,
+      evidence_anchor,
+      estimated_impact:  l.estimated_impact ?? '',
+      source,
+      deterministic_id:  undefined,
+      claim_type:        l.claim_type,
+      observed_basis:    l.observed_basis,
+      inferred_from:     l.inferred_from,
+      opportunity_confidence: l.opportunity_confidence ?? l.confidence,
+      demaze_fit_score:  l.demaze_fit_score,
+      service_line:      l.service_line,
+    }
+  }
+
+  // Sub-path B1: claim_type 'observed' — its evidence quote is independently
+  // verified (verifyQuoteInContent) against llmContentPool, the SAME capped,
+  // blended content pool the LLM was actually shown (see evidence-extractor
+  // .ts's 2026-07-22 websitePreview rewrite), not the larger unbounded
+  // `_service_evidence_content` pool, since that would let verification pass
+  // on content the LLM never saw and couldn't have legitimately quoted from.
+  // relevance is capped below a real regex-strong match, so this path can
+  // only fill gaps Path A found nothing for, never outrank it.
+  const opportunitiesFromLlmVerified: NormalizedAnalysis['opportunities'] = opportunityCandidates
+    .filter(l => l.claim_type === 'observed')
+    .map(l => ({ opp: l, verification: verifyQuoteInContent(l.evidence ?? '', llmContentPool) }))
+    .filter(({ verification }) => verification.tier !== 'none')
+    .map(({ opp: l, verification }) =>
+      shapeOpportunity(l, verification.tier === 'exact' ? 'Medium' : 'Low', verification.matchedSnippet, 'llm_verified')
+    )
+
+  // Sub-path B2 (found+fixed 2026-07-22, same day as B1, via live RIL usage):
+  // claim_type 'inferred' opportunities were being discarded entirely — a
+  // real gap, not intentional caution. A live RIL run showed the LLM
+  // proposing 5 specific, RIL-grounded opportunities (e.g. "Integrating
+  // new-energy assets with legacy oil-to-chemicals systems", tied to RIL's
+  // real, publicly known Green Energy Giga Complex) that were ALL tagged
+  // 'inferred' with no quote — none of B1's above requires a quote for
+  // 'inferred' by design (there isn't one to verify), so all 5 were silently
+  // dropped, leaving 0 opportunities despite genuinely good reasoning.
+  // pain_points already proved 'inferred' claims can be surfaced safely when
+  // honestly labeled (Session 3, same file) — this closes the asymmetry.
+  // Gate: `inferred_from` must be a real, substantive stated reasoning basis
+  // (not empty, not a token placeholder) — same "don't fabricate a reason"
+  // discipline as everything else in this merge, just without a literal
+  // quote to check. relevance is always 'Low' — a step below even the
+  // fuzzy-matched observed tier, since this is reasoning, not evidence.
+  const opportunitiesFromLlmInferred: NormalizedAnalysis['opportunities'] = opportunityCandidates
+    .filter(l => l.claim_type === 'inferred')
+    .filter(l => (l.inferred_from ?? '').trim().length >= 15)
+    .map(l => shapeOpportunity(l, 'Low', undefined, 'llm_inferred'))
+
+  const opportunities: NormalizedAnalysis['opportunities'] = [
+    ...opportunitiesFromDeterministic,
+    ...opportunitiesFromLlmVerified,
+    ...opportunitiesFromLlmInferred,
+  ]
+  console.log(`[normalize:opps] deterministic=${deterministic_opportunities.length} | llm_parsed=${llmOpportunities.length} | llm_enriched=${opportunitiesFromDeterministic.filter(o => o.evidence).length} | llm_verified=${opportunitiesFromLlmVerified.length} | llm_inferred=${opportunitiesFromLlmInferred.length}`)
 
   const competitive_context = str(flat.competitive_context)
 
@@ -1021,6 +1200,7 @@ export function normalizeAnalysisResult(
   // net 2) can push directly into the same array.
   const content_quality_flags: string[] = arr<string>(flat.content_quality_flags)
   const validation_warnings: string[]   = arr<string>(flat.validation_warnings)
+  validation_warnings.push(...painPointWarnings)
 
   // ── Outreach draft (2026-07-16) ──────────────────────────────
   // Safety net 1: matched_proof_point_id is only trusted if it echoes a real
@@ -1247,6 +1427,7 @@ function normalizeOpportunities(raw: unknown): NormalizedAnalysis['opportunities
       opportunity_confidence: item.opportunity_confidence ? str(item.opportunity_confidence) : undefined,
       demaze_fit_score:     item.demaze_fit_score ? str(item.demaze_fit_score) : undefined,
       estimated_impact: item.estimated_impact ? str(item.estimated_impact) : undefined,
+      service_line:     item.service_line ? str(item.service_line) : undefined,
     }
   }).filter((o): o is NonNullable<typeof o> => o !== null)
 }

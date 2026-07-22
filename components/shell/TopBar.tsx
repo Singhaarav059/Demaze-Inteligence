@@ -6,9 +6,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { MoreHorizontal } from 'lucide-react'
 import { ChevronRightIcon } from './nav-icons'
 import { MobileNav } from './MobileNav'
-import { NAV } from './nav-config'
+import { NAV, SECONDARY_NAV } from './nav-config'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLinkItem,
+} from '@/components/ui/dropdown-menu'
 
 export function TopBar() {
   const pathname = usePathname()
@@ -37,9 +44,39 @@ export function TopBar() {
         )}
       </div>
 
-      <span className="rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-        Internal
-      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Open command palette"
+          onClick={() => document.dispatchEvent(new CustomEvent('open-command-palette'))}
+          className="hidden items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:flex"
+        >
+          Jump to…
+          <kbd className="rounded border border-border/80 px-1 py-px text-[10px]">⌘K</kbd>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="More tools"
+            className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {SECONDARY_NAV.map(({ href, label, icon: Icon, hint }) => (
+              <DropdownMenuLinkItem key={href} href={href}>
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="flex flex-col leading-tight">
+                  <span className="font-medium">{label}</span>
+                  <span className="text-[11px] text-muted-foreground/70">{hint}</span>
+                </span>
+              </DropdownMenuLinkItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <span className="rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          Internal
+        </span>
+      </div>
     </header>
   )
 }

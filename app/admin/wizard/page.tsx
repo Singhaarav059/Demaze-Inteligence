@@ -35,6 +35,7 @@ import { WizardShell } from '@/components/wizard/WizardShell'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
+import { useSlashFocus } from '@/lib/hooks/useSlashFocus'
 
 type InputMode = 'single' | 'batch'
 type CompanyStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
@@ -61,6 +62,8 @@ function StatusBadge({ status }: { status: CompanyStatus }) {
 
 export default function WizardPage() {
   const [inputMode, setInputMode] = useState<InputMode>('single')
+  const urlInputRef = useRef<HTMLInputElement>(null)
+  useSlashFocus(urlInputRef)
 
   // ── Single-URL mode state (unchanged from before) ────────────
   const [url, setUrl] = useState('')
@@ -353,10 +356,11 @@ export default function WizardPage() {
           <div className="glass-panel space-y-3 rounded-xl p-4">
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
+                ref={urlInputRef}
                 aria-label="Company URL"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://company.com"
+                placeholder="https://company.com (press / to focus)"
                 className="flex-1 font-mono text-sm"
                 disabled={running}
                 onKeyDown={(e) => e.key === 'Enter' && run()}

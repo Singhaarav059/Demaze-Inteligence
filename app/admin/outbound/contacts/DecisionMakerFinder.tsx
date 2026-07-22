@@ -22,10 +22,20 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
+import { StageProgress, type ProgressStage } from '@/components/ui/stage-progress'
 import { staggerList, listItem } from '@/lib/motion'
 import { DEFAULT_TARGET_TITLES } from '@/lib/outbound/decision-maker-discovery/types'
 import type { DecisionMakerCandidate, LeadershipContactInput } from '@/lib/outbound/decision-maker-discovery/types'
 import type { OutboundContact } from './useOutboundContacts'
+
+// Hedged as "likely current activity" — same honesty discipline as
+// auto-gtm/page.tsx's RESEARCH_STAGES, see stage-progress.tsx's header
+// comment for why this isn't a real measured percentage.
+const DISCOVERY_STAGES: ProgressStage[] = [
+  { label: 'Searching for candidates…', afterMs: 0 },
+  { label: 'Verifying matches…', afterMs: 5_000 },
+  { label: 'Almost done…', afterMs: 15_000 },
+]
 
 // Placeholder rows shown while a search is in flight, so the layout doesn't
 // jump from "nothing" to "content" — same pattern as company-discovery/
@@ -301,7 +311,8 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
         </Button>
 
         {discovering && candidates.length === 0 && (
-          <div className="pt-2 border-t border-border">
+          <div className="pt-2 border-t border-border space-y-3">
+            <StageProgress active={discovering} stages={DISCOVERY_STAGES} />
             <CandidateRowSkeletons />
           </div>
         )}

@@ -45,12 +45,15 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { InfoTooltip } from '@/components/ui/tooltip'
+import { StageProgress, type ProgressStage } from '@/components/ui/stage-progress'
+import { useSlashFocus } from '@/lib/hooks/useSlashFocus'
 import { cn } from '@/lib/utils'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import { ResearchCard } from '@/app/admin/intelligence-lab/ResearchCard'
@@ -60,6 +63,15 @@ import { ContactInfoStep } from './ContactInfoStep'
 import { OutreachStep } from './OutreachStep'
 import { ReviewSendStep } from './ReviewSendStep'
 import { useAutoGtmFlow, type BatchCompanyStatus } from './useAutoGtmFlow'
+
+// Hedged as "likely current activity", not measured fact — there's no
+// streaming signal from the research call to confirm any of this, see
+// stage-progress.tsx's header comment.
+const RESEARCH_STAGES: ProgressStage[] = [
+  { label: 'Fetching site…', afterMs: 0 },
+  { label: 'Analyzing content…', afterMs: 15_000 },
+  { label: 'Finalizing…', afterMs: 40_000 },
+]
 
 function BatchStatusBadge({ status }: { status: BatchCompanyStatus }) {
   const map: Record<BatchCompanyStatus, { label: string; className: string }> = {
@@ -79,6 +91,8 @@ export default function AutoGtmFlowPage() {
   const decisionMakerRef = useRef<DecisionMakerFinderHandle>(null)
   const stepContentRef = useRef<HTMLDivElement>(null)
   const hasFocusedOnceRef = useRef(false)
+  const urlInputRef = useRef<HTMLInputElement>(null)
+  useSlashFocus(urlInputRef)
   const [dmSelectedCount, setDmSelectedCount] = useState(0)
   const [committingDm, setCommittingDm] = useState(false)
   const [showStartNewConfirm, setShowStartNewConfirm] = useState(false)
@@ -166,23 +180,47 @@ export default function AutoGtmFlowPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">Auto Flow</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Research a prospect company (or upload a lead list), pick who to contact, and send them a
-            personalized email, all in one continuous flow.{' '}
-            <Link href="/admin/wizard" className="underline hover:text-foreground">
-              Need the manual/debug tools instead?
-            </Link>
-          </p>
-        </div>
-        {(flow.runId || flow.batchCompanies.length > 0) && (
-          <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowStartNewConfirm(true)}>
-            Start New
-          </Button>
-        )}
-      </div>
+      <GlassCard>
+        <CardContent className="space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Auto Flow</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Research a prospect company (or upload a lead list), pick who to contact, and send them a
+                personalized email, all in one continuous flow.{' '}
+                <Link href="/admin/wizard" className="underline hover:text-foreground">
+                  Need the manual/debug tools instead?
+                </Link>
+              </p>
+            </div>
+            {(flow.runId || flow.batchCompanies.length > 0) && (
+              <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowStartNewConfirm(true)}>
+                Start New
+              </Button>
+            )}
+          </div>
+
+          {/* One persistent context line instead of a repeated "done" card per
+              step below — the step pills already show completion, this just
+              answers "which company / how far along" without duplicating that. */}
+          {(hasResearch || batchHasProgress) && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              {flow.inputMode === 'single'
+                ? flow.companyName || flow.domain
+                : `${batchDoneCount} of ${flow.batchCompanies.length} compan${flow.batchCompanies.length === 1 ? 'y' : 'ies'} researched`}
+              {flow.contacts.length > 0 && ` · ${flow.contacts.length} contact${flow.contacts.length === 1 ? '' : 's'}`}
+              {emailsFoundCount > 0 && ` · ${emailsFoundCount} email${emailsFoundCount === 1 ? '' : 's'} found`}
+            </p>
+          )}
+
+          <StepIndicator
+            current={flow.step}
+            maxReached={flow.maxStepReached}
+            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5)}
+            nextAction={nextAction}
+          />
+        </CardContent>
+      </GlassCard>
 
       <ConfirmDialog
         open={showStartNewConfirm}
@@ -191,32 +229,6 @@ export default function AutoGtmFlowPage() {
         description="This clears the current company and progress from this screen so you can start over. Nothing already saved (past runs, contacts, drafts) is deleted — you can still find it in History."
         confirmLabel="Start New"
         onConfirm={() => { setShowStartNewConfirm(false); flow.resetFlow() }}
-      />
-
-      {/* One persistent context line instead of a repeated "done" card per
-          step below — the step pills already show completion, this just
-          answers "which company / how far along" without duplicating that.
-          No custom margin here — this project's Tailwind v4 space-y-6
-          applies margin-bottom (not margin-top) to spaced children, so an
-          override here would fight that instead of just tightening a gap
-          (confirmed live: a -mb-2 here produced a literal negative gap,
-          overlapping the StepIndicator pills below it, since there was no
-          margin-top on the following element to collapse against). */}
-      {(hasResearch || batchHasProgress) && (
-        <p className="text-xs text-muted-foreground">
-          {flow.inputMode === 'single'
-            ? flow.companyName || flow.domain
-            : `${batchDoneCount} of ${flow.batchCompanies.length} compan${flow.batchCompanies.length === 1 ? 'y' : 'ies'} researched`}
-          {flow.contacts.length > 0 && ` · ${flow.contacts.length} contact${flow.contacts.length === 1 ? '' : 's'}`}
-          {emailsFoundCount > 0 && ` · ${emailsFoundCount} email${emailsFoundCount === 1 ? '' : 's'} found`}
-        </p>
-      )}
-
-      <StepIndicator
-        current={flow.step}
-        maxReached={flow.maxStepReached}
-        onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5)}
-        nextAction={nextAction}
       />
 
       {/* Screen-reader-only announcement on step change — sighted users
@@ -286,10 +298,11 @@ export default function AutoGtmFlowPage() {
             <h2 className="text-sm font-semibold text-foreground">Research company</h2>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
+                ref={urlInputRef}
                 aria-label="Company URL"
                 value={flow.url}
                 onChange={e => flow.setUrl(e.target.value)}
-                placeholder="https://company.com"
+                placeholder="https://company.com (press / to focus)"
                 className="flex-1 font-mono text-sm"
                 disabled={flow.researching}
                 onKeyDown={e => e.key === 'Enter' && flow.runResearch()}
@@ -331,11 +344,11 @@ export default function AutoGtmFlowPage() {
                 {flow.error}
               </div>
             )}
-            {/* Screen-reader-only status announcement for the ~60-100s research
-                call — sighted users already see the button spinner/text change. */}
-            <span className="sr-only" role="status" aria-live="polite">
-              {flow.researching ? 'Researching company…' : ''}
-            </span>
+            {/* Visible in place of the old sr-only-only announcement — its
+                label carries the same role="status"/aria-live so screen
+                readers still get an update, sighted users now get one too
+                instead of just the button's spinner. */}
+            <StageProgress active={flow.researching} stages={RESEARCH_STAGES} />
           </CardContent>
         </Card>
       )}

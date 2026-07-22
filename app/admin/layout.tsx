@@ -8,6 +8,7 @@ import { Toaster } from 'sonner'
 import { Sidebar } from '@/components/shell/Sidebar'
 import { TopBar } from '@/components/shell/TopBar'
 import { MotionConfigProvider } from '@/components/shell/MotionConfigProvider'
+import { CommandPalette } from '@/components/shell/CommandPalette'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -28,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <main id="main-content" tabIndex={-1} className="flex-1 outline-none">{children}</main>
         </div>
       </div>
+      <CommandPalette />
       <Toaster
         theme="dark"
         position="bottom-right"

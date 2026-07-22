@@ -38,10 +38,12 @@
 
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { SearchX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { InfoTooltip } from '@/components/ui/tooltip'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import { staggerList, listItem, crossfade } from '@/lib/motion'
 import type { CompanyMatch } from '@/lib/enrichment/company-discovery'
@@ -79,7 +81,7 @@ export function CompanyMatchList({
 }) {
   const {
     companies, selectedCount, doneCount, running, progress, pausedReason, expandedId, setExpandedId,
-    toggle, selectAll, selectNone, researchSelected, stopBatch,
+    toggle, selectAll, selectNone, researchSelected, stopBatch, sufficiency,
   } = search
 
   const [filterText, setFilterText] = useState('')
@@ -90,7 +92,20 @@ export function CompanyMatchList({
     return companies.filter(c => c.match.name.toLowerCase().includes(q))
   }, [companies, filterText])
 
-  if (companies.length === 0) return null
+  // Distinguish "haven't searched yet" (sufficiency still null, render
+  // nothing) from "searched, zero real matches survived filtering" — the
+  // latter used to also render nothing, silently discarding real API-quota-
+  // spending search effort with no feedback at all.
+  if (companies.length === 0 && sufficiency === null) return null
+  if (companies.length === 0) {
+    return (
+      <EmptyState
+        icon={SearchX}
+        title="No companies matched"
+        description="Nothing survived filtering for this segment. Try a broader or differently-worded description."
+      />
+    )
+  }
 
   return (
     <>

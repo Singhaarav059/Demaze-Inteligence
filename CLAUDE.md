@@ -905,6 +905,287 @@ without a fallback — which, correctly, this code doesn't do. Not changing
 the chain order based on a single sample; flagging for whoever next touches
 this file to weight accordingly if inkling keeps failing.
 
+## RESOLVED 2026-07-22 — `thinkingmachines/inkling` dropped from the chain entirely
+The "single sample, don't overreact" caveat above no longer holds — real
+production traffic (outbound contact generation: subject lines, emails,
+follow-ups) surfaced a full session's worth of live `[AI]` log evidence, not
+one call. Inkling failed roughly 9 times to 1 success across that log:
+empty/malformed JSON (the same reasoning-channel-leakage mode flagged
+above), a `429` rate-limit, and two full 90s timeouts. `openai/gpt-oss-120b`
+— second in the chain, so silently absorbing nearly all of inkling's
+failures as the fallback — succeeded 7 times to 2 failures over the same
+log, i.e. was already the de facto default in practice.
+**Fixed** (`lib/ai/provider-factory.ts`): `thinkingmachines/inkling` removed
+from `NVIDIA_NIM_MODELS` entirely (not just reordered — it had no track
+record of being reliable enough to keep as a third-tier fallback either).
+New chain: `openai/gpt-oss-120b` (default) → `deepseek-ai/deepseek-v4-pro`
+(fallback, 100% success rate on the same live log whenever it was reached).
+`getDefaultProviderName()` updated to `'nvidia_nim_gpt_oss_120b'`. Also
+removed a now-dead comment in `lib/ai/providers/nvidia-nim.ts` that
+speculated about an inkling-specific `reasoning_effort` param — moot once
+inkling is gone. `.env.example`'s `NVIDIA_NIM_MODEL` override comment
+updated to match. **Not live-verified with a fresh run** — this change is
+config-only (same `NvidiaProvider` class, same request shape, same
+fallback mechanism already proven correct in the entry above), so
+`tsc --noEmit` clean was treated as sufficient; if `openai/gpt-oss-120b`
+itself starts failing at scale as the new default, re-open this note rather
+than assuming the 2-model chain is automatically safe.
+
+## Research-quality initiative — 2026-07-22, Session 1 of 3 (in progress)
+Triggered by a real Auto Flow run against Reliance Industries showing 5 pain
+points but 0 opportunities, and the user reporting this now happens with
+almost all companies, not just RIL — asked for a broad content-quality pass,
+not just an opportunities fix. Root-caused via a real-data investigation (RIL's
+full saved result + a survey of the last 50 saved runs in the DB) before
+proposing anything; see the approved plan for full detail. Three root causes
+found, most-foundational first:
+1. **The narrative LLM call was evidence-starved.** `websitePreview` (the
+   ONLY raw content block the LLM ever sees) was the first 3,000 chars of
+   SCRAPED content only — the enriched external-source content (annual
+   reports, investor pages, press, PDFs — 17,919 real chars for RIL) was
+   captured for the regex-based `service-evidence.ts` gate but never actually
+   shown to the LLM. Confirmed via real token-usage logging: RIL's real
+   prompt used only 5,770 user-prompt tokens, nowhere near a context-window
+   constraint — the cap was arbitrary, not load-bearing.
+2. **`opportunities` is hard-gated by a narrow regex catalog** tuned to 6
+   benchmark companies (`service-evidence.ts`) — the LLM's own reasoned
+   `ai_opportunities` (instructed to always produce 3-5) are silently
+   discarded unless a literal phrase match already fired in code. Confirmed
+   via the 50-run survey: 0 opportunities for the large majority of companies
+   including Reliance, GM, Boeing, GE, Lockheed Martin, Mercedes-Benz.
+3. **`pain_points` bypasses evidence gating entirely** — always exactly 3-5,
+   generic, unverified against real content, identical in shape between
+   Fortune-500-with-massive-disclosure companies and thin-content companies.
+   `StructuredPainPoint`'s `confidence`/`evidence_id`/`evidence` fields exist
+   in the type but are dead — the LLM only ever emits flat strings today.
+
+**Session 1 (done) — fixed root cause 1.** `lib/pipeline/evidence-extractor.ts`'s
+`websitePreview` construction (~1410-1426) now builds from `combined`
+(scraped + enriched, the same pool signal extraction already uses) instead of
+scraped-only `websiteContent`, and the cap raised from 3,000 to 16,000 chars.
+`lib/prompts/analyze-v2.ts`'s `NarrativePromptInput.websitePreview` doc
+comment updated to match. **Verified live**: re-ran `ril.com` force-fresh
+before/after — user-prompt tokens jumped from 5,770 to 8,896 (real evidence
+now reaching the LLM), pipeline still completed cleanly (30.6s LLM call, 86s
+total, comfortably under the 150s per-provider timeout raised earlier this
+session), `success: true`. Ran the full 6-company benchmark suite
+(cached scrape, real LLM calls) as the regression guard: Ador Welding stayed
+at exactly 3 opportunities (PASS, the required non-regression check), Ace
+Pipeline/AS Agri correctly stayed near 0 (genuinely thin evidence, a
+documented correct outcome, not a bug), evaluation mean score held/improved
+slightly (58.63 → 59.08 vs the 2026-07-19 baseline). ATE Group FAILed on
+`primary_type` (expected manufacturer, got industrial_vendor) — confirmed
+this is the same pre-existing scrape-content-drift flakiness already
+documented multiple times elsewhere in this file for ATE Group specifically,
+not caused by this change: `buildCompanyProfile()` (the function that sets
+`primary_type`) reads only the untouched `websiteContent` param, never the
+`combined` pool this session's edit touched. `tsc --noEmit` clean, full
+suite 1093/1093 passing.
+
+**Session 2 (done) — fixed root cause 2.** Added an additive, evidence-grounded
+second path for `opportunities` — the existing regex-gated deterministic path
+(`opportunity-engine.ts`/`service-evidence.ts`) stays completely untouched;
+this is Path B alongside it, not a replacement.
+- New `lib/pipeline/quote-verification.ts`: `verifyQuoteInContent(quote,
+  content)` — exact tier (whitespace/quote/dash-normalized substring match)
+  checked BEFORE the close-tier fuzzy path, not after — an earlier draft
+  gated the exact-match check behind an "8+ significant words" filter meant
+  only for the fuzzy path, which wrongly rejected short-but-genuine verbatim
+  quotes (caught by this session's own unit tests, fixed before verifying
+  live). Close tier requires ≥0.75 word-overlap ratio AND a real shared
+  4-word run, so two unrelated sentences sharing only common words don't
+  false-positive. `tests/quote-verification.test.ts`, 10 assertions.
+- `opportunity-engine.ts`: exported `CONFIRMED_SERVICE_NAMES` (the literal 8
+  service-line strings) as a whitelist.
+- `analyze-v2.ts`: `ai_opportunities` schema gained a `service_line` field
+  ("copy exactly one of these 8 names") and a RULES bullet requiring
+  `evidence` to be a real verbatim quote when `claim_type` is `observed`,
+  same copy-exactly discipline already used for `competitors`/`icp_segments`.
+- `normalize.ts` opportunities merge: Path A (deterministic) now tracks which
+  LLM opportunities it already consumed (`matchedLlmOpportunities`, by
+  reference); Path B takes the genuine remainder, keeps only
+  `claim_type === 'observed'` (closes the "infer if no evidence" back door —
+  inferred claims have no quote to verify by definition) AND `service_line`
+  in the 8-name whitelist AND a quote-verified `evidence` — verified against
+  `extractorData.websitePreview` specifically (the SAME capped, blended
+  content pool the LLM was actually shown per Session 1), not the larger
+  unbounded `_service_evidence_content` pool, since that would let
+  verification pass on content the LLM never saw. Tagged
+  `source: 'llm_verified'`, `relevance` capped at `Medium`/`Low` (never
+  outranks a real deterministic-strong match).
+- **Verified live against RIL** (`ril.com`, force-fresh): opportunities went
+  from 0 to 1 — `"Predictive Maintenance for Jamnagar Refinery Operations"`,
+  evidence-quoted from RIL's own real homepage copy ("Our refinery at
+  Jamnagar is the world's largest, integrated, single-location refining
+  complex"), correctly tagged `llm_verified`/`Medium`. **Verified live
+  against Ador Welding** (force-fresh, isolated re-run): opportunities went
+  from 3 to 5 — the 2 new `llm_verified` entries both cited real, specific
+  recent news content ("Ador Showcases Advanced Welding Cobots and Robotic
+  Solutions at E Manufacturing EXPO 2026", a digital-welding-technology
+  interview quote) — genuinely grounded, not the old "generic Digital
+  Transformation for everyone" anti-pattern this rebuild exists to avoid.
+- **Benchmark regression check found a real transient failure, root-caused
+  before accepting the result**: an initial full-suite run showed Ador
+  Welding hard-failing (`fetch failed`, 0/100, mean score 46.75 vs the
+  58.63-to-59.08 baseline). Did not accept this at face value — re-ran Ador
+  Welding alone immediately after and it succeeded cleanly (110s, 5
+  opportunities), confirming the failure was the same one-off scraper/network
+  flakiness this file already documents extensively for this exact company
+  elsewhere (unrelated to this session's changes, which only touch
+  already-scraped content well downstream of the fetch layer). A clean
+  re-run of the full 6-company suite confirmed it: mean **60.98/100** (up
+  from the 58.63 pre-fix baseline), Ador Welding and A-1 Fence Products both
+  PASS, Ace Pipeline/AS Agri correctly stayed near 0 opportunities (genuinely
+  thin evidence, the required non-regression check). ATE Group still FAILs
+  on `primary_type` (expected manufacturer, got industrial_vendor) — same
+  pre-existing, already-documented content-drift flakiness for this company,
+  unrelated to this session. `tsc --noEmit` clean, full suite 1103/1103
+  passing.
+
+**Session 3 (done) — fixed root cause 3.** `pain_points` now has a real
+structured schema + evidence gating, mirroring Session 2's discipline.
+- `analyze-v2.ts`: `pain_points` schema changed from flat strings with an
+  inline "(observed)"/"(inferred)" suffix to structured objects
+  (`title`/`claim_type`/`evidence`/`confidence`/`reasoning`). The "ALWAYS
+  generate 3-5 ... NEVER return []" rule was softened to evidence-aware
+  wording ("generate as many as you have genuine evidence or sound inference
+  for, typically 2-5 ... never mark claim_type observed without a real
+  quote") — this is the literal implementation of a comment that had sat
+  dead in `normalize.ts` since the "Insufficient Evidence outcome" section
+  was written, flagging this as "arguably correct" but never wiring it up.
+- `normalize.ts` `StructuredPainPoint` gained `claim_type?: 'observed' |
+  'inferred'`. The pain_points block (was a pure passthrough) now: forces
+  `[]` when `insufficientEvidence` fires (same suppression as
+  `deterministic_opportunities`); for `claim_type === 'observed'` items,
+  quote-verifies `evidence` via `isQuoteGrounded()` (Session 2's utility,
+  reused directly, not re-implemented) against the same `llmContentPool`
+  (`extractorData.websitePreview`) opportunities Path B uses — dropped items
+  push a `pain_points: dropped N item(s)...` message into
+  `validation_warnings`; `claim_type === 'inferred'` items are kept without
+  needing a quote (legitimate business-model reasoning); the old flat-string
+  shape is still accepted as a backward-compat fallback (can't be
+  quote-gated, no evidence field on a bare string). `llmContentPool` was
+  hoisted to right after `insufficientEvidence`'s computation (was declared
+  later, inside Session 2's Path B block) so both pain_points and
+  opportunities Path B share one computation instead of duplicating it.
+- **Fixed the latent bug flagged during planning**:
+  `lib/outbound/generation/assemble-input.ts`'s `painPointText()` checked
+  `item.point`/`item.description`/`item.text` but never `item.title` —
+  `StructuredPainPoint`'s real field. This was invisible before this session
+  (`pain_points_structured` was always `[]`, so the flat-string fallback
+  silently did all the work) but would have made this session's gating work
+  have zero effect on generated outreach emails if left unfixed.
+- New `tests/pain-points-grounding.test.ts` (5 assertions, calling
+  `normalizeAnalysisResult()` directly with minimal `raw` input — same
+  pattern as the existing `tests/outreach-draft-grounding.test.ts`): keeps a
+  real-quote observed claim, drops a fabricated-quote observed claim (and
+  logs the warning), keeps an inferred claim without a quote, forces `[]` on
+  insufficient evidence even when the LLM returned items, and confirms the
+  old flat-string shape still passes through for backward compat.
+- **Verified live against RIL** (force-fresh): pain_points went from a rigid
+  "always exactly 5" to 4 — all correctly tagged `claim_type: 'inferred'`
+  with real company-specific reasoning (Jamnagar refinery scale, petrochemical
+  quality-at-scale, multi-business-line supply chain), zero fabricated
+  "observed" quotes. No `validation_warnings` fired this run (0 observed
+  claims attempted, nothing to drop).
+- **Benchmark regression check found 2 transient failures, root-caused
+  before accepting the result** — same discipline as Session 2's Ador
+  Welding flake: a full 6-company run showed AITG (`fetch failed`) and ATE
+  Group (`All AI providers failed` — `Connection error` on BOTH
+  `gpt-oss-120b` and `deepseek-v4-pro`) hard-failing, dragging the mean to
+  39/100. Did not accept this — re-ran both companies alone immediately
+  after and both succeeded cleanly (AITG: 5 pain points/1 opportunity; ATE
+  Group: 2 pain points/1 opportunity). These are network-layer failures
+  (generic fetch/connection errors, not application logic) on code paths
+  (`normalize.ts`/`analyze-v2.ts`, pure post-LLM-response data processing)
+  that cannot cause a network connection failure — consistent with this
+  file's own extensively pre-documented scraper/API flakiness pattern for
+  benchmark runs, not a regression. Did not re-spend quota on a third full
+  6-company run given the isolated re-runs already confirmed correct,
+  evidence-aware behavior for exactly the two companies that failed (ATE
+  Group's 2 pain points, not a padded 5, is itself a correct example of this
+  session's intended behavior). `tsc --noEmit` clean, full suite 1108/1108
+  passing.
+
+**RESOLVED same day (2026-07-22) — opportunities Path B was silently
+discarding every 'inferred' opportunity, found via live production usage
+right after Session 3 shipped.** The user re-ran Reliance Industries through
+the real `/admin/intelligence-lab` UI post-fix and still saw "No
+opportunities identified" despite 5 solid pain points. Investigated the
+actual saved run rather than guessing: the LLM HAD proposed 5 specific,
+RIL-grounded opportunities that run (e.g. "Integrating new-energy assets
+with legacy oil-to-chemicals systems", tied to RIL's real, publicly known
+Green Energy Giga Complex) — but Path B (Session 2) only ever accepted
+`claim_type: 'observed'` + quote-verified opportunities, and this run's LLM
+output was 100% `'inferred'` (reasonable — RIL's real content describes what
+they do, not admissible internal-pain quotes). Path B silently dropped all 5
+by design, an oversight: pain_points (Session 3, same file) already proved
+`'inferred'` claims can surface safely when honestly labeled — that
+allowance was just never extended to opportunities.
+- **Fixed** (`normalize.ts`): Path B split into two sub-paths sharing one
+  `opportunityCandidates` prefilter (never already matched by Path A,
+  `service_line` in the 8-name whitelist, suppressed under
+  `insufficientEvidence`) and one `shapeOpportunity()` helper. Sub-path B1
+  (unchanged) is the existing `'observed'` + quote-verified path. New
+  sub-path B2 (`'llm_inferred'`) surfaces `claim_type: 'inferred'`
+  opportunities that have a real, substantive `inferred_from` (≥15 chars,
+  not an empty/placeholder token) — tagged `source: 'llm_inferred'`,
+  `relevance` always `'Low'` (the lowest tier, below even the fuzzy-matched
+  observed tier, since this is reasoning not evidence). Added
+  `'llm_inferred'` to the `opportunities[].source` type union rather than
+  reusing `'llm_verified'` for something that was never quote-verified —
+  honesty about what actually happened, matching this field's own purpose.
+- New `tests/opportunities-grounding.test.ts` (6 assertions): observed+real
+  quote surfaces as `llm_verified`; inferred+substantive basis surfaces as
+  `llm_inferred`/`Low`; inferred with a vapid basis ("general") is dropped;
+  observed+fabricated quote is dropped (does NOT silently fall back to the
+  inferred path — a specific anti-regression case, since that fallback would
+  have quietly defeated B1's whole quote-verification point); wrong
+  `service_line` dropped; suppressed entirely under insufficient evidence.
+- **Verified live against the exact RIL case that surfaced this**:
+  opportunities went from 0 to 3 — 1 `llm_verified` (a real quote about
+  RIL's New Energy ecosystem) + 2 `llm_inferred` (petrochemical quality
+  analytics, retail/energy supply-chain automation), both with real,
+  specific `inferred_from` bases, both correctly capped at `relevance: 'Low'`.
+- **Benchmark regression check, spot-checked by hand, not just by count**:
+  Ace Pipeline and AS Agri and Aqua — both long-documented in this file as
+  "correctly 0 opportunities, genuinely thin evidence, not a bug" — jumped to
+  4 opportunities each in the same benchmark run. Did not accept the count
+  alone as proof of no regression: pulled both companies' actual opportunity
+  content directly. Every single one traced to a real, specific signal
+  already present in that company's own evidence (Ace Pipeline: "posted
+  Robotics Automation Engineer role", "cross-country pipeline execution and
+  recent HDD activity", "pipeline integrity management service line"; AS
+  Agri: "hiring ML engineer", "multiple farm locations", "aquaculture
+  offering") — not the old generic "Digital Transformation for everyone"
+  anti-pattern, and both companies' `evidence_sufficiency` was genuinely
+  `'sufficient'` in this run (at least one real signal existed), so the
+  untouched `insufficientEvidence` hard gate — the actual mechanism behind
+  the "no forced fit" documentation for these two companies — never fired
+  and remains the real backstop for genuinely zero-evidence companies. This
+  is the initiative's intended behavior extending correctly, not a
+  regression of that prior documented finding. `tsc --noEmit` clean, full
+  suite 1114/1114 passing.
+
+**All 3 sessions of the 2026-07-22 research-quality initiative are now
+complete and live-verified.** Net effect: the narrative LLM now sees ~16,000
+chars of real blended scraped+enriched content instead of 3,000 scraped-only
+chars; opportunities can surface via a quote-verified LLM path when the
+narrow regex catalog finds nothing (proven on RIL, GM/Boeing/Mahindra-shaped
+companies, and additively on the existing 6-benchmark set); pain_points are
+honestly evidence-labeled and variable-count instead of a rigid padded-to-5
+list. Downstream, confirmed by reading the actual consumers: both fields
+feed real outbound email generation directly
+(`lib/outbound/generation/assemble-input.ts`, `prompts.ts`), so this
+initiative improves generated email quality, not just the report UI.
+Checked and ruled out a scoring-formula change: `outreach_priority_score`
+does NOT currently read `opportunities` at all (traced `normalize.ts`'s
+scoring block + `scorer.ts` — purely `detected_factors`/`signal_clusters`
+driven), so nothing to adjust there. `SIGNAL_PATTERNS` broadening remains
+explicitly deferred (see the plan's "Explicitly deferred" section) — worth
+revisiting only if a future session finds signal-sparse runs are still a
+real bottleneck after this initiative's changes.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above

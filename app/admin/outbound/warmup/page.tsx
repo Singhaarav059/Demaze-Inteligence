@@ -10,12 +10,15 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { Flame } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Progress } from '@/components/ui/progress'
+import { EmptyState } from '@/components/ui/empty-state'
+import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
 
 interface LiveStatus {
   status: 'not_started' | 'warming' | 'warmed' | 'paused'
@@ -91,6 +94,7 @@ export default function OutboundWarmupPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+      <OutboundToolsNav />
       <div>
         <h1 className="text-lg font-semibold text-foreground">Email Warm-Up</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -122,7 +126,11 @@ export default function OutboundWarmupPage() {
           <Spinner className="size-4" /> Loading mailboxes…
         </div>
       ) : mailboxes.length === 0 ? (
-        <p className="text-sm text-muted-foreground/70 py-4">No mailboxes under warm-up yet.</p>
+        <EmptyState
+          icon={Flame}
+          title="No mailboxes under warm-up yet"
+          description="Add one above to start tracking its ramp-up metrics."
+        />
       ) : (
         <div className="space-y-3">
           {mailboxes.map(mailbox => (

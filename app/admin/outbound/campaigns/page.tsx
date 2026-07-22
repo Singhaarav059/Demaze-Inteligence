@@ -11,12 +11,15 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react'
+import { Inbox, Clock } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { EmptyState } from '@/components/ui/empty-state'
+import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
 import { useOutboundCampaigns } from './useOutboundCampaigns'
 
 interface AvailableContact {
@@ -90,6 +93,7 @@ export default function OutboundCampaignsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+      <OutboundToolsNav />
       <div>
         <h1 className="text-lg font-semibold text-foreground">Outbound Campaigns</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -216,7 +220,7 @@ export default function OutboundCampaignsPage() {
             <CardContent className="px-5 py-4 space-y-2">
               <h3 className="text-sm font-semibold text-foreground">Queue</h3>
               {campaignContacts.length === 0 ? (
-                <p className="text-xs text-muted-foreground/70">No contacts enqueued yet.</p>
+                <EmptyState icon={Inbox} title="No contacts enqueued yet" className="border-none py-4" />
               ) : (
                 <div className="space-y-1.5">
                   {campaignContacts.map(cc => (
@@ -236,7 +240,7 @@ export default function OutboundCampaignsPage() {
             <CardContent className="px-5 py-4 space-y-2">
               <h3 className="text-sm font-semibold text-foreground">Event Timeline</h3>
               {events.length === 0 ? (
-                <p className="text-xs text-muted-foreground/70">No events yet.</p>
+                <EmptyState icon={Clock} title="No events yet" className="border-none py-4" />
               ) : (
                 <div className="space-y-1.5">
                   {events.map(e => (

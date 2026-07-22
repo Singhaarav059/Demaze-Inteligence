@@ -7,12 +7,64 @@
 // so a "not found" result never costs credits.
 // ============================================================
 
-import { getProspeoApiKey, callProspeoEnrichPerson } from '@/lib/outbound/shared/prospeo-client'
+import { getProspeoApiKey, callProspeoEnrichPerson, type ProspeoCallResult } from '@/lib/outbound/shared/prospeo-client'
 import type { EmailFinderProvider, EmailFinderRequest, EmailFinderResult } from '../types'
 
 function mapConfidence(status: string | undefined): EmailFinderResult['confidence'] {
   if (!status) return 'medium'
   return /verif/i.test(status) ? 'high' : 'medium'
+}
+
+// Pure interpreter — derives an EmailFinderResult from any Prospeo
+// enrich-person response, whether it came from a fresh call this provider
+// made itself or was reused from a shared/cached response the Contact
+// Enrichment provider (or a prior call) already fetched. Extracted
+// (2026-07-21) so app/api/admin/outbound/contacts/[id]/find-email and
+// .../enrich can share ONE Prospeo call instead of each provider making its
+// own — see prospeo-contact-cache.ts for the shared-call orchestration.
+export function interpretProspeoEmailResult(result: ProspeoCallResult): EmailFinderResult {
+  if (!result.ok) {
+    return { email: null, confidence: 'none', providerUsed: 'prospeo', status: 'error', reason: result.error }
+  }
+
+  const { data } = result
+
+  if (data.error) {
+    if (data.error_code === 'NO_MATCH') {
+      return {
+        email: null,
+        confidence: 'none',
+        providerUsed: 'prospeo',
+        status: 'not_found',
+        reason: 'Prospeo found no matching person for this name/company.',
+      }
+    }
+    return {
+      email: null,
+      confidence: 'none',
+      providerUsed: 'prospeo',
+      status: 'error',
+      reason: data.error_code ?? 'Prospeo returned an error.',
+    }
+  }
+
+  const email = data.person?.email?.email
+  if (!email || data.person?.email?.revealed === false) {
+    return {
+      email: null,
+      confidence: 'none',
+      providerUsed: 'prospeo',
+      status: 'not_found',
+      reason: 'No verified email found for this person.',
+    }
+  }
+
+  return {
+    email,
+    confidence: mapConfidence(data.person?.email?.status),
+    providerUsed: 'prospeo',
+    status: 'found',
+  }
 }
 
 export const ProspeoEmailFinderProvider: EmailFinderProvider = {
@@ -55,48 +107,7 @@ export const ProspeoEmailFinderProvider: EmailFinderProvider = {
       },
     })
 
-    if (!result.ok) {
-      return { email: null, confidence: 'none', providerUsed: 'prospeo', status: 'error', reason: result.error }
-    }
-
-    const { data } = result
-
-    if (data.error) {
-      if (data.error_code === 'NO_MATCH') {
-        return {
-          email: null,
-          confidence: 'none',
-          providerUsed: 'prospeo',
-          status: 'not_found',
-          reason: 'Prospeo found no matching person for this name/company.',
-        }
-      }
-      return {
-        email: null,
-        confidence: 'none',
-        providerUsed: 'prospeo',
-        status: 'error',
-        reason: data.error_code ?? 'Prospeo returned an error.',
-      }
-    }
-
-    const email = data.person?.email?.email
-    if (!email || data.person?.email?.revealed === false) {
-      return {
-        email: null,
-        confidence: 'none',
-        providerUsed: 'prospeo',
-        status: 'not_found',
-        reason: 'No verified email found for this person.',
-      }
-    }
-
-    return {
-      email,
-      confidence: mapConfidence(data.person?.email?.status),
-      providerUsed: 'prospeo',
-      status: 'found',
-    }
+    return interpretProspeoEmailResult(result)
   },
 
   // Cheap credential-presence check only — no network ping before every

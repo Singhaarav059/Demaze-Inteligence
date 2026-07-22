@@ -14,11 +14,14 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { UserPlus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { EmptyState } from '@/components/ui/empty-state'
+import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
 import { staggerList, listItem } from '@/lib/motion'
 import { getLeadershipContacts } from '@/lib/pipeline/analysis-sections'
 import { useOutboundContacts, guessCompanyName } from './useOutboundContacts'
@@ -70,6 +73,7 @@ export default function OutboundContactsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+      <OutboundToolsNav />
       <div>
         <h1 className="text-lg font-semibold text-foreground">Outbound Contacts</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -139,7 +143,12 @@ export default function OutboundContactsPage() {
               <Spinner className="size-4" /> Loading contacts…
             </div>
           ) : contacts.length === 0 ? (
-            <p className="text-sm text-muted-foreground/70 py-4">No contacts added for this company yet.</p>
+            <EmptyState
+              icon={UserPlus}
+              title="No contacts yet"
+              description="Add one above by name, or run Decision-Maker Discovery below to find candidates."
+              className="border-none py-4"
+            />
           ) : (
             <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
               {contacts.map(contact => (

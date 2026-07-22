@@ -226,7 +226,6 @@ export function useAutoGtmFlow() {
       setStepState(resumeStep as FlowStep)
       setMaxStepReached(resumeStep as FlowStep)
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStepSynced(true)
     if (resumeRunId) void resumeFromRun(resumeRunId)
   }, [resumeFromRun])

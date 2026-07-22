@@ -15,23 +15,35 @@
 //     bug, see lib/pipeline/business-profile.ts ~154-198 — dropped.
 //   - moonshotai/kimi-k2.6: listed in the catalog but 404s — not entitled on
 //     this account.
-// Confirmed working, ranked by latency under the realistic-prompt test:
-//   1. thinkingmachines/inkling      (default — 5.6s, clean JSON)
-//   2. openai/gpt-oss-120b           (7.3s, clean JSON — needs a real token
-//                                     budget or its reasoning preamble alone
-//                                     exhausts a small max_tokens and returns
-//                                     null content; fine at production's
-//                                     4096+ default)
-//   3. deepseek-ai/deepseek-v4-pro   (19.1s, clean JSON, strongest-quality
-//                                     fallback)
+//   - thinkingmachines/inkling: was the default (single-sample test showed
+//     5.6s/clean JSON), but real production traffic on 2026-07-22 showed it
+//     failing ~90% of calls — empty/malformed JSON from reasoning-channel
+//     leakage (the exact failure mode looksLikeJson() below guards against),
+//     429 rate-limiting, and 90s timeouts. gpt-oss-120b was silently
+//     absorbing almost every one of those failures as the fallback. Dropped
+//     entirely rather than kept as a fallback — removed the "single sample,
+//     don't fully trust it" list.
+// Confirmed working, ranked by real production reliability (2026-07-22),
+// not just the original single-sample latency test:
+//   1. openai/gpt-oss-120b           (default — 7.3s single-sample latency,
+//                                     clean JSON, was already absorbing the
+//                                     vast majority of production traffic as
+//                                     the de facto fallback; needs a real
+//                                     token budget or its reasoning preamble
+//                                     alone exhausts a small max_tokens and
+//                                     returns null content — fine at
+//                                     production's 4096+ default)
+//   2. deepseek-ai/deepseek-v4-pro   (fallback — 19.1s single-sample latency,
+//                                     clean JSON, strongest-quality fallback,
+//                                     100% success rate on live 2026-07-22
+//                                     traffic when it was reached)
 // ============================================================
 
 import { NvidiaProvider } from './providers/nvidia-nim'
 import type { AIProvider, CompletionRequest, CompletionResponse } from './types'
 
 const NVIDIA_NIM_MODELS = [
-  process.env.NVIDIA_NIM_MODEL ?? 'thinkingmachines/inkling',
-  'openai/gpt-oss-120b',
+  process.env.NVIDIA_NIM_MODEL ?? 'openai/gpt-oss-120b',
   'deepseek-ai/deepseek-v4-pro',
 ]
 
@@ -79,7 +91,14 @@ async function tryProvider(
 export async function getCompletion(
   request: CompletionRequest
 ): Promise<CompletionResponse> {
-  const LLM_TIMEOUT_MS = 90_000
+  // Raised from 90s 2026-07-22: the full test-analysis pipeline's narrative
+  // prompt runs at maxTokens=8192 (vs. 1200 in the original per-model latency
+  // test and 4096 for outbound-generation calls) — both remaining models in
+  // the chain hit the 90s ceiling on a real large-content run, not a fluke
+  // (confirmed by 90000ms-exact timeouts on both, back to back). 150s gives
+  // genuinely large/reasoning-heavy completions realistic room without
+  // uncapping the request.
+  const LLM_TIMEOUT_MS = 150_000
   const errors: string[] = []
 
   // NVIDIA NIM chain (only provider)
@@ -107,5 +126,5 @@ export async function getCompletion(
 }
 
 export async function getDefaultProviderName(): Promise<string | null> {
-  return 'nvidia_nim_inkling'
+  return 'nvidia_nim_gpt_oss_120b'
 }
