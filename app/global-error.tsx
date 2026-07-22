@@ -36,22 +36,22 @@ export default function GlobalError({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#09090b',
-          color: '#fafafa',
+          background: '#0a0a0c',
+          color: '#f6f6f7',
           fontFamily: 'system-ui, sans-serif',
           textAlign: 'center',
           padding: '24px',
         }}
       >
         <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Something went wrong</h1>
-        <p style={{ marginTop: '8px', fontSize: '0.875rem', color: '#a1a1aa', maxWidth: '28rem' }}>
+        <p style={{ marginTop: '8px', fontSize: '0.875rem', color: '#a6a6ac', maxWidth: '28rem' }}>
           {error.message || 'The application failed to load.'}
         </p>
         <button
           onClick={reset}
           style={{
             marginTop: '20px',
-            background: '#6366f1',
+            background: '#6f63e8',
             color: '#fff',
             border: 'none',
             borderRadius: '10px',

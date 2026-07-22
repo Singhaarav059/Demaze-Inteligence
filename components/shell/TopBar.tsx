@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { ChevronRightIcon } from './nav-icons'
 import { MobileNav } from './MobileNav'
+import { BrandMark } from './BrandMark'
 import { NAV, SECONDARY_NAV } from './nav-config'
 import {
   DropdownMenu,
@@ -29,9 +30,7 @@ export function TopBar() {
         <MobileNav />
         {/* Mobile brand (sidebar hidden < md) */}
         <Link href="/admin/intelligence-lab" className="flex items-center gap-2 md:hidden">
-          <span className="grid size-6 place-items-center rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-semibold text-white">
-            D
-          </span>
+          <BrandMark size="sm" />
         </Link>
         <span className="hidden text-muted-foreground md:inline">Demaze</span>
         <ChevronRightIcon className="hidden size-3.5 text-muted-foreground/50 md:inline" />

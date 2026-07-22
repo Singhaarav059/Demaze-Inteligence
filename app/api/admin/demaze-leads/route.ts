@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       icpSegments: [],
       leads: [],
       researchedAt: cached.created_at,
-      reason: 'Cached Demaze research has no ICP segments (insufficient evidence on that run) — re-run research, or search a segment manually below.',
+      reason: 'Cached Demaze research has no ICP segments (insufficient evidence on that run). Re-run research, or search a segment manually below.',
     })
   }
 

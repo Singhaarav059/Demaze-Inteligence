@@ -168,7 +168,7 @@ function CompanyDiscoveryInner() {
       }
       if (data.needsResearch) {
         setProfileStatus('needs_research')
-        setProfileMessage('No cached research found for demazetech.com yet — run it once, then this step reuses that cached result every time after.')
+        setProfileMessage('No cached research found for demazetech.com yet. Run it once, then this step reuses that cached result every time after.')
         return
       }
 
@@ -192,7 +192,7 @@ function CompanyDiscoveryInner() {
   // Selected" elsewhere in this app, no extra dialog needed.
   async function runDemazeResearchThenCheckProfile() {
     setProfileStatus('researching')
-    setProfileMessage('Researching demazetech.com — spends real Firecrawl/Tavily/LLM quota, ~60-90s…')
+    setProfileMessage('Researching demazetech.com, spends real Firecrawl/Tavily/LLM quota, ~60-90s…')
 
     try {
       const res = await fetch('/api/admin/test-analysis', {
@@ -303,7 +303,7 @@ function CompanyDiscoveryInner() {
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-5">
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
         <h1 className="text-xl font-semibold text-foreground">Discover</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Demaze&rsquo;s own lead-generation engine — research Demaze → target sectors → select → find leads → research them</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Demaze&rsquo;s own lead-generation engine: research Demaze → target sectors → select → find leads → research them</p>
       </motion.div>
 
       {/* ── Step 1: Research Demaze ─────────────────────────────── */}
@@ -312,7 +312,7 @@ function CompanyDiscoveryInner() {
           <StepHeader
             n={1}
             title="Find Leads for Demaze"
-            subtitle="Build (or reuse) a structured Demaze profile — services, ICPs, industries served."
+            subtitle="Build (or reuse) a structured Demaze profile: services, ICPs, industries served."
             done={profileStatus === 'ready'}
           />
 
@@ -394,7 +394,7 @@ function CompanyDiscoveryInner() {
                 <StepHeader
                   n={3}
                   title="Sector Selection"
-                  subtitle="Pick one or more sectors to search — discovery runs across everything selected."
+                  subtitle="Pick one or more sectors to search. Discovery runs across everything selected."
                   done={selectedSectors.size > 0}
                 />
 
@@ -489,7 +489,7 @@ function CompanyDiscoveryInner() {
                     )}
                     {sufficiency === 'insufficient' && !searchError && (
                       <motion.div key="insufficient" variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit" className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs">
-                        <p className="text-signal-medium">No companies surfaced — {discoveryReason}</p>
+                        <p className="text-signal-medium">No companies surfaced: {discoveryReason}</p>
                       </motion.div>
                     )}
                     {sufficiency === 'sufficient' && discoveryReason && (

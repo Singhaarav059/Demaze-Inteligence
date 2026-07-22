@@ -98,12 +98,12 @@ export default function OutboundCampaignsPage() {
         <h1 className="text-lg font-semibold text-foreground">Outbound Campaigns</h1>
         <p className="text-sm text-muted-foreground mt-1">
           A campaign is a batch of prepared emails sent together to a group of contacts. This is
-          the manual/debug version of that step — most of the time you&apos;ll create and send a
+          the manual/debug version of that step, most of the time you&apos;ll create and send a
           campaign from the Auto Flow page instead, right after preparing outreach.
         </p>
         <p className="text-sm text-muted-foreground mt-1">
           Test/demo mode: no real email is delivered here. A real sending service (like Smartlead
-          or Instantly) hasn&apos;t been connected yet — this page is the working UI for that, ready to
+          or Instantly) hasn&apos;t been connected yet. This page is the working UI for that, ready to
           switch over once one is.
         </p>
       </div>
@@ -184,7 +184,7 @@ export default function OutboundCampaignsPage() {
               <h3 className="text-sm font-semibold text-foreground">Add Contacts</h3>
               {enqueueableContacts.length === 0 ? (
                 <p className="text-xs text-muted-foreground/70">
-                  No more contacts available — add contacts on the Contacts page first.
+                  No more contacts available. Add contacts on the Contacts page first.
                 </p>
               ) : (
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
@@ -226,7 +226,7 @@ export default function OutboundCampaignsPage() {
                   {campaignContacts.map(cc => (
                     <div key={cc.id} className="flex items-center justify-between text-xs">
                       <span className="text-foreground">
-                        {cc.outbound_contacts?.person_name ?? cc.contact_id} — {cc.outbound_contacts?.company_name}
+                        {cc.outbound_contacts?.person_name ?? cc.contact_id} · {cc.outbound_contacts?.company_name}
                       </span>
                       <Badge variant={statusBadgeVariant(cc.status)}>{cc.status}</Badge>
                     </div>

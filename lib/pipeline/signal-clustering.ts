@@ -125,7 +125,7 @@ const CLUSTER_DEFS: Array<{
   {
     id: 'scale_and_capacity',
     theme: 'Scale Management & Capacity Intelligence',
-    description: 'Company is expanding — new equipment, new plants, or new markets require AI to manage growth',
+    description: 'Company is expanding: new equipment, new plants, or new markets require AI to manage growth',
     required_signals: ['capacity_expansion', 'growth_signal'],
     bonus_signals: ['hiring_signal', 'recent_news_or_event'],
     applicable_models: ['Manufacturing', 'Automotive OEM', 'Automotive Supplier'],

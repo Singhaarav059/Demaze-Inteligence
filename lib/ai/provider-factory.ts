@@ -78,7 +78,7 @@ async function tryProvider(
 
   if (request.jsonMode && !looksLikeJson(result.content)) {
     throw new Error(
-      `${provider.displayName} returned an empty/malformed JSON response (content: ${JSON.stringify(result.content.slice(0, 40))}) — likely reasoning-channel leakage, not a real completion.`
+      `${provider.displayName} returned an empty/malformed JSON response (content: ${JSON.stringify(result.content.slice(0, 40))}), likely reasoning-channel leakage, not a real completion.`
     )
   }
 

@@ -98,7 +98,7 @@ export default function OutboundWarmupPage() {
       <div>
         <h1 className="text-lg font-semibold text-foreground">Email Warm-Up</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Mock warm-up simulation — metrics are computed from elapsed time, not a real
+          Mock warm-up simulation: metrics are computed from elapsed time, not a real
           inbox-placement test. A real provider (Smartlead/Instantly) is a future vendor decision.
         </p>
       </div>

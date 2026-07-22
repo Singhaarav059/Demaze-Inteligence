@@ -129,7 +129,7 @@ function rowsFromTable(headerRow: string[], dataRows: string[][]): { rows: LeadR
 
     const companyName = get('companyName')
     if (!companyName) {
-      warnings.push(`Row ${i + 2}: skipped — no company name`)
+      warnings.push(`Row ${i + 2}: skipped, no company name`)
       return
     }
 
@@ -247,7 +247,7 @@ async function parseDocx(buffer: Buffer): Promise<ParseResult> {
     if (!table) {
       return {
         success: false, rows: [], warnings: [],
-        error: 'Could not detect a table structure in this Word document — docx support only works reliably when the lead list is a real Word table, not free-form text.',
+        error: 'Could not detect a table structure in this Word document. docx support only works reliably when the lead list is a real Word table, not free-form text.',
       }
     }
 
@@ -300,7 +300,7 @@ async function parsePdf(buffer: Buffer): Promise<ParseResult> {
     if (!table) {
       return {
         success: false, rows: [], warnings: [],
-        error: 'Could not detect a reliable table structure in this PDF — PDF text extraction often interleaves columns from a real table, so this format is best-effort. xlsx or CSV is strongly preferred.',
+        error: 'Could not detect a reliable table structure in this PDF. PDF text extraction often interleaves columns from a real table, so this format is best-effort. xlsx or CSV is strongly preferred.',
       }
     }
 
@@ -342,7 +342,7 @@ export async function parseLeadListFile(
     default:
       return {
         success: false, rows: [], warnings: [],
-        error: `Unsupported file type ".${ext}" — supported formats: .xlsx, .csv, .docx, .pdf`,
+        error: `Unsupported file type ".${ext}", supported formats: .xlsx, .csv, .docx, .pdf`,
       }
   }
 }

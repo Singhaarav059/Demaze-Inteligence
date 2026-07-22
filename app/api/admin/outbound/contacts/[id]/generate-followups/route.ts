@@ -50,7 +50,7 @@ export async function POST(
 
   if (!emailDraft) {
     return NextResponse.json(
-      { success: false, error: 'No generated email found for this contact — run Generate Email first.' },
+      { success: false, error: 'No generated email found for this contact. Run Generate Email first.' },
       { status: 400 }
     )
   }

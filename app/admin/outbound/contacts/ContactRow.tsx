@@ -157,7 +157,7 @@ export function ContactRow({
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`Delete ${contact.person_name}?`}
-        description="This can't be undone — it also removes any generated outreach draft and campaign send history for this contact."
+        description="This can't be undone. It also removes any generated outreach draft and campaign send history for this contact."
         confirmLabel="Delete"
         destructive
         loading={pending === 'delete'}

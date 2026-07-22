@@ -164,7 +164,7 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
       })
     } catch (e) {
       console.warn('[CompanyDiscovery] Failed to persist result:', e)
-      toast.warning(`Couldn't save "${company.companyName}" to History — its result is still shown below`)
+      toast.warning(`Couldn't save "${company.companyName}" to History, but its result is still shown below`)
     }
   }
 
@@ -216,7 +216,7 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
         if (quotaMsg && shouldPauseBatch(consecutiveQuotaHits)) {
           const reason = `Stopped at company ${i + 1} of ${queue.length}, quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
           setPausedReason(reason)
-          toast.warning('Batch paused — quota likely exhausted', { description: `Stopped at company ${i + 1} of ${queue.length}. Already-completed results are saved.` })
+          toast.warning('Batch paused: quota likely exhausted', { description: `Stopped at company ${i + 1} of ${queue.length}. Already-completed results are saved.` })
           paused = true
           break
         }
@@ -231,7 +231,7 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
     setRunning(false)
     setProgress(null)
     if (!stopRequested.current && !paused) {
-      toast.success(`Research complete — ${succeededCount} of ${queue.length} succeeded`)
+      toast.success(`Research complete: ${succeededCount} of ${queue.length} succeeded`)
     }
   }
 

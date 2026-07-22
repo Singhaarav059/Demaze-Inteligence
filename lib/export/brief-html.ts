@@ -192,11 +192,11 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
   const wn = getWhyNow(data) ?? {}
   const scoreRows: Array<[string, Html]> = []
   if (S(fit.value) || S(fit.label))
-    scoreRows.push(['Company fit', asHtml(`${E(fit.value)}${fit.label ? ` — ${E(fit.label)}` : ''}`)])
+    scoreRows.push(['Company fit', asHtml(`${E(fit.value)}${fit.label ? ` (${E(fit.label)})` : ''}`)])
   if (S(auto.value) || S(auto.label))
-    scoreRows.push(['Automation opportunity', asHtml(`${E(auto.value)}${auto.label ? ` — ${E(auto.label)}` : ''}`)])
+    scoreRows.push(['Automation opportunity', asHtml(`${E(auto.value)}${auto.label ? ` (${E(auto.label)})` : ''}`)])
   if (S(wn.score))
-    scoreRows.push(['Why now', asHtml(`${E(wn.score)}/10${wn.urgency_label ? ` — ${E(wn.urgency_label)}` : ''}`)])
+    scoreRows.push(['Why now', asHtml(`${E(wn.score)}/10${wn.urgency_label ? ` (${E(wn.urgency_label)})` : ''}`)])
   if (S(data.outreach_priority_score))
     scoreRows.push([
       'Outreach priority',

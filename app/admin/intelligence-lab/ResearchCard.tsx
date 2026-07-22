@@ -582,7 +582,7 @@ export function ResearchQualitySection({ quality }: { quality?: ResearchQualityA
     <Section label="Research Quality" accent="text-signal-medium">
       <p className="mb-3 text-xs text-muted-foreground">
         {quality.items_flagged} of {quality.items_audited} audited item
-        {quality.items_audited !== 1 ? 's' : ''} flagged for review — informational only, nothing above was
+        {quality.items_audited !== 1 ? 's' : ''} flagged for review. Informational only, nothing above was
         suppressed or downgraded.
       </p>
       <ul className="space-y-2.5">

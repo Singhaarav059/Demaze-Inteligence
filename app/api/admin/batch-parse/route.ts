@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const MAX_SIZE = 20 * 1024 * 1024 // 20MB — generous for a lead-list export
   if (file.size > MAX_SIZE) {
-    return NextResponse.json({ success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB) — max 20MB` }, { status: 400 })
+    return NextResponse.json({ success: false, error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB), max 20MB` }, { status: 400 })
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())

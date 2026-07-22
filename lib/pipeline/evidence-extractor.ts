@@ -1371,7 +1371,7 @@ export function extractSignals(
     }
     if (sig.type === 'digital_transformation') {
       detectedFactors.technology_investment = true
-      addFactorSource('technology_investment', `${sig.type} (secondary — DX implies tech investment)`)
+      addFactorSource('technology_investment', `${sig.type} (secondary, DX implies tech investment)`)
     }
   }
 

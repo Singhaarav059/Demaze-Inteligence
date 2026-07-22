@@ -44,6 +44,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -52,6 +53,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -67,58 +69,27 @@
 }
 
 /* ------------------------------------------------------------
-   Light theme (:root) — used by the public landing page.
-   ------------------------------------------------------------ */
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --surface: oklch(0.985 0 0);
-  --surface-foreground: oklch(0.145 0 0);
-  --elevated: oklch(1 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.22 277);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0.22 277);
-
-  --signal-strong: oklch(0.58 0.15 155);
-  --signal-medium: oklch(0.62 0.15 75);
-  --signal-weak: oklch(0.62 0.13 55);
-  --signal-none: oklch(0.556 0 0);
-
-  --chart-1: oklch(0.55 0.22 277);
-  --chart-2: oklch(0.58 0.15 155);
-  --chart-3: oklch(0.62 0.15 75);
-  --chart-4: oklch(0.60 0.18 25);
-  --chart-5: oklch(0.55 0.16 200);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.22 277);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.55 0.22 277);
-}
-
-/* ------------------------------------------------------------
    Refined dark theme (.dark) — the internal SDR product.
+   Selector stays `.dark` (not `:root`) even though it's now the
+   only theme — every consumer (app/admin/layout.tsx, app/page.tsx)
+   already forces this class, so keeping the selector name avoids
+   touching either of them. No light theme exists: both the admin
+   app and the public landing page force `.dark` unconditionally,
+   confirmed with zero live consumers of a light theme (2026-07-22).
+
+   Surface ladder (deepest -> shallowest), 4 distinct steps:
+     --sidebar    (deepest well)   0.125
+     --background (canvas)         0.145
+     --surface / --card (lifted)   0.19
+     --elevated / --popover        0.22
    Near-neutral-black surfaces (Explee-aligned), glass-layered
-   cards via alpha-white border/input, vivid indigo/violet accent.
+   cards via alpha-white border/input, vivid indigo/violet accent
+   used scarcely (brand mark, primary CTA, focus ring, active-nav
+   indicator, links — never as a decorative fill), same discipline
+   as the Linear reference in DESIGN.md.
    ------------------------------------------------------------ */
 .dark {
+  --radius: 0.625rem;
   --background: oklch(0.145 0.003 285);
   --foreground: oklch(0.96 0.003 285);
   --surface: oklch(0.19 0.004 285);
@@ -129,6 +100,7 @@
   --popover: oklch(0.22 0.005 285);
   --popover-foreground: oklch(0.96 0.003 285);
   --primary: oklch(0.64 0.19 277);
+  --primary-hover: oklch(0.72 0.16 277);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.27 0.008 285);
   --secondary-foreground: oklch(0.96 0.003 285);
@@ -138,6 +110,7 @@
   --accent-foreground: oklch(0.96 0.003 285);
   --destructive: oklch(0.68 0.2 22);
   --border: oklch(1 0 0 / 8%);
+  --border-strong: oklch(1 0 0 / 14%);
   --input: oklch(1 0 0 / 11%);
   --ring: oklch(0.64 0.19 277);
 

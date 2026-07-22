@@ -207,7 +207,7 @@ export type EvidenceTier = 'tier1' | 'tier2' | 'tier3'
 
 export const EVIDENCE_TIER_GUIDE = {
   tier1: {
-    label: 'Tier 1 — Highest Trust',
+    label: 'Tier 1: Highest Trust',
     sources: [
       'annual_report', 'investor_presentation', 'earnings_call',
       'official_press_release', 'careers_page', 'leadership_statement',
@@ -217,7 +217,7 @@ export const EVIDENCE_TIER_GUIDE = {
     description: 'Annual reports, investor presentations, press releases, careers pages, leadership statements',
   },
   tier2: {
-    label: 'Tier 2 — Secondary',
+    label: 'Tier 2: Secondary',
     sources: [
       'official_blog', 'case_study', 'product_documentation',
       'about_page', 'company_history', 'news_section',
@@ -226,7 +226,7 @@ export const EVIDENCE_TIER_GUIDE = {
     description: 'Official blog, case studies, About page, product documentation',
   },
   tier3: {
-    label: 'Tier 3 — Marketing',
+    label: 'Tier 3: Marketing',
     sources: [
       'homepage_marketing', 'generic_marketing', 'tagline',
       'mission_statement', 'generic_copy',

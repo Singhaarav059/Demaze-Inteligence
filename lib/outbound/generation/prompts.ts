@@ -37,6 +37,7 @@ Rules:
 - If the research below is thin, write shorter and more general copy rather than fabricating specifics to fill space.
 - Address the person by first name only. Do not invent a greeting title (Mr./Ms./Dr.) unless it's given.
 - No corporate buzzwords ("synergy", "leverage", "circle back"). Write like a real person, not a template.
+- NEVER use em dashes (—) or en dashes (–), and never " -- " as a connector. Use a comma, a period, or rewrite as two shorter sentences.
 `.trim()
 
 export function buildSubjectLinePrompt(input: EmailGenerationInput): { systemPrompt: string; userPrompt: string } {

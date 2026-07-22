@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation'
 import { LayoutGroup, motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { BrandMark } from './BrandMark'
 import { DotIcon } from './nav-icons'
 import { NAV } from './nav-config'
 
@@ -22,9 +23,7 @@ export function Sidebar() {
         href="/admin/intelligence-lab"
         className="flex h-14 items-center gap-2.5 px-5 border-b border-sidebar-border/60"
       >
-        <span className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white shadow-sm shadow-violet-950/40">
-          D
-        </span>
+        <BrandMark size="md" glow />
         <span className="flex flex-col leading-none">
           <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Demaze</span>
           <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">

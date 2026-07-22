@@ -120,7 +120,7 @@ export default function WizardPage() {
       })
     } catch (e) {
       console.warn('[Wizard] Failed to persist result:', e)
-      toast.warning("Couldn't save this result to History — the report above is still valid")
+      toast.warning("Couldn't save this result to History, but the report above is still valid")
     }
   }, [url])
 
@@ -241,7 +241,7 @@ export default function WizardPage() {
       // shown in this session, just not saved to history. Same "display
       // unaffected" principle as the single-URL flow.
       console.warn('[Wizard] Failed to persist batch result:', e)
-      toast.warning(`Couldn't save "${company.companyName}" to History — its result is still shown below`)
+      toast.warning(`Couldn't save "${company.companyName}" to History, but its result is still shown below`)
     }
   }
 
@@ -319,7 +319,7 @@ export default function WizardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Company Research</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Research a company, or upload a lead list — either way you get the same outreach-ready report.
+            Research a company, or upload a lead list. Either way you get the same outreach-ready report.
           </p>
         </div>
         <Link
@@ -414,7 +414,7 @@ export default function WizardPage() {
                 {uploading && <span className="text-xs text-muted-foreground">Parsing…</span>}
               </div>
               <p className="text-muted-foreground/70 text-xs">
-                Supported: .xlsx (priority), .csv, .docx, .pdf. PDF is the least reliable format —
+                Supported: .xlsx (priority), .csv, .docx, .pdf. PDF is the least reliable format:
                 text extraction can interleave columns from a real table; verify extracted rows carefully.
               </p>
 

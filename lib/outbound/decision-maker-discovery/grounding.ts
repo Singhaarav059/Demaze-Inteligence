@@ -107,7 +107,7 @@ export function groundCandidate(
     ...candidate,
     grounding: {
       status: 'conflict',
-      reason: `Name found on the company's own website, but listed there as "${match.title}" — not "${candidate.title}".`,
+      reason: `Name found on the company's own website, but listed there as "${match.title}", not "${candidate.title}".`,
     },
   }
 }

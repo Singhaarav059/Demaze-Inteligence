@@ -72,7 +72,7 @@ function OutboundIntegrationsPageInner() {
     const status = searchParams.get('gmail_oauth')
     if (!status) return
     const message = searchParams.get('gmail_oauth_message')
-    if (status === 'success') toast.success(message ? `Gmail connected — ${message}` : 'Gmail connected')
+    if (status === 'success') toast.success(message ? `Gmail connected: ${message}` : 'Gmail connected')
     else toast.error(message ?? 'Gmail connection failed')
     router.replace('/admin/outbound/integrations')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,7 +193,7 @@ function OutboundIntegrationsPageInner() {
         <h1 className="text-lg font-semibold text-foreground">Outbound Integrations</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Configure the vendor behind each outbound capability. Every capability works today via a
-          built-in mock provider — adding a real vendor here is a config change, not a code change.
+          built-in mock provider. Adding a real vendor here is a config change, not a code change.
         </p>
       </div>
 
@@ -297,7 +297,7 @@ function OutboundIntegrationsPageInner() {
                     <div className="flex items-center justify-between pt-1">
                       <span className="text-xs text-muted-foreground/70">
                         {isGmailDraft
-                          ? 'Gmail is connected via Google\'s consent screen above, not a pasted key — click Test Connection after connecting.'
+                          ? 'Gmail is connected via Google\'s consent screen above, not a pasted key. Click Test Connection after connecting.'
                           : (active?.last_test_message ?? 'Not tested yet.')}
                       </span>
                       <div className="flex gap-2">

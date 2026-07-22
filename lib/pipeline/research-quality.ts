@@ -96,7 +96,7 @@ export function auditResearchQuality(normalized: NormalizedAnalysis): ResearchQu
         'opportunity',
         o.title,
         'evidence_subject_mismatch',
-        `Marked high confidence but linked evidence (${o.evidence_id}) is tagged product_capability — likely customer-facing copy, not internal pain`,
+        `Marked high confidence but linked evidence (${o.evidence_id}) is tagged product_capability, likely customer-facing copy, not internal pain`,
         'warn',
       )
     }
@@ -113,7 +113,7 @@ export function auditResearchQuality(normalized: NormalizedAnalysis): ResearchQu
         'pain_point',
         p.title,
         'evidence_subject_mismatch',
-        `Marked high confidence but linked evidence (${p.evidence_id}) is tagged product_capability — likely customer-facing copy, not internal pain`,
+        `Marked high confidence but linked evidence (${p.evidence_id}) is tagged product_capability, likely customer-facing copy, not internal pain`,
         'warn',
       )
     }
@@ -127,7 +127,7 @@ export function auditResearchQuality(normalized: NormalizedAnalysis): ResearchQu
         'competitor',
         c.name,
         'single_mention_high_confidence',
-        `Marked high confidence with only ${c.source_urls?.length ?? 0} source URL(s) — this module's own tiering requires 2+ mentions for high confidence`,
+        `Marked high confidence with only ${c.source_urls?.length ?? 0} source URL(s), this module's own tiering requires 2+ mentions for high confidence`,
         'warn',
       )
     }
@@ -136,7 +136,7 @@ export function auditResearchQuality(normalized: NormalizedAnalysis): ResearchQu
         'competitor',
         c.name,
         'self_name_collision',
-        `Name matches the researched company ("${normalized.company_name}") via self-name check — should have been filtered at discovery time`,
+        `Name matches the researched company ("${normalized.company_name}") via self-name check, should have been filtered at discovery time`,
         'warn',
       )
     }
@@ -150,7 +150,7 @@ export function auditResearchQuality(normalized: NormalizedAnalysis): ResearchQu
         'icp_segment',
         s.name,
         'single_mention_high_confidence',
-        `Marked high confidence with only ${s.source_urls?.length ?? 0} source URL(s) — this module's own tiering requires 2+ mentions for high confidence`,
+        `Marked high confidence with only ${s.source_urls?.length ?? 0} source URL(s), this module's own tiering requires 2+ mentions for high confidence`,
         'warn',
       )
     }
@@ -159,7 +159,7 @@ export function auditResearchQuality(normalized: NormalizedAnalysis): ResearchQu
         'icp_segment',
         s.name,
         'self_name_collision',
-        `Name matches the researched company ("${normalized.company_name}") via self-name check — should have been filtered at discovery time`,
+        `Name matches the researched company ("${normalized.company_name}") via self-name check, should have been filtered at discovery time`,
         'warn',
       )
     }

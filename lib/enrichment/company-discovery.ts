@@ -526,7 +526,7 @@ export async function discoverCompanies(
     return {
       companies: [],
       sufficiency: 'insufficient',
-      reason: `"${icpSegment.trim()}" looks like a company URL/domain, not an ICP segment. This field expects a segment description (e.g. "oil and gas", "automotive manufacturers", "mid-size SaaS companies") — not the company itself. To find companies similar to a specific company, research that company first and copy one of its "Target Customer Segments," or use Competitor Discovery on that company's report.`,
+      reason: `"${icpSegment.trim()}" looks like a company URL/domain, not an ICP segment. This field expects a segment description (e.g. "oil and gas", "automotive manufacturers", "mid-size SaaS companies"), not the company itself. To find companies similar to a specific company, research that company first and copy one of its "Target Customer Segments," or use Competitor Discovery on that company's report.`,
       candidates_considered: 0,
     }
   }

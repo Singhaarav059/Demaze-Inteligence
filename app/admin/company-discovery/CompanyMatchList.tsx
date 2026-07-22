@@ -58,7 +58,7 @@ const FILTER_THRESHOLD = 8
 
 function serviceFitFor(match: DemazeMatch, demazeSegments: ICPSegment[]): string {
   const segNames = match.segments ?? []
-  if (segNames.length === 0) return 'Not available — no Demaze ICP segment tagged for this lead.'
+  if (segNames.length === 0) return 'Not available, no Demaze ICP segment tagged for this lead.'
 
   const texts = segNames
     .map(name => demazeSegments.find(s => s.name.toLowerCase() === name.toLowerCase()))
@@ -67,7 +67,7 @@ function serviceFitFor(match: DemazeMatch, demazeSegments: ICPSegment[]): string
     .filter(Boolean)
 
   if (texts.length === 0) {
-    return `Matches Demaze's "${segNames.join(', ')}" segment — fit detail not available (not one of Demaze's own cached ICP segments).`
+    return `Matches Demaze's "${segNames.join(', ')}" segment, fit detail not available (not one of Demaze's own cached ICP segments).`
   }
   return texts.join(' | ')
 }
@@ -205,10 +205,10 @@ export function CompanyMatchList({
                     )}
                   </div>
 
-                  <Field label="Website" value={match.domain ?? 'not resolved — will research by name only'} />
+                  <Field label="Website" value={match.domain ?? 'not resolved, will research by name only'} />
                   <Field
                     label="Industry"
-                    value={match.segments && match.segments.length > 0 ? undefined : '—'}
+                    value={match.segments && match.segments.length > 0 ? undefined : 'N/A'}
                   >
                     {match.segments && match.segments.length > 0 && (
                       <div className="flex flex-wrap gap-1">
@@ -222,7 +222,7 @@ export function CompanyMatchList({
                   <Field label="Service Fit" value={serviceFitFor(match, demazeSegments)} className="md:col-span-2" />
                   <Field
                     label="Opportunity Summary"
-                    value="Not available yet — run Research (Step 5) on this lead to generate real pain points/opportunities."
+                    value="Not available yet, run Research (Step 5) on this lead to generate real pain points/opportunities."
                     muted
                     className="md:col-span-2"
                   />

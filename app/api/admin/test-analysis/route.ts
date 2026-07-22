@@ -651,7 +651,7 @@ export async function POST(req: NextRequest) {
     } else {
       competitorDiscoveryResult = {
         competitors: [], candidates: [], sufficiency: 'insufficient',
-        reason: 'no business profile available — falling back to offering-grounded pass',
+        reason: 'no business profile available, falling back to offering-grounded pass',
         candidates_considered: 0,
       }
     }
@@ -716,7 +716,7 @@ export async function POST(req: NextRequest) {
       icpDiscoveryPromise,
       new Promise<ICPDiscoveryResult>(resolve => setTimeout(() => resolve({
         segments: [], candidates: [], sufficiency: 'insufficient',
-        reason: `timed out after ${ICP_DISCOVERY_TIMEOUT_MS}ms — kicked off in parallel with scrape, still not resolved by prompt-build time`,
+        reason: `timed out after ${ICP_DISCOVERY_TIMEOUT_MS}ms, kicked off in parallel with scrape, still not resolved by prompt-build time`,
         candidates_considered: 0,
       }), ICP_DISCOVERY_TIMEOUT_MS)),
     ])
@@ -761,7 +761,7 @@ export async function POST(req: NextRequest) {
       marketIntelPromise,
       new Promise<MarketIntelligenceResult>(resolve => setTimeout(() => resolve({
         items: [], sufficiency: 'insufficient',
-        reason: `timed out after ${MARKET_INTEL_TIMEOUT_MS}ms — kicked off in parallel with scrape, still not resolved by prompt-build time`,
+        reason: `timed out after ${MARKET_INTEL_TIMEOUT_MS}ms, kicked off in parallel with scrape, still not resolved by prompt-build time`,
         candidates_considered: 0,
       }), MARKET_INTEL_TIMEOUT_MS)),
     ])

@@ -44,7 +44,7 @@ export const MockEnrichmentProvider: EnrichmentProvider = {
     const industry = knownIndustry || seededPick(`${seed}::industry`, FALLBACK_INDUSTRIES)
 
     const linkedinSummary = linkedinUrl
-      ? `${personName} — ${seniority} in ${department} at ${companyName} (from provided LinkedIn URL).`
+      ? `${personName}, ${seniority} in ${department} at ${companyName} (from provided LinkedIn URL).`
       : undefined
 
     const usedRealData = Boolean(knownCompanySize || knownIndustry)

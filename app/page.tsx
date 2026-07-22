@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BrandMark } from '@/components/shell/BrandMark'
 
 const NAV_LINKS = [
   { label: 'How it works', href: '#how-it-works' },
@@ -18,19 +19,19 @@ const STEPS = [
     number: '01',
     title: 'Paste any company URL',
     description: 'Drop in a company website, manufacturing plant, automotive OEM, tier-1 supplier, welding company. Any URL works.',
-    color: 'from-blue-600 to-blue-400',
+    color: 'from-chart-5 to-chart-5/70',
   },
   {
     number: '02',
     title: 'Agent researches the company',
     description: 'The agent scrapes their site, extracts operational signals, and infers business challenges from their industry and model, just like an SDR would.',
-    color: 'from-violet-600 to-violet-400',
+    color: 'from-chart-1 to-chart-1/70',
   },
   {
     number: '03',
     title: 'Get a research brief',
     description: 'Company description, pain points, AI opportunities, recent news, and a personalization summary, ready to use, specific to this company.',
-    color: 'from-emerald-600 to-emerald-400',
+    color: 'from-chart-2 to-chart-2/70',
   },
 ]
 
@@ -39,37 +40,37 @@ const RESEARCH_AREAS = [
     label: '🏭',
     title: 'Company Overview',
     description: 'What they do, who they sell to, how many plants, where they operate. The context your SDR needs before hitting send.',
-    accent: 'border-blue-800/60 bg-blue-950/20',
+    accent: 'border-chart-5/40 bg-chart-5/10',
   },
   {
     label: '📡',
     title: 'Recent Signals',
     description: 'Expansions, automation investments, hiring surges, certifications, digital initiatives, recent activity that creates outreach urgency.',
-    accent: 'border-violet-800/60 bg-violet-950/20',
+    accent: 'border-chart-1/40 bg-chart-1/10',
   },
   {
     label: '⚙️',
     title: 'Pain Points',
     description: 'Operational pain points specific to their business model, observed from their content or inferred from their industry. Always labeled.',
-    accent: 'border-amber-800/60 bg-amber-950/20',
+    accent: 'border-chart-3/40 bg-chart-3/10',
   },
   {
     label: '🎯',
     title: 'AI Opportunities',
     description: 'The Demaze services most relevant to this company, matched to their signals, with a one-line rationale for each. Only real evidence, no forced fit.',
-    accent: 'border-emerald-800/60 bg-emerald-950/20',
+    accent: 'border-chart-2/40 bg-chart-2/10',
   },
   {
     label: '✨',
     title: 'Personalization Summary',
     description: 'A tailored outreach angle grounded in the company’s strongest signal, the specific "why now" a rep can lead with.',
-    accent: 'border-indigo-800/60 bg-indigo-950/20',
+    accent: 'border-chart-1/40 bg-chart-1/10',
   },
   {
     label: '🔎',
     title: 'Evidence-backed',
     description: 'Every point is labeled observed vs. inferred and traced to a source, so reps trust what they read before they reach out.',
-    accent: 'border-rose-800/60 bg-rose-950/20',
+    accent: 'border-chart-4/40 bg-chart-4/10',
   },
 ]
 
@@ -95,9 +96,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white text-xs">
-                D
-              </div>
+              <BrandMark size="md" />
               <span className="text-sm font-semibold tracking-tight text-foreground">Demaze AI</span>
             </div>
             <nav className="hidden md:flex items-center gap-6">
@@ -122,11 +121,12 @@ export default function Home() {
         {/* Hero */}
         <section className="relative overflow-hidden pt-24 pb-20 px-6">
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-b from-primary/10 via-violet-600/5 to-transparent rounded-full blur-3xl" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-b from-primary/10 via-primary-hover/5 to-transparent rounded-full blur-3xl" />
             <div
               className="absolute inset-0 opacity-40"
               style={{
-                backgroundImage: 'radial-gradient(circle at 1px 1px, rgb(63 63 70 / 0.6) 1px, transparent 0)',
+                backgroundImage:
+                  'radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 40%, transparent) 1px, transparent 0)',
                 backgroundSize: '32px 32px',
               }}
             />
@@ -138,9 +138,9 @@ export default function Home() {
               Manufacturing &amp; Automotive · Outbound Research
             </div>
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05]">
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tighter leading-[1.05]">
               Research any company.{' '}
-              <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-indigo-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-primary via-primary-hover to-primary bg-clip-text text-transparent">
                 Personalize every outreach.
               </span>
             </h1>
@@ -284,22 +284,22 @@ export default function Home() {
             <div className="rounded-2xl border border-border bg-card p-8 sm:p-12 space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center text-white font-bold text-lg">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white font-bold text-lg">
                     ✓
                   </div>
                   <h3 className="text-xl font-bold text-foreground">Inferred is not a dirty word</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     A welding company&apos;s website rarely says &ldquo;we have quality control problems.&rdquo;
-                    An experienced SDR infers it from their business model. So does this agent —
+                    An experienced SDR infers it from their business model. So does this agent,
                     and it labels every inference so you know what&apos;s fact vs. deduction.
                   </p>
                   <div className="space-y-2 pt-2">
                     <div className="flex items-center gap-3 text-sm">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-teal-950 text-teal-300 border-teal-800">observed</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-signal-strong/15 text-signal-strong border-signal-strong/40">observed</span>
                       <span className="text-muted-foreground">Directly stated on their website</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-orange-950 text-orange-300 border-orange-800">inferred</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-signal-medium/15 text-signal-medium border-signal-medium/40">inferred</span>
                       <span className="text-muted-foreground">Deduced from business model or industry</span>
                     </div>
                   </div>
@@ -357,9 +357,7 @@ export default function Home() {
       <footer className="border-t border-border py-8 px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white text-[10px]">
-              D
-            </div>
+            <BrandMark size="xs" />
             <span className="text-xs font-medium text-muted-foreground">Demaze Technologies</span>
           </div>
           <p className="text-xs text-muted-foreground/60">

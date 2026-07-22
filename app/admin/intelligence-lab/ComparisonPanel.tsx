@@ -16,15 +16,15 @@ export function ComparisonPanel({ a, b }: { a: RunResult | null; b: RunResult | 
 
   const str = (r: RunResult | null, key: string) => {
     const ar = r?.analysisResult as Record<string, unknown> | undefined
-    if (!ar) return '—'
+    if (!ar) return 'N/A'
     const v = ar[key]
-    return v != null && v !== '' ? String(v) : '—'
+    return v != null && v !== '' ? String(v) : 'N/A'
   }
 
   const count = (r: RunResult | null, key: string) => {
     const ar = r?.analysisResult as Record<string, unknown> | undefined
     const v = ar?.[key]
-    return Array.isArray(v) ? String(v.length) : '—'
+    return Array.isArray(v) ? String(v.length) : 'N/A'
   }
 
   // Aligned to the locked 5-field output schema (no legacy scores).
@@ -35,7 +35,7 @@ export function ComparisonPanel({ a, b }: { a: RunResult | null; b: RunResult | 
     { label: 'Pain points', fn: (r) => count(r, 'pain_points') },
     { label: 'AI opportunities', fn: (r) => count(r, 'opportunities') },
     { label: 'Recent news', fn: (r) => count(r, 'recent_activity') },
-    { label: 'Signals detected', fn: (r) => String(r?.extractorResult?.signals.length ?? '—') },
+    { label: 'Signals detected', fn: (r) => String(r?.extractorResult?.signals.length ?? 'N/A') },
   ]
 
   return (

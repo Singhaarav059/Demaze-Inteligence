@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   const rateLimit = checkRateLimit(`gmail-oauth:${getClientIp(req)}`, OAUTH_RATE_LIMIT)
   if (!rateLimit.allowed) {
     return NextResponse.json(
-      { success: false, error: 'Too many attempts — please wait a minute and try again.' },
+      { success: false, error: 'Too many attempts, please wait a minute and try again.' },
       { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds ?? 60) } }
     )
   }
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID
   if (!clientId) {
     return NextResponse.json(
-      { success: false, error: 'GOOGLE_CLIENT_ID is not configured — see .env.example for setup steps.' },
+      { success: false, error: 'GOOGLE_CLIENT_ID is not configured, see .env.example for setup steps.' },
       { status: 500 }
     )
   }

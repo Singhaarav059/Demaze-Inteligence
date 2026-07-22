@@ -248,7 +248,7 @@ export default function RunHistoryPage() {
           const industryLine = cardData
             ? [cardData.industry, cardData.subIndustry !== cardData.industry ? cardData.subIndustry : null]
                 .filter(Boolean)
-                .join(' — ')
+                .join(' · ')
             : ''
           const isExpanded = expandedId === run.id
 
@@ -352,7 +352,7 @@ export default function RunHistoryPage() {
                     <Step1Research result={toRunResult(run)} />
                   ) : (
                     <p className="text-muted-foreground text-xs">
-                      No saved analysis result for this run — nothing to render as a report.
+                      No saved analysis result for this run, nothing to render as a report.
                     </p>
                   )}
 
@@ -372,16 +372,16 @@ export default function RunHistoryPage() {
                       {/* Metadata grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <DetailStat label="URL" value={run.company_url} mono />
-                        <DetailStat label="Discovery" value={run.discovery_method ?? '—'} />
-                        <DetailStat label="Provider" value={run.provider_used ?? '—'} />
-                        <DetailStat label="Model" value={run.model_used ?? '—'} mono />
-                        <DetailStat label="Scrape time" value={run.scrape_time_ms ? `${(run.scrape_time_ms / 1000).toFixed(1)}s` : '—'} />
-                        <DetailStat label="Analysis time" value={run.analysis_time_ms ? `${(run.analysis_time_ms / 1000).toFixed(1)}s` : '—'} />
+                        <DetailStat label="Discovery" value={run.discovery_method ?? 'N/A'} />
+                        <DetailStat label="Provider" value={run.provider_used ?? 'N/A'} />
+                        <DetailStat label="Model" value={run.model_used ?? 'N/A'} mono />
+                        <DetailStat label="Scrape time" value={run.scrape_time_ms ? `${(run.scrape_time_ms / 1000).toFixed(1)}s` : 'N/A'} />
+                        <DetailStat label="Analysis time" value={run.analysis_time_ms ? `${(run.analysis_time_ms / 1000).toFixed(1)}s` : 'N/A'} />
                         <DetailStat label="Failed pages" value={String(run.failed_pages ?? 0)} />
                         <DetailStat label="Pages scraped" value={String(run.scraped_pages ?? 0)} />
                         <DetailStat label="Quality" value={`${run.quality_score ?? 0}/100`} />
-                        <DetailStat label="Tokens" value={run.token_usage ? run.token_usage.toLocaleString() : '—'} />
-                        <DetailStat label="Execution time" value={run.execution_time_ms ? `${(run.execution_time_ms / 1000).toFixed(1)}s` : '—'} />
+                        <DetailStat label="Tokens" value={run.token_usage ? run.token_usage.toLocaleString() : 'N/A'} />
+                        <DetailStat label="Execution time" value={run.execution_time_ms ? `${(run.execution_time_ms / 1000).toFixed(1)}s` : 'N/A'} />
                         <DetailStat label="Run ID" value={run.id.slice(0, 8) + '…'} mono />
                       </div>
 

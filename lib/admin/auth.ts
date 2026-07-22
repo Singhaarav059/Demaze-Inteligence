@@ -27,7 +27,7 @@ export function verifyAdminRequest(req: NextRequest): NextResponse | null {
   const rateLimit = checkRateLimit(`admin:${getClientIp(req)}`, ADMIN_RATE_LIMIT)
   if (!rateLimit.allowed) {
     return NextResponse.json(
-      { success: false, error: 'Too many requests — please slow down.' },
+      { success: false, error: 'Too many requests, please slow down.' },
       { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds ?? 60) } }
     )
   }
@@ -45,7 +45,7 @@ export function verifyAdminRequest(req: NextRequest): NextResponse | null {
 
   if (!token || !timingSafeEqualStr(token, expected)) {
     return NextResponse.json(
-      { success: false, error: 'Unauthorized — invalid or missing admin token' },
+      { success: false, error: 'Unauthorized: invalid or missing admin token' },
       { status: 401 }
     )
   }

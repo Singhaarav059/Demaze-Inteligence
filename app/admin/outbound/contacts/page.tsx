@@ -79,7 +79,7 @@ export default function OutboundContactsPage() {
         <p className="text-sm text-muted-foreground mt-1">
           Pick a researched company, then add contacts. Manually typing in a name (from Sales
           Navigator, a lead list, etc.) stays the default path. Decision-Maker Discovery below is a
-          separate, explicit action — it surfaces candidates for you to review, and nothing is added
+          separate, explicit action. It surfaces candidates for you to review, and nothing is added
           as a contact until you select it.
         </p>
       </div>

@@ -1254,7 +1254,7 @@ export function normalizeAnalysisResult(
       if (hasUngroundedStat) {
         outreach_draft.matched_proof_point_id = ''
         validation_warnings.push(
-          `outreach_draft cites a stat (${draftStatTokens.join(', ')}) not found in the matched proof point's real outcomes — likely fabricated, matched_proof_point_id cleared. Review before sending.`
+          `outreach_draft cites a stat (${draftStatTokens.join(', ')}) not found in the matched proof point's real outcomes, likely fabricated, matched_proof_point_id cleared. Review before sending.`
         )
       }
     }
@@ -1263,14 +1263,14 @@ export function normalizeAnalysisResult(
   const llmFlagsActive     = Object.values(llmFactors).filter(Boolean).length
   const derivedFlagsActive = Object.values(detected_factors).filter(Boolean).length
   if (llmFlagsActive === 0 && derivedFlagsActive > 0) {
-    validation_warnings.push(`Auto-derived ${derivedFlagsActive} detected_factor(s) — LLM provided all-false flags`)
+    validation_warnings.push(`Auto-derived ${derivedFlagsActive} detected_factor(s): LLM provided all-false flags`)
   }
   // Warn if business model type caused signals to be filtered
   const filteredCount = Object.keys(derivedFactors).filter(
     k => Boolean((derivedFactors as Record<string, boolean>)[k]) && !Boolean((detected_factors as Record<string, boolean>)[k])
   ).length
   if (filteredCount > 0) {
-    validation_warnings.push(`${filteredCount} signal(s) suppressed — not valid for ${business_model_type} business model (likely false positives from product/customer content)`)
+    validation_warnings.push(`${filteredCount} signal(s) suppressed: not valid for ${business_model_type} business model (likely false positives from product/customer content)`)
   }
 
   // ── Metadata ─────────────────────────────────────────────────

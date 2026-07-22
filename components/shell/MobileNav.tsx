@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { MenuIcon, CloseIcon, DotIcon } from './nav-icons'
+import { BrandMark } from './BrandMark'
 import { NAV } from './nav-config'
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled])'
@@ -101,9 +102,7 @@ export function MobileNav() {
           <aside ref={drawerRef} className="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col border-r border-sidebar-border bg-sidebar shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-sidebar-border/60 px-4">
               <Link href="/admin/intelligence-lab" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
-                <span className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white">
-                  D
-                </span>
+                <BrandMark size="md" />
                 <span className="flex flex-col leading-none">
                   <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Demaze</span>
                   <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">

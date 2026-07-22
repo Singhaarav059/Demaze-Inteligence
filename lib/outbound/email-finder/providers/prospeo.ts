@@ -94,7 +94,7 @@ export const ProspeoEmailFinderProvider: EmailFinderProvider = {
         confidence: 'none',
         providerUsed: 'prospeo',
         status: 'error',
-        reason: 'No Prospeo API key configured — set it in Outbound Integrations or PROSPEO_API_KEY.',
+        reason: 'No Prospeo API key configured, set it in Outbound Integrations or PROSPEO_API_KEY.',
       }
     }
 

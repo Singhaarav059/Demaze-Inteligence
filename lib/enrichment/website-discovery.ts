@@ -323,7 +323,7 @@ export async function discoverCompanyWebsite(
       domain: null,
       confidence: 'none',
       candidates,
-      reason: `${candidates.filter(c => c.confidence === top.confidence).length} candidates tied at "${top.confidence}" confidence — could not disambiguate which is the real "${companyName}"`,
+      reason: `${candidates.filter(c => c.confidence === top.confidence).length} candidates tied at "${top.confidence}" confidence, could not disambiguate which is the real "${companyName}"`,
     }
   }
 

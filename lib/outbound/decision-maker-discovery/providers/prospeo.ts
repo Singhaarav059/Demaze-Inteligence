@@ -218,7 +218,7 @@ export const ProspeoDecisionMakerDiscoveryProvider: DecisionMakerDiscoveryProvid
         providerUsed: 'prospeo',
         status: 'not_found',
         reason: rawResults.length === 0
-          ? 'Prospeo\'s own title-filtered search returned zero candidates for this company — it may not have senior leadership indexed for it under any of the requested titles.'
+          ? 'Prospeo\'s own title-filtered search returned zero candidates for this company. It may not have senior leadership indexed for it under any of the requested titles.'
           : `Prospeo returned ${rawResults.length} candidate(s), but none had a title matching the requested roles closely enough.`,
       }
     }

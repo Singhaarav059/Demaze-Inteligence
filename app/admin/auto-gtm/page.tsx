@@ -226,7 +226,7 @@ export default function AutoGtmFlowPage() {
         open={showStartNewConfirm}
         onOpenChange={setShowStartNewConfirm}
         title="Start a new research?"
-        description="This clears the current company and progress from this screen so you can start over. Nothing already saved (past runs, contacts, drafts) is deleted — you can still find it in History."
+        description="This clears the current company and progress from this screen so you can start over. Nothing already saved (past runs, contacts, drafts) is deleted, you can still find it in History."
         confirmLabel="Start New"
         onConfirm={() => { setShowStartNewConfirm(false); flow.resetFlow() }}
       />

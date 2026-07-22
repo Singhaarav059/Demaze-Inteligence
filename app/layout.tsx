@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Demaze AI — Outbound Intelligence Platform",
+  title: "Demaze AI: Outbound Intelligence Platform",
   description: "AI-powered company intelligence for B2B outbound sales targeting manufacturing and automotive industries.",
 };
 

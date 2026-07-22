@@ -737,7 +737,7 @@ async function searchFallbackScrape(
     isB2CSite: false,
     b2cPatternsHit: 0,
     corporateSeedPathsProbed: 0,
-    warnings: [`Direct scraping failed — using web search fallback for "${companyName}"`],
+    warnings: [`Direct scraping failed, using web search fallback for "${companyName}"`],
     errors: [],
   }
 
@@ -950,7 +950,7 @@ export async function scrapeCompanyWebsite(baseUrl: string): Promise<ScrapeResul
   debugInfo.homepageLinksRaw = homepage.links.length
 
   if (!homepage.page.success) {
-    debugInfo.errors.push(`Homepage failed — ${homepage.page.error}`)
+    debugInfo.errors.push(`Homepage failed: ${homepage.page.error}`)
     console.warn(`[Scraper] Homepage failed: ${homepage.page.error}`)
     // Tier 1: Jina.ai reader (JS rendering, Google Sites, basic anti-bot bypass)
     const jinaResult = await jinaFullScrape(safeBase, debugInfo)

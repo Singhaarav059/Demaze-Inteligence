@@ -40,7 +40,7 @@ export const MockEmailFinderProvider: EmailFinderProvider = {
         confidence: 'none',
         providerUsed: 'mock',
         status: 'error',
-        reason: 'No domain provided — cannot derive an email address.',
+        reason: 'No domain provided, cannot derive an email address.',
       }
     }
 

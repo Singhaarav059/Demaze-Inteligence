@@ -280,7 +280,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
             {autoStart && showAutoStartConfirm
               ? 'This search uses paid credits, waiting for your confirmation before running it.'
               : autoStart && compact
-              ? 'Searching automatically using common titles (CEO, CTO, VP Operations, etc). Found candidates start checked below — uncheck anyone you don’t want, then hit Continue.'
+              ? 'Searching automatically using common titles (CEO, CTO, VP Operations, etc). Found candidates start checked below, uncheck anyone you don’t want, then hit Continue.'
               : autoStart
               ? 'Searching automatically using common titles (CEO, CTO, VP Operations, etc). Found candidates start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'
               : 'Searches for candidate decision-makers by title. Found candidates start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'}
@@ -351,7 +351,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
             </motion.div>
             {compact ? (
               <p className="text-xs text-muted-foreground/70">
-                {selectedCandidates.size} selected — hit Continue above to add {selectedCandidates.size === 1 ? 'them' : 'them all'} and move on.
+                {selectedCandidates.size} selected. Hit Continue above to add {selectedCandidates.size === 1 ? 'them' : 'them all'} and move on.
               </p>
             ) : (
               <Button size="sm" disabled={adding || selectedCandidates.size === 0} onClick={handleAddSelected}>
@@ -366,7 +366,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
         open={showAutoStartConfirm}
         onOpenChange={open => { if (!open) setShowAutoStartConfirm(false) }}
         title="Search for decision makers?"
-        description="This looks up decision makers for this company using the currently configured provider — which may use paid credits if a real vendor (not the mock) is active in Outbound Integrations. Nothing is added as a contact until you review and select from the results."
+        description="This looks up decision makers for this company using the currently configured provider, which may use paid credits if a real vendor (not the mock) is active in Outbound Integrations. Nothing is added as a contact until you review and select from the results."
         confirmLabel="Search"
         onConfirm={() => { setShowAutoStartConfirm(false); void handleDiscover() }}
       />
