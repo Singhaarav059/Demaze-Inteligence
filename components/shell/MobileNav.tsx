@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -88,7 +89,7 @@ export function MobileNav() {
         <MenuIcon className="size-5" />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation menu">
           {/* Backdrop */}
           <button
@@ -159,7 +160,8 @@ export function MobileNav() {
               </div>
             </div>
           </aside>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
