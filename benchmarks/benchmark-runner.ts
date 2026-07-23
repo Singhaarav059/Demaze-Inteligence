@@ -94,10 +94,10 @@ interface ApiResponse {
       relevance?: string
     }>
     outreach_intelligence?: {
-      opening_angle?: string
-      problem?: string
-      service?: string
-      trigger?: string
+      conversation_angle?: string
+      likely_problem?: string
+      recommended_service?: string
+      why_contact?: string
     }
     executive_brief?: {
       what_to_sell?: string
@@ -146,9 +146,9 @@ function buildNarrativeText(result: ApiResponse['analysisResult']): string {
     result.company_summary ?? '',
     ...(result.pain_points ?? []),
     ...(result.opportunities ?? []).flatMap(o => [o.title ?? '', o.description ?? '']),
-    result.outreach_intelligence?.opening_angle ?? '',
-    result.outreach_intelligence?.problem ?? '',
-    result.outreach_intelligence?.service ?? '',
+    result.outreach_intelligence?.conversation_angle ?? '',
+    result.outreach_intelligence?.likely_problem ?? '',
+    result.outreach_intelligence?.recommended_service ?? '',
     result.executive_brief?.what_to_sell ?? '',
     result.why_demaze?.outreach_angle ?? '',
   ].join(' ').toLowerCase()

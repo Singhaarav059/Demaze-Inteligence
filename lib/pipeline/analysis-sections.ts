@@ -93,10 +93,10 @@ export interface WhyDemaze {
 }
 
 export interface OutreachIntelligence {
-  trigger?: string
-  problem?: string
-  service?: string
-  opening_angle?: string
+  why_contact?: string
+  likely_problem?: string
+  recommended_service?: string
+  conversation_angle?: string
   why_now?: string
 }
 

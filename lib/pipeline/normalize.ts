@@ -150,10 +150,10 @@ export interface WhyDemaze {
 }
 
 export interface OutreachIntelligence {
-  trigger: string
-  problem: string
-  service: string
-  opening_angle: string
+  why_contact: string
+  likely_problem: string
+  recommended_service: string
+  conversation_angle: string
   why_now: string
 }
 
@@ -1181,19 +1181,19 @@ export function normalizeAnalysisResult(
   // ── Outreach intelligence ────────────────────────────────────
   const rawOI = flat.outreach_intelligence
   let outreach_intelligence: OutreachIntelligence = {
-    trigger: '', problem: '', service: '', opening_angle: '', why_now: '',
+    why_contact: '', likely_problem: '', recommended_service: '', conversation_angle: '', why_now: '',
   }
   if (rawOI && typeof rawOI === 'object') {
     const oi = rawOI as Record<string, unknown>
     outreach_intelligence = {
-      trigger:        str(oi.trigger),
-      problem:        str(oi.problem),
-      service:        str(oi.service),
-      opening_angle:  str(oi.opening_angle),
-      why_now:        str(oi.why_now),
+      why_contact:         str(oi.why_contact),
+      likely_problem:      str(oi.likely_problem),
+      recommended_service: str(oi.recommended_service),
+      conversation_angle:  str(oi.conversation_angle),
+      why_now:             str(oi.why_now),
     }
   }
-  const outreach_angle = str(flat.outreach_angle ?? outreach_intelligence.opening_angle)
+  const outreach_angle = str(flat.outreach_angle ?? outreach_intelligence.conversation_angle)
 
   // ── Flags & warnings ─────────────────────────────────────────
   // Declared ahead of outreach_draft below so its grounding check (safety

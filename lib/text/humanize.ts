@@ -1,7 +1,7 @@
 // ============================================================
 // humanizeText — strip the tells of AI-generated prose
 // ============================================================
-// The LLM narrative fields (company_summary, opening_angle,
+// The LLM narrative fields (company_summary, conversation_angle,
 // pain points, etc.) tend to read "AI-written": em/en dashes
 // used as sentence connectors, doubled hyphens, and a few
 // stock filler phrases. SDR-facing copy should read like a

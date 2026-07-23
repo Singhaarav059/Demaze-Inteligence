@@ -103,10 +103,10 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
   ],
 
   "outreach_intelligence": {
-    "trigger": "The strongest single signal — what specifically makes this company a prospect right now",
-    "problem": "The operational implication this signal creates for their business",
-    "service": "The ONE Demaze service best matched to their situation",
-    "opening_angle": "2–3 sentences a sales rep could use verbatim as a cold LinkedIn/email opener. Follow the REAL DEMAZE OUTREACH VOICE below exactly, same as outreach_draft — this is NOT a consulting-pitch paragraph, it's a casual first-person note. No 'I hope this finds you well.' No generic openers.",
+    "why_contact": "The strongest single signal — what specifically makes this company a prospect right now",
+    "likely_problem": "The operational implication this signal creates for their business",
+    "recommended_service": "The ONE Demaze service best matched to their situation",
+    "conversation_angle": "2–3 sentences a sales rep could use verbatim as a cold LinkedIn/email opener. Follow the REAL DEMAZE OUTREACH VOICE below exactly, same as outreach_draft — this is NOT a consulting-pitch paragraph, it's a casual first-person note. No 'I hope this finds you well.' No generic openers.",
     "why_now": "ONE specific reason urgency is real — a company event, a scaling challenge, a market pressure. Not an industry trend."
   },
 
@@ -129,7 +129,7 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
     "reasons": [
       "Signal — 'evidence quote or inference basis' — operational implication → Demaze service"
     ],
-    "outreach_angle": "2–3 sentences a rep could use verbatim. Same as opening_angle above.",
+    "outreach_angle": "2–3 sentences a rep could use verbatim. Same as conversation_angle above.",
     "relevant_services": ["Service 1", "Service 2"]
   },
 
@@ -180,13 +180,13 @@ RULES:
 - ai_opportunities: ALWAYS generate 3-5. Use pre-extracted signals if available. Use inference if not. NEVER return [].
 - ai_opportunities.service_line: must be one of the exact 8 names listed in the schema above, copied verbatim. Never invent a 9th service or a reworded variant of one of the 8.
 - ai_opportunities.evidence: when claim_type is "observed", this MUST be an exact verbatim quote from [WEBSITE CONTENT] below, not a paraphrase and not a summary — a made-up or reworded "quote" will cause this opportunity to be discarded downstream. If you cannot find a real quote to support a claim, mark it claim_type "inferred" instead of inventing one.
-- opening_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes, good.
+- conversation_angle: Must be usable verbatim. Test: would a rep send this without editing? If yes, good.
 - why_now: Must be company-specific. "Digital transformation is accelerating in manufacturing" = REJECTED. "Ador Welding is scaling robotic welding across 3 plants" = VALID.
 - For thin-content sites: use what you have, infer what you can, state your confidence level honestly.
 - competitors: ONE entry per name in [COMPETITOR CANDIDATES], same order, nothing added or dropped. If [COMPETITOR CANDIDATES] says "None found", return "competitors": []. Do NOT populate competitors from general industry knowledge, do NOT list companies you personally know compete in this space if they aren't in the candidate list — only the search-derived list, never the model's own knowledge of the market. Use [BUSINESS PROFILE] only to help judge category/similarities, never to add a competitor name.
 - icp_segments: ONE entry per name in [ICP CANDIDATES], same order, nothing added or dropped. If [ICP CANDIDATES] says "None found", return "icp_segments": []. Do NOT populate segments from general industry knowledge of who a company like this "probably" sells to — only the search-derived list, never the model's own guess. Use [BUSINESS PROFILE] only to help judge use_cases/market_attractiveness/priority, never to add a segment name.
 - outreach_draft: matched_proof_point_id must be copied exactly from an id in [DEMAZE PROOF POINTS], or left as "" if none found there. Never invent a Demaze client name, case study, or stat that isn't in that list. If the matched proof point's provenance is "composite/illustrative example", describe it the way the source material does (e.g. "one of Africa's largest tile manufacturers", "a mid-market manufacturer running 4 plants") — never attach a specific company name to it, since none was given. Fill in the REAL DEMAZE OUTREACH VOICE templates below with THIS company's specifics; do not reuse a name/company from the template examples verbatim, those are illustrative only.
-- outreach_intelligence.opening_angle: same REAL DEMAZE OUTREACH VOICE below, not a separate style — this field and outreach_draft.connection_note should read like they came from the same person.
+- outreach_intelligence.conversation_angle: same REAL DEMAZE OUTREACH VOICE below, not a separate style — this field and outreach_draft.connection_note should read like they came from the same person.
 
 REAL DEMAZE OUTREACH VOICE — this is not a suggestion, it is the required template. These are real Demaze LinkedIn messages that got real replies. Casual, first-person, short sentences, no corporate jargon ("unlock," "leverage," "visibility problem," "scale creates"), no consulting-pitch tone. Fill in the bracketed parts with THIS company's real details; keep everything else structurally identical.
 

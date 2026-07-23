@@ -310,16 +310,16 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
 
   // Outreach Intelligence
   const oi = getOutreachIntelligence(data) ?? {}
-  if (S(oi.opening_angle)) {
+  if (S(oi.conversation_angle)) {
     parts.push(
       detail(
         'Outreach Intelligence',
         [
-          `<blockquote>&ldquo;${H(oi.opening_angle)}&rdquo;</blockquote>`,
+          `<blockquote>&ldquo;${H(oi.conversation_angle)}&rdquo;</blockquote>`,
           kv([
-            ['Trigger', H(oi.trigger)],
-            ['Problem', H(oi.problem)],
-            ['Lead with', H(oi.service)],
+            ['Trigger', H(oi.why_contact)],
+            ['Problem', H(oi.likely_problem)],
+            ['Lead with', H(oi.recommended_service)],
             ['Why now', H(oi.why_now)],
           ]),
         ].join(''),

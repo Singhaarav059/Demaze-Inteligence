@@ -68,7 +68,7 @@ export function buildEmailGenerationInput(
     painPoints: painPointsStructured.length > 0 ? painPointsStructured : fallbackPainPoints,
     opportunities,
     recentActivity,
-    openingAngle: outreachIntelligence?.opening_angle,
+    openingAngle: outreachIntelligence?.conversation_angle,
     whatToSell: executiveBrief?.what_to_sell,
     whyNow: outreachIntelligence?.why_now ?? executiveBrief?.why_now,
   }

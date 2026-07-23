@@ -1089,7 +1089,7 @@ function AnalysisViewer({ data, extractorResult }: {
       <MaybeWhyDemaze data={data} />
 
       {/* Outreach Intelligence */}
-      {outreachIntel && outreachIntel.opening_angle && (
+      {outreachIntel && outreachIntel.conversation_angle && (
         <Card className="bg-card border-border">
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm text-foreground">Outreach Intelligence</CardTitle>
@@ -1098,26 +1098,26 @@ function AnalysisViewer({ data, extractorResult }: {
             <div className="rounded-md bg-primary/10 border border-primary/30 px-4 py-3">
               <p className="text-[10px] text-primary uppercase tracking-wide mb-1.5">Opening angle (use verbatim)</p>
               <p className="text-foreground text-sm leading-relaxed italic">
-                &ldquo;{outreachIntel.opening_angle}&rdquo;
+                &ldquo;{outreachIntel.conversation_angle}&rdquo;
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {outreachIntel.trigger && (
+              {outreachIntel.why_contact && (
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Trigger</p>
-                  <p className="text-foreground text-xs">{outreachIntel.trigger}</p>
+                  <p className="text-foreground text-xs">{outreachIntel.why_contact}</p>
                 </div>
               )}
-              {outreachIntel.problem && (
+              {outreachIntel.likely_problem && (
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Problem to address</p>
-                  <p className="text-foreground text-xs">{outreachIntel.problem}</p>
+                  <p className="text-foreground text-xs">{outreachIntel.likely_problem}</p>
                 </div>
               )}
-              {outreachIntel.service && (
+              {outreachIntel.recommended_service && (
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Lead with</p>
-                  <p className="text-foreground text-xs">{outreachIntel.service}</p>
+                  <p className="text-foreground text-xs">{outreachIntel.recommended_service}</p>
                 </div>
               )}
             </div>
@@ -1132,7 +1132,7 @@ function AnalysisViewer({ data, extractorResult }: {
       )}
 
       {/* Fallback outreach angle if no structured intel */}
-      {(!outreachIntel?.opening_angle) && Boolean(data.outreach_angle) && (
+      {(!outreachIntel?.conversation_angle) && Boolean(data.outreach_angle) && (
         <Card className="bg-card border-border">
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm text-foreground">Outreach Recommendation</CardTitle>
