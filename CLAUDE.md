@@ -368,6 +368,55 @@ own investigation (anti-bot/slow-site/redirect — same diagnostic discipline as
 Fence's `fetch failed` below). Fix the filename/content mismatch and re-add real
 regression coverage for the reference set before trusting "do not regress" again.
 
+**RESOLVED 2026-07-23 — filename/content mismatch fixed, reference set now
+in the automated run.** Read `benchmarks/benchmark-runner.ts`'s `loadSpecs()`
+first, as instructed, before changing anything: it reads every `*.json` file
+in `benchmarks/companies/` via `fs.readdirSync(...).filter(f =>
+f.endsWith('.json'))` and parses each independently — filename is never used
+for anything, only `spec.name`/`spec.url`/`spec.expectations` from the file's
+own content. So the mismatch was purely cosmetic/organizational, not a
+functional bug — renaming was safe and required no runner changes. Fixed via
+`git mv`: `bharat-forge.json` → `aitg.json`, `hdfc-bank.json` →
+`a1-fence-products.json`, `zoho.json` → `ate-group.json` (confirmed no
+existing file already held these correct names before renaming — no
+duplicates). Three new fixture files created for the original reference set,
+so `benchmarks/companies/` now has 9 files total and `npm run benchmark`
+picks up all 9 automatically with zero other wiring needed:
+- `bharat-forge.json` — bharatforge.com, `requiredProfileFlags:
+  ["manufacturer"]`, `expectedPrimaryType: "manufacturer"` — matches the
+  2026-07-11 manual spot-check finding ("Bharat Forge... classify correctly
+  manufacturer").
+- `chargebee.json` — chargebee.com, `requiredProfileFlags:
+  ["software_saas"]`, `expectedPrimaryType: "software_saas"` — matches the
+  same spot-check finding for Chargebee. `forbiddenTerms` flipped relative to
+  the manufacturer fixtures (guards against manufacturing/industrial terms
+  leaking into a SaaS company's narrative instead of the other way round).
+- `muthoot-finance.json` — muthootfinance.com, **deliberately** leaves
+  `requiredProfileFlags: []` and no `expectedPrimaryType` set, same pattern
+  as `acepipeline.json`'s genuine-uncertainty case. Not because the correct
+  classification is unknown (it's obviously `financial_institution`) — because
+  whether the scrape reliably succeeds is still unconfirmed even after this
+  session's fix (see the root-cause note under "Company-specific known
+  issues" below): asserting a FAIL-severity classification check against a
+  company whose scrape success is still an open question would reintroduce
+  exactly the kind of false-FAIL noise this fixture work exists to avoid.
+  `minSignals`/`minOpportunities`/`minChallenges` are all set to 0 (WARN-only
+  anyway) so the fixture still runs and reports real numbers without gating
+  on them.
+
+New `tests/benchmark-fixtures.test.ts` (5 assertions, pure fs + JSON.parse,
+no network, no server) verifies: every fixture file is valid JSON matching
+`BenchmarkSpec`; no duplicate names/URLs; the 3 renamed files carry the
+filename matching their content AND the old wrong-content filenames
+(`hdfc-bank.json`/`zoho.json`) no longer exist; the 3 reference-set companies
+are present with the expected classification; and the full 9-company set
+(6 current benchmark + 3 reference) is exactly what's on disk. Did NOT run
+the real `npm run benchmark` (would spend real Tavily/Serper/LLM quota, per
+this session's own instructions) — verified structurally instead:
+`tsc --noEmit` clean, full suite 488/488 passing (was 483 pre-existing + 5
+new from this test file — actual pre-existing count re-confirmed live, not
+assumed from a stale note elsewhere in this file).
+
 ## Company-specific known issues (context for whoever debugs these next)
 - **AITG**: superseded (2026-07-11) — the "signals=0, opportunities=0" state
   described below is resolved. Real root causes were, in order: (1) the
@@ -380,6 +429,84 @@ regression coverage for the reference set before trusting "do not regress" again
   evidence-backed opportunity.
 - **A-1 Fence**: `fetch failed` — determine if Cloudflare/SSL/slow site/regional block
   before assuming it's fixed by the fallback chain alone.
+
+  **RESOLVED / root-caused 2026-07-23 (direct network diagnosis, no API keys or
+  quota spent).** Used plain `curl` (status/headers/redirects/timing) and
+  `openssl s_client` (TLS handshake) against `a-1fenceproducts.com` directly.
+  Found: the domain is healthy right now — valid TLS 1.3 handshake (`Verify
+  return code: 0 (ok)`), consistent `200 OK` in ~1.8-3.3s across the default
+  curl UA, this codebase's old self-identifying `DemazeBot` UA, and a real
+  browser UA, both with and without `www.`, both with and without a `Range`
+  header (mirrors exactly what `probeCorporateSeeds()`/`probeUniversalPaths()`
+  send) — real page content every time (confirmed by inspecting the response
+  body, a genuine `.php`-based fencing-company site behind Cloudflare, not an
+  interstitial/challenge page). No anti-bot block, no slow-site symptom, no
+  DNS/redirect problem, no rate limiting reproduces today from this
+  environment. **Conclusion**: the historically-reported `fetch failed` is
+  most likely (a) the same one-off scraper/network flakiness this file
+  already documents extensively elsewhere for AITG/A-1 Fence/Ador Welding (a
+  transient failure at the original test time, not a persistent block), or
+  (b) Cloudflare's bot-management triggering specifically against
+  Firecrawl's headless-browser fingerprint in a way plain HTTP requests
+  don't reproduce — genuinely unconfirmable without spending real Firecrawl
+  quota, since Firecrawl's SDK controls its own request internals, outside
+  this codebase's reach. Per this investigation's own scope, NOT forcing a
+  workaround for a cause that doesn't reproduce and can't be confirmed
+  outside this codebase's control — documenting instead, per the "if the
+  real cause is outside reasonable control, document don't force" rule.
+  **One real, narrowly-scoped fix WAS found and applied though** (see the
+  Muthoot Finance entry immediately below for the actual root cause it
+  targets) — this codebase's own direct-fetch tiers (sitemap fetch, B2B/
+  corporate path probing, Jina reader, website-discovery.ts's candidate
+  verification, web-enricher.ts's PDF fetch) now send a real browser User-
+  Agent instead of no UA or the old self-identifying `DemazeBot` string,
+  which is a legitimate, in-our-control improvement to the fallback tiers
+  even though it isn't what was blocking A-1 Fence specifically (that domain
+  never showed a UA-based block in this session's testing).
+
+- **Muthoot Finance**: root-caused 2026-07-23, same investigation session as
+  A-1 Fence above, same direct-`curl`-only diagnostic discipline (no API
+  keys/quota needed). Found a real, confirmed, reproducible cause:
+  `muthootfinance.com` sits behind a CloudFront WAF rule that hard-blocks
+  (`403 Forbidden`, body: "Request blocked... We can't connect to the server
+  for this app or website at this time") any request whose User-Agent is
+  either absent (Node's `fetch()` default) or self-identifies as a bot.
+  Proved this precisely via 4 isolated curl requests against the identical
+  URL: default curl UA → `403`; this codebase's old
+  `'Mozilla/5.0 (compatible; DemazeBot/1.0)'` UA → `403`; a real modern
+  Chrome UA → `200 OK` with 383,932 bytes of real Drupal-rendered content;
+  same real UA against the bare (non-`www`) domain → `301` redirect to
+  `www.`, also healthy. This is a textbook case of "missing/wrong
+  User-Agent header causing a bot-block" — exactly the fixable class of
+  issue this investigation was asked to look for. **Fixed**: every direct
+  `fetch()` call this codebase makes against a target site or PDF now sends
+  a real browser-shaped User-Agent (`Mozilla/5.0 ... Chrome/124.0.0.0
+  Safari/537.36`) instead of no UA or the old bot-shaped string —
+  `lib/pipeline/scraper.ts` (`fetchXml`/sitemap fetch, `probeCorporateSeeds`,
+  `probeUniversalPaths`, `fetchViaJina`), `lib/enrichment/website-
+  discovery.ts` (`fetchHomepageIdentityPlain`, the candidate-verification
+  fetch already flagged elsewhere in this file as a known precision gap for
+  ATE Group), and `lib/enrichment/web-enricher.ts` (`fetchPdfText`, which
+  previously sent no UA at all). `tsc --noEmit` clean; this is a pure
+  request-header change with no new branch logic, so no new unit test was
+  needed — the existing `tests/enrichment-pdf.test.ts` /
+  `tests/evidence-extractor-*` suites (which don't hit the network) stayed
+  green. **Not fully verified end-to-end**: this fixes every DIRECT-fetch
+  code path in this codebase, but the PRIMARY scraper for Muthoot Finance
+  (and every company) is Firecrawl's managed SDK, which controls its own
+  request headers internally — whether Firecrawl's own outbound requests
+  already send a browser-shaped UA (likely, given it's a headless-browser
+  service) or whether this same WAF rule also blocks Firecrawl on some other
+  signal (IP reputation/datacenter ASN, a common WAF heuristic independent
+  of UA) is unconfirmed without spending real Firecrawl quota against
+  muthootfinance.com — a live pipeline re-run is the natural next step for
+  whoever picks this up next, with explicit confirmation first per this
+  repo's quota-spending discipline. `benchmarks/companies/muthoot-
+  finance.json` (new, see "Benchmark set" above) deliberately does not
+  assert `requiredProfileFlags`/`expectedPrimaryType` given this remaining
+  uncertainty, so the automated benchmark won't false-FAIL if Firecrawl
+  itself still can't get through.
+
 - **AS Agri & Aqua**: Google Sites URL. URL normalization bug (losing company identity
   by stripping to bare `sites.google.com`) is fixed. Tavily search fallback parser bug
   (`SearchData has no '.data'`, results actually under `.web`) needs verification —

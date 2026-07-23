@@ -38,6 +38,21 @@ const SITEMAP_TIMEOUT_MS   =  8_000
 const MIN_USEFUL_CHARS     =    150
 const MAX_DISCOVERED_PAGES =     15  // raised from 9
 
+// A real, current-browser-shaped User-Agent for every fetch() this file makes
+// DIRECTLY against a target site (sitemap fetch, corporate/B2B path probing,
+// Jina reader). Root-caused 2026-07-23 (Muthoot Finance / A-1 Fence scraper-
+// reliability investigation, see CLAUDE.md): muthootfinance.com sits behind a
+// CloudFront WAF rule that hard-blocks (403) any request whose User-Agent is
+// either absent (Node's fetch default) or self-identifies as a bot — the
+// previous 'Mozilla/5.0 (compatible; DemazeBot/1.0)' string is exactly the
+// kind of UA such a rule targets. Confirmed via direct curl: the identical
+// request succeeds (200, real content) with this browser-shaped UA and fails
+// (403) with either no UA or the old DemazeBot string. Does NOT change what
+// Firecrawl sends — Firecrawl's SDK controls its own request headers, out of
+// this codebase's control.
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
 // ── URL category scoring ──────────────────────────────────────
 // Each URL is classified into one of these buckets.
 // score = base priority for selection.
@@ -463,7 +478,7 @@ async function fetchSitemapUrls(baseUrl: string): Promise<string[]> {
 async function fetchXml(url: string): Promise<string | null> {
   try {
     const resp = await Promise.race([
-      fetch(url, { headers: { 'Accept': 'application/xml, text/xml, */*' } }),
+      fetch(url, { headers: { 'Accept': 'application/xml, text/xml, */*', 'User-Agent': BROWSER_USER_AGENT } }),
       rejectAfter(SITEMAP_TIMEOUT_MS, `Sitemap timeout: ${url}`),
     ])
     if (!(resp as Response).ok) return null
@@ -590,7 +605,7 @@ async function probeCorporateSeeds(
         // Many servers (Cloudflare, CloudFront, nginx hardened) block HEAD
         // with 405 even when the page exists.
         const resp = await Promise.race([
-          fetch(url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-0' } }),
+          fetch(url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-0', 'User-Agent': BROWSER_USER_AGENT } }),
           rejectAfter(4_000, 'probe timeout'),
         ]) as Response
         return (resp.ok || resp.status === 206) ? url : null
@@ -638,7 +653,7 @@ async function probeUniversalPaths(
     const settled = await Promise.allSettled(
       batch.map(async ({ url, normalized }) => {
         const resp = await Promise.race([
-          fetch(url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-0' } }),
+          fetch(url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-0', 'User-Agent': BROWSER_USER_AGENT } }),
           rejectAfter(4_000, 'probe timeout'),
         ]) as Response
         if (resp.ok || resp.status === 206) {
@@ -854,7 +869,7 @@ async function fetchViaJina(url: string): Promise<ScrapePageResult> {
       fetch(jinaUrl, {
         headers: {
           'Accept': 'text/plain, text/markdown, */*',
-          'User-Agent': 'Mozilla/5.0 (compatible; DemazeBot/1.0)',
+          'User-Agent': BROWSER_USER_AGENT,
           'X-No-Cache': 'true',
         },
       }),

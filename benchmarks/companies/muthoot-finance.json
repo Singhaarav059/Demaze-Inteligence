@@ -1,0 +1,21 @@
+{
+  "name": "Muthoot Finance",
+  "url": "https://www.muthootfinance.com",
+  "expectations": {
+    "minSignals": 0,
+    "minOpportunities": 0,
+    "minChallenges": 0,
+    "requiredProfileFlags": [],
+    "forbiddenTerms": [
+      "SaaS onboarding",
+      "subscription churn",
+      "monthly recurring revenue",
+      "churn rate",
+      "software subscription",
+      "user acquisition",
+      "manufacturing plant",
+      "assembly line",
+      "factory floor"
+    ]
+  }
+}
