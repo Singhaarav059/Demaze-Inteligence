@@ -573,6 +573,48 @@ fix.** Same failure class as `website-discovery.ts`'s already-documented
 single-word-name and `isSelfName()`'s domain-guess-imprecision gaps
 elsewhere in this file. Logged here for a future session; not fixed now.
 
+**RESOLVED 2026-07-23 — short-form self-reference vs. a longer resolved
+legal name (the gap flagged directly above).** `classifySubject()`'s
+third-person self-reference block now tries a short-form fallback when the
+full resolved company name doesn't match verbatim: a new
+`firstSignificantWord()` helper strips unambiguous legal-entity suffixes
+(same `LEGAL_SUFFIXES`-style regex as `website-discovery.ts`'s
+`normalizeCompanyName()`, deliberately duplicated rather than imported,
+same precedent as the other discovery modules) and returns the resolved
+name's first significant word — e.g. `"Ador"` from `"Ador Welding"` or
+`"Ador Welding Ltd"` — ONLY when the name is genuinely multi-word (a
+single-word resolved name has nothing shorter to try, so the existing
+full-name check already covers it, unchanged). The short form is only ever
+tried as a `\b`-anchored word-boundary regex, never `.includes()` — same
+discipline as `matchesKeyword()` in `scraper.ts` (the 'ir'-inside-'wire'
+bug class this whole section already warns against). Two guards prevent
+reintroducing that exact bug class via the short form itself: a 4-char
+minimum length (mirrors the existing floor on the full-name check), and a
+new `GENERIC_LEADING_WORDS` stoplist (the/a/an/group/global/national/
+international/united/american/indian/general/premier/prime/advanced/
+modern/new/smart/digital/tech/star/sun/royal/elite/supreme/leading/first/
+top/best/world/universal) — a company whose first word is on this list
+(e.g. a hypothetical "Global Industries") does not get the short-form
+rescue and falls back to the full-name-only behavior from before this fix;
+that's an accepted false-negative trade-off, not a new gap.
+Verified with real content from this file's own documented case: Ador
+Welding's actual cached homepage copy ("Ador produces world-class products
+across six manufacturing facilities nationwide") now correctly classifies
+as `company_strategy` and produces a real `multi_location_operations`
+signal for `companyName` resolved as `"Ador Welding"` AND `"Ador Welding
+Ltd"` (both previously failed, per the paragraph directly above), while a
+single-word `companyName="Ador"` continues to work exactly as before (non-
+regression). New regression tests in
+`tests/evidence-extractor-pagetype.test.ts`: full-name-still-matches
+non-regression, both short-form cases (`"Ador Welding"` and `"Ador Welding
+Ltd"`), single-word-name non-regression, a negative case confirming the
+generic-word guard prevents a false match on an unrelated "Global
+manufacturing trends..." sentence for resolved name `"Global Industries"`,
+and a negative case confirming the 4-char minimum guard prevents a false
+match via `"AS"` (from resolved name `"AS Agri"`) trivially appearing
+inside ordinary text. `tsc --noEmit` clean, full suite passing (489/489 in
+this branch's current test count, including the 6 new assertions here).
+
 **Same live benchmark run showed a FAIL on ATE Group's `profile_flag:
 manufacturer`** (`company_type.manufacturer: false`, contradicting this
 file's own 2026-07-11 "verified... now correctly `true` for ATE" note).

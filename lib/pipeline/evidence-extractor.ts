@@ -567,6 +567,54 @@ function strengthFromTier(tier: 'tier1' | 'tier2' | 'tier3'): EvidenceStrength {
 
 // ── Evidence subject classifier ────────────────────────────────
 
+// Short-form self-reference fallback (2026-07-23) — see CLAUDE.md's
+// "RESOLVED 2026-07-19 — detectPageType()..." section for the live case
+// this closes: a resolved legal name like "Ador Welding Ltd" never matches
+// real prose that uses the short brand form ("Ador produces..."), so real
+// company_strategy evidence was falling through to generic_marketing.
+//
+// Same word-boundary discipline as matchesKeyword() in scraper.ts (short
+// keywords must be real whole-word matches, never a substring) — the short
+// form here is only ever tried as a \b-anchored regex, never .includes().
+//
+// Reuses the same "strip unambiguous legal-entity suffixes only" rule as
+// website-discovery.ts's normalizeCompanyName() — deliberately duplicated
+// rather than imported, same precedent as the other discovery modules'
+// duplicated STOPWORDS/self-name-checking logic.
+const LEGAL_SUFFIXES_RE = /\b(?:pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|corp\.?|corporation|co\.?)\b/gi
+
+// Generic first-words that are common enough in ordinary marketing/industry
+// prose that falling back to them as a "short form" would reintroduce the
+// exact substring/false-positive bug class this fallback must avoid (same
+// bug class as 'ir' matching inside "wire" in the URL classifier). A company
+// literally named e.g. "Global Industries" won't get the short-form rescue —
+// that's an accepted false-negative trade-off, not a new gap: its full name
+// still gets tried first, same as always.
+const GENERIC_LEADING_WORDS = new Set([
+  'the', 'a', 'an', 'group', 'global', 'national', 'international', 'united',
+  'american', 'indian', 'general', 'premier', 'prime', 'advanced', 'modern',
+  'new', 'smart', 'digital', 'tech', 'star', 'sun', 'royal', 'elite',
+  'supreme', 'leading', 'first', 'top', 'best', 'world', 'universal',
+])
+
+/**
+ * Returns the first significant word of a resolved company name, for use
+ * as a short-form self-reference fallback — but ONLY when the name is
+ * genuinely multi-word (a single-word resolved name has nothing shorter
+ * to try; the full-name check already covers it). Returns null when no
+ * safe short form exists.
+ */
+function firstSignificantWord(name: string): string | null {
+  const cleaned = name
+    .replace(LEGAL_SUFFIXES_RE, ' ')
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const words = cleaned.split(' ').filter(w => w.length > 0)
+  if (words.length <= 1) return null
+  return words[0]
+}
+
 function classifySubject(text: string, pageType: PageType, profile?: CompanyProfile, companyName?: string): EvidenceSubject {
   const t = text.toLowerCase()
 
@@ -650,6 +698,21 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
         const escaped = companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         const nameRe = new RegExp(`\\b${escaped}\\b`, 'i')
         if (nameRe.test(text)) return 'company_strategy'
+
+        // Short-form fallback (2026-07-23): the full resolved name (often a
+        // longer legal form, e.g. "Ador Welding Ltd") didn't match — try the
+        // name's first significant word (e.g. "Ador") as a real, word-
+        // boundary-anchored match, the way real site prose often refers to
+        // itself. Guarded against the short/generic collision risk this
+        // fallback exists to avoid: only tried for genuinely multi-word
+        // names, only when the short form itself is >= 4 chars, and never
+        // for a word on GENERIC_LEADING_WORDS.
+        const shortForm = firstSignificantWord(companyName)
+        if (shortForm && shortForm.length >= 4 && !GENERIC_LEADING_WORDS.has(shortForm.toLowerCase())) {
+          const escapedShort = shortForm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const shortRe = new RegExp(`\\b${escapedShort}\\b`, 'i')
+          if (shortRe.test(text)) return 'company_strategy'
+        }
       }
       if (/\b(?:the\s+company|the\s+group|the\s+firm)\s+\w+/i.test(t)) return 'company_strategy'
     }
