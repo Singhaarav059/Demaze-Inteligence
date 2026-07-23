@@ -67,7 +67,11 @@ export function prioritizeSources(
   const coverage: CategoryCoverage = { investor: 0, hiring: 0, expansion: 0, strategy: 0, leadership: 0 }
 
   // Pass 1: Ensure at least 1 investor + 1 hiring source (highest value)
-  const mustHave: SourceType[] = ['annual_report', 'investor_presentation', 'earnings_release']
+  // Item 4 (2026-07-23): earnings_call_transcript added — it's the same
+  // "highest evidence tier" as the other 3 (direct management commentary,
+  // not just headline numbers), so it should compete for a guaranteed slot
+  // the same way.
+  const mustHave: SourceType[] = ['annual_report', 'investor_presentation', 'earnings_release', 'earnings_call_transcript']
   for (const src of discovered) {
     if (selected.length >= maxFetch) break
     if (!mustHave.includes(src.source_type)) continue
@@ -114,17 +118,19 @@ export function prioritizeSources(
 
 export function sourceTypeLabel(type: SourceType): string {
   const labels: Record<SourceType, string> = {
-    annual_report:          'Annual Report',
-    investor_presentation:  'Investor Presentation',
-    earnings_release:       'Earnings Release',
-    press_release:          'Press Release',
-    careers_page:           'Careers Page',
-    ceo_interview:          'CEO Interview',
-    official_blog:          'Official Blog',
-    news_article:           'News Article',
-    sustainability_report:  'Sustainability Report',
-    corporate_website:      'Corporate Website',
-    other:                  'External Source',
+    annual_report:                  'Annual Report',
+    investor_presentation:          'Investor Presentation',
+    earnings_release:               'Earnings Release',
+    earnings_call_transcript:       'Earnings Call Transcript',
+    executive_change_announcement:  'Executive Change Announcement',
+    press_release:                  'Press Release',
+    careers_page:                   'Careers Page',
+    ceo_interview:                  'CEO Interview',
+    official_blog:                  'Official Blog',
+    news_article:                   'News Article',
+    sustainability_report:          'Sustainability Report',
+    corporate_website:              'Corporate Website',
+    other:                          'External Source',
   }
   return labels[type] ?? 'External Source'
 }
