@@ -23,7 +23,7 @@ describe('buildEmailGenerationInput', () => {
       opportunities: [{ title: 'Plant reporting automation', description: 'Automate cross-plant reports' }],
       recent_activity: ['Opened a new facility in Ohio'],
       executive_brief: { what_to_sell: 'Operational dashboards', why_now: 'New facility just opened' },
-      outreach_intelligence: { opening_angle: 'Congrats on the new Ohio facility', why_now: 'Growth phase' },
+      outreach_intelligence: { conversation_angle: 'Congrats on the new Ohio facility', why_now: 'Growth phase' },
     }
 
     const input = buildEmailGenerationInput(contact, finalResult)

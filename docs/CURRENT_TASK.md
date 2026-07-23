@@ -2,7 +2,24 @@
 
 ## Milestone
 
-**Market Intelligence Layer** (Roadmap Phase 2, item 6) — COMPLETE, including
+**Outreach Intelligence Layer field-naming reconciliation** (Roadmap Phase 2,
+item 7) — COMPLETE (2026-07-23). Rename-only pass, no new logic: the
+already-built `OutreachIntelligence` fields in `lib/pipeline/
+analysis-sections.ts` and `lib/pipeline/normalize.ts` were renamed to match
+this roadmap's naming — `trigger` → `why_contact`, `problem` →
+`likely_problem`, `service` → `recommended_service`, `opening_angle` →
+`conversation_angle` (`why_now` was already correctly named). Updated
+consistently across the LLM prompt schema (`lib/prompts/analyze-v2.ts`,
+`system-v2.ts`), the normalize merge step, both admin UI render sites
+(`page.tsx`, `ResearchCard.tsx`), the downloaded-brief export
+(`lib/export/brief-html.ts`), outbound email generation's input assembly
+(`lib/outbound/generation/assemble-input.ts`), the benchmark runner, and
+the one test fixture that referenced the old names. Full detail in
+`CLAUDE.md`'s Phase 2 item 7 entry. Verified: `tsc --noEmit` clean, full
+suite 483/483 passing — no benchmark run needed for a pure rename.
+
+Prior milestone — **Market Intelligence Layer** (Roadmap Phase 2, item 6) —
+COMPLETE, including
 live end-to-end verification (2026-07-15). Given an already-researched
 company, surfaces 0-8 industry-level statements (trend/growth_indicator/
 challenge/shift) for the sector the company operates in. Deliberately
@@ -65,15 +82,13 @@ Full history for each is in `DECISIONS.md`, not repeated here.
 
 ## Next milestone
 
-**Item 7 — Outreach Intelligence Layer field-naming reconciliation.**
-Confirm/rename the already-substantially-built `OutreachIntelligence`
-fields (`trigger`/`problem`/`service`/`opening_angle`/`why_now` in
-`lib/pipeline/analysis-sections.ts`) against this roadmap's naming
-(`why_contact`/`why_now`/`likely_problem`/`recommended_service`/
-`conversation_angle`) — this is a reconciliation pass, not new discovery
-logic. Items 8-9 (decision-maker discovery, outreach send) stay blocked on
-their respective vendor decisions (people-data API; sending
-infrastructure), unchanged from the standing scope note in `CLAUDE.md`.
+Items 1-7 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
+Discovery Engine, Research Quality Framework, Research Evaluation
+Framework, Market Intelligence Layer, Outreach Intelligence Layer) are all
+now complete. Items 8-9 (decision-maker discovery, outreach send) stay
+blocked on their respective vendor decisions (people-data API; sending
+infrastructure), unchanged from the standing scope note in `CLAUDE.md` —
+do not start either without that decision being made first.
 
 ## Do not start
 

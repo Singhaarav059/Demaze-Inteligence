@@ -84,8 +84,10 @@ before implementation, per that doc's own session-management rules):
 7. Outreach Intelligence Layer — why_contact / why_now / likely_problem /
    recommended_service / conversation_angle. **Already substantially built**
    — see `OutreachIntelligence` in `lib/pipeline/analysis-sections.ts`
-   (`trigger/problem/service/opening_angle/why_now`), populated live by the
-   prompt in `lib/prompts/analyze-v2.ts` and rendered in `ResearchCard.tsx`.
+   (originally `trigger/problem/service/opening_angle/why_now` — **renamed
+   to match this line's naming, see the 2026-07-23 entry in the Phase 2
+   item 7 section below**), populated live by the prompt in
+   `lib/prompts/analyze-v2.ts` and rendered in `ResearchCard.tsx`.
    Confirm/rename field alignment with this doc's naming, don't rebuild
 8. **Decision-maker discovery** (Explee phase 5) — needs a people-data
    vendor decision first, not started
@@ -2411,6 +2413,35 @@ identical pattern.
 
 **Market Intelligence Layer (Phase 2 item 6) is now COMPLETE, including live
 verification.**
+
+**Item 7, Outreach Intelligence Layer — field-naming reconciliation done
+(2026-07-23).** Rename-only pass, no new logic. `OutreachIntelligence`'s
+fields (`lib/pipeline/analysis-sections.ts` and `lib/pipeline/normalize.ts`,
+which each independently declared the same interface shape) renamed to
+match this roadmap's naming: `trigger` → `why_contact`, `problem` →
+`likely_problem`, `service` → `recommended_service`, `opening_angle` →
+`conversation_angle`. `why_now` was already correctly named and untouched.
+Every touch point updated consistently: the LLM output schema and RULES
+bullets in `lib/prompts/analyze-v2.ts` (including the `why_demaze.
+outreach_angle` schema comment that cross-references `conversation_angle`
+by name), the `system-v2.ts` writing-style rule, `normalize.ts`'s
+merge-from-raw-LLM-output block, `lib/export/brief-html.ts`'s downloaded-
+brief rendering, `lib/outbound/generation/assemble-input.ts`'s read of
+`outreachIntelligence?.conversation_angle` (note: `EmailGenerationInput.
+openingAngle`, the field it's assigned into, is a differently-named field
+on an unrelated type and was deliberately left as-is — out of scope for
+this rename), both admin UI render sites (`app/admin/intelligence-lab/
+page.tsx` and `ResearchCard.tsx`), `benchmarks/benchmark-runner.ts`'s
+scoring-text extraction, and `tests/outbound-generation.test.ts`'s fixture.
+A stale comment in `lib/text/humanize.ts` was also updated for consistency.
+Confirmed via full-repo grep before and after that no other file reads or
+writes these fields under their old names (ruled out several false-positive
+matches: `icp-generator.ts`'s unrelated `LIST_TRIGGER` search-trigger
+concept, `types/index.ts`'s unrelated `trigger` usage, `docs/ROADMAP.md`
+which already used the new names as the target spec, never the old ones).
+**Verified**: `tsc --noEmit` clean, full suite 483/483 passing (this
+worktree's test count — no benchmark run needed, this is a rename with no
+behavior change).
 
 ## The actual goal
 NOT "6/6 benchmark PASS." The goal is: any company URL -> pipeline always returns

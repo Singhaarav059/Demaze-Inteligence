@@ -789,7 +789,7 @@ export function getResearchCardData(result: RunResult) {
   const businessProfile = getBusinessProfile(a)
 
   const outreachIntel = a.outreach_intelligence as Record<string, unknown> | null
-  const openingAngle = humanizeText(str(outreachIntel?.opening_angle) ?? str(a.outreach_angle) ?? '')
+  const openingAngle = humanizeText(str(outreachIntel?.conversation_angle) ?? str(a.outreach_angle) ?? '')
   const whyNow = humanizeText(str(outreachIntel?.why_now) ?? str((a.why_now as Record<string, unknown>)?.explanation) ?? '')
   const whatToSell = humanizeText(str((a.executive_brief as Record<string, unknown>)?.what_to_sell) ?? '')
 
