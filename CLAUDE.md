@@ -2362,6 +2362,77 @@ confirmed`) rather than guessing. Not blocking, not fixed this session —
 logged as a precision gap in the shared `discoverCompanyWebsite()` path,
 same "known, not urgent" status as ATE Group's unresolved domain case above.
 
+## RESOLVED 2026-07-23 — `discoverCompanyWebsite()`'s Anadarko Petroleum -> petroleum.gov.gy false positive
+The precision gap logged directly above (loose body-text-only matching
+letting a genuine two-word name resolve to an unrelated domain) was fixed
+in `lib/enrichment/website-discovery.ts`, not just noted. The prior fix for
+this bug class (the single-word-name title-required guard, see Item 1's
+history above — "AITG" -> `aitg.miraheze.org`) only covered single-word
+names; "Anadarko Petroleum" is a genuine two-word name, so it didn't hit
+that guard, and the underlying weakness (a body/description-only match
+requires ALL name-words to be present SOMEWHERE in a 2000-char snippet,
+with zero check that they refer to the same real mention) was still live
+for any multi-word name landing on a generic page that happens to mention
+each word separately.
+
+Two additive guards, combining both directions considered in the task that
+prompted this fix:
+1. **`isKnownNonCorporateDomain()`** — a list-based rejection of obviously
+   non-corporate domain shapes (`.gov`/`.gov.<cc>`/`.mil`/`.edu`, known
+   wiki-hosting domains including `miraheze.org` — the literal AITG false
+   positive's own host — plus Wikipedia/Wikimedia/Fandom/Wikia, and known
+   directory/aggregator/social domains: Crunchbase, LinkedIn, Glassdoor,
+   Indeed, G2, Capterra). Checked in the main `discoverCompanyWebsite()`
+   loop BEFORE any fetch/scoring happens — same "known-bad names checked
+   before generic heuristics" precedent as `competitor-discovery.ts`'s
+   `NON_COMPETITOR_NAMES` list (direction 1 from the task). This alone
+   rejects `petroleum.gov.gy` outright, with zero fetch cost.
+2. **`wordsAppearTogether()`** — for body/description-only matches (no
+   partial title match), require the company name's significant words to
+   actually appear within a 120-char window of each other in the source
+   text, not just present anywhere in the snippet (direction 2 from the
+   task). This is the real root-cause fix: a government/industry portal can
+   legitimately mention a company's distinctive word once, far from where
+   it mentions the industry's generic word repeatedly — the old check
+   couldn't tell that apart from a real "A-1 Fence Products Pvt Ltd" style
+   mention where all the words appear together. Partial-title matches
+   (`titleRatio >= 0.5`) are deliberately EXEMPT from this proximity
+   requirement — the title itself is short, so "words present in it" is
+   already strong proximity evidence on its own; this exemption is what
+   keeps "Shree Balaji Fabricators"'s documented partial-title-match
+   downgrade (medium, not none) working unchanged.
+Both helpers and `scoreCandidate()`/`normalizeCompanyName()`/
+`significantWords()`/`HomepageIdentity` are now exported specifically so
+they're unit-testable without network, following the same pattern as
+`competitor-discovery.ts`'s exported `isSelfName()`/`classifyRejection()`.
+
+**New `tests/website-discovery.test.ts`** (this repo's first dedicated
+website-discovery test file — none existed before, despite the stale
+`tests/url-classifier.test.ts` reference elsewhere in this file already
+flagging that this repo's test coverage lagged its documented precision
+history). 21 assertions, covering both the new guards in isolation and the
+full `discoverCompanyWebsite()` flow with `searchTavily`/`searchSerper` and
+`global.fetch` mocked (same mocked-`global.fetch` precedent as
+`tests/prospeo-client.test.ts`): the new Anadarko-Petroleum-shaped
+rejection (both via the domain guard directly, and — as a defense-in-depth
+check — via the proximity requirement alone, simulating a differently-named
+portal the domain-pattern list wouldn't catch) plus every documented
+non-regression case from this file's history — Ador Welding (title match ->
+high), A-1 Fence Products (real body match with words together -> medium),
+AITG (single-word guard -> not_found), "Om Enterprises"-shaped generic
+2-domain tie (-> ambiguous), "Shree Balaji Fabricators" (partial title ->
+medium, not high), and "A-1 Fence Products" vs "A-1 Fence Company"/Anaheim
+(genuine real-world name collision -> ambiguous). All pass; `tsc --noEmit`
+clean; full suite green in this worktree (504/504 — this worktree's test
+count differs from the 1000+ figures cited in later sessions elsewhere in
+this file, consistent with this branch's own more limited commit history;
+not a regression signal, just a different starting point). **Not
+live-verified against a real Tavily/Serper call** — this is a pure
+precision/logic fix to already-existing scoring code, verified via mocked
+end-to-end flow tests rather than spending real search quota; if a future
+session re-runs Company Discovery Engine live against "Anadarko Petroleum"
+or a similar case, confirm this fix holds against real search results too.
+
 **Company Discovery Engine (Phase 2 item 3) is now COMPLETE, including live
 verification.**
 

@@ -47,7 +47,7 @@ export interface WebsiteDiscoveryResult {
 
 const LEGAL_SUFFIXES = /\b(?:pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|corp\.?|corporation|co\.?)\b/gi
 
-function normalizeCompanyName(name: string): string {
+export function normalizeCompanyName(name: string): string {
   return name
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
@@ -56,12 +56,87 @@ function normalizeCompanyName(name: string): string {
     .trim()
 }
 
-function significantWords(normalizedName: string): string[] {
+export function significantWords(normalizedName: string): string[] {
   return normalizedName.split(' ').filter(w => w.length > 0)
 }
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ── Known non-corporate domain guard ────────────────────────────
+// Some domains will reliably produce a false-positive content match no
+// matter how strict the word-matching gets — a government portal, wiki, or
+// directory/aggregator page can legitimately mention a company's name
+// (even its full name) without BEING that company's own official site.
+// Checked BEFORE the content-fetch/word-matching heuristics run — same
+// "known-bad names checked before generic heuristics" precedent as
+// competitor-discovery.ts's `NON_COMPETITOR_NAMES` list (checked before its
+// length/stopword checks in `classifyRejection()`).
+//
+// Found live 2026-07-15 (Company Discovery Engine's live run, logged in
+// CLAUDE.md): "Anadarko Petroleum" (a genuine two-word name, so it doesn't
+// hit the single-word-name guard below) resolved at 'medium' confidence to
+// petroleum.gov.gy — a Guyana government petroleum-industry info site, not
+// Anadarko's real corporate domain. This guard rejects that domain shape
+// outright, before any fetch/scoring happens. Also directly covers the
+// AITG/aitg.miraheze.org false positive's domain shape (that specific case
+// is already independently blocked by the single-word-name title-required
+// guard in scoreCandidate(), but this guard would catch the same domain
+// shape even for a multi-word name).
+const NON_CORPORATE_DOMAIN_PATTERNS: RegExp[] = [
+  /\.gov$/i,                     // e.g. usa.gov
+  /\.gov\.[a-z]{2,3}$/i,         // e.g. petroleum.gov.gy, mca.gov.in
+  /\.mil$/i,
+  /\.edu$/i,
+  /(?:^|\.)wikipedia\.org$/i,
+  /(?:^|\.)wikimedia\.org$/i,
+  /(?:^|\.)miraheze\.org$/i,     // free wiki hosting — the real AITG false positive's host
+  /(?:^|\.)fandom\.com$/i,
+  /(?:^|\.)wikia\.org$/i,
+  /(?:^|\.)crunchbase\.com$/i,
+  /(?:^|\.)linkedin\.com$/i,
+  /(?:^|\.)glassdoor\.com$/i,
+  /(?:^|\.)indeed\.com$/i,
+  /(?:^|\.)g2\.com$/i,
+  /(?:^|\.)capterra\.com$/i,
+]
+
+export function isKnownNonCorporateDomain(domain: string): boolean {
+  return NON_CORPORATE_DOMAIN_PATTERNS.some(p => p.test(domain))
+}
+
+// ── Word-proximity check ─────────────────────────────────────────
+// "All significant words appear somewhere in a 2000-char body snippet" is
+// not, by itself, strong evidence the words refer to the same entity — a
+// generic industry/government page can mention a company's most-generic
+// name-word constantly (e.g. "petroleum") while only mentioning its
+// distinctive word (e.g. "Anadarko") once, in an unrelated sentence, on the
+// same page. Require multi-word names to have their words actually appear
+// near each other (i.e. a real mention of the name, not scattered
+// coincidental word matches) before trusting a body/description-only match.
+// This is the enforcement of what the original body-match confidence tier
+// always assumed ("3 corroborating words matching together is real
+// evidence a single acronym match isn't" — see the single-word-name guard
+// below) but never actually checked.
+const PROXIMITY_WINDOW_CHARS = 120
+
+export function wordsAppearTogether(words: string[], text: string, windowChars = PROXIMITY_WINDOW_CHARS): boolean {
+  if (words.length <= 1) return true
+  const anchorRegex = new RegExp(`\\b${escapeRegex(words[0])}\\b`, 'gi')
+  let match: RegExpExecArray | null
+  while ((match = anchorRegex.exec(text)) !== null) {
+    const start = Math.max(0, match.index - windowChars)
+    const end = Math.min(text.length, match.index + match[0].length + windowChars)
+    const window = text.slice(start, end)
+    if (words.every(w => new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(window))) {
+      return true
+    }
+    // Avoid infinite loop on zero-length matches (can't happen with \b...\b
+    // word patterns, but keep the guard cheap and explicit anyway).
+    if (match[0].length === 0) anchorRegex.lastIndex++
+  }
+  return false
 }
 
 // ── Word-boundary match ratio ───────────────────────────────────
@@ -94,7 +169,7 @@ function wordMatchRatio(words: string[], text: string): number {
 // reuses the same fetchWithFirecrawl() calling pattern rather than inventing
 // a new one.
 
-interface HomepageIdentity {
+export interface HomepageIdentity {
   title: string
   description: string
   bodySnippet: string
@@ -174,7 +249,7 @@ async function fetchHomepageIdentity(url: string): Promise<HomepageIdentity | nu
 
 // ── Confidence scoring ───────────────────────────────────────────
 
-function scoreCandidate(words: string[], identity: HomepageIdentity): { confidence: WebsiteDiscoveryConfidence; evidence: string } {
+export function scoreCandidate(words: string[], identity: HomepageIdentity): { confidence: WebsiteDiscoveryConfidence; evidence: string } {
   const titleRatio = wordMatchRatio(words, identity.title)
   const descRatio = wordMatchRatio(words, identity.description)
   const bodyRatio = wordMatchRatio(words, identity.bodySnippet)
@@ -199,6 +274,21 @@ function scoreCandidate(words: string[], identity: HomepageIdentity): { confiden
   }
 
   if (titleRatio >= 0.5 || descRatio === 1 || bodyRatio === 1) {
+    // Body/description-only matches (no partial title match) additionally
+    // require the words to appear NEAR each other in the source text, not
+    // just present somewhere in a 2000-char snippet — see
+    // wordsAppearTogether()'s header comment. A partial title match is
+    // exempt: the title itself is short, so "all significant words present"
+    // in it is already strong proximity evidence on its own.
+    if (titleRatio < 0.5) {
+      const sourceText = descRatio === 1 ? identity.description : identity.bodySnippet
+      if (!wordsAppearTogether(words, sourceText)) {
+        return {
+          confidence: 'none',
+          evidence: 'name words matched individually but not together in the same mention — likely coincidental/unrelated occurrences, not the company\'s own site',
+        }
+      }
+    }
     const where = titleRatio >= 0.5 ? `partial match in title: "${identity.title.slice(0, 100)}"`
       : descRatio === 1 ? `full match in meta description: "${identity.description.slice(0, 100)}"`
       : `full match in page body`
@@ -290,6 +380,14 @@ export async function discoverCompanyWebsite(
 
   const candidates: WebsiteDiscoveryCandidate[] = []
   for (const domain of domainsToCheck) {
+    if (isKnownNonCorporateDomain(domain)) {
+      candidates.push({
+        domain,
+        confidence: 'none',
+        evidence: 'known non-corporate domain pattern (government/wiki/directory/aggregator hosting) — not a plausible official company site',
+      })
+      continue
+    }
     const identity = await fetchHomepageIdentity(`https://${domain}`)
     if (!identity) {
       candidates.push({ domain, confidence: 'none', evidence: 'homepage fetch failed or timed out' })
