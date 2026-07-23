@@ -59,3 +59,93 @@ Leading provider of world-class solutions for a better tomorrow.
     expect(result.signals).toHaveLength(0)
   })
 })
+
+describe('extractSignals — short-form self-reference fallback (2026-07-23)', () => {
+  // Closes the precision gap flagged in CLAUDE.md's "RESOLVED 2026-07-19 —
+  // detectPageType()..." section: real site prose using a short brand form
+  // (e.g. "Ador") never matched a longer resolved legal name (e.g. "Ador
+  // Welding Ltd"), even though the same logic worked correctly when tested
+  // with the short form in isolation.
+
+  it('non-regression: the full resolved name still matches directly when present verbatim', () => {
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Ador Welding produces world-class products across six manufacturing facilities nationwide.
+`
+    const result = extractSignals(content, undefined, 'Ador Welding')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+  })
+
+  it('short-form fallback: real homepage prose using "Ador" alone classifies as company_strategy when the resolved name is "Ador Welding"', () => {
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Ador produces world-class products across six manufacturing facilities nationwide.
+`
+    const result = extractSignals(content, undefined, 'Ador Welding')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+  })
+
+  it('short-form fallback: also works when the resolved name is the full legal form "Ador Welding Ltd"', () => {
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Ador produces world-class products across six manufacturing facilities nationwide.
+`
+    const result = extractSignals(content, undefined, 'Ador Welding Ltd')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+  })
+
+  it('non-regression: a single-word resolved name still works exactly as before (no shorter form exists to fall back to)', () => {
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Ador operates six manufacturing facilities nationwide.
+`
+    const result = extractSignals(content, undefined, 'Ador')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+  })
+
+  it('does NOT false-positive when an unrelated generic word happens to appear in the text — short-form fallback is skipped for names whose first word is on the generic-word guard list', () => {
+    // Resolved name "Global Industries" — first word "Global" is on the
+    // generic-leading-word guard list specifically because it's common
+    // enough in unrelated marketing/industry prose to cause exactly this
+    // kind of false collision if it were used as a short-form anchor.
+    // Neither the full name nor a (correctly skipped) short-form match this
+    // text, so it falls through to the unconditional homepage ->
+    // generic_marketing return — which is excluded from the "subject floor"
+    // fallback, so no signal is produced at all for this snippet.
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Global manufacturing trends show six facilities is the new industry benchmark for competitors.
+`
+    const result = extractSignals(content, undefined, 'Global Industries')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeUndefined()
+  })
+
+  it('does NOT fall back to a short form under the 4-char minimum-length guard', () => {
+    // Resolved name "AS Agri" — first word "AS" is only 2 chars, below the
+    // minimum-length guard, so no short-form fallback should be attempted
+    // even though "as" trivially appears inside ordinary text. Same
+    // no-signal-at-all outcome as the generic-word-guard case above.
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+As six facilities came online this year, the sector overall saw growth.
+`
+    const result = extractSignals(content, undefined, 'AS Agri')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeUndefined()
+  })
+})
