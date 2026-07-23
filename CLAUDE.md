@@ -832,6 +832,59 @@ real gaps: a non-timing-safe comparison and zero rate limiting on
   infrastructure, not a lint-debt cleanup) — worth its own session if lint
   is ever meant to be a real gate.
 
+## RESOLVED 2026-07-23 — the "~1000+ pre-existing lint errors" note above is stale
+Ran the planned "bounded lint cleanup pass" this session and found the
+premise had already changed: `npm run lint` (`eslint`, flat config in
+`eslint.config.mjs`) currently reports **0 errors, 0 warnings** across all
+229 linted files — not ~1000+. Did not take this at face value; verified it
+three ways before trusting it: (1) `npx eslint . -f json` parsed
+programmatically, summed `errorCount`/`warningCount` across all 229 file
+entries — both totals genuinely 0, not an empty/truncated report; (2) a
+deliberate probe file with an intentionally unused variable
+(`lib/pipeline/__lint_probe.ts`, deleted after the check) correctly
+triggered `@typescript-eslint/no-unused-vars` as a warning, confirming
+ESLint is actually running the real ruleset against real files, not
+silently no-op'ing; (3) `npm run lint -- --fix` produced a byte-identical
+working tree (`git status --short` empty before and after) — nothing to
+autofix, consistent with a genuine 0-error baseline rather than a broken
+lint invocation.
+**Root cause of the discrepancy, not fully confirmed but the most likely
+explanation**: the Track 6 commit that first measured "~1000+ errors"
+(`dcc2156`, 2026-07-19) is the SAME commit that added the `.claude/**` and
+`**/.next/**` `globalIgnores` entries to `eslint.config.mjs` (visible in
+that commit's own diff). If the ~1000+ figure was measured before those
+ignores were added in that session — plausible, since a repo that gets
+built/dev-served frequently will have a `.next/` output directory, and this
+repo's own worktrees live under `.claude/worktrees/`, both of which used to
+be linted as if they were source — that alone could produce noise in the
+thousands (generated build output triggers many stylistic rules). The
+ignores were added but lint was apparently never re-run afterward to
+confirm the count actually dropped, so the stale "~1000+" figure sat
+undisturbed in this file for 4 days. Separately, commit `3287205`
+(2026-07-22, "resolve lint errors") fixed 4 real react-hooks violations
+found via a targeted pass, which may have closed out whatever small
+residual count was left after the ignore fix. Not independently verified
+by reproducing the original 1000+ count (would require checking out
+`dcc2156`'s parent with a real `.next/` dir present, not worth the spend to
+confirm a now-moot historical number).
+**What this session actually did, given the above**: ran the full planned
+sequence anyway rather than stopping early — `npm run lint` (0/0 baseline),
+`npm run lint -- --fix` (no-op, confirmed via clean `git status`),
+`npx tsc --noEmit` (clean), `npm test` (483/483 passing, 36 test files —
+lower than this file's most recent "1114/1114" figure elsewhere, because
+this worktree's branch (`f30238c`) predates several later sessions
+documented above, e.g. the 2026-07-22 research-quality initiative's test
+files aren't present on this branch; not a regression, just a
+branch-currency gap, not investigated further as out of scope for a lint
+task), `npm run lint` again (still 0/0). No categorized "remaining errors
+by rule" breakdown follows, because there is nothing remaining to
+categorize. **Standing recommendation for whoever next touches this**: if a
+future `npm run lint` run on a fully up-to-date branch/checkout resurfaces
+a large error count, suspect a `.next/` build directory or another
+worktree's contents leaking into the lint scope before assuming the
+codebase itself regressed — that's the exact failure mode this note
+suspects caused the original ~1000+ figure.
+
 ## Model quality verdict — SUPERSEDED 2026-07-18, was "DO NOT relitigate"
 Original verdict (kept for history): evaluated whether model quality is the
 bottleneck, concluded no — architecture fixes ~+30% vs model upgrade ~+5-10%,
