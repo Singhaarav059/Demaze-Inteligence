@@ -1,10 +1,10 @@
 {
-  "name": "Bharat Forge",
-  "url": "https://www.bharatforge.com",
+  "name": "AITG",
+  "url": "https://www.aitg.co",
   "expectations": {
-    "minSignals": 1,
-    "minOpportunities": 1,
-    "minChallenges": 1,
+    "minSignals": 2,
+    "minOpportunities": 3,
+    "minChallenges": 3,
     "requiredProfileFlags": [
       "manufacturer"
     ],

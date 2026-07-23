@@ -1,0 +1,24 @@
+{
+  "name": "Chargebee",
+  "url": "https://www.chargebee.com",
+  "expectations": {
+    "minSignals": 1,
+    "minOpportunities": 1,
+    "minChallenges": 1,
+    "requiredProfileFlags": [
+      "software_saas"
+    ],
+    "expectedPrimaryType": "software_saas",
+    "forbiddenTerms": [
+      "manufacturing plant",
+      "assembly line",
+      "raw material sourcing",
+      "factory floor",
+      "welding",
+      "conveyor belt",
+      "loan",
+      "banking",
+      "insurance"
+    ]
+  }
+}
