@@ -181,6 +181,17 @@ async function fetchWithFirecrawl(url: string, timeoutMs = 12_000): Promise<stri
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024   // skip reports larger than 10 MB
 
+// A real, current-browser-shaped User-Agent for the direct PDF fetch below —
+// see the identical constant + comment in lib/pipeline/scraper.ts
+// (2026-07-23 Muthoot Finance / A-1 Fence scraper-reliability investigation)
+// for the root cause: this fetch previously sent no User-Agent at all
+// (Node's fetch default), which is exactly the shape at least one real
+// target site's WAF hard-blocks (confirmed via direct curl against
+// muthootfinance.com). Duplicated rather than shared, same precedent as
+// website-discovery.ts's copy.
+const PDF_FETCH_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
 /** Extension check, tolerant of query strings / fragments (e.g. `…/ar.pdf?x=1`). */
 export function isPdfUrl(url: string): boolean {
   try {
@@ -214,7 +225,11 @@ async function fetchPdfText(url: string, timeoutMs = 15_000): Promise<string | n
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, { signal: controller.signal, redirect: 'follow' })
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: { 'User-Agent': PDF_FETCH_USER_AGENT },
+    })
     if (!res.ok) return null
 
     // Guard against non-PDF responses (a .pdf URL that 404s to an HTML page) and

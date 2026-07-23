@@ -21,6 +21,17 @@
 
 import { searchTavily, searchSerper } from './discovery-engine'
 
+// A real, current-browser-shaped User-Agent — see the identical constant +
+// comment in lib/pipeline/scraper.ts (2026-07-23 Muthoot Finance / A-1 Fence
+// scraper-reliability investigation) for the root cause this fixes: the old
+// self-identifying 'DemazeBot' UA got hard-blocked (403) by at least one
+// real target site's CloudFront WAF, confirmed via direct curl. Duplicated
+// here rather than shared, matching this repo's existing precedent of
+// duplicating small constants across enrichment/pipeline modules rather than
+// adding a new shared import for a one-line string.
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
 // ── Public types ──────────────────────────────────────────────
 
 export type WebsiteDiscoveryStatus = 'confirmed' | 'ambiguous' | 'not_found'
@@ -104,7 +115,7 @@ async function fetchHomepageIdentityPlain(url: string): Promise<HomepageIdentity
   try {
     const resp = await Promise.race([
       fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DemazeBot/1.0)' },
+        headers: { 'User-Agent': BROWSER_USER_AGENT },
         redirect: 'follow',
       }),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
