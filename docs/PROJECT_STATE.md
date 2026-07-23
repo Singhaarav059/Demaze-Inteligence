@@ -44,7 +44,15 @@ Chargebee) verified manually, not in the automated run.
 - `detectPageType()` receives full URL not bare path (homepage
   mislabeling) — deliberately NOT fixed in isolation, needs a dedicated
   session (see `DECISIONS.md` history in CLAUDE.md if detail is needed).
-- Item 4 (executive-change/investor-transcript query targeting) — deferred.
+- ~~Item 4 (executive-change/investor-transcript query targeting) —
+  deferred.~~ **DONE (2026-07-23), code + unit tests; live verification
+  pending.** `lib/enrichment/discovery-engine.ts` gained 5 new query
+  templates (2 investor-call-transcript, 3 executive-change-announcement)
+  and 2 new `SourceType`s (`earnings_call_transcript`,
+  `executive_change_announcement`) with dedicated `classifySourceType()`
+  detection; `source-prioritizer.ts`'s `mustHave` pass now also guarantees
+  a transcript slot when available. See CLAUDE.md's Implementation
+  sequence, Item 4, for full detail.
 - Government-filings APIs (EDGAR/MCA) — future category, not built.
 
 ## Test infra

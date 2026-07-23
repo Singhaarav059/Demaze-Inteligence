@@ -170,10 +170,14 @@ for investing in enrichment depth, not LinkedIn access.
   fallback, only its deeper *recovery* path-probing sub-stage is gated on content
   quality. (Correcting an earlier overstatement of this gap.) Repositioning it to
   a fully parallel, always-on stage is item 2 below — not started yet.
-- Public-source category gaps (item 4, not started): no dedicated query template
-  for executive-change announcements; investor-call transcripts and financial
-  disclosures only surface incidentally, not targeted; government-filings APIs
-  (EDGAR/MCA) are a future category, explicitly not being built now.
+- ~~Public-source category gaps (item 4, not started): no dedicated query
+  template for executive-change announcements; investor-call transcripts and
+  financial disclosures only surface incidentally, not targeted~~
+  **RESOLVED (2026-07-23, Item 4)** — 5 new dedicated query templates (2
+  investor-call-transcript, 3 executive-change) plus 2 new classified
+  `SourceType`s. See Item 4 in the implementation sequence below.
+  Government-filings APIs (EDGAR/MCA) remain a future category, explicitly
+  not being built now.
 - ~~`isFetchable()` still skips PDFs entirely~~ **RESOLVED (2026-07-12, Item 3)** —
   PDFs (annual reports / investor presentations, the highest-priority source
   types) are no longer dropped; they route through `pdf-parse` in
@@ -1917,9 +1921,74 @@ discarding exactly the evidence enrichment exists to capture.
   fetch+parse mechanism itself works; a full cached-scrape regression check
   is still open if someone wants it.
 
-**Item 4 (not started)** — add executive-change-announcement query template +
-dedicated investor-call-transcript/filings targeting pass. Explicitly skip
-government-filings APIs (EDGAR/MCA) — logged as a future category, not built.
+**Item 4 (done 2026-07-23, code + unit tests; live verification pending)** —
+added the executive-change-announcement query template + dedicated
+investor-call-transcript/financial-disclosure targeting pass. Explicitly
+skips government-filings APIs (EDGAR/MCA) — still logged as a future
+category, not built.
+- `lib/enrichment/discovery-engine.ts`: checked the existing `investor`
+  category first (per the task's own instruction) before adding anything —
+  it already covered annual report / investor presentation / quarterly
+  results, but had no query actually targeting transcript-shaped content
+  (management commentary, not just headline numbers) and no query at all
+  for leadership-change events. Reused the existing `investor` and
+  `leadership` `QueryCategory` values rather than inventing new ones (no
+  `CategoryCoverage`/prioritizer-coverage-tracking changes needed) — 2 new
+  investor-call-transcript queries (`"${c}" earnings call transcript
+  ${yr}"`, `"${c}" investor call transcript quarterly results"`) and 3 new
+  executive-change queries (`"${c}" appoints new CEO"`, `"${c}" CEO steps
+  down leadership transition"`, `"${c}" management change appointment
+  ${yr}"`).
+- `classifySourceType()` gained 2 new `SourceType`s with dedicated
+  detection, checked BEFORE the generic `press_release`/
+  `investor_presentation` branches so more-specific content classifies
+  correctly instead of falling into a generic bucket:
+  `earnings_call_transcript` (very_high evidence strength, priority_score
+  88 — just below `earnings_release`'s 90, since a transcript is the same
+  "highest evidence tier" but slightly less canonical than the release
+  itself) and `executive_change_announcement` (high evidence strength,
+  priority_score 82 — above `press_release`'s 75, per CLAUDE.md's own
+  "named individual + explicit stated portfolio" signal-library entry
+  calling this kind of evidence out as strong).
+- Applied the same word-boundary discipline this file already documents for
+  short/generic keywords (the historical 'ir'/'sec' URL-classifier bug
+  class): a bare "transcript" mention only classifies as
+  `earnings_call_transcript` when it co-occurs with an earnings-call/
+  investor-call/concall/conference-call/quarterly cue — caught and fixed a
+  real bug of this exact shape while writing the regression tests: the
+  first draft's `\btranscript\b` didn't match the plural "transcripts"
+  (`\b` requires a `\w`/`\W` transition, and "transcript" immediately
+  followed by "s" is `\w`-`\w`, no boundary) — fixed to `\btranscripts?\b`.
+- `source-prioritizer.ts`: `mustHave` (the guaranteed-fetch-slot list, was
+  `annual_report`/`investor_presentation`/`earnings_release`) now also
+  includes `earnings_call_transcript` — same "highest evidence tier"
+  reasoning as its priority score. `sourceTypeLabel()` gained labels for
+  both new types.
+- New `tests/discovery-engine.test.ts` (25 assertions) — the first real
+  unit-test coverage for either `discovery-engine.ts` or
+  `source-prioritizer.ts` (neither had any before this session).
+  `buildDiscoveryQueries()` was exported specifically to make this
+  testable without spending real search-API quota, same reasoning as
+  `isPdfUrl`/`extractPdfText` in `web-enricher.ts` (Item 3). Covers: both
+  new source-type classifications (including the plural-transcript fix and
+  a `executive_change_announcement`-wins-over-`press_release`
+  check-order case), a `"recall"`-contains-"call" false-positive guard
+  (same bug class as the historical 'ir' matching inside "wire"), presence
+  of all 5 new query templates under the correct existing category, a
+  non-regression floor on the pre-existing 14 query templates, and a
+  `prioritizeSources()` case confirming a transcript-only source (no
+  annual report/investor presentation/earnings release present) still
+  claims a guaranteed fetch slot.
+- **Verified**: `tsc --noEmit` clean, full suite passing (508 tests, 37
+  files, in this worktree — 25 new). **Not live-verified** — no real
+  Tavily/Serper call was made against the new query templates, same
+  "verify via tsc+tests, defer live run" pattern as every other
+  quota-spending discovery module in this repo. A future session should
+  run `discoverEvidenceSources()` against a real benchmark company (Ador
+  Welding is this file's own reference case for enrichment work) and
+  confirm at least one of the 5 new query templates surfaces a real,
+  correctly-classified `earnings_call_transcript` or
+  `executive_change_announcement` source in practice.
 
 **Item 5 (done 2026-07-11)** — `generateDeterministicOpportunities()` rebuilt
 against the 8 confirmed services. Root cause of the old fake-opportunity bug:
@@ -2076,8 +2145,8 @@ the top of this file for the decision and the 9-item priority order
 Research Quality Framework → Research Evaluation Framework → Market
 Intelligence Layer → Outreach Intelligence Layer → Decision-maker discovery
 → Outreach send). Phase 1's items 2-4 (parallel enrichment repositioning
-already done as Item 2; items 3 PDF done; item 4 executive-change/investor-
-transcript targeting still open) are independent of Phase 2 and can proceed
+done as Item 2; item 3 PDF done; item 4 executive-change/investor-transcript
+targeting done 2026-07-23) are independent of Phase 2 and can proceed
 in either order — Phase 2 doesn't block on them.
 Living-memory note: `docs/PROJECT_STATE.md`, `docs/ROADMAP.md`,
 `docs/DECISIONS.md`, and `docs/CURRENT_TASK.md` are the current canonical,

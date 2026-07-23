@@ -16,6 +16,8 @@ export type SourceType =
   | 'annual_report'
   | 'investor_presentation'
   | 'earnings_release'
+  | 'earnings_call_transcript'
+  | 'executive_change_announcement'
   | 'press_release'
   | 'careers_page'
   | 'official_blog'
@@ -47,6 +49,29 @@ export function classifySourceType(url: string, title: string): SourceType {
   if (/annual.?report|annual-report|annualreport/.test(u + t)) return 'annual_report'
   if (/investor.?presentation|investor-presentation|ir\.pdf/.test(u + t)) return 'investor_presentation'
   if (/earnings.?release|earnings-release|quarterly.?results|q[1-4].{0,5}results/.test(u + t)) return 'earnings_release'
+  // Item 4 (2026-07-23): earnings-call / investor-call transcripts are a
+  // distinct, high-value source type from a plain earnings release — they
+  // carry direct management quotes, not just the numbers. Checked before
+  // the generic press_release/investor_presentation branches so a URL like
+  // "/investor/q3-earnings-call-transcript" classifies as a transcript, not
+  // a generic investor_presentation. `\btranscript\b` uses a word boundary
+  // (not a plain substring test) for the same reason the URL-classifier's
+  // 'ir'/'sec' bug fix does — "transcript" alone is common enough in page
+  // titles that it needs to co-occur with an earnings/investor-call cue,
+  // not match in isolation.
+  if (
+    /earnings.?call.?transcripts?|concall.?transcripts?|investor.?call.?transcripts?/.test(u + t) ||
+    (/\btranscripts?\b/.test(t) && /earnings.?call|investor.?call|concall|conference.?call|quarterly/.test(u + t))
+  ) return 'earnings_call_transcript'
+  // Item 4 (2026-07-23): executive-change announcements (new CEO, leadership
+  // transition, management change) are a real trigger-event signal — see
+  // CLAUDE.md's "named individual + explicit stated portfolio" signal
+  // category. Checked before press_release so a "company appoints new CEO"
+  // press release classifies by its actual content, not the generic
+  // press-release URL pattern.
+  if (
+    /appoints?\s+new\s+(ceo|cfo|coo|cto|md|president|managing director|chairman)|appointed\s+as\s+(ceo|cfo|coo|cto|president|md|managing director|chairman)|new\s+(ceo|cfo|coo|cto|md|president|managing director)\s+(announced|named|appointed)|steps?\s+down\s+as\s+(ceo|cfo|coo|cto|president|chairman)|resigns?\s+as\s+(ceo|cfo|coo|cto|president|chairman)|leadership\s+transition|management\s+change|names?\s+new\s+(ceo|cfo|coo|cto|president)|succeeds?\s+.{0,20}\s+as\s+(ceo|cfo|coo|cto|president)/.test(u + t)
+  ) return 'executive_change_announcement'
   if (/press.?release|press-release|newsroom|news-release/.test(u + t)) return 'press_release'
   if (/careers|jobs|hiring|vacancies|work-with-us|join-us/.test(u + t)) return 'careers_page'
   if (/blog|insights|perspectives|thought-leadership/.test(u + t)) return 'official_blog'
@@ -62,36 +87,43 @@ export function classifySourceType(url: string, title: string): SourceType {
 // ── Evidence strength by source type ─────────────────────────
 
 const SOURCE_STRENGTH: Record<SourceType, EvidenceStrength> = {
-  annual_report:          'very_high',
-  investor_presentation:  'very_high',
-  earnings_release:       'very_high',
-  press_release:          'high',
-  careers_page:           'high',
-  ceo_interview:          'high',
-  official_blog:          'medium',
-  news_article:           'medium',
-  sustainability_report:  'medium',
-  corporate_website:      'low',
-  other:                  'low',
+  annual_report:                  'very_high',
+  investor_presentation:          'very_high',
+  earnings_release:               'very_high',
+  earnings_call_transcript:       'very_high',
+  executive_change_announcement:  'high',
+  press_release:                  'high',
+  careers_page:                   'high',
+  ceo_interview:                  'high',
+  official_blog:                  'medium',
+  news_article:                   'medium',
+  sustainability_report:          'medium',
+  corporate_website:              'low',
+  other:                          'low',
 }
 
 const PRIORITY_SCORE: Record<SourceType, number> = {
-  annual_report:          100,
-  investor_presentation:  95,
-  earnings_release:       90,
-  press_release:          75,
-  careers_page:           70,
-  ceo_interview:          65,
-  official_blog:          50,
-  news_article:           45,
-  sustainability_report:  40,
-  corporate_website:      20,
-  other:                  10,
+  annual_report:                  100,
+  investor_presentation:          95,
+  earnings_release:               90,
+  earnings_call_transcript:       88,
+  executive_change_announcement:  82,
+  press_release:                  75,
+  careers_page:                   70,
+  ceo_interview:                  65,
+  official_blog:                  50,
+  news_article:                   45,
+  sustainability_report:          40,
+  corporate_website:              20,
+  other:                          10,
 }
 
 // ── Search query templates ────────────────────────────────────
 
-function buildDiscoveryQueries(companyName: string): Array<{ query: string; category: QueryCategory }> {
+// Exported for unit testing (Item 4, 2026-07-23) — same reasoning as
+// isPdfUrl/extractPdfText in web-enricher.ts: query-template shape is
+// unit-testable without spending real search-API quota, so it should be.
+export function buildDiscoveryQueries(companyName: string): Array<{ query: string; category: QueryCategory }> {
   const c = companyName
   const yr = new Date().getFullYear()
   return [
@@ -99,6 +131,15 @@ function buildDiscoveryQueries(companyName: string): Array<{ query: string; cate
     { query: `"${c}" annual report ${yr}`,                         category: 'investor' },
     { query: `"${c}" investor presentation ${yr}`,                  category: 'investor' },
     { query: `"${c}" quarterly results earnings ${yr}`,             category: 'investor' },
+
+    // ── Investor call transcripts / financial disclosures (Item 4,
+    // 2026-07-23 — previously only surfaced incidentally via the generic
+    // investor queries above; these target the transcript/disclosure
+    // content specifically, e.g. management commentary that a plain
+    // "quarterly results" query tends to miss in favor of just the
+    // headline numbers) ─────────────────────────────────────────
+    { query: `"${c}" earnings call transcript ${yr}`,               category: 'investor' },
+    { query: `"${c}" investor call transcript quarterly results`,   category: 'investor' },
 
     // ── Hiring (strong intent signals) ──────────────────────────
     { query: `"${c}" AI machine learning engineer jobs hiring`,     category: 'hiring' },
@@ -128,6 +169,14 @@ function buildDiscoveryQueries(companyName: string): Array<{ query: string; cate
     // other query here) ──────────────────────────────────────────
     { query: `"${c}" leadership team executives`,                   category: 'leadership' },
     { query: `"${c}" CEO CTO management team`,                      category: 'leadership' },
+
+    // ── Executive-change announcements (Item 4, 2026-07-23 — a real
+    // trigger-event signal per CLAUDE.md's "named individual + explicit
+    // stated portfolio" signal category; previously had no dedicated
+    // query template at all, so this only surfaced by accident) ───────
+    { query: `"${c}" appoints new CEO`,                             category: 'leadership' },
+    { query: `"${c}" CEO steps down leadership transition`,         category: 'leadership' },
+    { query: `"${c}" management change appointment ${yr}`,          category: 'leadership' },
   ]
 }
 

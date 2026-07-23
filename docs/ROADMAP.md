@@ -6,8 +6,10 @@ Full decision history: `docs/DECISIONS.md`. This file is status only.
 
 Core 4-step pipeline (find website → enrich → find problem → AI research),
 batch lead-list upload, buyer/contact field removal, quota-pause handling.
-Items 2 (parallel enrichment) and 3 (PDF fetch) done; item 4 (executive-
-change / investor-transcript query targeting) deferred, not blocking.
+Items 2 (parallel enrichment), 3 (PDF fetch), and 4 (executive-change /
+investor-transcript query targeting) all done — item 4 done 2026-07-23,
+code + unit tests, live verification pending (same pattern as every other
+quota-spending discovery module in this repo).
 
 ## Phase 2 — AutoGTM loop (scope pivot 2026-07-14)
 
