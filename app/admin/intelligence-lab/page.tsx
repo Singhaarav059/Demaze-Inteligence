@@ -30,6 +30,7 @@ import {
   getStrategicChallenges,
   getExecutiveBrief,
   getDeterministicOpportunities,
+  getServiceEvidenceDebug,
 } from '@/lib/pipeline/analysis-sections'
 import type { RunResult, Operation, AnalysisMode, ActiveTab } from './_types'
 import { ComparisonPanel } from './ComparisonPanel'
@@ -1846,8 +1847,110 @@ function DebugPanel({
   setExpandedSection: (s: string | null) => void
 }) {
   if (!result) return <EmptyState message="Run an analysis to see debug output." />
+  const serviceEvidenceDebug = result.analysisResult ? getServiceEvidenceDebug(result.analysisResult) : undefined
   return (
     <div className="space-y-3">
+      {/* Evidence & Opportunity Debug — added 2026-07-24. Answers "why did
+          this run come back with 0 pain points / 0 opportunities" without
+          needing a live re-run: shows exactly which of the 4 insufficientEvidence
+          conditions fired, and the per-service evidence trail (including
+          weak-tier matches that never made it into the final report). */}
+      {serviceEvidenceDebug && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm text-foreground flex items-center gap-2">
+              Evidence &amp; Opportunity Debug
+              {serviceEvidenceDebug.insufficient_evidence?.fired && (
+                <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400">
+                  insufficient evidence fired
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-3">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground/70">
+                Insufficient-evidence gate — all 4 must be true to suppress pain_points/opportunities:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(serviceEvidenceDebug.insufficient_evidence?.conditions ?? {}).map(([k, v]) => (
+                  <Badge
+                    key={k}
+                    variant="outline"
+                    className={cn(
+                      'text-[10px] font-mono',
+                      v ? 'border-amber-500/50 text-amber-600 dark:text-amber-400' : 'border-border text-muted-foreground/70'
+                    )}
+                  >
+                    {k}: {String(v)}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {(serviceEvidenceDebug.services?.length ?? 0) > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground/70">Per-service evidence (includes weak-tier matches discarded from the final report):</p>
+                {serviceEvidenceDebug.services!.map((s) => {
+                  const id = `service-evidence-${s.service}`
+                  const hasEvidence = (s.evidence?.length ?? 0) > 0
+                  return (
+                    <div key={s.service} className="rounded-lg border border-border bg-card overflow-hidden">
+                      <button
+                        onClick={() => hasEvidence && setExpandedSection(expandedSection === id ? null : id)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2',
+                          hasEvidence && 'hover:bg-muted/50 transition-colors'
+                        )}
+                        disabled={!hasEvidence}
+                      >
+                        <span className="text-xs text-foreground text-left">{s.service}</span>
+                        <span className="flex items-center gap-1.5">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[10px] font-mono',
+                              s.threshold === 'strong' ? 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                              : s.threshold === 'medium' ? 'border-blue-500/50 text-blue-600 dark:text-blue-400'
+                              : s.threshold === 'weak' ? 'border-amber-500/50 text-amber-600 dark:text-amber-400'
+                              : 'border-border text-muted-foreground/70'
+                            )}
+                          >
+                            {s.threshold}
+                          </Badge>
+                          {s.surfaced ? (
+                            <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-600 dark:text-emerald-400">surfaced</Badge>
+                          ) : s.disqualified ? (
+                            <Badge variant="outline" className="text-[10px] border-red-500/50 text-red-600 dark:text-red-400" title={s.disqualifier_matched}>disqualified</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] border-border text-muted-foreground/70">not surfaced</Badge>
+                          )}
+                          {hasEvidence && (
+                            <span className="text-muted-foreground/70 text-[10px]">{expandedSection === id ? '▲' : '▼'}</span>
+                          )}
+                        </span>
+                      </button>
+                      {expandedSection === id && hasEvidence && (
+                        <div className="border-t border-border p-3 space-y-2">
+                          {s.disqualifier_matched && (
+                            <p className="text-[10px] text-red-600 dark:text-red-400 font-mono">disqualifier: {s.disqualifier_matched}</p>
+                          )}
+                          {s.evidence!.map((e, i) => (
+                            <div key={i} className="text-[10px] font-mono text-muted-foreground border-l-2 border-border pl-2">
+                              <span className="text-muted-foreground/70">[{e.pattern}]</span> {e.snippet}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* AI Meta */}
       {result.aiMeta && (
         <Card className="bg-card border-border">

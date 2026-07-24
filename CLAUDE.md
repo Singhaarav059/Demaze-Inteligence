@@ -420,6 +420,92 @@ ambiguous-match handling) to avoid false-positiving on a genuine one-off
 content path — not worth tightening unless a future company shows this
 under-catching a real multi-locale structure.
 
+## 2026-07-24 — "silent zero" bug class audit + first fix (Evidence & Opportunity Debug UI)
+After the lechler.com locale fix above, user asked how to make fixes like this
+"foolproof" and to find other similar problems. Answer given: no literal
+foolproof for heuristic/pattern-matching systems, but the practical fix is
+making silent failures loud. Ran two parallel research-agent audits (not
+guessed, actual code-reading investigations):
+
+**Audit 1 — language-blindness beyond the scraper fix.** CONFIRMED risks
+found in `evidence-extractor.ts` (`LEADERSHIP_TITLE_VOCAB` is English-only
+titles — a non-English leadership page produces `leadershipContacts: []`,
+independently able to trigger the same silent 0 pain_points/opportunities
+failure via the `insufficientEvidence` gate) and `website-discovery.ts` (name
+normalization uses bare `\w`, which is ASCII-only in JS — `"Möller Group"`
+becomes `"m ller group"`, corrupting company-identity matching at Step 0,
+before anything else runs; same bug duplicated across
+`evidence-extractor.ts`'s `firstSignificantWord()`, `competitor-discovery.ts`,
+`icp-generator.ts`, `company-discovery.ts`). `discovery-engine.ts`'s search
+query templates are also English-only, amplifying the above. THEORETICAL/LOW
+risk (graceful degradation confirmed, doesn't touch `insufficientEvidence`):
+`competitor-discovery.ts`, `icp-generator.ts`, `company-discovery.ts`,
+`market-intelligence.ts` triggers. **Confirmed benchmark blind spot**: all 9
+benchmark/reference companies are English-primary with plain ASCII names —
+none of these risks can ever be caught by `npm run benchmark`/CI today.
+
+**Audit 2 — non-language silent-degradation patterns.** CONFIRMED:
+`business-profile.ts` has **zero pipeline gate** — every other discovery
+stage (`COMPETITOR`/`ICP`/`MARKET_INTEL`) gets a WARN with a reason string;
+business-profile failure is invisible beyond an ephemeral console log, despite
+feeding the competitor/ICP fallback path. `scraper.ts`'s
+`assessScrapeQuality()` scores purely on page/char count with zero
+content-relevance signal (15 pages of the *wrong* content scores identically
+to 15 right ones — the general case the locale fix above patched one instance
+of), and its rich `ScrapeDebugInfo` trail never reaches the saved run at all
+(orphaned in the separate `company_scrape_cache` table, unreachable without
+raw SQL). `evidence-extractor.ts`'s `classifySubject()` also excludes
+`'products'`/`'blog'` pageTypes from subject matching even though
+`scraper.ts` scores `/solutions/`/`/services/`/`/capabilities/` pages
+(`b2b_services`, 75) as high-priority — same shape as the already-fixed
+homepage pageType bug, never extended to this page type. And: the
+`_service_evidence_debug` diagnostic (added 2026-07-18) already exists,
+already persists into every saved run — it was just never rendered anywhere
+in the UI. Cheapest fix in the whole audit, chosen to ship first.
+
+**Fixed this session**: `_service_evidence_debug` is now surfaced in
+`/admin/intelligence-lab`'s Debug tab. New `getServiceEvidenceDebug()` getter
+in `lib/pipeline/analysis-sections.ts` (loosened-optional local type mirror
+of normalize.ts's `ServiceEvidenceDebug`, per this file's own no-cross-import
+convention). New "Evidence & Opportunity Debug" card in `DebugPanel`
+(`app/admin/intelligence-lab/page.tsx`) shows: the `insufficientEvidence`
+4-condition breakdown as badges (which of `companySubjectCount_zero`/
+`signals_zero`/`leadershipContacts_zero`/`no_facility_evidence` actually
+fired), and a per-service list (all 8 confirmed Demaze services) with
+threshold/surfaced/disqualified badges and expandable weak-tier evidence
+snippets — the same view this session used via raw API-response inspection
+to root-cause the Lechler bug, now reachable in a few clicks from any saved
+run going forward. `tsc --noEmit` clean, full suite 551/551 (no new tests —
+this is a pure read/render of already-validated data, no new logic to
+regression-test).
+
+**Live-verified in the browser, not just compiled.** Re-ran lechler.com
+(cached scrape, real LLM call), opened Debug tab, confirmed real data
+rendered: `leadershipContacts_zero: true`, `no_facility_evidence: true`,
+`companySubjectCount_zero: false`, `signals_zero: false` (2 of 4, correctly
+did not fire — matches this run's real 4 pain_points/5 opportunities), and
+all 8 services listed with real thresholds (7 `none`, 1 `weak` —
+"Marketplace platforms", evidence: a generic "partners" data-processing
+mention, correctly NOT surfaced). Confirmed the expand/collapse interaction
+works and reveals the real evidence snippet. Needed to dispatch synthetic
+pointer events via `javascript_tool` rather than the `computer` tool's click
+— base-ui Tabs/collapsible triggers didn't respond to the computer tool's
+click in this environment, consistent with this session's prior browser-
+automation gotcha notes elsewhere in this project's memory.
+
+**Not done — remaining audit findings, ranked, for a future session**:
+(1) `evidence-extractor.ts` leadership-title vocab — highest remaining blast
+radius, independently triggers the exact silent-zero failure on non-English
+companies; (2) the shared `\w`-ASCII name-normalization bug across 5 files —
+corrupts company identity at Step 0 for any accented company name; (3)
+`business-profile.ts` missing a pipeline gate; (4) `scraper.ts`'s
+`assessScrapeQuality()` having no content-relevance signal, and its debug
+trail never reaching the saved run; (5) `classifySubject()`'s `'products'`/
+`'blog'` pageType exclusion. A non-English/diacritic-name benchmark fixture
+(flagged by both audits independently) would be needed before any of these
+fixes could be regression-tested — none of the current 9 fixtures can
+exercise this bug class.
+
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,

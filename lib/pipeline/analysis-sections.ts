@@ -294,3 +294,44 @@ export interface ResearchQualityAudit {
 
 export const getResearchQuality = (data: Record<string, unknown>): ResearchQualityAudit | undefined =>
   data.research_quality as ResearchQualityAudit | undefined
+
+// Service Evidence Debug (added 2026-07-18 to normalize.ts, never surfaced in
+// the UI until now — see CLAUDE.md's 2026-07-24 audit). Diagnostic-only: the
+// per-service weak/medium/strong evidence trail plus the insufficientEvidence
+// 4-condition breakdown that decides whether pain_points/opportunities get
+// force-suppressed. Exists specifically so a silent "0 pain points, 0
+// opportunities" result can be root-caused from a saved run without a live
+// re-run — this is the same field this session used, via raw API response
+// inspection, to diagnose the lechler.com locale-scoring bug. Loosened to
+// optional fields, mirroring normalize.ts's ServiceEvidenceDebug shape,
+// per this file's own no-cross-import convention.
+export interface ServiceEvidenceDebugMatch {
+  pattern?: string
+  matched?: string
+  snippet?: string
+}
+
+export interface ServiceEvidenceDebugEntry {
+  service?: string
+  threshold?: string
+  surfaced?: boolean
+  disqualified?: boolean
+  disqualifier_matched?: string
+  evidence?: ServiceEvidenceDebugMatch[]
+}
+
+export interface ServiceEvidenceDebug {
+  services?: ServiceEvidenceDebugEntry[]
+  insufficient_evidence?: {
+    fired?: boolean
+    conditions?: {
+      companySubjectCount_zero?: boolean
+      signals_zero?: boolean
+      leadershipContacts_zero?: boolean
+      no_facility_evidence?: boolean
+    }
+  }
+}
+
+export const getServiceEvidenceDebug = (data: Record<string, unknown>): ServiceEvidenceDebug | undefined =>
+  data._service_evidence_debug as ServiceEvidenceDebug | undefined
