@@ -506,6 +506,79 @@ trail never reaching the saved run; (5) `classifySubject()`'s `'products'`/
 fixes could be regression-tested — none of the current 9 fixtures can
 exercise this bug class.
 
+## RESOLVED 2026-07-24 — leadership-title vocab gap (audit item ranked #1)
+`LEADERSHIP_TITLE_VOCAB` in `evidence-extractor.ts` was English-only
+(Chairman/CEO/Director/President/etc.), so a real German/French/Spanish/
+Italian/Portuguese/Dutch leadership page produced zero leadership contacts —
+one of the four ANDed conditions in `normalize.ts`'s `insufficientEvidence`
+gate, so this alone could force-suppress pain_points/opportunities on a
+non-English company, same failure shape as the lechler.com locale bug via a
+different mechanism.
+
+**Fixed**: extended `LEADERSHIP_TITLE_VOCAB` with real, common top-level
+titles from the same 6 languages (Geschäftsführer/Vorstandsvorsitzende(r)/
+Vorstand/Direktor(in) — German; Directeur/Directrice (Général(e))/Président(e)/
+PDG — French; Directora (General)/Presidente/Presidenta/Consejero(a) Delegado(a)
+— Spanish; Amministratore Delegato/Direttore(-trice) Generale — Italian;
+Diretor(a) (Geral) — Portuguese; Algemeen Directeur/Voorzitter/
+Bestuursvoorzitter — Dutch) — deliberately the same rough depth as the
+existing English list, not an exhaustive per-country title hierarchy.
+**Deliberately did NOT touch `PORTFOLIO_CLAUSE`** (the English-only
+"heads/leads/oversees" verb list `extractLeadershipEvidence()`'s narrative,
+high-confidence strategy requires) — translating verb-clause grammar across 6
+languages is a much higher-risk regex problem than extending a title noun
+list, and `extractStructuralLeadershipEvidence()` (medium confidence, name+
+title adjacency only, no portfolio clause required) already exists as the
+lower-confidence path this fix relies on for non-English titles. This is an
+honest reflection of weaker evidence for non-English leadership pages, not a
+workaround — narrative/high-confidence stays English-only for now.
+
+Also fixed the accented-name half of the same real-world symptom (a German
+"Björn Müller" or French "Étienne Lefevre" — same `\w`-ASCII bug class this
+file's audit section flagged for `website-discovery.ts`, confirmed here too):
+`STRUCTURAL_NAME_TITLE_PATTERN`'s name-capture group changed from `[A-Z]
+[a-zA-Z'.-]+` to `\p{Lu}[\p{L}'.-]+` (Unicode letter classes, `u` flag added),
+and `LEADERSHIP_TITLE_PATTERN`'s leading-capital check changed from `[A-Z]` to
+`\p{Lu}` (`u` flag added) so a name starting with an accented capital
+("Étienne") matches. **Found and fixed a real bug while wiring the `u` flag
+in**: `extractLeadershipEvidence()` reconstructed `LEADERSHIP_TITLE_PATTERN`
+per-segment via `new RegExp(LEADERSHIP_TITLE_PATTERN.source, 'g')` — hardcoding
+just `'g'` silently dropped the new `u` flag every time, which would have
+either thrown or silently failed to match `\p{Lu}`. Fixed to
+`LEADERSHIP_TITLE_PATTERN.flags` (the structural strategy's equivalent
+reconstruction already did this correctly, no bug there).
+
+**Known pre-existing limitation, confirmed unchanged, not part of this fix**:
+a name with a lowercase nobiliary particle ("Jan de Vries", "Ludwig von Мises"
+-shaped) still doesn't match — every space-separated word in the name group
+requires a leading capital, true under both the old ASCII pattern and the new
+Unicode one. Not a regression; documented via its own test case rather than
+silently left unverified.
+
+New tests in `tests/evidence-extractor-leadership.test.ts` (8 added, 15
+total): German/French/Spanish/Italian/Dutch structural-title extraction,
+an accented-name narrative (heading + portfolio-clause) match, the
+single-word non-English false-positive guard still holding, and the
+nobiliary-particle non-match documented as expected. `tsc --noEmit` clean,
+full suite 559/559 (551 pre-existing + 8 new). Dev-server sanity pass (no
+live company re-run — this is a pure regex/vocab change already covered by
+realistic unit-test content shapes, same "verify via tsc+tests+dev-server"
+precedent used elsewhere in this file for changes that don't need fresh
+network-dependent verification): zero console/server errors.
+
+**Not done — still open from the ranked audit list**: (1) the shared
+`\w`-ASCII name-normalization bug in `website-discovery.ts`/
+`competitor-discovery.ts`/`icp-generator.ts`/`company-discovery.ts` (this
+session only fixed the two leadership-extraction regexes, not the other 4
+files sharing the same bug shape); (2) `business-profile.ts` missing a
+pipeline gate; (3) `scraper.ts`'s `assessScrapeQuality()` having no
+content-relevance signal; (4) `classifySubject()`'s `'products'`/`'blog'`
+pageType exclusion. A non-English/diacritic-name benchmark fixture is still
+needed before any of these (including this session's own fix) can be
+regression-tested by `npm run benchmark`/CI — this session's verification
+was unit tests + dev-server only, per the same "no benchmark fixture exists
+yet" gap flagged in the original audit.
+
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,

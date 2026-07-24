@@ -1113,12 +1113,37 @@ function extractJobPostingWorkflowEvidence(segments: ContentSegment[]): Extracte
 // "Head of [A-Za-z ]" uses a literal space, not \s — \s matches newlines too,
 // which let this branch greedily swallow across line breaks into unrelated
 // following text (e.g. into the next paragraph on a busy team-grid page).
+//
+// Non-English titles (2026-07-24, "silent zero" audit): the English-only
+// vocab meant a real German/French/Spanish/Italian/Portuguese/Dutch
+// leadership page produced zero leadership contacts — one of the four
+// conditions that can independently trigger normalize.ts's
+// insufficientEvidence gate and force-suppress pain_points/opportunities,
+// same failure shape as the lechler.com locale bug, via a different
+// mechanism. Deliberately scoped to real, common top-level titles (the
+// same rough depth as the existing English list — Chairman/CEO/Director-
+// equivalent, not an exhaustive per-country title hierarchy), and
+// deliberately does NOT touch PORTFOLIO_CLAUSE's English-only verb list
+// below — translating "heads/leads/oversees" across 6 languages' differing
+// grammar is a much higher-risk regex problem than extending a title noun
+// list. This means non-English leadership contacts surface only via
+// extractStructuralLeadershipEvidence() (medium confidence, no portfolio
+// clause required), not extractLeadershipEvidence() (high confidence) —
+// an honest reflection of weaker evidence, not a workaround.
 const LEADERSHIP_TITLE_VOCAB =
-  'Chairman|Vice\\s+Chairman|Managing\\s+Director|Administrative\\s+Director|Director|CEO|COO|CTO|CFO|President|Vice\\s+President|VP|Head\\s+of\\s+[A-Za-z][A-Za-z &]{1,39}|Chief\\s+[A-Za-z]+\\s+Officer'
+  'Chairman|Vice\\s+Chairman|Managing\\s+Director|Administrative\\s+Director|Director|CEO|COO|CTO|CFO|President|Vice\\s+President|VP|Head\\s+of\\s+[A-Za-z][A-Za-z &]{1,39}|Chief\\s+[A-Za-z]+\\s+Officer' +
+  '|Geschäftsführer(?:in)?|Vorstandsvorsitzende(?:r)?|Vorstand|Direktor(?:in)?' +
+  '|Directeur(?:\\s+Général)?|Directrice(?:\\s+Générale)?|Président(?:e)?|PDG' +
+  '|Directora(?:\\s+General)?|Presidente|Presidenta|Consejero\\s+Delegado|Consejera\\s+Delegada' +
+  '|Amministratore\\s+Delegato|Direttore\\s+Generale|Direttrice\\s+Generale' +
+  '|Diretor(?:a)?(?:\\s+Geral)?' +
+  '|Algemeen\\s+Directeur|Voorzitter|Bestuursvoorzitter'
 
+// 'u' flag added (2026-07-24) so \p{Lu} below can match an accented leading
+// capital (e.g. "Étienne", "Ólafur") — plain [A-Z] only matched ASCII.
 const LEADERSHIP_TITLE_PATTERN = new RegExp(
-  `#{1,3}\\s*([A-Z][^\\n]{2,50})\\n+\\s*#{0,4}\\s*(${LEADERSHIP_TITLE_VOCAB})\\b`,
-  'g'
+  `#{1,3}\\s*(\\p{Lu}[^\\n]{2,50})\\n+\\s*#{0,4}\\s*(${LEADERSHIP_TITLE_VOCAB})\\b`,
+  'gu'
 )
 
 const PORTFOLIO_CLAUSE =
@@ -1130,7 +1155,7 @@ function extractLeadershipEvidence(segments: ContentSegment[], seenNames: Set<st
   const results: LeadershipContact[] = []
 
   for (const seg of segments) {
-    const regex = new RegExp(LEADERSHIP_TITLE_PATTERN.source, 'g')
+    const regex = new RegExp(LEADERSHIP_TITLE_PATTERN.source, LEADERSHIP_TITLE_PATTERN.flags)
     let match: RegExpExecArray | null
     while ((match = regex.exec(seg.text)) !== null) {
       const name = match[1].trim()
@@ -1200,9 +1225,15 @@ function isLikelyPersonName(phrase: string): boolean {
 // Smith, CEO" or "John Smith | Chief Operating Officer"). Tight adjacency
 // only — no wide-window scanning like PORTFOLIO_SEARCH_WINDOW — specifically
 // to avoid matching an unrelated title elsewhere on a busy page.
+//
+// Name group uses \p{Lu}/\p{L} (Unicode letter), not [A-Z]/[a-z] (2026-07-24,
+// "silent zero" audit) — the old ASCII-only class meant a real name with a
+// diacritic ("Björn Müller", "François Dubois") never matched at all, the
+// same failure shape as website-discovery.ts's \w-based name normalization
+// bug (see CLAUDE.md). Requires the 'u' flag to enable \p{...} escapes.
 const STRUCTURAL_NAME_TITLE_PATTERN = new RegExp(
-  `^[ \\t]*[*#>\\-]{0,3}[ \\t]*([A-Z][a-zA-Z'.-]+(?:\\s+[A-Z][a-zA-Z'.-]+){1,3})[ \\t]*[*_]{0,2}[ \\t]*(?:\\n+[ \\t]*[*#>\\-]{0,3}[ \\t]*|[ \\t]*[,|\\u2013\\u2014-][ \\t]*)(${LEADERSHIP_TITLE_VOCAB})\\b`,
-  'gm'
+  `^[ \\t]*[*#>\\-]{0,3}[ \\t]*(\\p{Lu}[\\p{L}'.-]+(?:\\s+\\p{Lu}[\\p{L}'.-]+){1,3})[ \\t]*[*_]{0,2}[ \\t]*(?:\\n+[ \\t]*[*#>\\-]{0,3}[ \\t]*|[ \\t]*[,|\\u2013\\u2014-][ \\t]*)(${LEADERSHIP_TITLE_VOCAB})\\b`,
+  'gmu'
 )
 
 function extractStructuralLeadershipEvidence(

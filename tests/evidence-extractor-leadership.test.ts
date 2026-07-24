@@ -118,6 +118,127 @@ We manufacture industrial valves and pumps for the oil and gas sector.
     expect(result.leadershipContacts).toEqual([])
   })
 
+  // 2026-07-24 "silent zero" audit fix — LEADERSHIP_TITLE_VOCAB was
+  // English-only, so a real non-English leadership page produced zero
+  // contacts. Deliberately structural-only (medium confidence) per the
+  // fix's own scoping — PORTFOLIO_CLAUSE (narrative, high confidence)
+  // stays English-only, so these must go through
+  // extractStructuralLeadershipEvidence(), not extractLeadershipEvidence().
+  it('extracts a German structural title (Geschäftsführer) with an umlaut in the name', () => {
+    const content = `
+--- PAGE: /unternehmen (https://example.com/unternehmen) ---
+
+Björn Müller
+Geschäftsführer
+`
+    const result = extractSignals(content)
+    const bjorn = result.leadershipContacts.find(c => c.name === 'Björn Müller')
+    expect(bjorn).toBeDefined()
+    expect(bjorn?.confidence).toBe('medium')
+    expect(bjorn?.title).toBe('Geschäftsführer')
+  })
+
+  it('extracts a French structural title (Directeur Général) with an accented name', () => {
+    const content = `
+--- PAGE: /entreprise (https://example.com/entreprise) ---
+
+François Dubois, Directeur Général
+`
+    const result = extractSignals(content)
+    const francois = result.leadershipContacts.find(c => c.name === 'François Dubois')
+    expect(francois).toBeDefined()
+    expect(francois?.confidence).toBe('medium')
+    expect(francois?.title).toBe('Directeur Général')
+  })
+
+  it('extracts a Spanish structural title (Presidenta) with a plain-ASCII name', () => {
+    const content = `
+--- PAGE: /nosotros (https://example.com/nosotros) ---
+
+Maria Fernandez
+Presidenta
+`
+    const result = extractSignals(content)
+    const maria = result.leadershipContacts.find(c => c.name === 'Maria Fernandez')
+    expect(maria).toBeDefined()
+    expect(maria?.confidence).toBe('medium')
+    expect(maria?.title).toBe('Presidenta')
+  })
+
+  it('extracts an Italian structural title (Amministratore Delegato)', () => {
+    const content = `
+--- PAGE: /azienda (https://example.com/azienda) ---
+
+Luca Rossi | Amministratore Delegato
+`
+    const result = extractSignals(content)
+    const luca = result.leadershipContacts.find(c => c.name === 'Luca Rossi')
+    expect(luca).toBeDefined()
+    expect(luca?.title).toBe('Amministratore Delegato')
+  })
+
+  it('extracts a Dutch structural title (Voorzitter)', () => {
+    const content = `
+--- PAGE: /over-ons (https://example.com/over-ons) ---
+
+Anna Bakker
+Voorzitter
+`
+    const result = extractSignals(content)
+    const anna = result.leadershipContacts.find(c => c.name === 'Anna Bakker')
+    expect(anna).toBeDefined()
+    expect(anna?.title).toBe('Voorzitter')
+  })
+
+  // Nobiliary/prefix particles (de/van/von/da) start lowercase — this was
+  // never matched even under the old ASCII-only pattern (every word in the
+  // name group required a leading capital), so it's a pre-existing,
+  // out-of-scope limitation, not something this session's fix touches.
+  // Documented here rather than silently left unverified.
+  it('does not match a name containing a lowercase nobiliary particle (pre-existing limitation, unchanged)', () => {
+    const content = `
+--- PAGE: /over-ons (https://example.com/over-ons) ---
+
+Jan de Vries
+Voorzitter
+`
+    const result = extractSignals(content)
+    expect(result.leadershipContacts.some(c => c.name.includes('Vries'))).toBe(false)
+  })
+
+  it('extracts a narrative heading match with an accented leading capital in the name', () => {
+    const content = `
+--- PAGE: /leadership (https://example.com/leadership) ---
+
+### Étienne Lefevre
+
+#### Chief Executive Officer
+
+Étienne Lefevre leads the global operations strategy for the entire company.
+`
+    const result = extractSignals(content)
+    const etienne = result.leadershipContacts.find(c => c.name === 'Étienne Lefevre')
+    expect(etienne).toBeDefined()
+    expect(etienne?.confidence).toBe('high')
+    expect(etienne?.title).toBe('Chief Executive Officer')
+  })
+
+  // NON_NAME_WORDS itself stays English-only (out of scope for this fix,
+  // per CLAUDE.md's audit note) — this only confirms isLikelyPersonName()'s
+  // 2-4 word-count guard still rejects a single-word non-English phrase
+  // adjacent to a (now-recognized) non-English title, i.e. the new vocab
+  // entries don't bypass the existing false-positive guard entirely.
+  it('rejects a single-word phrase adjacent to a non-English title (word-count guard still applies)', () => {
+    const content = `
+--- PAGE: /karriere (https://example.com/karriere) ---
+
+Qualitätskontrolle
+Direktor
+`
+    const result = extractSignals(content)
+    expect(result.leadershipContacts.some(c => c.name === 'Qualitätskontrolle')).toBe(false)
+  })
+
   it('a "Head of X" title does not greedily swallow text across a line break (2026-07-19 fix)', () => {
     const content = `
 --- PAGE: /leadership (https://example.com/leadership) ---
