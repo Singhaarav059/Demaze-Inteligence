@@ -546,10 +546,73 @@ const CORPORATE_CATEGORIES_B2C = new Set([
   'sustainability', 'careers', 'technology', 'media',
 ])
 
-function selectUrlsToScrape(
+// ── Locale-aware scoring ────────────────────────────────────────
+// Many global corporate sites (e.g. TYPO3/Drupal multi-market sites like
+// lechler.com) publish the same content under per-country/language path
+// prefixes (/de/, /fr/, /es/, /de-en/, /in-en/, /be-nl/...). classifyUrl()
+// scores purely on keyword content, so a French or German page can
+// outscore its English counterpart just by sharing the same corporate/
+// b2b_services keyword deeper in the path — and evidence-extractor.ts's
+// subject-classification and SIGNAL_PATTERNS regexes are English-only, so
+// a non-English page silently contributes zero usable evidence even when
+// Firecrawl scrapes it successfully. Confirmed live (2026-07-24):
+// lechler.com scraped 7 pages at 95/100 quality, 11 of 15 selected
+// candidates were German/French/Spanish/Finnish/Dutch, and
+// companySubjectCount came back 0 despite genuinely rich content existing.
+// This doesn't exclude non-English pages outright (a French-only site
+// still needs to surface SOMETHING) — it deprioritizes them behind
+// English/unlabeled pages of the same category.
+//
+// A first-path-segment only counts as a real locale prefix when it (a)
+// looks locale-shaped (2 letters, or 2 letters + hyphen + 2 letters) AND
+// (b) repeats across 3+ distinct candidate URLs — the same "require
+// repeated structural evidence, not a single match" discipline this
+// codebase already uses to avoid the 'ir'-inside-'wire' false-positive
+// class (see matchesKeyword()'s doc comment), applied here to a new kind
+// of false positive: a one-off 2-letter segment (e.g. a genuine /ir/
+// investor-relations page) is not a site-wide locale switcher. Segments
+// that collide with an existing short (<=3 char) category keyword
+// (currently 'ir', 'ai') are excluded outright regardless of repetition,
+// since classifyUrl() already gives those a real, more specific meaning.
+const LOCALE_SEGMENT_RE = /^[a-z]{2}(-[a-z]{2})?$/i
+const MIN_LOCALE_REPEAT = 3
+const NON_ENGLISH_LOCALE_PENALTY = 40
+
+const SHORT_CATEGORY_KEYWORDS = new Set(
+  Object.values(URL_CATEGORY_CONFIG)
+    .flatMap((c) => c.keywords)
+    .filter((kw) => kw.length <= 3)
+)
+
+function firstPathSegment(path: string): string | undefined {
+  return path.split('/').filter(Boolean)[0]?.toLowerCase()
+}
+
+export function detectLocalizedUrlStructure(urls: string[]): Set<string> {
+  const counts = new Map<string, number>()
+  for (const url of urls) {
+    let path: string
+    try { path = new URL(url).pathname } catch { continue }
+    const seg = firstPathSegment(path)
+    if (!seg || !LOCALE_SEGMENT_RE.test(seg) || SHORT_CATEGORY_KEYWORDS.has(seg)) continue
+    counts.set(seg, (counts.get(seg) ?? 0) + 1)
+  }
+  const confirmed = new Set<string>()
+  for (const [seg, count] of counts) {
+    if (count >= MIN_LOCALE_REPEAT) confirmed.add(seg)
+  }
+  return confirmed
+}
+
+export function isEnglishLocaleSegment(seg: string): boolean {
+  return seg === 'en' || seg.endsWith('-en')
+}
+
+export function selectUrlsToScrape(
   candidates: string[],
   isB2C: boolean,
-  limit: number
+  limit: number,
+  localeSegments: Set<string> = new Set()
 ): { selected: string[]; scored: ScoredLink[] } {
   const seen = new Set<string>()
   const scored: ScoredLink[] = []
@@ -561,7 +624,7 @@ function selectUrlsToScrape(
     if (seen.has(url)) continue
     seen.add(url)
 
-    const { category, score } = classifyUrl(path)
+    const { category, score: baseScore } = classifyUrl(path)
 
     if (isB2C) {
       // Positive allowlist: on consumer sites, only keep pages we
@@ -569,6 +632,11 @@ function selectUrlsToScrape(
       // and 'other' (unrecognised paths that are likely still B2C).
       if (!CORPORATE_CATEGORIES_B2C.has(category)) continue
     }
+
+    const seg = firstPathSegment(path)
+    const score = seg && localeSegments.has(seg) && !isEnglishLocaleSegment(seg)
+      ? Math.max(0, baseScore - NON_ENGLISH_LOCALE_PENALTY)
+      : baseScore
 
     scored.push({ url, score, tier: category })
   }
@@ -1055,7 +1123,13 @@ export async function scrapeCompanyWebsite(baseUrl: string): Promise<ScrapeResul
   console.log(`[Scraper] Sitemap URLs found: ${sitemapSameDomain.length}`)
   console.log(`[Scraper] Total candidates: ${allCandidates.length}`)
 
-  const { selected, scored } = selectUrlsToScrape(allCandidates, isB2C, MAX_DISCOVERED_PAGES)
+  const localeSegments = detectLocalizedUrlStructure(allCandidates)
+  const nonEnglishLocaleSegments = [...localeSegments].filter((seg) => !isEnglishLocaleSegment(seg))
+  if (nonEnglishLocaleSegments.length > 0) {
+    console.log(`[Scraper] Multi-locale site detected — deprioritizing non-English locale prefixes: ${nonEnglishLocaleSegments.join(', ')}`)
+  }
+
+  const { selected, scored } = selectUrlsToScrape(allCandidates, isB2C, MAX_DISCOVERED_PAGES, localeSegments)
   debugInfo.linkScores = scored
 
   let pagesToScrape = selected

@@ -348,6 +348,78 @@ Probe trigger fires when EITHER:
   This reuses data already returned by Firecrawl/Jina mapUrl and should be built into
   `anchor-text-scorer.ts` before inventing more URL-keyword heuristics.
 
+## RESOLVED 2026-07-24 — multi-locale sites (lechler.com): non-English page
+## duplicates were crowding out English content, zeroing out pain_points/opportunities
+User reported lechler.com (a German spray-nozzle manufacturer, real, content-rich
+site) coming back with 0 pain points and 0 opportunities. Root-caused via a live
+force-fresh run (not guessed): the scrape itself was fine (7 pages, quality
+95/100) — but `classifyUrl()`'s keyword scoring has no language awareness, and
+lechler.com is a heavily multi-locale TYPO3 site (`/de/`, `/fr/`, `/es/`, `/it/`,
+`/ru/`, `/se/`, `/fi/`, plus `-en`-suffixed English variants like `/de-en/`,
+`/in-en/`, `/be-nl/`). A French `/fr/solutions/secteurs/...` page scores
+identically to its English equivalent purely on keyword match, so 11 of the top
+15 selected pages were German/French/Spanish/Finnish/Dutch. `evidence-
+extractor.ts`'s subject-classification and `SIGNAL_PATTERNS` regexes are
+English-only, so those non-English pages contributed real scraped content but
+zero usable signal — `companySubjectCount` and `signals.length` both came back
+0, which fired the `insufficientEvidence` gate (see the "Insufficient Evidence
+outcome" section above) and force-suppressed both `pain_points` and
+`opportunities` even though the LLM's own narrative output that run actually
+had 4 of each (`LLM_PARSE` stage reported "4 pain_points | 4 opportunities";
+`NORMALIZATION` reported "0 pain_points and 0 opportunities" — that gate's own
+existing WARN message, working as designed).
+
+**Fixed** in `lib/pipeline/scraper.ts`: `detectLocalizedUrlStructure()` scans
+the full candidate URL list, finds first-path-segments that (a) look
+locale-shaped (`/^[a-z]{2}(-[a-z]{2})?$/i` — 2 letters, or 2+hyphen+2) AND (b)
+repeat across 3+ distinct URLs (same "require repeated structural evidence, not
+a single match" discipline as the historical `matchesKeyword()` word-boundary
+fix, applied to a new false-positive shape: a genuine one-off `/ir/` investor-
+relations page must never be mistaken for a locale switcher). Segments
+colliding with an existing short (<=3 char) category keyword (`ir`, `ai`) are
+excluded outright regardless of repetition. `selectUrlsToScrape()` then applies
+a 40-point score penalty to any URL whose first segment is a confirmed
+non-English locale (English = segment `en` or ending `-en`) — this
+deprioritizes, not excludes, so a genuinely non-English-only site still gets
+scraped rather than coming back empty. Both new functions
+(`detectLocalizedUrlStructure`, `isEnglishLocaleSegment`) plus
+`selectUrlsToScrape` itself exported for testability, same precedent as
+`isPdfUrl`/`buildDiscoveryQueries` elsewhere in this codebase.
+
+New `tests/scraper-locale.test.ts` (11 assertions): confirms/rejects locale
+segments by repeat count, the `ir`/`ai` collision guards specifically, no
+penalty on unlabeled paths, non-English pages still selected when nothing else
+exists, and a scoring reproduction of the exact lechler.com regression.
+`tsc --noEmit` clean, full suite 551/551 (540 pre-existing + 11 new).
+
+**Live-verified end-to-end, not just via unit test.** Re-ran lechler.com
+force-fresh after restarting the dev server (per this file's own Windows
+file-watcher gotcha): `linkScores` confirmed the penalty firing correctly in
+production — German/French/Spanish pages that previously scored 90/75/65 now
+score 35/30/25/0, while English pages (`de-en/company/events`, `in-en/
+products/process-technology`, etc.) kept their original unpenalized scores and
+now rank at the top of the selection. End result: `PAIN_POINTS` gate went from
+`"0 pain_point(s) | evidence_sufficiency=insufficient"` to `"4 pain_point(s) |
+evidence_sufficiency=sufficient"`, `NORMALIZATION` from `"0 pain_points and 0
+opportunities"` to `"4 pain_points | 4 opportunities"` — both driven purely by
+one new deterministic signal now being detected from the improved English-page
+mix (`companySubjectCount` is still 0 for this company; the fix improved
+`signals.length` from 0 to 1, which was enough to flip the insufficientEvidence
+AND-gate). Rendered report now shows 4 real, specific pain points (nozzle
+production quality consistency, custom-order engineering lead time, spray
+equipment downtime, multi-site visibility) and 4 opportunities, each tied to a
+named Demaze-shaped capability — not the generic-padding anti-pattern this
+repo's opportunity engine exists to avoid.
+
+**Known residual gap, not fixed**: `MIN_LOCALE_REPEAT=3` is deliberately
+conservative — a locale segment appearing only 1-2 times in the candidate list
+won't get flagged (e.g. lechler.com's `/fr/` only appeared twice among the 59
+candidates and stayed unpenalized this run). This is an intentional
+under-confidence tradeoff (same philosophy as `website-discovery.ts`'s
+ambiguous-match handling) to avoid false-positiving on a genuine one-off
+content path — not worth tightening unless a future company shows this
+under-catching a real multi-locale structure.
+
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,
