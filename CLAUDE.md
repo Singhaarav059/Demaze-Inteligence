@@ -1002,6 +1002,90 @@ the full 10-company sequence to confirm timing correlation — not done, not
 clearly worth the added quota spend given the individual re-runs already
 confirm both domains are genuinely reachable and produce good output).
 
+## RESOLVED 2026-07-27 — A-1 Fence Products / Bharat Forge `primary_type`
+## flakiness from the re-verification above — two distinct real root causes
+The re-verification directly above flagged both companies' `primary_type:
+unknown` as "real content-dependent non-determinism, not caused by this
+session's fixes" — true, but that stopped short of actually diagnosing
+WHY, on the theory it was pre-existing and out of scope. User asked for the
+actual fix next, so this session investigated both properly with real data
+(cheap `test-scraper`-only calls, no LLM cost, before touching any code) —
+found two genuinely different bugs, not one shared cause.
+
+**Bharat Forge — real regex-coverage gap, not a scraping problem.** The
+homepage scraped cleanly (5000 real chars) both times. Pulled the actual
+homepage markdown and read it directly: "*Bharat Forge Limited... is a
+global leader in high-performance components across sectors such as
+Automotive, Railways, Defence... With over half a century of manufacturing
+history, we have the largest repository of metallurgical knowledge...*" —
+genuine, strong manufacturer-describing language that literally none of the
+9 existing `manufacturer` regex patterns in `evidence-extractor.ts`'s
+`buildCompanyProfile()` covered: the "leader in X" pattern's noun list
+(forgings/castings/stampings/machining/fabrication/manufactur\*) didn't
+include "components", and there was no pattern at all for "N years/
+decades/century of manufacturing" — a specific, low-risk, unambiguous
+self-description. **Fixed**: extended the "leader in X" pattern to also
+accept `(?:precision|high[\s-]performance|engineered)\s+components?` (the
+qualifier requirement deliberately excludes bare "leader in
+components"/"leader in products" — too generic, could fire for almost any
+industry, the exact "generic industry label, not a sales-useful signal"
+anti-pattern this file's own "Why this exists" section warns against), and
+added a new pattern for `(?:years?|decades?|century|centuries)\s+of\s+
+manufactur\w+`. New `tests/evidence-extractor-manufacturer.test.ts` (7
+assertions, `buildCompanyProfile()`'s first dedicated test file — no prior
+coverage existed for this function at all): both new patterns against the
+real captured Bharat Forge text, a combined-both-patterns case, two
+false-positive guards (bare "leader in components"/"leader in products"
+correctly still don't match), a non-regression check that the original
+noun-list pattern still works, and a non-regression check that an unrelated
+"years of X" phrase doesn't accidentally match. **Live-verified twice**:
+re-ran bharatforge.com through the real pipeline (cached scrape, no code
+change needed to the scrape itself) — `GATE_PASS stage=PROFILE
+reason="Profile extracted: primary=manufacturer | companySubjectCount=3"`,
+then a full run completed `GATE_OVERALL=PASS` end to end (up from the
+benchmark's `primary_type=unknown` FAIL).
+
+**A-1 Fence Products — a real scraper-logic bug, unrelated to Bharat
+Forge's.** Pulled the actual scrape debug info directly: `"errors":
+["Homepage failed: Homepage scrape timed out"]`, but `"sitemapUrlsFound":
+125` — the sitemap fetch succeeded and found 125 real URLs in the exact
+same request that timed out on the homepage specifically. Yet
+`"urlsSelectedForScraping": []` and `"discoveryMethod": "homepage_only"` —
+zero pages ended up selected despite 125 real candidates sitting right
+there. Root cause, found in `lib/pipeline/scraper.ts`'s
+`scrapeCompanyWebsite()`: when `homepage.page.success` is `false`, the
+function tries Jina-reader and web-search fallback tiers, then
+**unconditionally returns** — completely discarding `sitemapUrls`/
+`rawMapUrls`, both already fetched in the same parallel `Promise.all()` at
+the top of the function, independent of whether the homepage-specific
+sub-request happened to succeed. A single slow/timed-out homepage fetch
+doesn't mean the rest of the domain is unreachable; the sitemap proved that
+directly, live, this exact run. **Fixed**: the homepage-failure branch now
+checks whether `rawMapUrls`/`sitemapUrls` contain any same-domain
+candidates before giving up — if they do, it logs and falls through into
+the normal Step 3+ discovery/selection/scraping flow instead of returning
+early. No separate guard needed for the two steps that read
+`homepage.page.markdown`/`homepage.links` (B2C detection, homepage-link
+extraction) — both already degrade safely to empty/false on a failed
+homepage fetch, confirmed by reading them rather than assumed. **Live
+verification is honest about its limits**: a live `force=true` re-scrape of
+a-1fenceproducts.com did NOT reproduce the original timeout (the homepage
+succeeded cleanly this time, 5000 chars / 38 links / 134 total candidates,
+`SCRAPE:PASS` at 100/100 quality, `primary=manufacturer`) — transient
+network timeouts aren't reliably reproducible on demand, so the NEW
+fallback branch specifically was not exercised live this session. Confirmed
+instead via direct code reading (the two steps it falls through into are
+provably homepage-failure-safe) and `tsc --noEmit`; no unit test added —
+`scrapeCompanyWebsite()` has no existing test coverage of any kind (would
+need substantial new Firecrawl-SDK mocking infrastructure this repo doesn't
+have yet for any scraper function, disproportionate to this fix — flagged
+here rather than silently skipped).
+
+**Verified**: `tsc --noEmit` clean, full suite 585/585 (578 pre-existing +
+7 new, all in the new Bharat Forge test file). Both companies also
+re-verified via their normal, already-working (homepage-succeeds) path
+live, confirming zero regression from either change.
+
 ## Company-specific known issues (context for whoever debugs these next)
 - **AITG**: superseded (2026-07-11) — the "signals=0, opportunities=0" state
   described below is resolved. Real root causes were, in order: (1) the

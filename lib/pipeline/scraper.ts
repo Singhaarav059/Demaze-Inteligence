@@ -1041,15 +1041,38 @@ export async function scrapeCompanyWebsite(baseUrl: string): Promise<ScrapeResul
       console.log(`[Scraper] Jina rescued scrape (${jinaResult.totalCharCount} chars)`)
       return jinaResult
     }
-    // Tier 2: Firecrawl web search fallback
-    const fallback = await searchFallbackScrape(client, safeBase)
-    if (fallback && fallback.totalCharCount > 200) return fallback
-    return buildResult(allResults, 'homepage_only', debugInfo)
-  }
 
-  console.log(
-    `[Scraper] Homepage: ${homepage.page.charCount} chars, ${homepage.links.length} raw links`
-  )
+    // Before giving up: sitemapUrls/rawMapUrls were already fetched above,
+    // in parallel with (and independent of) the homepage request — a single
+    // slow/timed-out homepage fetch doesn't mean the rest of the domain is
+    // unreachable. Found live 2026-07-27 re-verifying a benchmark failure:
+    // a-1fenceproducts.com's homepage fetch timed out, but its sitemap.xml
+    // still returned 125 real URLs — previously discarded entirely by this
+    // early return, producing an empty scrape (0 pages beyond the failed
+    // homepage stub) despite real, scrapable content being one step away.
+    const baseDomainOnFailure = new URL(safeBase).hostname.replace(/^www\./, '')
+    const hasCandidatesWithoutHomepage =
+      rawMapUrls.some(u => { try { return new URL(u).hostname.replace(/^www\./, '') === baseDomainOnFailure } catch { return false } }) ||
+      sitemapUrls.some(u => { try { return new URL(u).hostname.replace(/^www\./, '') === baseDomainOnFailure } catch { return false } })
+
+    if (!hasCandidatesWithoutHomepage) {
+      // Tier 2: Firecrawl web search fallback — no candidates from any source
+      const fallback = await searchFallbackScrape(client, safeBase)
+      if (fallback && fallback.totalCharCount > 200) return fallback
+      return buildResult(allResults, 'homepage_only', debugInfo)
+    }
+
+    console.log(`[Scraper] Homepage failed but mapUrl/sitemap discovery found real candidates — proceeding without homepage nav links`)
+    // Falls through to Step 3 below. B2C detection and homepage-link
+    // extraction both already degrade safely on empty homepage.page.markdown/
+    // homepage.links (B2C detection reads 0 pattern matches; homepage-link
+    // extraction's own existing "0 links found" branch already retries via
+    // Jina) — no separate guard needed for either.
+  } else {
+    console.log(
+      `[Scraper] Homepage: ${homepage.page.charCount} chars, ${homepage.links.length} raw links`
+    )
+  }
 
   // ── Step 3: B2C detection ────────────────────────────────────
   // Two signals — either one triggers B2C mode:

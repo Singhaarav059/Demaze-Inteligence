@@ -836,9 +836,23 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
     [/\b(?:component|forging|casting|stamping|fabricat\w+|precision|contract|industrial|automotive)\s+manufacturer\b/i, 'X manufacturer (standalone noun)'],
     [/\bwe\s+are\s+(?:a|an|the)\s+(?:\w+\s+){0,2}manufacturer\b/i,                                     'we are a/the ... manufacturer'],
     [/\bmanufactur\w+\s+and\s+export(?:ing|s|ed)?\b/i,                                                  'manufactures and exports'],
-    [/\bleader\s+in\s+(?:forgings?|castings?|stampings?|machining|fabrication|manufactur\w+)\b/i,        'leader in forgings/castings/machining/...'],
+    // "leader in high-performance components" (a qualifier + "components"/"parts",
+    // not just the forging/casting/etc. noun list) — real gap found live 2026-07-27
+    // re-verifying a benchmark failure: Bharat Forge's actual homepage copy reads
+    // "global leader in high-performance components across sectors such as
+    // Automotive, Railways...", which this pattern's original noun list didn't
+    // cover at all (only forgings/castings/stampings/machining/fabrication/
+    // manufactur*). The qualifier requirement (precision/high-performance/
+    // engineered) keeps bare "leader in components"/"leader in products" — too
+    // generic, could fire for almost any industry — from matching.
+    [/\bleader\s+in\s+(?:forgings?|castings?|stampings?|machining|fabrication|manufactur\w+|(?:precision|high[\s-]performance|engineered)\s+components?)\b/i, 'leader in forgings/castings/machining/.../high-performance components'],
     [/\bour\s+(?:forging|casting|stamping|machining|fabrication|welding)\s+operations?\b/i,              'our forging/casting/welding operations'],
     [/\b(?:forging|casting|stamping|fabrication|machining)\s+(?:company|business|operations?)\b/i,      'forging/casting company/business/operations'],
+    // "over half a century of manufacturing history/experience" — same real
+    // gap, found on the same Bharat Forge page. A specific, low-risk signal:
+    // a company describing its own tenure in years/decades/a century of
+    // manufacturing is unambiguously a manufacturer, not marketing puffery.
+    [/\b(?:years?|decades?|century|centuries)\s+of\s+manufactur\w+/i,                                    'N years/decades/century of manufactur*'],
     // Enumerated capability lists ("fabrication, machining, control system design facility")
     // put other nouns between the capability keyword and facility/plant/unit — the patterns
     // above all require direct adjacency and miss this list-style copy. Bounded to 40 chars
