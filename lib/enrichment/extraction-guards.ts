@@ -51,10 +51,26 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// JavaScript's \b is always defined in terms of the ASCII \w class, even
+// under the 'u' flag — it does not become Unicode-aware just by adding 'u'.
+// So a word starting or ending with an accented letter (e.g. "société") is
+// never matched by a plain \b-anchored pattern, regardless of how the word
+// itself was normalized. Manual Unicode-aware boundary via negative
+// lookaround instead — see website-discovery.ts's identical helper
+// (2026-07-24 fix) for the full rationale.
+function wordBoundaryRegex(word: string, flags = ''): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(word)}(?![\\p{L}\\p{N}])`, flags + 'u')
+}
+
 function significantWords(name: string): string[] {
   return name
     .toLowerCase()
-    .replace(/[^\w\s-]/g, ' ')
+    // \p{L}/\p{N} (Unicode letter/number), not \w — same 2026-07-24 fix as
+    // website-discovery.ts's normalizeCompanyName(). Without this, a real
+    // accented company name would never reliably pass mentionsCompany()
+    // below, silently filtering out every legitimate search result for
+    // that company before extraction even runs.
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .split(/\s+/)
     .filter(w => w.length > 1 && !GENERIC_NAME_WORDS.has(w))
 }
@@ -70,7 +86,7 @@ export function mentionsCompany(text: string, companyName: string): boolean {
   const words = significantWords(companyName)
   if (words.length === 0) return true // nothing meaningful to check against — don't block
   const haystack = text || ''
-  const present = words.filter(w => new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(haystack))
+  const present = words.filter(w => wordBoundaryRegex(w, 'i').test(haystack))
   if (words.length <= 2) return present.length === words.length
   return present.length / words.length >= 0.6
 }
@@ -89,7 +105,7 @@ export function looksLikeSentenceFragment(name: string): boolean {
   const trimmed = name.trim()
   if (!trimmed) return true
   if (DIMENSION_OR_ASSET_SHAPE.test(trimmed)) return true
-  const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase().replace(/[^\w]/g, '') ?? ''
+  const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') ?? ''
   return FRAGMENT_STARTERS.has(firstWord)
 }
 
@@ -154,7 +170,7 @@ export function mentionsTopic(text: string, topic: string): boolean {
   const words = significantWords(topic)
   if (words.length === 0) return true // nothing meaningful to check against — don't block
   const haystack = text || ''
-  const present = words.filter(w => new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(haystack))
+  const present = words.filter(w => wordBoundaryRegex(w, 'i').test(haystack))
   if (present.length === 0) return false // near-zero overlap — the case this exists to catch
   if (words.length <= 3) return true // any real shared word is enough for a short topic phrase
   return present.length / words.length >= 0.34

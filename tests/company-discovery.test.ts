@@ -326,6 +326,17 @@ describe('filterAlreadyResearched', () => {
     expect(survivors).toHaveLength(1)
   })
 
+  // 2026-07-24 fix: normalizeName() used to strip [^\w\s-] (ASCII-only in
+  // JS), mangling an accented company name to something that would never
+  // match itself across two differently-cased/punctuated mentions of the
+  // same real company.
+  it('filters a no-domain candidate with an accented name by normalized match (Unicode-aware)', () => {
+    const companies = [match('Möller Group')]
+    const history = [{ companyUrl: 'Möller Group Ltd', domain: null }]
+    const { survivors } = filterAlreadyResearched(companies, history)
+    expect(survivors).toHaveLength(0)
+  })
+
   it('survives everything when history is empty', () => {
     const companies = [match('Bharat Forge', 'bharatforge.com'), match('Om Enterprises')]
     const { survivors, filteredOut } = filterAlreadyResearched(companies, [])

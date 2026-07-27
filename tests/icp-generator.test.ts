@@ -16,6 +16,7 @@ import {
   buildOfferingICPQueries,
   buildBusinessProfileICPQueries,
   mergeICPResults,
+  normalizeSegmentName,
   type ICPCandidate,
   type ICPDiscoveryResult,
 } from '../lib/enrichment/icp-generator'
@@ -41,6 +42,19 @@ describe('classifySegmentRejection — filtering rules', () => {
 
   it('accepts a real segment name', () => {
     expect(classifySegmentRejection('automotive manufacturers', company)).toBeNull()
+  })
+
+  // 2026-07-24 fix: normalizeSegmentName() used to strip [^\w\s&-] (ASCII-
+  // only in JS), so an accented segment name would collapse to something
+  // shorter than the 3-char floor or lose its distinguishing characters
+  // entirely before the real filtering rules ever ran.
+  it('preserves diacritics instead of blanking them to spaces', () => {
+    expect(normalizeSegmentName('Société Générale')).toBe('société générale')
+    expect(normalizeSegmentName('food & beverage')).toBe('food & beverage')
+  })
+
+  it('accepts a real accented segment name (does not falsely reject as too-short/generic)', () => {
+    expect(classifySegmentRejection('énergie renouvelable', company)).toBeNull()
   })
 
   it('accepts a proper-noun-shaped industry segment', () => {

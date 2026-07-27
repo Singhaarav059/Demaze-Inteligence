@@ -77,7 +77,9 @@ export function normalizeName(name: string): string {
   return name
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
-    .replace(/[^\w\s-]/g, ' ')
+    // \p{L}/\p{N} (Unicode letter/number), not \w — see website-discovery.ts's
+    // normalizeCompanyName() for the full 2026-07-24 fix rationale.
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }

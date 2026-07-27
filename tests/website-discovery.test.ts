@@ -101,6 +101,86 @@ function searchReturns(urls: string[]) {
   )
 }
 
+// ── \w-ASCII name-normalization fix (2026-07-24) ──────────────────────
+// normalizeCompanyName() used to strip [^\w\s-] — ASCII-only in JS — so an
+// accented company name like "Möller Group" was mangled to "m ller group"
+// before any word-matching happened at all. Separately, even after fixing
+// the character class, JS's \b is ALWAYS ASCII-\w-based (the 'u' flag does
+// not change this), so a name starting/ending with an accented letter
+// (e.g. "Société", which ends in "é") still wouldn't match a plain
+// \b-anchored regex — wordBoundaryRegex()'s manual lookaround boundary is
+// what actually fixes that half of the bug.
+
+describe('normalizeCompanyName — Unicode-aware punctuation stripping', () => {
+  it('preserves diacritics instead of blanking them to spaces', () => {
+    expect(normalizeCompanyName('Möller Group')).toBe('möller group')
+    expect(normalizeCompanyName('Société Générale')).toBe('société générale')
+  })
+
+  it('still strips real punctuation and collapses whitespace', () => {
+    expect(normalizeCompanyName('Möller, Inc.!!')).toBe('möller')
+  })
+})
+
+describe('scoreCandidate — accented company names', () => {
+  it('scores a full title match as high confidence for a name with an internal diacritic', () => {
+    const identity: HomepageIdentity = {
+      title: 'Möller Group - Industrial Automation',
+      description: '',
+      bodySnippet: '',
+    }
+    const result = scoreCandidate(wordsFor('Möller Group'), identity)
+    expect(result.confidence).toBe('high')
+  })
+
+  it('scores a full title match for a name ENDING in a diacritic (the \\b-boundary edge case)', () => {
+    // "Société" ends in "é" — a plain \b-anchored regex would never match
+    // this at all, since \b only fires at a \w/\W transition and "é" isn't
+    // \w under JS's ASCII-only definition. This is the case that would have
+    // silently stayed broken if only the strip-regex had been fixed.
+    const identity: HomepageIdentity = {
+      title: 'Société Générale - Global Banking',
+      description: '',
+      bodySnippet: '',
+    }
+    const result = scoreCandidate(wordsFor('Société Générale'), identity)
+    expect(result.confidence).toBe('high')
+  })
+
+  it('scores a real body-only match (words together) as medium for an accented multi-word name', () => {
+    const identity: HomepageIdentity = {
+      title: 'Home',
+      description: '',
+      bodySnippet: 'Welcome to Société Générale, a leading global banking group.',
+    }
+    const result = scoreCandidate(wordsFor('Société Générale'), identity)
+    expect(result.confidence).toBe('medium')
+  })
+})
+
+describe('wordsAppearTogether — accented words', () => {
+  it('is true when accented words appear in the same mention', () => {
+    const text = 'Welcome to Société Générale, a leading global banking group.'
+    expect(wordsAppearTogether(['société', 'générale'], text)).toBe(true)
+  })
+})
+
+describe('discoverCompanyWebsite — accented company name end to end', () => {
+  it('confirms Möller Group at high confidence via a title match', async () => {
+    searchReturns(['https://moller-group.example'])
+    pages['moller-group.example'] = {
+      title: 'Möller Group - Industrial Automation',
+      description: '',
+      body: '',
+    }
+
+    const result = await discoverCompanyWebsite('Möller Group')
+    expect(result.status).toBe('confirmed')
+    expect(result.domain).toBe('moller-group.example')
+    expect(result.confidence).toBe('high')
+  })
+})
+
 // ── Pure helper: isKnownNonCorporateDomain ──────────────────────────
 
 describe('isKnownNonCorporateDomain', () => {

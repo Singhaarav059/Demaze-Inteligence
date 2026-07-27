@@ -41,6 +41,14 @@ describe('isSelfName — word-boundary self-match', () => {
     expect(isSelfName('Ace Hardware', 'Ace Pipeline')).toBe(false)
   })
 
+  // 2026-07-24 fix: normalizeName() used to strip [^\w\s-] (ASCII-only in
+  // JS), mangling "Möller Group" -> "m ller group" before word-overlap
+  // comparison ever ran — "möller" and "m" share zero words in common, so
+  // this would have silently failed to self-match before the fix.
+  it('matches an accented name against itself (Unicode-aware normalization)', () => {
+    expect(isSelfName('Möller Group', 'Möller Group')).toBe(true)
+  })
+
   it('does NOT match an unrelated single-word name against a multi-word one', () => {
     expect(isSelfName('Bharat Forge', 'Ador Welding')).toBe(false)
   })

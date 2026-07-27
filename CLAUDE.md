@@ -579,6 +579,99 @@ regression-tested by `npm run benchmark`/CI — this session's verification
 was unit tests + dev-server only, per the same "no benchmark fixture exists
 yet" gap flagged in the original audit.
 
+## RESOLVED 2026-07-24 — shared `\w`-ASCII name-normalization bug (audit
+## item ranked #2, item (1) from the leadership-fix session's "not done" list)
+Five files independently stripped `[^\w\s-]`-shaped character classes to
+normalize a company/segment name for word-boundary matching — `\w` is
+ASCII-only in JS (`[A-Za-z0-9_]`), so any name with a diacritic (French/
+German/Spanish/Nordic/Portuguese, the same real-world set the locale-
+scoring and leadership-vocab fixes above target) got mangled BEFORE any
+matching logic ran: `"Möller Group"` → `"m ller group"` →
+`significantWords()` splits into `["m", "ller", "group"]`, corrupting every
+downstream word-boundary check. This is upstream of and independent from
+the locale/leadership-vocab bugs — it corrupts company IDENTITY resolution
+at Step 0 (`website-discovery.ts`, before scraping even starts) and the
+company-name self-reference/relevance checks used throughout enrichment,
+not just evidence extraction on already-scraped content.
+
+**A second, separate root cause found while fixing the first**: even after
+preserving accented characters in the normalized word, the `\b${word}\b`
+constructions built around them still wouldn't reliably match — JavaScript's
+`\b` is ALWAYS defined in terms of the ASCII `\w` class, REGARDLESS of the
+`u` flag (a genuinely easy-to-miss subtlety, not commonly known). A word
+that starts or ends with an accented letter (e.g. `"société"`, which ends in
+"é") has no `\w`/`\W` transition at that boundary once the character class
+fix is applied on its own — `\b` silently fails to match there, since both
+the accented letter and whatever follows it (space, punctuation) are
+non-`\w`. Confirmed via a real audit-derived test case ("Société Générale")
+that would have stayed silently broken under a naive "just widen the strip
+regex" fix — this is exactly why the fix needed two parts, not one.
+
+**Fixed, both parts, across all 5 files**:
+1. Every `[^\w\s-]`-shaped strip regex switched to `[^\p{L}\p{N}\s-]`
+   (`icp-generator.ts`'s variant additionally keeps `&`) with the `u` flag —
+   `website-discovery.ts`'s `normalizeCompanyName()`,
+   `evidence-extractor.ts`'s `firstSignificantWord()`,
+   `competitor-discovery.ts`'s `normalizeName()`, `icp-generator.ts`'s
+   `normalizeSegmentName()`, `company-discovery.ts`'s `normalizeName()`
+   (this file's own separate duplicate copy), and
+   `extraction-guards.ts`'s `significantWords()` (the shared relevance
+   gate both `competitor-discovery.ts` and `icp-generator.ts` filter every
+   search result through — arguably the highest-impact single fix here,
+   since a broken match here silently drops every search result for an
+   accented-name company before extraction ever runs) and
+   `looksLikeSentenceFragment()`'s first-word cleanup.
+2. New `wordBoundaryRegex(word, flags)` helper — `(?<![\p{L}\p{N}])word(?![\p{L}\p{N}])`
+   with the `u` flag, a manual Unicode-aware boundary via negative
+   lookaround, replacing every `\b${escapeRegex(word)}\b` construction built
+   from a normalized/dynamic word (never touched the badlist checks against
+   fixed ASCII strings like `NON_COMPETITOR_NAMES`, which don't need it) —
+   added independently in `website-discovery.ts`, `evidence-extractor.ts`,
+   and `extraction-guards.ts` (competitor-discovery.ts's `isSelfName()`
+   didn't need this half: it compares word arrays via `.includes()`, not
+   regex, so fixing its `normalizeName()` alone was sufficient — confirmed
+   by reading the function before assuming it needed the same treatment).
+   Same duplication-over-sharing precedent as every other small helper in
+   these modules (`escapeRegex()` itself is already independently defined
+   per file) — no new shared cross-module utility added.
+3. `isSelfName()` (competitor-discovery.ts, imported by `icp-generator.ts`
+   and `company-discovery.ts` for their own self-name checks — so this one
+   fix covers all three call sites) needed no boundary-regex change, only
+   its `normalizeName()` dependency fixed, since it does array-overlap
+   comparison, not regex matching.
+
+New/extended tests across 6 files (14 assertions total): `tests/website-
+discovery.test.ts` (character preservation, a title-match case with an
+INTERNAL diacritic, a title-match case ENDING in a diacritic — the specific
+case that exercises the `\b`-boundary half of the fix — a body-match case,
+`wordsAppearTogether()` with accented words, and a full `discoverCompany
+Website()` end-to-end run), `tests/competitor-discovery.test.ts`
+(`isSelfName` self-match), `tests/icp-generator.test.ts`
+(`normalizeSegmentName` preservation + a real accented segment surviving
+`classifySegmentRejection`), `tests/company-discovery.test.ts`
+(`filterAlreadyResearched`'s normalized-name dedup path), `tests/
+extraction-guards.test.ts` (`mentionsCompany` accepting a name with both an
+internal and a trailing diacritic — the actual relevance gate, most
+consequential single test here), and `tests/evidence-extractor-pagetype
+.test.ts` (`classifySubject`'s third-person self-reference match, both for
+a name ENDING in a diacritic and for the short-form fallback on an accented
+first word). `tsc --noEmit` clean, full suite 573/573 (559 pre-existing +
+14 new). Dev-server sanity pass (no live company re-run — same "verify via
+tsc+tests+dev-server" precedent as the leadership-vocab fix, this is a pure
+regex/normalization change already covered by realistic unit-test content
+shapes): zero console/server errors.
+
+**Not done — still open from the ranked audit list**: (1) `business-
+profile.ts` missing a pipeline gate; (2) `scraper.ts`'s
+`assessScrapeQuality()` having no content-relevance signal, and its debug
+trail never reaching the saved run; (3) `classifySubject()`'s `'products'`/
+`'blog'` pageType exclusion. The non-English/diacritic-name benchmark
+fixture flagged by every session in this audit chain is STILL not built —
+worth doing before the next fix in this chain, since three sessions in a
+row have now shipped a real fix verified only by unit tests + dev-server,
+with no way for `npm run benchmark`/CI to catch a future regression in any
+of them.
+
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,

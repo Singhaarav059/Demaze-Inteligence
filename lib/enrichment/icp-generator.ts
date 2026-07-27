@@ -112,7 +112,10 @@ const GENERIC_SEGMENT_TERMS = new Set([
 ])
 
 export function normalizeSegmentName(name: string): string {
-  return name.toLowerCase().replace(/[^\w\s&-]/g, ' ').replace(/\s+/g, ' ').trim()
+  // \p{L}/\p{N} (Unicode letter/number), not \w — same 2026-07-24 fix as
+  // website-discovery.ts's normalizeCompanyName() (a real accented segment
+  // name would otherwise be mangled the same way "Möller Group" was).
+  return name.toLowerCase().replace(/[^\p{L}\p{N}\s&-]/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
 // Returns a rejection reason, or null if the candidate survives. Order

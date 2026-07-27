@@ -62,7 +62,13 @@ export function normalizeCompanyName(name: string): string {
   return name
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
-    .replace(/[^\w\s-]/g, ' ')   // strip punctuation except hyphens (keep "A-1" intact)
+    // strip punctuation except hyphens (keep "A-1" intact) — \p{L}/\p{N}
+    // (Unicode letter/number), not \w, so an accented name like "Möller
+    // Group" keeps its "ö" instead of it being treated as punctuation and
+    // blanked to a space (found live 2026-07-24, "silent zero" audit:
+    // "Möller Group" -> "m ller group" -> significantWords() splits it into
+    // ["m", "ller", "group"], corrupting every word-boundary match below).
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -73,6 +79,17 @@ export function significantWords(normalizedName: string): string[] {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// JavaScript's \b is defined in terms of the ASCII \w class REGARDLESS of
+// the 'u' flag — it does not become Unicode-aware just by adding 'u'. So
+// even after normalizeCompanyName() above stops stripping accented letters,
+// a plain `\b${word}\b` still fails for a word that STARTS or ENDS with an
+// accented letter (e.g. "société" — \b never fires after "é", since both
+// "é" and a following space are \W, so there's no \w/\W transition to
+// detect). Manual Unicode-aware boundary via negative lookaround instead.
+function wordBoundaryRegex(word: string, flags = ''): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(word)}(?![\\p{L}\\p{N}])`, flags + 'u')
 }
 
 // ── Known non-corporate domain guard ────────────────────────────
@@ -134,17 +151,17 @@ const PROXIMITY_WINDOW_CHARS = 120
 
 export function wordsAppearTogether(words: string[], text: string, windowChars = PROXIMITY_WINDOW_CHARS): boolean {
   if (words.length <= 1) return true
-  const anchorRegex = new RegExp(`\\b${escapeRegex(words[0])}\\b`, 'gi')
+  const anchorRegex = wordBoundaryRegex(words[0], 'gi')
   let match: RegExpExecArray | null
   while ((match = anchorRegex.exec(text)) !== null) {
     const start = Math.max(0, match.index - windowChars)
     const end = Math.min(text.length, match.index + match[0].length + windowChars)
     const window = text.slice(start, end)
-    if (words.every(w => new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(window))) {
+    if (words.every(w => wordBoundaryRegex(w, 'i').test(window))) {
       return true
     }
-    // Avoid infinite loop on zero-length matches (can't happen with \b...\b
-    // word patterns, but keep the guard cheap and explicit anyway).
+    // Avoid infinite loop on zero-length matches (can't happen with
+    // word-boundary patterns, but keep the guard cheap and explicit anyway).
     if (match[0].length === 0) anchorRegex.lastIndex++
   }
   return false
@@ -160,7 +177,7 @@ export function wordsAppearTogether(words: string[], text: string, windowChars =
 function wordMatchRatio(words: string[], text: string): number {
   if (words.length === 0) return 0
   const t = text.toLowerCase()
-  const matched = words.filter(w => new RegExp(`\\b${escapeRegex(w)}\\b`, 'i').test(t))
+  const matched = words.filter(w => wordBoundaryRegex(w, 'i').test(t))
   return matched.length / words.length
 }
 

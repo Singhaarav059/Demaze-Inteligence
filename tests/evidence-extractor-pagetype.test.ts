@@ -134,6 +134,36 @@ Global manufacturing trends show six facilities is the new industry benchmark fo
     expect(multiLocation).toBeUndefined()
   })
 
+  // 2026-07-24 fix: classifySubject()'s third-person self-reference match
+  // used a plain \b-anchored regex against the raw company name — JS's \b
+  // is always ASCII-\w-based (the 'u' flag doesn't change this), so a name
+  // ending in a diacritic ("Société", ending in "é") would never match at
+  // all, regardless of firstSignificantWord()'s separate strip-regex fix.
+  // wordBoundaryRegex()'s manual lookaround boundary is what fixes this.
+  it('matches third-person self-reference for a company name ending in a diacritic ("Société")', () => {
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Société operates six manufacturing facilities nationwide.
+`
+    const result = extractSignals(content, undefined, 'Société')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+  })
+
+  it('short-form fallback matches an accented first word ("Möller" from resolved name "Möller Group")', () => {
+    const content = `
+--- PAGE: / (https://example.com) ---
+
+Möller produces world-class products across six manufacturing facilities nationwide.
+`
+    const result = extractSignals(content, undefined, 'Möller Group')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+  })
+
   it('does NOT fall back to a short form under the 4-char minimum-length guard', () => {
     // Resolved name "AS Agri" — first word "AS" is only 2 chars, below the
     // minimum-length guard, so no short-form fallback should be attempted

@@ -53,6 +53,19 @@ describe('mentionsCompany — source-relevance gate', () => {
   it('does not block when the company name has no significant words to check', () => {
     expect(mentionsCompany('anything at all', '')).toBe(true)
   })
+
+  // 2026-07-24 fix: significantWords() used to strip [^\w\s-] (ASCII-only
+  // in JS), so a real accented company name would never reliably pass this
+  // gate — every search result for that company would look "irrelevant"
+  // and get silently filtered out before extraction even ran. "Société"
+  // specifically ends in "é", exercising the \b-boundary half of the fix
+  // (JS's \b is always ASCII-\w-based, even with the 'u' flag, so a plain
+  // \b-anchored match would still fail here even with the character class
+  // fixed alone).
+  it('accepts a page naming a two-word company with internal and trailing diacritics', () => {
+    const text = 'Société Générale reported strong quarterly results driven by retail banking growth.'
+    expect(mentionsCompany(text, 'Société Générale')).toBe(true)
+  })
 })
 
 describe('looksLikeSentenceFragment', () => {

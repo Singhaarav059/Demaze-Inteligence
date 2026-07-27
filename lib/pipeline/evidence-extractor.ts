@@ -607,12 +607,26 @@ const GENERIC_LEADING_WORDS = new Set([
 function firstSignificantWord(name: string): string | null {
   const cleaned = name
     .replace(LEGAL_SUFFIXES_RE, ' ')
-    .replace(/[^\w\s-]/g, ' ')
+    // \p{L}/\p{N} (Unicode letter/number), not \w — see website-discovery.ts's
+    // normalizeCompanyName() for the same 2026-07-24 fix and the live
+    // "Möller Group" -> "m ller group" symptom this addresses here too.
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   const words = cleaned.split(' ').filter(w => w.length > 0)
   if (words.length <= 1) return null
   return words[0]
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// JavaScript's \b is always defined in terms of the ASCII \w class, even
+// under the 'u' flag — see website-discovery.ts's identical helper for the
+// full explanation.
+function wordBoundaryRegex(word: string, flags = ''): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(word)}(?![\\p{L}\\p{N}])`, flags + 'u')
 }
 
 function classifySubject(text: string, pageType: PageType, profile?: CompanyProfile, companyName?: string): EvidenceSubject {
@@ -695,8 +709,12 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
       // scraper.ts): a bare short name could otherwise substring-match unrelated
       // words. Requiring >= 4 chars guards against degenerate/placeholder names.
       if (companyName && companyName.trim().length >= 4) {
-        const escaped = companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const nameRe = new RegExp(`\\b${escaped}\\b`, 'i')
+        // wordBoundaryRegex(), not \b...\b (2026-07-24 fix) — \b is always
+        // ASCII-\w-based in JS regardless of the 'u' flag, so a name that
+        // STARTS or ENDS with an accented letter (e.g. "Société", "École")
+        // would never match a plain \b-anchored pattern even once the
+        // company name itself is no longer mangled by a strip-regex.
+        const nameRe = wordBoundaryRegex(companyName.trim(), 'i')
         if (nameRe.test(text)) return 'company_strategy'
 
         // Short-form fallback (2026-07-23): the full resolved name (often a
@@ -709,8 +727,7 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
         // for a word on GENERIC_LEADING_WORDS.
         const shortForm = firstSignificantWord(companyName)
         if (shortForm && shortForm.length >= 4 && !GENERIC_LEADING_WORDS.has(shortForm.toLowerCase())) {
-          const escapedShort = shortForm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          const shortRe = new RegExp(`\\b${escapedShort}\\b`, 'i')
+          const shortRe = wordBoundaryRegex(shortForm, 'i')
           if (shortRe.test(text)) return 'company_strategy'
         }
       }
