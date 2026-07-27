@@ -60,6 +60,70 @@ Leading provider of world-class solutions for a better tomorrow.
   })
 })
 
+// 2026-07-27 fix (audited 2026-07-24): classifySubject()'s third-person
+// self-reference block was gated on pageType === 'other'/'about'/'homepage'
+// only — 'products' and 'blog' were excluded even though detectPageType()
+// labels /solutions/, /services/, /capabilities/ URLs 'products', exactly
+// the pages scraper.ts's classifyUrl() scores highest (b2b_services, 75).
+describe('extractSignals — "products" and "blog" pageType third-person self-reference (2026-07-27)', () => {
+  it('classifies third-person self-reference as company_strategy on a /solutions/ page (pageType "products")', () => {
+    const content = `
+--- PAGE: /solutions/industrial (https://example.com/solutions/industrial) ---
+
+Acme Industries operates six manufacturing facilities across the region, serving customers worldwide.
+`
+    const result = extractSignals(content, undefined, 'Acme Industries')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+    expect(multiLocation!.is_company_subject).toBe(true)
+
+    const evidence = multiLocation!.evidence.find(e => e.source_url === 'https://example.com/solutions/industrial')
+    expect(evidence).toBeDefined()
+    expect(evidence!.page_type).toBe('products')
+    expect(evidence!.subject).toBe('company_strategy')
+  })
+
+  it('classifies third-person self-reference as company_strategy on a /blog/ page (pageType "blog")', () => {
+    const content = `
+--- PAGE: /blog/quarterly-update (https://example.com/blog/quarterly-update) ---
+
+Acme Industries operates six manufacturing facilities across the region, serving customers worldwide.
+`
+    const result = extractSignals(content, undefined, 'Acme Industries')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(multiLocation).toBeDefined()
+
+    const evidence = multiLocation!.evidence.find(e => e.source_url === 'https://example.com/blog/quarterly-update')
+    expect(evidence).toBeDefined()
+    expect(evidence!.page_type).toBe('blog')
+    expect(evidence!.subject).toBe('company_strategy')
+  })
+
+  it('does NOT force customer-facing second-person copy on a /solutions/ page into company_strategy (isCustomerFacing guard still applies)', () => {
+    const content = `
+--- PAGE: /solutions/industrial (https://example.com/solutions/industrial) ---
+
+Acme Industries helps your company run six manufacturing facilities more efficiently.
+`
+    const result = extractSignals(content, undefined, 'Acme Industries')
+    const multiLocation = result.signals.find(s => s.type === 'multi_location_operations')
+    // The name match is correctly skipped (customer-facing), so this falls
+    // through to the unconditional generic_marketing return — same
+    // no-forced-signal outcome as the existing generic-word-guard case above.
+    expect(multiLocation).toBeUndefined()
+  })
+
+  it('non-regression: a plain marketing tagline on a /solutions/ page with no self-reference still produces no signal', () => {
+    const content = `
+--- PAGE: /solutions/industrial (https://example.com/solutions/industrial) ---
+
+Leading provider of world-class solutions for a better tomorrow.
+`
+    const result = extractSignals(content, undefined, 'Acme Industries')
+    expect(result.signals).toHaveLength(0)
+  })
+})
+
 describe('extractSignals — short-form self-reference fallback (2026-07-23)', () => {
   // Closes the precision gap flagged in CLAUDE.md's "RESOLVED 2026-07-19 —
   // detectPageType()..." section: real site prose using a short brand form

@@ -701,7 +701,28 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
   // correctly labeled 'homepage', they need to reach this same check on
   // purpose, or they'd fall through to the unconditional generic_marketing
   // return below and real evidence would be lost. Fixed together per design.
-  if (pageType === 'other' || pageType === 'about' || pageType === 'homepage') {
+  //
+  // 'products' and 'blog' joined this list 2026-07-27 (same bug shape,
+  // audited 2026-07-24 alongside the fixes above): detectPageType() labels
+  // /solutions/, /services/, /capabilities/ URLs as 'products' (line 549) —
+  // exactly the pages scraper.ts's classifyUrl() scores highest under its
+  // b2b_services category (75, one of the top tiers it prioritizes for
+  // scraping) — yet this third-person self-reference check never ran for
+  // them, so real third-person company_strategy evidence sitting on a
+  // heavily-scraped page type fell straight to the unconditional
+  // generic_marketing return below. Same for 'blog': a press-release-style
+  // post ("XYZ Corp announced record earnings this quarter") is routinely
+  // third-person, not first-person "we/our". Deliberately NOT extended to
+  // the vendor-aware block above (pageType === 'about' || 'other') or the
+  // Industry 4.0 context check below — both are broader "treat the whole
+  // page as company_strategy" rules with no per-mention name check, and a
+  // product/solutions page is disproportionately likely to be genuine
+  // customer-facing sales copy (second-person "empower YOUR factory")
+  // rather than a company self-description; the third-person block here is
+  // safe to extend because it still requires the company's OWN NAME (or
+  // "the company/group/firm") to actually appear, not a blanket page-type
+  // assumption.
+  if (pageType === 'other' || pageType === 'about' || pageType === 'homepage' || pageType === 'products' || pageType === 'blog') {
     const isCustomerFacing = /\b(?:help|enable|your\s+company|our\s+customer)\b/i.test(t)
     if (!isCustomerFacing) {
       // Match the company's own name with word boundaries — same discipline as

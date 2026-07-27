@@ -732,6 +732,73 @@ trail never reaching the saved run; (2) `classifySubject()`'s `'products'`/
 fixture is STILL not built — four sessions in this audit chain now, worth
 prioritizing before the next code fix.
 
+## RESOLVED 2026-07-27 — `classifySubject()`'s `'products'`/`'blog'`
+## pageType exclusion (last remaining item from the ranked audit list except
+## the scraper content-relevance gap)
+`detectPageType()` labels `/solutions/`, `/services/`, `/capabilities/` URLs
+as pageType `'products'` (line 549's regex) — exactly the pages
+`scraper.ts`'s `classifyUrl()` scores highest under its `b2b_services`
+category (score 75, one of the top tiers it prioritizes for scraping). But
+`classifySubject()`'s third-person self-reference block (the mechanism the
+2026-07-19 homepage fix extended to cover `'homepage'` pages) was still
+gated to `pageType === 'other' || 'about' || 'homepage'` only — `'products'`
+and `'blog'` were never added. Same bug shape as the homepage fix, on a page
+type that's arguably scraped *more* often than `'about'` for services/
+industrial vendors, per this file's own 2026-07-24 audit note.
+
+**Fixed**: added `'products'` and `'blog'` to the third-person self-
+reference block's pageType condition in `lib/pipeline/evidence-extractor.ts`
+(the block starting `if (pageType === 'other' || ...)`). **Deliberately did
+NOT extend the other two pageType-gated blocks** in the same function — the
+vendor-aware block (`isVendorType && (pageType === 'about' || 'other')`,
+~line 666) and the Industry-4.0-context block (~line 687) are both broader
+"treat the whole page as company_strategy" rules with no per-mention name
+check, and a `/solutions/` page is disproportionately likely to be genuine
+customer-facing sales copy ("empower YOUR factory") rather than a company
+self-description — extending those carries materially more false-positive
+risk than the third-person block, which only fires when the company's OWN
+NAME (or "the company/group/firm") actually appears in the text, not a
+blanket page-type assumption. The existing `isCustomerFacing` guard inside
+the third-person block (checks `help`/`enable`/`your company`/`our
+customer`) is reused unchanged and still applies to `'products'`/`'blog'`
+pages exactly as it already did for `'about'`/`'other'`/`'homepage'`.
+
+New tests in `tests/evidence-extractor-pagetype.test.ts` (4 added, 15
+total): third-person self-reference correctly classifies as
+`company_strategy` on both a `/solutions/` page (pageType `'products'`) and
+a `/blog/` page (pageType `'blog'`), a non-regression case confirming the
+`isCustomerFacing` guard still suppresses a genuinely customer-facing
+`/solutions/` page, and a non-regression case confirming a plain marketing
+tagline with no self-reference on a `/solutions/` page still produces no
+signal. **Found and worked around a real, separate, pre-existing bug while
+writing the blog test**: `detectPageType()`'s `'about'` regex
+(`/\/(?:about|about-us|company|our-story|...)/  `) has no segment-boundary
+anchoring on any of its keywords — `/blog/company-news` matched `'about'`
+via the bare substring `/company` inside `/company-news`, the same
+short-substring-collision bug class this codebase already fixed once for
+`matchesKeyword()`'s `'ir'`-inside-`'wire'` case, just never applied to
+`detectPageType()`'s longer keywords. Out of scope for this session (a
+different function, a different bug) — worked around by using a
+non-colliding test URL (`/blog/quarterly-update`) instead of fixing it, and
+logged here rather than silently left unnoticed for whoever next touches
+`detectPageType()`.
+
+**Verified**: `tsc --noEmit` clean, full suite 577/577 (573 pre-existing +
+4 new). Dev-server sanity pass (no live company re-run — same "verify via
+tsc+tests+dev-server" precedent as the leadership-vocab and `\w`-ASCII
+fixes earlier in this chain, this is a pure pageType-condition change
+already covered by realistic unit-test content shapes): zero console/server
+errors.
+
+**Not done — still open from the ranked audit list**: `scraper.ts`'s
+`assessScrapeQuality()` having no content-relevance signal, and its debug
+trail never reaching the saved run — the last item from the original
+2026-07-24 audit's ranked list. Also newly found, not fixed: `detectPageType()`'s
+missing segment-boundary anchoring (see above). The non-English/diacritic-
+name benchmark fixture is STILL not built — five sessions in this audit
+chain now, worth prioritizing before the next code fix regardless of which
+one it is.
+
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,
