@@ -1,0 +1,374 @@
+{
+  "runAt": "2026-07-23T08:21:31.575Z",
+  "companies": [
+    {
+      "name": "AITG",
+      "url": "https://www.aitg.co",
+      "durationMs": 88656,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 4,
+      "opportunities": 4,
+      "challenges": 4,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "manufacturer",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "production facility/plant/line",
+            "matched": "production line",
+            "snippet": "have an advantage over others for setting up production lines fast. [Read More >](https://www.aitg.co/key-capabili"
+          }
+        ],
+        "retailer_suppressed": [
+          {
+            "pattern": "fmcg / consumer goods [SUPPRESSED — automotive/industrial context detected]",
+            "matched": "FMCG",
+            "snippet": "aving 40 years of diverse experience in FMCG, Tractor, Auto parts & Chemical industry, to conduct a Work"
+          }
+        ],
+        "healthcare_provider": [
+          {
+            "pattern": "hospital / clinic / medical devices",
+            "matched": "hospital",
+            "snippet": "siness, Nanasaheb chanced upon many imported hospital equipment lying unused due to failure. He offered to r"
+          }
+        ],
+        "conglomerate": [
+          {
+            "pattern": "group/holding/conglomerate company/with diverse...",
+            "matched": "Group Compan",
+            "snippet": "ad More](https://www.aitg.co/about.html) ## Group Companies - [Marathwada Auto Compo Pvt. Ltd. offers a niche"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "ATE Group",
+      "url": "https://www.ategroup.com",
+      "durationMs": 99966,
+      "overall": "FAIL",
+      "validationOverall": "WARN",
+      "signals": 2,
+      "opportunities": 4,
+      "challenges": 4,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 2,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "company_type.manufacturer=false, primary_type=industrial_vendor"
+        },
+        {
+          "check": "primary_type",
+          "status": "FAIL",
+          "actual": "industrial_vendor",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "industrial_vendor": [
+          {
+            "pattern": "consumables/equipment for welding/cutting/manufacturing",
+            "matched": "equipment manufactur",
+            "snippet": "A.T.E. If you are a technology provider or equipment manufacturer seeking a trusted counterpart with deep domain exper"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 97774,
+      "overall": "FAIL",
+      "validationOverall": "WARN",
+      "signals": 4,
+      "opportunities": 4,
+      "challenges": 4,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 1"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "company_type.manufacturer=false, primary_type=unknown"
+        },
+        {
+          "check": "primary_type",
+          "status": "FAIL",
+          "actual": "unknown",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null
+    }
+  ]
+}

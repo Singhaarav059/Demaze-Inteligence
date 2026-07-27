@@ -1,0 +1,497 @@
+{
+  "runAt": "2026-07-23T06:49:47.528Z",
+  "companyScores": [
+    {
+      "name": "A-1 Fence Products",
+      "score": 55.25
+    },
+    {
+      "name": "Ace Pipeline",
+      "score": 51.5
+    },
+    {
+      "name": "Ador Welding",
+      "score": 54
+    },
+    {
+      "name": "AITG",
+      "score": 0
+    },
+    {
+      "name": "AS Agri and Aqua",
+      "score": 40.5
+    },
+    {
+      "name": "ATE Group",
+      "score": 54
+    },
+    {
+      "name": "Bharat Forge",
+      "score": 44
+    },
+    {
+      "name": "Chargebee",
+      "score": 54
+    },
+    {
+      "name": "Muthoot Finance",
+      "score": 69
+    }
+  ],
+  "meanScore": 46.92,
+  "minScore": 0,
+  "maxScore": 69,
+  "perCompany": [
+    {
+      "name": "A-1 Fence Products",
+      "evaluation": {
+        "name": "A-1 Fence Products",
+        "score": 55.25,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/6 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 11.25,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=1/2"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/5 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 5,
+            "max": 10,
+            "note": "competitor_sufficiency=sufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "0/4 audited items flagged"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ace Pipeline",
+      "evaluation": {
+        "name": "Ace Pipeline",
+        "score": 51.5,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/5 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 7.5,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=0/1"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 5,
+            "max": 10,
+            "note": "competitor_sufficiency=sufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "0/1 audited items flagged"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ador Welding",
+      "evaluation": {
+        "name": "Ador Welding",
+        "score": 54,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/6 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=3/2"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "nothing audited (no flaggable items)"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "AITG",
+      "evaluation": {
+        "name": "AITG",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AS Agri and Aqua",
+      "evaluation": {
+        "name": "AS Agri and Aqua",
+        "score": 40.5,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 8,
+            "max": 20,
+            "note": "validation gate: PARTIAL"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/4 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 7.5,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=0/0"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "nothing audited (no flaggable items)"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "ATE Group",
+      "evaluation": {
+        "name": "ATE Group",
+        "score": 54,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/4 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=2/2"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "nothing audited (no flaggable items)"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Bharat Forge",
+      "evaluation": {
+        "name": "Bharat Forge",
+        "score": 44,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/4 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=4/1"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 5,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=sufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "5/5 audited items flagged"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Chargebee",
+      "evaluation": {
+        "name": "Chargebee",
+        "score": 54,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/5 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=1/1"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/3 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 5,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=sufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 10,
+            "max": 15,
+            "note": "1/3 audited items flagged"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Muthoot Finance",
+      "evaluation": {
+        "name": "Muthoot Finance",
+        "score": 69,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 20,
+            "max": 20,
+            "note": "no opportunities, honestly reported as insufficient evidence"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "evidence_sufficiency=insufficient, signals=0/0"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 10,
+            "max": 10,
+            "note": "no pain points, honestly reported as insufficient evidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "nothing audited (no flaggable items)"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    }
+  ]
+}

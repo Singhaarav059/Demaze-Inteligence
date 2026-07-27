@@ -1,5 +1,8 @@
 import Link from 'next/link'
 import { BrandMark } from '@/components/shell/BrandMark'
+import { SmoothScroll } from '@/components/shell/SmoothScroll'
+import { ScrollReveal } from '@/components/shell/ScrollReveal'
+import { MotionConfigProvider } from '@/components/shell/MotionConfigProvider'
 
 const NAV_LINKS = [
   { label: 'How it works', href: '#how-it-works' },
@@ -89,6 +92,8 @@ const OUTPUTS = [
 
 export default function Home() {
   return (
+    <MotionConfigProvider>
+    <SmoothScroll>
     <div className="dark min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/30">
 
       {/* Navigation */}
@@ -172,11 +177,11 @@ export default function Home() {
         <section className="border-y border-border bg-card/40">
           <div className="max-w-5xl mx-auto px-6 py-10">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
-              {STATS.map((stat) => (
-                <div key={stat.label} className="text-center space-y-1">
+              {STATS.map((stat, i) => (
+                <ScrollReveal key={stat.label} delay={i * 0.08} className="text-center space-y-1">
                   <p className="text-3xl font-bold text-foreground tracking-tight">{stat.value}</p>
                   <p className="text-xs text-muted-foreground uppercase tracking-widest">{stat.label}</p>
-                </div>
+                </ScrollReveal>
               ))}
             </div>
           </div>
@@ -185,14 +190,14 @@ export default function Home() {
         {/* How it works */}
         <section id="how-it-works" className="py-24 px-6">
           <div className="max-w-5xl mx-auto">
-            <div className="text-center space-y-3 mb-16">
+            <ScrollReveal className="text-center space-y-3 mb-16">
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">How it works</p>
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Three steps to a personalized brief</h2>
-            </div>
+            </ScrollReveal>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {STEPS.map((step, i) => (
-                <div key={step.number} className="relative group">
+                <ScrollReveal key={step.number} delay={i * 0.1} className="relative group">
                   {i < STEPS.length - 1 && (
                     <div className="hidden sm:block absolute top-8 left-full w-6 h-px bg-border z-10" />
                   )}
@@ -205,7 +210,7 @@ export default function Home() {
                       <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
                     </div>
                   </div>
-                </div>
+                </ScrollReveal>
               ))}
             </div>
           </div>
@@ -214,7 +219,7 @@ export default function Home() {
         {/* Research areas */}
         <section id="research" className="py-24 px-6 bg-card/40">
           <div className="max-w-5xl mx-auto">
-            <div className="text-center space-y-3 mb-16">
+            <ScrollReveal className="text-center space-y-3 mb-16">
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">What the agent researches</p>
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Everything an SDR needs before hitting send
@@ -222,12 +227,13 @@ export default function Home() {
               <p className="text-muted-foreground text-base max-w-xl mx-auto">
                 The agent mimics how a great SDR researches a company, then packages it in a brief that&apos;s ready to act on.
               </p>
-            </div>
+            </ScrollReveal>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {RESEARCH_AREAS.map((area) => (
-                <div
+              {RESEARCH_AREAS.map((area, i) => (
+                <ScrollReveal
                   key={area.title}
+                  delay={i * 0.06}
                   className={`rounded-xl border p-5 space-y-3 hover:bg-accent/40 transition-colors ${area.accent}`}
                 >
                   <span className="text-2xl" role="img" aria-hidden>{area.label}</span>
@@ -235,7 +241,7 @@ export default function Home() {
                     <h3 className="text-sm font-semibold text-foreground">{area.title}</h3>
                     <p className="text-xs text-muted-foreground leading-relaxed">{area.description}</p>
                   </div>
-                </div>
+                </ScrollReveal>
               ))}
             </div>
           </div>
@@ -245,7 +251,7 @@ export default function Home() {
         <section id="output" className="py-24 px-6">
           <div className="max-w-5xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-              <div className="space-y-6">
+              <ScrollReveal className="space-y-6">
                 <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Research brief</p>
                 <h2 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
                   Every field in the brief is built for one purpose
@@ -261,17 +267,18 @@ export default function Home() {
                 >
                   Try it on a company <span aria-hidden>→</span>
                 </Link>
-              </div>
+              </ScrollReveal>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {OUTPUTS.map((output) => (
-                  <div
+                {OUTPUTS.map((output, i) => (
+                  <ScrollReveal
                     key={output}
+                    delay={i * 0.04}
                     className="flex items-center gap-2.5 text-xs text-muted-foreground bg-card border border-border rounded-lg px-3 py-2.5 hover:border-primary/50 hover:text-foreground/90 transition-colors"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
                     {output}
-                  </div>
+                  </ScrollReveal>
                 ))}
               </div>
             </div>
@@ -281,7 +288,7 @@ export default function Home() {
         {/* SDR trust section */}
         <section className="py-24 px-6 bg-card/40">
           <div className="max-w-5xl mx-auto">
-            <div className="rounded-2xl border border-border bg-card p-8 sm:p-12 space-y-8">
+            <ScrollReveal className="rounded-2xl border border-border bg-card p-8 sm:p-12 space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 <div className="space-y-4">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white font-bold text-lg">
@@ -321,13 +328,13 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </div>
+            </ScrollReveal>
           </div>
         </section>
 
         {/* CTA */}
         <section className="py-24 px-6">
-          <div className="max-w-3xl mx-auto text-center space-y-6">
+          <ScrollReveal className="max-w-3xl mx-auto text-center space-y-6">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
               Try it on your next prospect
             </h2>
@@ -348,7 +355,7 @@ export default function Home() {
                 Browse past research
               </Link>
             </div>
-          </div>
+          </ScrollReveal>
         </section>
 
       </main>
@@ -367,5 +374,7 @@ export default function Home() {
       </footer>
 
     </div>
+    </SmoothScroll>
+    </MotionConfigProvider>
   )
 }

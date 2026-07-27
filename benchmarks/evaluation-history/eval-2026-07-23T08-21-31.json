@@ -1,0 +1,172 @@
+{
+  "runAt": "2026-07-23T08:21:31.582Z",
+  "companyScores": [
+    {
+      "name": "AITG",
+      "score": 51.5
+    },
+    {
+      "name": "ATE Group",
+      "score": 54
+    },
+    {
+      "name": "Bharat Forge",
+      "score": 44
+    }
+  ],
+  "meanScore": 49.83,
+  "minScore": 44,
+  "maxScore": 54,
+  "perCompany": [
+    {
+      "name": "AITG",
+      "evaluation": {
+        "name": "AITG",
+        "score": 51.5,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/4 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=4/2"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 5,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=sufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 7.5,
+            "max": 15,
+            "note": "1/2 audited items flagged"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "ATE Group",
+      "evaluation": {
+        "name": "ATE Group",
+        "score": 54,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/4 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=2/2"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=insufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 15,
+            "max": 15,
+            "note": "nothing audited (no flaggable items)"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Bharat Forge",
+      "evaluation": {
+        "name": "Bharat Forge",
+        "score": 44,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 14,
+            "max": 20,
+            "note": "validation gate: WARN"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "0/4 opportunities carry an evidence_id"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 15,
+            "max": 15,
+            "note": "evidence_sufficiency=sufficient, signals=4/1"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "0/4 pain points evidence-backed, non-low-confidence"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 5,
+            "max": 10,
+            "note": "competitor_sufficiency=insufficient, icp_sufficiency=sufficient"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "5/5 audited items flagged"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 10,
+            "max": 10
+          }
+        ]
+      }
+    }
+  ]
+}

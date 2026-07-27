@@ -1,0 +1,505 @@
+{
+  "runAt": "2026-07-23T06:22:36.559Z",
+  "companyScores": [
+    {
+      "name": "A-1 Fence Products",
+      "score": 0
+    },
+    {
+      "name": "Ace Pipeline",
+      "score": 0
+    },
+    {
+      "name": "Ador Welding",
+      "score": 0
+    },
+    {
+      "name": "AITG",
+      "score": 0
+    },
+    {
+      "name": "AS Agri and Aqua",
+      "score": 0
+    },
+    {
+      "name": "ATE Group",
+      "score": 0
+    },
+    {
+      "name": "Bharat Forge",
+      "score": 0
+    },
+    {
+      "name": "Chargebee",
+      "score": 0
+    },
+    {
+      "name": "Muthoot Finance",
+      "score": 0
+    }
+  ],
+  "meanScore": 0,
+  "minScore": 0,
+  "maxScore": 0,
+  "perCompany": [
+    {
+      "name": "A-1 Fence Products",
+      "evaluation": {
+        "name": "A-1 Fence Products",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ace Pipeline",
+      "evaluation": {
+        "name": "Ace Pipeline",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ador Welding",
+      "evaluation": {
+        "name": "Ador Welding",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AITG",
+      "evaluation": {
+        "name": "AITG",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AS Agri and Aqua",
+      "evaluation": {
+        "name": "AS Agri and Aqua",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ATE Group",
+      "evaluation": {
+        "name": "ATE Group",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Bharat Forge",
+      "evaluation": {
+        "name": "Bharat Forge",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Chargebee",
+      "evaluation": {
+        "name": "Chargebee",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Muthoot Finance",
+      "evaluation": {
+        "name": "Muthoot Finance",
+        "score": 0,
+        "dimensions": [
+          {
+            "name": "Pipeline reliability",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence-backed opportunities",
+            "score": 0,
+            "max": 20,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Evidence sufficiency & signal depth",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Pain-point quality",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Competitor / ICP discovery yield",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Research quality flag ratio",
+            "score": 0,
+            "max": 15,
+            "note": "pipeline did not succeed"
+          },
+          {
+            "name": "Narrative safety",
+            "score": 0,
+            "max": 10,
+            "note": "pipeline did not succeed"
+          }
+        ]
+      }
+    }
+  ]
+}
