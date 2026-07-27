@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
   const {
     url: rawUrl,
     companyName: rawCompanyName,
-    mode = 'lightweight',
+    mode = 'full',
     force = false,
   } = body as { url?: string; companyName?: string; mode?: 'lightweight' | 'full'; force?: boolean }
 

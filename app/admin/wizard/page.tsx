@@ -67,7 +67,7 @@ export default function WizardPage() {
 
   // ── Single-URL mode state (unchanged from before) ────────────
   const [url, setUrl] = useState('')
-  const [mode, setMode] = useState<AnalysisMode>('lightweight')
+  const [mode, setMode] = useState<AnalysisMode>('full')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<RunResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -266,8 +266,8 @@ export default function WizardPage() {
 
       try {
         const body = item.company.companyWebsite
-          ? { url: item.company.companyWebsite, mode: 'lightweight' }
-          : { companyName: item.company.companyName, mode: 'lightweight' }
+          ? { url: item.company.companyWebsite, mode: 'full' }
+          : { companyName: item.company.companyName, mode: 'full' }
 
         const res = await fetch('/api/admin/test-analysis', {
           method: 'POST',

@@ -87,7 +87,7 @@ export function useAutoGtmFlow() {
   // does not shrink it, so the flow can always jump forward again too.
   const [maxStepReached, setMaxStepReached] = useState<FlowStep>(1)
   const [url, setUrl] = useState('')
-  const [mode, setMode] = useState<AnalysisMode>('lightweight')
+  const [mode, setMode] = useState<AnalysisMode>('full')
   const [researching, setResearching] = useState(false)
   const [result, setResult] = useState<RunResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -129,7 +129,7 @@ export function useAutoGtmFlow() {
     setStepState(1)
     setMaxStepReached(1)
     setUrl('')
-    setMode('lightweight')
+    setMode('full')
     setResearching(false)
     setResult(null)
     setError(null)
@@ -391,8 +391,8 @@ export function useAutoGtmFlow() {
 
       try {
         const body = item.company.companyWebsite
-          ? { url: item.company.companyWebsite, mode: 'lightweight' }
-          : { companyName: item.company.companyName, mode: 'lightweight' }
+          ? { url: item.company.companyWebsite, mode: 'full' }
+          : { companyName: item.company.companyName, mode: 'full' }
 
         const res = await fetch('/api/admin/test-analysis', {
           method: 'POST',

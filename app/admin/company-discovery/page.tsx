@@ -198,7 +198,7 @@ function CompanyDiscoveryInner() {
       const res = await fetch('/api/admin/test-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: DEMAZE_URL, mode: 'lightweight' }),
+        body: JSON.stringify({ url: DEMAZE_URL, mode: 'full' }),
       })
       const data: RunResult = await res.json()
 

@@ -192,8 +192,8 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
 
       try {
         const body = item.company.companyWebsite
-          ? { url: item.company.companyWebsite, mode: 'lightweight' }
-          : { companyName: item.company.companyName, mode: 'lightweight' }
+          ? { url: item.company.companyWebsite, mode: 'full' }
+          : { companyName: item.company.companyName, mode: 'full' }
 
         const res = await fetch('/api/admin/test-analysis', {
           method: 'POST',

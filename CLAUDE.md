@@ -295,6 +295,14 @@ Company identity (URL, name, LinkedIn, domain, CRM/Apollo/Clay export)
 - Validation stage returns PASS / WARN / FAIL today. Task in flight: add PARTIAL so we never hard-fail when any fallback source returned content.
 - `ENRICHMENT_TIMEOUT_MS` is 70000 (raised from 45000 — enrichment reliably completes ~50s).
 - LLM JSON responses are fence-stripped (```json ... ``` stripped, first `{` to last `}` extracted) before `JSON.parse()`. Considered fixed — don't re-solve this.
+- **Analysis mode defaults to `full` everywhere (2026-07-27)** — was `lightweight`.
+  Changed in `/api/admin/test-analysis/route.ts`'s own request-body fallback
+  and every page/hook's initial `useState<AnalysisMode>`/batch-processing
+  request body (`wizard`, `auto-gtm`'s `useAutoGtmFlow`, `company-discovery`'s
+  page + `useCompanyDiscoverySearch`) — `intelligence-lab/page.tsx` already
+  defaulted to `full`, no change needed there. The Lightweight/Full toggle
+  buttons themselves are untouched — users can still manually switch to
+  Lightweight per-run; only the starting default changed.
 
 ## Known environment gotcha — READ THIS BEFORE DEBUGGING "WHY ISN'T MY FIX WORKING"
 The Next.js dev server on Windows does NOT pick up file changes made from a Linux shell
