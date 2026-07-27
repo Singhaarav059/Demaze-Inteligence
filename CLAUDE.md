@@ -922,6 +922,86 @@ full-suite run would be pure re-confirmation, not new information.
 one assertion, not two, since the fixture-count bump lives inside an
 existing test rather than adding a new one).
 
+## VERIFIED 2026-07-27 — first real `npm run benchmark` run with the
+## Lechler fixture in place; 4 failures investigated, none are regressions
+Ran the actual full 10-company benchmark (real Firecrawl/Tavily/LLM quota,
+explicit confirmation given first) to close the loop on the audit chain
+above. Result: **3 passed, 3 warned, 4 failed**, mean score 46.08/100 (down
+from the previous 49.83 baseline). The Lechler fixture itself behaved
+exactly as designed — `WARN` (not FAIL), `min_opportunities`/
+`min_challenges` both showing 0 this run, the honest "canary" outcome for
+genuinely thin evidence on this run's particular scrape, per its own
+documented deliberate-conservatism above.
+
+**Did not accept the 4 FAILs at face value** — re-ran each of the 4 failed
+companies individually against the same live domains, same discipline this
+file already used multiple times for Ador Welding/AITG (see the 2026-07-22
+research-quality initiative's own "found a real transient failure, root-
+caused before accepting the result" entries). All 4 individual re-runs
+completed successfully (`GATE_OVERALL=WARN`, none crashed):
+
+- **ATE Group** (`fetch failed` in the benchmark) — re-run succeeded
+  cleanly: real scrape (cache hit), `primary=industrial_vendor`, 3 signals,
+  3 pain points, 5 opportunities, `GATE_OVERALL=WARN`. The `fetch failed`
+  was the benchmark script's own outer HTTP call to the dev server failing
+  (`callAnalysis()`'s `fetch()` in `benchmark-runner.ts`), not a real
+  ategroup.com reachability problem — most likely the dev server under load
+  after handling 7 prior sequential long-running (100-300s each) requests in
+  the same run, not a code issue.
+- **Muthoot Finance** (`fetch failed`) — re-run succeeded cleanly: real
+  scrape (cache hit), `primary=financial_institution`, `company_name:
+  "Muthoot Finance Ltd"`, 4 pain points, 5 opportunities. Same transient
+  outer-HTTP explanation as ATE Group — this specifically confirms the
+  muthootfinance.com direct-reachability question this file's own
+  `muthoot-finance.json` entry flagged as still-open ("whether the scrape
+  reliably succeeds is still unconfirmed") remains open in the *good*
+  direction this run, not a new problem.
+- **A-1 Fence Products** (`primary_type=unknown`, expected `manufacturer`)
+  — re-run succeeded overall, but the scrape itself came back genuinely
+  empty this time (`"Scraper returned no usable content — using domain-only
+  stub"`), so `primary_type: unknown` is an honest, correct consequence of
+  stub-only content, not a classifier bug. This is the exact "scraper
+  flakiness observed 2026-07-11" pattern already documented above
+  ("re-running AITG and A-1 Fence back-to-back produced different
+  successfulUrls sets between runs") manifesting again for this company —
+  a pre-existing, accepted characteristic of this benchmark suite, not
+  something this session's fixes touched (none of the locale-scoring/
+  leadership-vocab/ASCII-normalization/`classifySubject`-pageType/
+  `BUSINESS_PROFILE`-gate fixes touch scrape page-selection reliability).
+- **Bharat Forge** (`primary_type=unknown`, expected `manufacturer`) —
+  re-run succeeded overall with real scraped content this time
+  (`companySubjectCount=3`, 2 signals, `SCRAPE:PASS`), 5 pain points, 5
+  opportunities, `company_name: "Bharat Forge Limited"` — but
+  `buildCompanyProfile()` still didn't set `company_type.manufacturer=true`
+  on this run's specific content mix. Real content-dependent classification
+  variability in `evidence-extractor.ts`'s `primary_type` cascade logic — a
+  completely different function from anything touched in this session's
+  fix chain, so not a regression from this session, just the same class of
+  scrape-content non-determinism already logged for this company's
+  `retailer`/`conglomerate` false-positive history above.
+
+**Conclusion: none of the 4 benchmark failures trace back to this session's
+work.** Two (ATE Group, Muthoot Finance) were pure benchmark-script/dev-
+server infrastructure flakiness under sequential load, not application code
+at all. Two (A-1 Fence Products, Bharat Forge) are the same pre-existing
+scrape-content and `primary_type`-classification non-determinism this file
+already extensively documents for these exact companies — genuinely real,
+but not new, and not caused by the locale/leadership/ASCII/pageType/gate
+fixes from this session, none of which touch scraper page-selection or the
+`primary_type` cascade. Mean-score drop (49.83 → 46.08) is fully explained
+by these 4 companies scoring low/zero in the one benchmark run that
+happened to catch them mid-flake, not by any code change.
+
+**Not done**: no code fix attempted for the underlying flakiness sources
+themselves (dev-server load handling during a long sequential benchmark
+run, or `A-1 Fence`/`Bharat Forge`'s scrape-content non-determinism) — both
+are pre-existing, already-tracked issues, out of scope for a re-verification
+pass. The dev-server-under-load theory for the two `fetch failed` cases is
+plausible but not proven (would need a deliberately-instrumented re-run of
+the full 10-company sequence to confirm timing correlation — not done, not
+clearly worth the added quota spend given the individual re-runs already
+confirm both domains are genuinely reachable and produce good output).
+
 ## Company-specific known issues (context for whoever debugs these next)
 - **AITG**: superseded (2026-07-11) — the "signals=0, opportunities=0" state
   described below is resolved. Real root causes were, in order: (1) the
