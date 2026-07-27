@@ -802,7 +802,9 @@ one it is.
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,
-do not regress these)
+do not regress these) — plus Lechler (2026-07-27, the non-English/multi-locale
+regression fixture — see its own dedicated section below for why its
+expectations are deliberately conservative, not a guess)
 
 **Known gap (2026-07-11, not blocking, needs proper fixing later):** the files in
 `benchmarks/companies/*.json` no longer match their filenames — `bharat-forge.json`
@@ -867,6 +869,58 @@ this session's own instructions) — verified structurally instead:
 `tsc --noEmit` clean, full suite 488/488 passing (was 483 pre-existing + 5
 new from this test file — actual pre-existing count re-confirmed live, not
 assumed from a stale note elsewhere in this file).
+
+## ADDED 2026-07-27 — `lechler.json`, the non-English benchmark fixture
+Five consecutive sessions in the "silent zero" audit chain (locale-scoring,
+leadership-title vocab, `\w`-ASCII name normalization, `classifySubject()`
+pageType exclusion, `BUSINESS_PROFILE` gate) flagged the same gap every
+time: all 9 existing benchmark fixtures are English-primary companies with
+plain ASCII names, so none of those fixes could ever be regression-tested
+by `npm run benchmark`/CI — only by a live, one-off manual investigation
+(exactly what this whole chain repeatedly had to do). New
+`benchmarks/companies/lechler.json` closes this gap using the exact real
+company (`lechler.com`, a German spray-nozzle/atomization manufacturer)
+that drove and validated every fix in this chain — not a new, unfamiliar
+company requiring fresh live investigation to determine correct expected
+values.
+
+**Deliberately conservative expectations, not guessed** — `requiredProfileFlags:
+[]` and no `expectedPrimaryType`, same genuine-uncertainty pattern as
+`muthoot-finance.json`/`acepipeline.json`: across every live run against
+this company this session (multiple, spanning all 4 code fixes above),
+`primary_type` stayed `'unknown'` (confidence 30, `companySubjectCount: 0`)
+regardless of which fixes were live — a real, separate, not-yet-root-caused
+gap unrelated to what this fixture exists to guard, so asserting on it would
+just reintroduce false-FAIL noise this fixture work exists to avoid.
+`minSignals: 0` for the same reason (real scrape-content variability run to
+run — same accepted flakiness class already documented elsewhere in this
+file for Ador Welding/AITG/A-1 Fence — this session's own live runs saw
+`signals_detected` bounce between 0 and 1 across otherwise-identical
+re-analyses). `minOpportunities: 1`/`minChallenges: 1` are set deliberately
+as a **canary**, not a guess at a typical value: this session's live runs
+after the fixes above produced 4-5 opportunities and 4-5 pain_points on a
+favorable scrape, so a future regression that silently reverts any of the
+locale/leadership/ASCII/pageType fixes would collapse this fixture back
+toward its pre-fix 0/0 state and show up as a `WARN` (not `FAIL` — these
+checks are WARN-severity by design, same as every other fixture) — visible
+in benchmark output without requiring anyone to know to check.
+`forbiddenTerms` reuses the same generic SaaS/finance-contamination guard
+already used by the other manufacturer fixtures (industrial spray-nozzle
+manufacturing shares no real risk of accidentally matching those terms).
+
+New assertion in `tests/benchmark-fixtures.test.ts`: the existing 9-company
+count check updated to 10 (in place, not a new test), plus one new test
+confirming the fixture's uncertainty (`requiredProfileFlags: []`, no
+`expectedPrimaryType`) is deliberate, not an oversight. Did NOT run the real `npm run
+benchmark` — same "would spend real Tavily/Serper/LLM quota across all 10
+companies" reasoning as the original 2026-07-23 fixture-set session, and
+this session already has extensive direct live-verification of the exact
+underlying API call this fixture depends on (`mode: 'full'` against
+`lechler.com/de-en`), repeated across all 4 fixes in this chain — a fresh
+full-suite run would be pure re-confirmation, not new information.
+`tsc --noEmit` clean, full suite 578/578 (577 pre-existing + 1 new test —
+one assertion, not two, since the fixture-count bump lives inside an
+existing test rather than adding a new one).
 
 ## Company-specific known issues (context for whoever debugs these next)
 - **AITG**: superseded (2026-07-11) — the "signals=0, opportunities=0" state

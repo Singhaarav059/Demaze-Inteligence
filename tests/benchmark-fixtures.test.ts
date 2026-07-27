@@ -99,16 +99,36 @@ describe('benchmark fixture set (benchmarks/companies/*.json)', () => {
     expect(chargebee?.expectations.expectedPrimaryType).toBe('software_saas')
   })
 
-  it('includes the full current 6-company benchmark set plus the 3-company reference set (9 total)', () => {
+  it('includes the full current 6-company benchmark set plus the 3-company reference set plus the non-English fixture (10 total)', () => {
     const names = new Set(loadSpecs().map(({ spec }) => spec.name))
     const expected = [
       'Ace Pipeline', 'Ador Welding', 'AS Agri and Aqua', 'AITG',
       'A-1 Fence Products', 'ATE Group',
       'Bharat Forge', 'Muthoot Finance', 'Chargebee',
+      'Lechler',
     ]
     for (const name of expected) {
       expect(names.has(name), `expected fixture for "${name}"`).toBe(true)
     }
     expect(names.size).toBe(expected.length)
+  })
+
+  it('the Lechler fixture (non-English/multi-locale regression coverage) deliberately leaves classification unasserted', () => {
+    // 2026-07-27: added specifically to give npm run benchmark/CI coverage
+    // for the locale-scoring, leadership-vocab, \w-ASCII-normalization, and
+    // classifySubject pageType fixes (all fixed against this exact real
+    // company this session, see CLAUDE.md) — none of which any of the other
+    // 9 fixtures can exercise, since they're all English-primary companies
+    // with plain ASCII names. requiredProfileFlags/expectedPrimaryType are
+    // deliberately left unset, same genuine-uncertainty pattern as
+    // Muthoot Finance/Ace Pipeline: primary_type has stayed 'unknown' across
+    // every live run this session regardless of the fixes above, and that's
+    // a separate, not-yet-root-caused gap unrelated to this fixture's actual
+    // purpose — asserting on it would just reintroduce false-FAIL noise.
+    const lechler = new Map(loadSpecs().map(({ spec }) => [spec.name, spec])).get('Lechler')
+    expect(lechler).toBeTruthy()
+    expect(lechler?.url).toContain('lechler.com')
+    expect(lechler?.expectations.requiredProfileFlags).toEqual([])
+    expect(lechler?.expectations.expectedPrimaryType).toBeUndefined()
   })
 })

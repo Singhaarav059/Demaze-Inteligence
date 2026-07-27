@@ -1,0 +1,18 @@
+{
+  "name": "Lechler",
+  "url": "https://www.lechler.com/de-en",
+  "expectations": {
+    "minSignals": 0,
+    "minOpportunities": 1,
+    "minChallenges": 1,
+    "requiredProfileFlags": [],
+    "forbiddenTerms": [
+      "SaaS onboarding",
+      "subscription churn",
+      "monthly recurring revenue",
+      "churn rate",
+      "software subscription",
+      "user acquisition"
+    ]
+  }
+}
