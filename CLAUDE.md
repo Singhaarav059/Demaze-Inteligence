@@ -672,6 +672,66 @@ row have now shipped a real fix verified only by unit tests + dev-server,
 with no way for `npm run benchmark`/CI to catch a future regression in any
 of them.
 
+## RESOLVED 2026-07-27 — `business-profile.ts` missing a pipeline gate
+(audit item ranked #1 remaining from the previous session's list). Every
+other discovery stage (`COMPETITOR`/`ICP`/`MARKET_INTEL`) already surfaces a
+WARN with a reason string on failure — `extractBusinessProfile()`'s failure
+was invisible beyond an ephemeral `console.warn`, despite its result
+(`businessProfile`) deciding whether `discoverCompetitorsFromBusinessProfile`/
+`discoverICPSegmentsFromBusinessProfile` run at all versus falling back to
+the narrower offering-grounded pass (`route.ts`'s `isEmptyBusinessProfile()`
+check right after this gate).
+
+**Fixed** in `app/api/admin/test-analysis/route.ts`: the existing
+`Promise.race([businessProfilePromise, <30s timeout>])` used to resolve its
+timeout branch directly to `emptyBusinessProfile()` — indistinguishable from
+`extractBusinessProfile()` itself genuinely returning nothing (no API key,
+LLM failure, unparseable response, or a real thin-content site). Changed the
+race to resolve its timeout branch to `null` instead (same sentinel pattern
+already used one section above by the `ENRICHMENT` soft-timeout race —
+`businessProfilePromise` never legitimately resolves to `null` itself, since
+its own `.catch()` already returns a real `emptyBusinessProfile()` object on
+error, so `null` is a safe, unambiguous sentinel). New `BUSINESS_PROFILE`
+gate (non-critical, WARN-only, same tier as `COMPETITOR`/`ICP`/
+`MARKET_INTEL`/`ENRICHMENT`) reports one of three distinct outcomes: timed
+out (`"timed out after 30000ms — competitor/ICP discovery falls back to the
+offering-grounded pass"`), genuinely empty (`"extraction returned empty (no
+API key, LLM failure, or genuinely no services/positioning content found)
+— ..."`), or `PASS` with the actual service count and positioning
+presence.
+
+**Live-verified**, not just compiled — re-ran lechler.com through the real
+`/admin/intelligence-lab` UI (real Firecrawl/Tavily/LLM quota, cache had
+expired so this was a genuinely fresh run): confirmed
+`GATE_PASS stage=BUSINESS_PROFILE reason="4 service(s) | positioning=yes"`
+in the server log and, more importantly, the same entry correctly present
+in the API response's `validation.gates` array (previously this stage
+didn't exist there at all) — positioned between `SIGNAL` and `COMPETITOR`,
+matching where it's computed in the pipeline. Only the `PASS` branch was
+exercised live in this run (the real business-profile call succeeded
+cleanly, 9.9s); the `timed out` and `empty` WARN branches are covered by
+the sentinel logic itself being a straightforward, already-established
+pattern (identical in shape to the `ENRICHMENT` race directly above it in
+the same file) rather than separately live-triggered — would need a
+deliberately-forced timeout/failure to exercise those two branches live,
+not worth spending quota to manufacture.
+
+**No new unit test** — `route.ts` has zero existing unit-test coverage of
+any kind (confirmed via search before starting; the other three
+non-critical gates it already had, `COMPETITOR`/`ICP`/`MARKET_INTEL`, were
+themselves never unit-tested either, only live-verified when first
+introduced), so adding test scaffolding for just this one gate would be new
+infrastructure, not a regression per this file's established convention.
+`tsc --noEmit` clean, full suite unchanged at 573/573 (no existing tests
+touch this code path).
+
+**Not done — still open from the ranked audit list**: (1) `scraper.ts`'s
+`assessScrapeQuality()` having no content-relevance signal, and its debug
+trail never reaching the saved run; (2) `classifySubject()`'s `'products'`/
+`'blog'` pageType exclusion. The non-English/diacritic-name benchmark
+fixture is STILL not built — four sessions in this audit chain now, worth
+prioritizing before the next code fix.
+
 ## Benchmark set (current)
 Ace Pipeline, Ador Welding, AS Agri & Aqua, AITG, A-1 Fence Products, ATE Group
 (earlier/reference set: Bharat Forge, Muthoot Finance, Chargebee — all currently PASS,

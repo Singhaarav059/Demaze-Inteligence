@@ -617,12 +617,39 @@ export async function POST(req: NextRequest) {
     // background and the offering-grounded fallback below covers this run.
     const BUSINESS_PROFILE_TIMEOUT_MS = 30_000
     const businessProfileStart = Date.now()
-    const businessProfile: CompanyBusinessProfile = await Promise.race([
+    // Race against a null sentinel (same pattern as the ENRICHMENT soft-
+    // timeout race above), not a bare emptyBusinessProfile() resolution —
+    // this lets the gate below distinguish "timed out" from "the call
+    // itself came back with nothing" instead of collapsing both into an
+    // indistinguishable empty profile. businessProfilePromise never
+    // resolves to null itself (see its .catch() above), so null is a safe
+    // sentinel here.
+    const businessProfileRaceWinner = await Promise.race([
       businessProfilePromise,
-      new Promise<CompanyBusinessProfile>(resolve => setTimeout(() => resolve(emptyBusinessProfile()), BUSINESS_PROFILE_TIMEOUT_MS)),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), BUSINESS_PROFILE_TIMEOUT_MS)),
     ])
     timing.businessProfile = Date.now() - businessProfileStart
+    const businessProfileTimedOut = businessProfileRaceWinner === null
+    const businessProfile: CompanyBusinessProfile = businessProfileTimedOut ? emptyBusinessProfile() : businessProfileRaceWinner
     logger.info('Timing', `Business Profile: ${t(timing.businessProfile)} | services=${businessProfile.services.length} | positioning=${businessProfile.market_positioning ? 'yes' : 'no'}`)
+
+    // Gate: BUSINESS_PROFILE (non-critical — WARN only, same tier as
+    // COMPETITOR/ICP/MARKET_INTEL/ENRICHMENT). Added 2026-07-24 ("silent
+    // zero" audit) — every other discovery stage already got a WARN with a
+    // reason string on failure; this one was invisible beyond an ephemeral
+    // console.warn, despite feeding the competitor/ICP offering-grounded
+    // fallback decision immediately below. Distinguishes the two real
+    // failure shapes rather than reporting one generic message for both.
+    if (businessProfileTimedOut) {
+      gate(pipelineGates, 'BUSINESS_PROFILE', 'WARN',
+        `timed out after ${BUSINESS_PROFILE_TIMEOUT_MS}ms — competitor/ICP discovery falls back to the offering-grounded pass`)
+    } else if (isEmptyBusinessProfile(businessProfile)) {
+      gate(pipelineGates, 'BUSINESS_PROFILE', 'WARN',
+        'extraction returned empty (no API key, LLM failure, or genuinely no services/positioning content found) — competitor/ICP discovery falls back to the offering-grounded pass')
+    } else {
+      gate(pipelineGates, 'BUSINESS_PROFILE', 'PASS',
+        `${businessProfile.services.length} service(s) | positioning=${businessProfile.market_positioning ? 'yes' : 'no'}`)
+    }
 
     // ── Step 4b: Competitor Discovery ────────────────────────────────
     // Business-understanding rebuild (2026-07-16): the business-profile-
