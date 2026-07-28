@@ -91,15 +91,32 @@ scraper/classifier/prompt file edit before trusting a live run reflects it.
   (Lemwarm), multi-mailbox rotation for deliverability, and native reply/
   open/click webhooks, rather than infra we'd have to build ourselves on
   top of a bare send API.
-- **API shape (researched, not yet integrated)**: REST API at
-  `api.lemlist.com`, authenticated via API key (Bearer token or HTTP Basic
-  with empty username). Campaign/lead endpoints
-  (`POST /campaigns/{id}/leads` to add a lead, `GET` for stats). Full
-  reference at `developer.lemlist.com`. Native webhooks
-  (`developer.lemlist.com/api-reference/objects-definitions/webhook`) push
-  real-time events for opens/clicks/**replies** — retried on failure, so a
-  future webhook receiver needs idempotent handling (store processed event
-  IDs, skip duplicates).
+- **API shape — verified 2026-07-28 against `developer.lemlist.com` directly**
+  (corrects an earlier, slightly-wrong first pass that guessed Bearer-or-Basic;
+  same "don't trust a guessed vendor shape" discipline as the Prospeo
+  deprecated-endpoint lesson elsewhere in this repo):
+  - Base URL: `https://api.lemlist.com/api` (not the bare host).
+  - **Auth is Basic ONLY, not Bearer** — empty username, API key as
+    password, i.e. base64-encode the literal string `:YOUR_API_KEY`
+    (leading colon required) into `Authorization: Basic {encoded}`. The
+    docs themselves flag this as the one non-obvious gotcha.
+  - **Rate limit: 20 requests / 2 seconds, per API key**, applies uniformly
+    to all routes. Signaled via `Retry-After`/`X-RateLimit-Limit`/
+    `X-RateLimit-Remaining`/`X-RateLimit-Reset` headers, not a dedicated
+    status code — a future provider should track `X-RateLimit-Remaining`
+    and back off proactively rather than only reacting to a 429-shaped
+    error. Relevant to this repo's existing sequential (not `Promise.all`)
+    per-contact send-loop pattern (`lib/outbound/sending/*`, Session 6) —
+    that shape already fits a rate-limited API well.
+  - Campaign endpoints: create/get/get-many/update/start/pause/stats/
+    duplicate. Lead endpoints: create-lead-in-campaign/get-campaign-leads/
+    get-lead-by-email/update/delete-unsubscribe/mark-interested/pause.
+    Activity endpoints: get-many-activities (this is where reply/open/click
+    events surface via polling, as an alternative to webhooks). Webhook
+    endpoints: add/get-many/delete.
+  - Native webhooks push real-time events for opens/clicks/**replies** —
+    retried on failure by Lemlist, so a future webhook receiver needs
+    idempotent handling (store processed event IDs, skip duplicates).
 - **This unblocks reply tracking**, previously logged elsewhere as "likely
   blocked on [an] unrelated decision" (no sending vendor chosen). Lemlist's
   reply webhook is the real mechanism for the existing but currently-inert
