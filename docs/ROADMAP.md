@@ -49,11 +49,15 @@ Target: Explee's 6-phase loop. Priority order, one milestone at a time:
    `/admin/outbound/contacts` page can't ground candidates from runs saved
    before the grounding field existed; phone/mobile enrichment via Prospeo
    is deliberately not wired (extra per-lookup cost).
-9. Outreach send (Explee phase 6) — blocked on sending-infra vendor
-   decision (domain warming, deliverability, provider). Not started.
+9. **Outreach send (Explee phase 6)** — vendor decision made 2026-07-28
+   (Lemlist — dedicated cold-outreach platform with built-in warmup and
+   reply webhooks, see `DECISIONS.md`). Architecture/implementation not
+   started; also blocked on the user creating a real Lemlist account +
+   API key before any live integration work can happen.
 
-Item 9 cannot start until its vendor question is answered — that is its
-own session, separate from pipeline code.
+Item 9's implementation is its own session, separate from pipeline code —
+now unblocked on the vendor question, but nothing beyond the decision
+itself is built yet.
 
 ## Rule
 

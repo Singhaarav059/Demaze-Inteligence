@@ -83,6 +83,44 @@ scraper/classifier/prompt file edit before trusting a live run reflects it.
   backfill done); phone/mobile enrichment via Prospeo deliberately not
   wired (extra cost, separate decision if ever wanted).
 
+## Outreach send (Phase 2, item 9)
+
+- **Vendor decision made (2026-07-28)**: Lemlist. Chosen over a general
+  transactional email API (SendGrid/SES/Postmark/Resend) specifically
+  because it's a dedicated cold-outreach platform — built-in warmup
+  (Lemwarm), multi-mailbox rotation for deliverability, and native reply/
+  open/click webhooks, rather than infra we'd have to build ourselves on
+  top of a bare send API.
+- **API shape (researched, not yet integrated)**: REST API at
+  `api.lemlist.com`, authenticated via API key (Bearer token or HTTP Basic
+  with empty username). Campaign/lead endpoints
+  (`POST /campaigns/{id}/leads` to add a lead, `GET` for stats). Full
+  reference at `developer.lemlist.com`. Native webhooks
+  (`developer.lemlist.com/api-reference/objects-definitions/webhook`) push
+  real-time events for opens/clicks/**replies** — retried on failure, so a
+  future webhook receiver needs idempotent handling (store processed event
+  IDs, skip duplicates).
+- **This unblocks reply tracking**, previously logged elsewhere as "likely
+  blocked on [an] unrelated decision" (no sending vendor chosen). Lemlist's
+  reply webhook is the real mechanism for the existing but currently-inert
+  `outbound_campaign_events` `replied` event type.
+- **Interacts with the existing mock Warm-Up module**
+  (`lib/outbound/warmup/*`, Session 7, 2026-07-17): that module simulates
+  deliverability/inbox-rate metrics as a pure function of elapsed time,
+  with no real vendor behind it. Lemlist's built-in Lemwarm most likely
+  supersedes this module's role for real warmup — a future architecture
+  session needs to decide whether the mock module gets replaced outright or
+  kept as a secondary/offline metrics view.
+- **Not yet implemented.** Per this repo's own convention (architecture
+  before implementation, one deliverable per session), this is a vendor
+  decision only — no provider class, no schema/migration, no UI wiring yet.
+  Also blocked on the user creating a real Lemlist account and generating
+  an API key (never handled or entered by the assistant, same rule as every
+  other credential in this repo).
+- **Standing safety rule still applies once built**: sending real emails to
+  real prospects requires explicit, per-batch user confirmation every
+  time — building the capability is not standing authorization to use it.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead
