@@ -40,13 +40,20 @@ Target: Explee's 6-phase loop. Priority order, one milestone at a time:
    populated by `lib/prompts/analyze-v2.ts`, rendered in
    `ResearchCard.tsx`). Only needs field-naming reconciliation against this
    doc, not a rebuild.
-8. Decision-maker discovery (Explee phase 5) — blocked on people-data
-   vendor decision (Apollo/PDL/Proxycurl/Hunter-class). Not started.
+8. **Decision-maker discovery (Explee phase 5)** — COMPLETE. Vendor decision
+   made (Prospeo Search Person endpoint), provider built and wired into the
+   standard `lib/outbound/decision-maker-discovery/` provider-factory
+   pattern, candidates grounded against scraped leadership evidence, and
+   user-confirmed working via a real live test (2026-07-28). See
+   `DECISIONS.md`. Known remaining gaps (not blockers): the standalone
+   `/admin/outbound/contacts` page can't ground candidates from runs saved
+   before the grounding field existed; phone/mobile enrichment via Prospeo
+   is deliberately not wired (extra per-lookup cost).
 9. Outreach send (Explee phase 6) — blocked on sending-infra vendor
    decision (domain warming, deliverability, provider). Not started.
 
-Items 8-9 cannot start until their vendor questions are answered — that is
-its own session, separate from pipeline code.
+Item 9 cannot start until its vendor question is answered — that is its
+own session, separate from pipeline code.
 
 ## Rule
 

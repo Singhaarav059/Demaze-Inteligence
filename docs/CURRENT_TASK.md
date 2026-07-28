@@ -82,15 +82,19 @@ Full history for each is in `DECISIONS.md`, not repeated here.
 
 ## Next milestone
 
-Items 1-7 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
+Items 1-8 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
 Discovery Engine, Research Quality Framework, Research Evaluation
-Framework, Market Intelligence Layer, Outreach Intelligence Layer) are all
-now complete. Items 8-9 (decision-maker discovery, outreach send) stay
-blocked on their respective vendor decisions (people-data API; sending
-infrastructure), unchanged from the standing scope note in `CLAUDE.md` —
-do not start either without that decision being made first.
+Framework, Market Intelligence Layer, Outreach Intelligence Layer,
+Decision-maker discovery) are all now complete. Item 8's status was
+corrected 2026-07-28: the Prospeo vendor decision was already made and the
+`search-person`-based provider already built/wired (see `DECISIONS.md`) —
+this file and `ROADMAP.md` just hadn't been updated to reflect it until the
+user directly confirmed a live test working. Item 9 (outreach send) stays
+blocked on its sending-infra vendor decision, unchanged from the standing
+scope note in `CLAUDE.md` — do not start without that decision being made
+first.
 
 ## Do not start
 
-Items 8-9 (decision-maker discovery, outreach send) until their vendor
-decisions are made — see `CLAUDE.md`'s "DO NOT WORK ON RIGHT NOW" section.
+Item 9 (outreach send) until its vendor decision is made — see
+`CLAUDE.md`'s "DO NOT WORK ON RIGHT NOW" section.

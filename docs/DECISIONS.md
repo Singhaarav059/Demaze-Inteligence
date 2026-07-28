@@ -55,6 +55,34 @@ The Next.js dev server on Windows does not pick up file changes made from a
 Linux shell (cross-OS file watcher issue). Restart `npm run dev` after any
 scraper/classifier/prompt file edit before trusting a live run reflects it.
 
+## Decision-maker discovery (Phase 2, item 8)
+
+- **Vendor decision made**: Prospeo, via their `search-person` endpoint
+  (`lib/outbound/decision-maker-discovery/providers/prospeo.ts`,
+  `callProspeoSearchPerson`) — not Apollo/PDL/Proxycurl/Hunter. Given a
+  researched company + target titles (CEO/CTO/VP Operations/Plant Head,
+  etc.), returns candidate decision-makers.
+- Follows the standard outbound-module provider pattern: one
+  `DecisionMakerDiscoveryProvider` interface, mock provider +
+  `prospeo.ts`, selected via `outbound_integrations` (DB row, active by
+  default is `mock` — must be explicitly flipped per environment, same
+  discipline as every other outbound vendor in this repo).
+- Candidates are **grounded**, not trusted blindly: each is tagged
+  `confirmed`/`conflict`/`not_found` against the company's own scraped
+  `leadershipContacts` (`lib/outbound/decision-maker-discovery/grounding.ts`).
+- **LinkedIn stays excluded** — Search Person is a non-LinkedIn people-data
+  API, same category as Prospeo's other capabilities, not a reversal of the
+  LinkedIn boundary above.
+- Real Prospeo credits are spent per lookup — the Auto Flow UI gates the
+  first auto-triggered search behind a one-time confirm dialog; the manual
+  "Search Again" button stays a single click (an explicit click is already
+  consent).
+- **Status: COMPLETE, user-confirmed working via live test (2026-07-28).**
+  Known remaining gaps: the standalone `/admin/outbound/contacts` page
+  can't apply grounding to runs saved before that field existed (no
+  backfill done); phone/mobile enrichment via Prospeo deliberately not
+  wired (extra cost, separate decision if ever wanted).
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead

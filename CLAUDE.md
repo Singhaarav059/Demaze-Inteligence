@@ -2102,9 +2102,16 @@ real bottleneck after this initiative's changes.
   vendor decision (domain warming, deliverability, sending provider) that
   hasn't happened yet. Don't wire up a send mechanism opportunistically
   inside another item — it needs its own architecture session
-- **Decision-maker/contact discovery implementation** — also in scope as of
-  Decision B, but blocked on a people-data vendor decision (Apollo/PDL/
-  Proxycurl/Hunter or similar) that hasn't happened yet, same reasoning
+- ~~Decision-maker/contact discovery implementation — blocked on a
+  people-data vendor decision~~ **RESOLVED (2026-07-28, corrected status)**
+  — this bullet was stale. The vendor decision (Prospeo, `search-person`
+  endpoint) was made and built back in the 2026-07-18/07-19 sessions (see
+  "Decision-maker auto-discovery — UNBLOCKED 2026-07-18" and "Precision +
+  latency fixes" below); it just never got reflected in this bullet or in
+  `docs/ROADMAP.md`/`docs/CURRENT_TASK.md` until the user directly
+  confirmed a live test working. See `docs/DECISIONS.md`'s "Decision-maker
+  discovery (Phase 2, item 8)" section for current status and remaining
+  gaps (contacts-page grounding backfill, mobile enrichment not wired).
 - **LinkedIn-driven architecture decisions**. LinkedIn scraping/automation
   stays excluded regardless of the above — contact discovery should go
   through a people-data API, not LinkedIn
