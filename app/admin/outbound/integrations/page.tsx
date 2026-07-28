@@ -37,13 +37,29 @@ import {
 type RowState = {
   provider_name: string
   api_key: string
+  // Lemlist-only: campaign_id targets the one pre-built Lemlist campaign
+  // (see lib/outbound/shared/lemlist-client.ts's header) this pipeline
+  // enqueues leads into. webhook_secret is optional — only needed if the
+  // user has manually registered a webhook in their Lemlist dashboard
+  // pointing at /api/webhooks/lemlist with a shared secret for
+  // verification. Both are non-secret config, not encrypted credentials.
+  campaign_id: string
+  webhook_secret: string
   is_enabled: boolean
   saving: boolean
   testing: boolean
 }
 
 function emptyRowState(providerName: string): RowState {
-  return { provider_name: providerName, api_key: '', is_enabled: false, saving: false, testing: false }
+  return {
+    provider_name: providerName,
+    api_key: '',
+    campaign_id: '',
+    webhook_secret: '',
+    is_enabled: false,
+    saving: false,
+    testing: false,
+  }
 }
 
 function testBadgeVariant(status: OutboundIntegrationRow['last_test_status'] | undefined) {
@@ -116,9 +132,12 @@ function OutboundIntegrationsPageInner() {
         const next = { ...prev }
         for (const capability of OUTBOUND_CAPABILITIES) {
           const active = byCapability[capability]
+          const activeConfig = (active?.config ?? {}) as { campaignId?: string; webhookSecret?: string }
           next[capability] = {
             provider_name: active?.provider_name ?? 'mock',
             api_key: '',
+            campaign_id: activeConfig.campaignId ?? '',
+            webhook_secret: activeConfig.webhookSecret ?? '',
             is_enabled: active?.is_enabled ?? false,
             saving: false,
             testing: false,
@@ -139,6 +158,11 @@ function OutboundIntegrationsPageInner() {
 
   async function saveCapability(capability: OutboundCapability) {
     const draft = drafts[capability]
+    const isLemlist = capability === 'sending' && draft.provider_name === 'lemlist'
+    if (isLemlist && !draft.campaign_id.trim()) {
+      toast.error('Lemlist needs a target campaign ID — create one in your Lemlist account first.')
+      return
+    }
     updateDraft(capability, { saving: true })
     try {
       const res = await fetch(`/api/admin/outbound/integrations/${capability}`, {
@@ -148,6 +172,9 @@ function OutboundIntegrationsPageInner() {
           provider_name: draft.provider_name,
           display_name: `${draft.provider_name === 'mock' ? 'Mock' : draft.provider_name} ${CAPABILITY_LABELS[capability]}`,
           api_key: draft.api_key || undefined,
+          config: isLemlist
+            ? { campaignId: draft.campaign_id.trim(), webhookSecret: draft.webhook_secret.trim() || undefined }
+            : undefined,
           is_enabled: draft.provider_name === 'mock' ? true : draft.is_enabled,
           is_active: true,
         }),
@@ -208,6 +235,7 @@ function OutboundIntegrationsPageInner() {
             const draft = drafts[capability]
             const knownProviders = CAPABILITY_KNOWN_PROVIDERS[capability]
             const isGmailDraft = capability === 'sending' && draft.provider_name === 'gmail'
+            const isLemlistDraft = capability === 'sending' && draft.provider_name === 'lemlist'
             const connectedGmailEmail = active?.provider_name === 'gmail'
               ? (active.config as { email?: string } | undefined)?.email
               : undefined
@@ -293,6 +321,36 @@ function OutboundIntegrationsPageInner() {
                         </div>
                       )}
                     </div>
+
+                    {isLemlistDraft && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor={`${capability}-lemlist-campaign`}>Lemlist campaign ID</Label>
+                          <Input
+                            id={`${capability}-lemlist-campaign`}
+                            placeholder="Create an empty campaign in Lemlist first"
+                            value={draft.campaign_id}
+                            onChange={e => updateDraft(capability, { campaign_id: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`${capability}-lemlist-secret`}>Webhook secret (optional)</Label>
+                          <Input
+                            id={`${capability}-lemlist-secret`}
+                            placeholder="Only if you registered a reply-tracking webhook"
+                            value={draft.webhook_secret}
+                            onChange={e => updateDraft(capability, { webhook_secret: e.target.value })}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground/70 col-span-2">
+                          Sending needs a one-time manual step in your Lemlist account: create a campaign
+                          with one sequence step whose subject and body are just{' '}
+                          <code className="text-foreground">{'{{subjectLine}}'}</code> and{' '}
+                          <code className="text-foreground">{'{{icebreaker}}'}</code> — this pipeline can&apos;t
+                          create that template via API. Paste that campaign&apos;s ID above.
+                        </p>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between pt-1">
                       <span className="text-xs text-muted-foreground/70">

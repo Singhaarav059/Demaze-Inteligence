@@ -91,17 +91,31 @@ corrected 2026-07-28: the Prospeo vendor decision was already made and the
 this file and `ROADMAP.md` just hadn't been updated to reflect it until the
 user directly confirmed a live test working.
 
-Item 9 (outreach send)'s vendor decision was also made 2026-07-28 —
-**Lemlist**, see `DECISIONS.md`. Implementation itself has NOT started: no
-provider class, no migration, no UI. Needs its own architecture session
-(mirroring how Decision-maker discovery was built: interface + mock +
-Lemlist provider, following the standard `lib/outbound/*` pattern) and a
-real Lemlist account + API key from the user before any live work.
+Item 9 (outreach send) is now code-complete too, same day (2026-07-28) —
+**Lemlist** provider (`lib/outbound/sending/providers/lemlist.ts`), settings
+UI, and a reply/open/click webhook receiver (`app/api/webhooks/lemlist/
+route.ts`) are all built and tested (`tsc`+603/603 suite clean), plus
+live-verified in the browser (selected the provider, saved real config,
+Test Connection reported the expected "no API key" failure, reverted to
+mock afterward). See `DECISIONS.md`'s "Outreach send (Phase 2, item 9)"
+section for full detail, including a real bug fixed along the way
+(`send/route.ts` was mishandling the `'queued'` status Lemlist needs).
+
+**What's left is account-side, not engineering**: the user needs to (1)
+create a real Lemlist account and generate an API key, (2) manually build
+one campaign with a sequence template using `{{subjectLine}}`/
+`{{icebreaker}}` merge tags (no API exists for writing template content),
+and (3) apply migration `014_outbound_campaign_events_provider_id.sql` in
+the Supabase dashboard. None of that is something the assistant can do.
+
+Both items 8 and 9 — the entire Phase 2 AutoGTM roadmap — are now
+code-complete. Nothing in Phase 2 remains to be built; what's left is
+vendor-account setup on the user's side plus real live verification once
+credentials exist.
 
 ## Do not start
 
-Do not begin Item 9 implementation opportunistically inside another task —
-it needs its own dedicated architecture session. See
-`DECISIONS.md`'s "Outreach send (Phase 2, item 9)" section for what's
-already researched (API shape, webhook events, interaction with the
-existing mock Warm-Up module).
+Do not send real outreach emails without explicit, per-batch user
+confirmation, even once Lemlist is fully configured — see `CLAUDE.md`'s
+standing safety rule. Building the send capability was never standing
+authorization to use it.

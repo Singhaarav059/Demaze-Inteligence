@@ -2097,17 +2097,14 @@ real bottleneck after this initiative's changes.
 - More regexes as a first resort, EXCEPT the 4 confirmed SIGNAL_PATTERNS gaps
   above — those are validated against real data, not speculative, and are now the
   highest-priority signal-extraction work
-- **Email-finding, generation, QA implementation** — already built (see
-  "Outbound Workflow Modules" sessions above). **Send implementation** — in
-  scope as of the 2026-07-14 "SCOPE PIVOT" Decision B; the sending-infra
-  vendor decision was made 2026-07-28 (**Lemlist**, see
-  `docs/DECISIONS.md`'s "Outreach send (Phase 2, item 9)" section for the
-  researched API/webhook shape), but implementation itself has NOT started
-  — no provider class, no migration, no UI, and it's also blocked on the
-  user creating a real Lemlist account + API key. Don't wire up a send
-  mechanism opportunistically inside another item — it still needs its own
-  dedicated architecture session, the vendor decision alone doesn't skip
-  that
+- **Email-finding, generation, QA, and send implementation** — all built
+  (see "Outbound Workflow Modules" sessions above, plus the 2026-07-28
+  Lemlist sending provider — `docs/DECISIONS.md`'s "Outreach send (Phase 2,
+  item 9)" section for full detail). What's NOT done is real-vendor
+  verification: the user still needs to create a Lemlist account, generate
+  an API key, and manually build a merge-tag campaign template before any
+  real send can happen — until then this stays inert regardless of what
+  code exists.
 - ~~Decision-maker/contact discovery implementation — blocked on a
   people-data vendor decision~~ **RESOLVED (2026-07-28, corrected status)**
   — this bullet was stale. The vendor decision (Prospeo, `search-person`

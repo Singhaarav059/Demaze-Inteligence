@@ -46,7 +46,7 @@ export const CAPABILITY_KNOWN_PROVIDERS: Record<OutboundCapability, string[]> = 
   decision_maker_discovery: ['mock', 'prospeo', 'apollo', 'proxycurl'],
   email_finder: ['mock', 'prospeo', 'hunter', 'apollo', 'findymail', 'snov'],
   enrichment: ['mock', 'prospeo', 'apollo', 'proxycurl'],
-  sending: ['mock', 'gmail', 'smartlead', 'instantly'],
+  sending: ['mock', 'gmail', 'lemlist', 'smartlead', 'instantly'],
   warmup: ['mock', 'smartlead', 'instantly'],
 }
 

@@ -128,15 +128,93 @@ scraper/classifier/prompt file edit before trusting a live run reflects it.
   supersedes this module's role for real warmup — a future architecture
   session needs to decide whether the mock module gets replaced outright or
   kept as a secondary/offline metrics view.
-- **Not yet implemented.** Per this repo's own convention (architecture
-  before implementation, one deliverable per session), this is a vendor
-  decision only — no provider class, no schema/migration, no UI wiring yet.
-  Also blocked on the user creating a real Lemlist account and generating
-  an API key (never handled or entered by the assistant, same rule as every
-  other credential in this repo).
-- **Standing safety rule still applies once built**: sending real emails to
-  real prospects requires explicit, per-batch user confirmation every
-  time — building the capability is not standing authorization to use it.
+- **Architecture note that shaped the implementation**: Lemlist has no
+  "send this exact pre-written subject/body to this address now" primitive
+  — the same reason this repo's Gmail sending provider's own header comment
+  gives for ruling out Snov.io first. Campaigns are created empty; the
+  sequence template (subject/body) has to be built once, manually, in the
+  user's real Lemlist account, using merge-tag placeholders. So `sendEmail()`
+  doesn't send — it creates/updates a lead in one pre-configured campaign
+  (`config.campaignId`), passing this pipeline's already-LLM-generated
+  subject/body as custom variables (`subjectLine`, `icebreaker` — the latter
+  a purpose-built Lemlist field for exactly this kind of personalization).
+  Lemlist sends on its own schedule afterward, so the honest
+  `SendEmailStatus` is `'queued'`, not `'sent'`.
+- **Status: IMPLEMENTED (2026-07-28), code + tests + live UI verification —
+  NOT yet live-verified against a real Lemlist account** (no API key exists
+  yet; the user still needs to create one, plus manually build the merge-tag
+  campaign template described above — neither is something the assistant
+  can do).
+  - `lib/outbound/shared/lemlist-client.ts` — Basic-auth header builder,
+    generic request wrapper (handles Lemlist's plain-text, non-JSON error
+    bodies — a real gap the Prospeo client's "any body = ok" contract
+    doesn't share), `createLeadInCampaign()`.
+  - `lib/outbound/sending/providers/lemlist.ts` — implements the existing
+    `EmailSenderProvider` interface; `scheduleFollowups` honestly reports
+    `scheduled:false` (same limitation as Gmail — no per-lead follow-up
+    content primitive); `pauseCampaign`/`resumeCampaign` are app-owned
+    no-ops, not forwarded to Lemlist (many app campaigns can share one
+    Lemlist campaign, so pausing "the campaign" here would be wrong).
+  - Wired into `lib/outbound/sending/provider-factory.ts`'s `PROVIDERS` map
+    and `CAPABILITY_KNOWN_PROVIDERS.sending`.
+  - **Fixed a real latent bug found while wiring this in**:
+    `app/api/admin/outbound/campaigns/[id]/send/route.ts` treated any
+    status other than literal `'sent'` as a failure — `SendEmailStatus`
+    already had a `'queued'` member that nothing previously returned, so
+    Lemlist's honest `'queued'` result would have been wrongly recorded as
+    failed. Now only `'failed'` is treated as failure; the provider's exact
+    status is preserved in the event's `detail.providerStatus`.
+  - Settings UI (`/admin/outbound/integrations`): selecting `lemlist` for
+    Email Sending reveals two extra fields — target Campaign ID (required)
+    and an optional webhook secret — stored via the existing non-secret
+    `config` JSONB column (new `getActiveConfig()` helper in
+    `lib/outbound/settings/provider-selection.ts`, mirroring
+    `getActiveCredential()`), not the encrypted-credential path (a campaign
+    ID isn't sensitive). Client-side guard blocks saving without a campaign
+    ID. **Live-verified in the browser**: selected lemlist, confirmed the
+    two fields render with the manual-setup instructions, saved (real PUT
+    to the live DB), Test Connection correctly reported failure with a
+    clear "no API key configured" message (no crash), then reverted the
+    capability back to `mock` afterward — same "leave real environments on
+    safe defaults after verification" discipline as the Prospeo session.
+  - **Reply/open/click tracking**: new `POST /api/webhooks/lemlist` receiver
+    (public route, no admin-token auth — verified instead via an optional
+    shared `secret` field Lemlist echoes back in every webhook call).
+    Webhook **registration** itself was deliberately NOT built against the
+    API (a one-time manual step in the Lemlist dashboard is simpler and
+    lower-risk than guessing the Add Webhook request shape for a
+    one-off action) — only the receiver. Correlates incoming events to a
+    `campaign_contact` primarily via the lead/contact id stored as
+    `provider_message_id` at send time, falling back to most-recent-by-email
+    when absent. New migration `014_outbound_campaign_events_provider_id.sql`
+    adds `provider_event_id` (nullable, partial-unique-indexed) so retried
+    webhook deliveries dedupe correctly — **not yet applied to the live DB**
+    (same "user runs migrations manually in the Supabase dashboard"
+    precedent as every prior migration in this repo).
+  - **Honest caveat on payload field names**: developer.lemlist.com
+    documents webhooks conceptually (real-time POST callbacks for
+    `emailsOpened`/`emailsReplied`/etc.) without a worked payload example —
+    the receiver's field-name guesses (`leadEmail`/`email`, `_id`/`id`/
+    `eventId`, etc.) are best-effort, not confirmed. It always stores the
+    full raw payload in `detail.rawPayload` regardless of whether parsing
+    succeeds, so nothing is lost if a guessed name is wrong — treat as
+    verified only after a real webhook delivery has been inspected live.
+  - Tests: `tests/lemlist-client.test.ts`, `tests/lemlist-provider.test.ts`,
+    `tests/lemlist-webhook-mapping.test.ts` (the webhook route handler
+    itself isn't unit-tested end-to-end, matching this repo's established
+    "route.ts files get tsc+dev-server verification, not Supabase-mocked
+    unit tests" precedent — only its pure mapping helpers are). `tsc
+    --noEmit` clean, full suite 603/603 passing.
+  - **Deliberately not touched**: the mock Warm-Up module
+    (`lib/outbound/warmup/*`) — whether Lemwarm supersedes it is still an
+    open, separate architecture decision per the note above, not decided by
+    building the sending provider.
+- **Standing safety rule still applies now that this is built**: sending
+  real emails to real prospects requires explicit, per-batch user
+  confirmation every time — building the capability is not standing
+  authorization to use it. Nothing in this implementation sends a real
+  email; `sendEmail()` cannot even run yet without a real API key + a
+  manually-built Lemlist campaign template, neither of which exist.
 
 ## Competitor Discovery Engine (Phase 2, item 1)
 

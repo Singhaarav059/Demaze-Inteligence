@@ -6,7 +6,18 @@
 // since a real sending provider rate-limits sends the same way search
 // quota does). Each contact needs an already-generated email (subject +
 // draft) — contacts missing one are skipped, left 'queued' for retry,
-// not silently marked done. Mock provider only: no real email is sent.
+// not silently marked done.
+//
+// A provider result is only a failure when its status is literally
+// 'failed' — SendEmailResult.status also has a 'queued' outcome (real for
+// lib/outbound/sending/providers/lemlist.ts, which enqueues into Lemlist's
+// own async scheduler rather than sending synchronously like Gmail/mock).
+// Both 'sent' and 'queued' mean "successfully handed off to the sending
+// provider" from this app's perspective, so both advance the campaign
+// contact to 'sent' here — outbound_campaign_contacts has no separate
+// "handed off but not yet delivered" state, and the distinction is still
+// preserved in the event's own detail.providerStatus for anyone inspecting
+// the timeline.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -73,7 +84,7 @@ export async function POST(
       body: emailDraft.fullText,
     })
 
-    if (result.status !== 'sent') {
+    if (result.status === 'failed') {
       outcomes.push({ campaignContactId: item.id, status: 'failed', reason: result.error })
       continue
     }
@@ -92,7 +103,11 @@ export async function POST(
       campaign_id: campaignId,
       campaign_contact_id: item.id,
       event_type: 'sent',
-      detail: { providerMessageId: result.providerMessageId, providerUsed: result.providerUsed },
+      detail: {
+        providerMessageId: result.providerMessageId,
+        providerUsed: result.providerUsed,
+        providerStatus: result.status,
+      },
     })
 
     outcomes.push({ campaignContactId: item.id, status: 'sent' })

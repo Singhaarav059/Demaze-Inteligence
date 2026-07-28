@@ -49,15 +49,21 @@ Target: Explee's 6-phase loop. Priority order, one milestone at a time:
    `/admin/outbound/contacts` page can't ground candidates from runs saved
    before the grounding field existed; phone/mobile enrichment via Prospeo
    is deliberately not wired (extra per-lookup cost).
-9. **Outreach send (Explee phase 6)** — vendor decision made 2026-07-28
-   (Lemlist — dedicated cold-outreach platform with built-in warmup and
-   reply webhooks, see `DECISIONS.md`). Architecture/implementation not
-   started; also blocked on the user creating a real Lemlist account +
-   API key before any live integration work can happen.
+9. **Outreach send (Explee phase 6)** — vendor decided AND implemented
+   2026-07-28 (Lemlist — dedicated cold-outreach platform with built-in
+   warmup and reply webhooks, see `DECISIONS.md`). Sending provider,
+   settings UI, and a reply/open/click webhook receiver are all built,
+   tested (`tsc`+full suite clean), and live-UI-verified. **Not yet
+   live-verified against a real Lemlist account** — still needs the user to
+   create a Lemlist account, generate an API key, and manually build a
+   merge-tag campaign template (Lemlist has no API for writing sequence
+   content) before any real send can happen. Migration
+   `014_outbound_campaign_events_provider_id.sql` also needs to be applied
+   manually in the Supabase dashboard, same as every prior migration.
 
-Item 9's implementation is its own session, separate from pipeline code —
-now unblocked on the vendor question, but nothing beyond the decision
-itself is built yet.
+Item 9 is code-complete; what remains is entirely account-side setup the
+user has to do themselves (Lemlist signup, API key, campaign template) plus
+running the one pending migration — not further engineering work.
 
 ## Rule
 

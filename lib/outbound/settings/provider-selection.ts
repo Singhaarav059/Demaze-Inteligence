@@ -59,3 +59,24 @@ export async function getActiveCredential(capability: OutboundCapability): Promi
     return null
   }
 }
+
+// Same discipline as getActiveCredential, for the non-secret `config` JSONB
+// column — used by providers that need per-environment settings that aren't
+// sensitive enough to warrant encryption (e.g. Lemlist's target campaign
+// id). Returns null under the same conditions as getActiveCredential.
+export async function getActiveConfig(capability: OutboundCapability): Promise<Record<string, unknown> | null> {
+  try {
+    const supabase = createServerClient()
+    const { data } = await supabase
+      .from('outbound_integrations')
+      .select('config')
+      .eq('capability', capability)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (!data?.config || typeof data.config !== 'object') return null
+    return data.config as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
