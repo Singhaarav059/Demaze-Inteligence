@@ -34,13 +34,26 @@ const GMAIL_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GMAIL_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GMAIL_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 const GMAIL_SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'
+const GMAIL_THREADS_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/threads'
 const DEFAULT_TIMEOUT_MS = 15000
 
-// gmail.send only grants permission to send — not to read the mailbox.
-// userinfo.email is only used to show "Connected as: someone@gmail.com" in
-// the Integrations UI, never anything else.
+// gmail.metadata (added 2026-07-29 for free reply tracking) grants read
+// access to message/thread headers and labels ONLY — never body content —
+// which is exactly enough to tell "did this thread get a reply from someone
+// else" without ever reading what a prospect actually wrote. userinfo.email
+// is only used to show "Connected as: someone@gmail.com" in the Integrations
+// UI, never anything else.
+//
+// IMPORTANT: this scope was added after gmail.send/userinfo.email were
+// already live for some accounts — an already-connected account's stored
+// refresh token predates this scope and does NOT have read access. Anyone
+// who connected Gmail before this change needs to click "Reconnect with
+// Google" once (the auth URL's prompt=consent forces a fresh grant) before
+// checkGmailThreadForReply() below will work for them; sendEmail() is
+// unaffected either way.
 export const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.metadata',
   'https://www.googleapis.com/auth/userinfo.email',
 ]
 
@@ -218,7 +231,7 @@ export function buildMimeMessage(params: { to: string; subject: string; bodyText
 }
 
 export type GmailSendResult =
-  | { ok: true; messageId: string }
+  | { ok: true; messageId: string; threadId: string }
   | { ok: false; error: string }
 
 export async function sendGmailMessage(
@@ -246,11 +259,88 @@ export async function sendGmailMessage(
       return { ok: false, error: `Gmail send failed: ${detail}` }
     }
 
-    return { ok: true, messageId: json.id }
+    // threadId is what makes free reply tracking possible (see
+    // checkGmailThreadForReply below) — a freshly-sent message starts a new
+    // thread of its own, so threadId === messageId at send time, but keeping
+    // both named explicitly (rather than reusing one value for both) avoids
+    // relying on that Gmail implementation detail elsewhere in this codebase.
+    return { ok: true, messageId: json.id, threadId: json.threadId ?? json.id }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Network error calling Gmail send API'
     return { ok: false, error: controller.signal.aborted ? `Gmail send request timed out after ${timeoutMs}ms` : message }
   } finally {
     clearTimeout(timeout)
   }
+}
+
+interface GmailThreadMessage {
+  id: string
+  from: string | null
+}
+
+export type GmailThreadResult =
+  | { ok: true; messages: GmailThreadMessage[] }
+  | { ok: false; error: string }
+
+// format=metadata + metadataHeaders=From deliberately never requests message
+// bodies — this only ever sees who a message is from, matching the
+// gmail.metadata scope's own read-only-headers guarantee. Used by
+// checkGmailThreadForReply() below, and directly by anything that just
+// wants the raw per-message From headers for a thread.
+export async function getGmailThread(
+  threadId: string,
+  accessToken: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<GmailThreadResult> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const url = new URL(`${GMAIL_THREADS_URL}/${threadId}`)
+    url.searchParams.set('format', 'metadata')
+    url.searchParams.set('metadataHeaders', 'From')
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    })
+    const json = await res.json().catch(() => null)
+
+    if (!res.ok || !Array.isArray(json?.messages)) {
+      const detail = json?.error?.message || `HTTP ${res.status}`
+      return { ok: false, error: `Gmail thread fetch failed: ${detail}` }
+    }
+
+    const messages: GmailThreadMessage[] = json.messages.map((m: { id: string; payload?: { headers?: Array<{ name: string; value: string }> } }) => {
+      const fromHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'from')
+      return { id: m.id, from: fromHeader?.value ?? null }
+    })
+
+    return { ok: true, messages }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Network error calling Gmail threads API'
+    return { ok: false, error: controller.signal.aborted ? `Gmail thread request timed out after ${timeoutMs}ms` : message }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export interface ReplyCheckResult {
+  hasReply: boolean
+  replyMessageId?: string
+  fromHeader?: string
+}
+
+// A message counts as "a reply" only if its From header doesn't belong to
+// the connected account — this is what stops a manually-sent follow-up
+// (sent from within Gmail's own UI, in the same thread, by the connected
+// account itself) from being mistaken for a prospect's reply. If more than
+// one qualifying message exists, the most recent one (last in Gmail's
+// thread order) is reported.
+export function findReplyInThread(messages: GmailThreadMessage[], connectedEmail: string): ReplyCheckResult {
+  const lowerConnected = connectedEmail.toLowerCase()
+  const replies = messages.filter(m => m.from && !m.from.toLowerCase().includes(lowerConnected))
+  const last = replies[replies.length - 1]
+  if (!last) return { hasReply: false }
+  return { hasReply: true, replyMessageId: last.id, fromHeader: last.from ?? undefined }
 }

@@ -114,7 +114,7 @@ export function ReviewSendStep({
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   // Was hardcoded 'Demo mode' regardless of the actually-active sending
-  // provider — a real bug once a real vendor (Lemlist) is connected, since
+  // provider — a real bug once a real vendor (e.g. Gmail) is connected, since
   // the confirm dialog's "Mock sending only, no real email goes out yet"
   // text would then be actively false at the exact moment someone clicks
   // Send. null while loading = treated as mock (safe default: don't imply

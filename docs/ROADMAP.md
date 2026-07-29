@@ -49,21 +49,24 @@ Target: Explee's 6-phase loop. Priority order, one milestone at a time:
    `/admin/outbound/contacts` page can't ground candidates from runs saved
    before the grounding field existed; phone/mobile enrichment via Prospeo
    is deliberately not wired (extra per-lookup cost).
-9. **Outreach send (Explee phase 6)** — vendor decided AND implemented
-   2026-07-28 (Lemlist — dedicated cold-outreach platform with built-in
-   warmup and reply webhooks, see `DECISIONS.md`). Sending provider,
-   settings UI, and a reply/open/click webhook receiver are all built,
-   tested (`tsc`+full suite clean), and live-UI-verified. **Not yet
-   live-verified against a real Lemlist account** — still needs the user to
-   create a Lemlist account, generate an API key, and manually build a
-   merge-tag campaign template (Lemlist has no API for writing sequence
-   content) before any real send can happen. Migration
-   `014_outbound_campaign_events_provider_id.sql` also needs to be applied
-   manually in the Supabase dashboard, same as every prior migration.
+9. **Outreach send (Explee phase 6)** — **REVERSED 2026-07-29.** Lemlist
+   (chosen and implemented 2026-07-28) was removed entirely at the user's
+   explicit request in favor of a free, no-vendor path: Gmail (OAuth,
+   already-existing `lib/outbound/sending/providers/gmail.ts`) as the
+   sending provider, plus a new free poll-on-demand reply-tracking route
+   (`POST /api/admin/outbound/campaigns/[id]/check-replies`, Gmail
+   `gmail.metadata` scope, no background scheduler needed). See
+   `DECISIONS.md`'s "Outreach send" section for the full history including
+   the reversal. The user has completed the Google Cloud OAuth app setup
+   (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` configured); the one remaining
+   step is clicking "Connect with Google" on `/admin/outbound/integrations`
+   themselves to grant real send+read access — not yet done as of this
+   writing.
 
-Item 9 is code-complete; what remains is entirely account-side setup the
-user has to do themselves (Lemlist signup, API key, campaign template) plus
-running the one pending migration — not further engineering work.
+Item 9 is code-complete on the Gmail path; what remains is the user
+clicking through Google's consent screen once (cannot be done on their
+behalf) and then switching Email Sending to `gmail` in
+`/admin/outbound/integrations`.
 
 ## Rule
 

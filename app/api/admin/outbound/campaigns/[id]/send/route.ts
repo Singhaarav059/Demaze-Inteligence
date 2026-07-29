@@ -16,19 +16,18 @@
 // calls this same endpoint — would actually send every OTHER already-queued
 // contact in the campaign too, not just the one the user clicked "Send
 // Email" on. Silent and harmless while sending was mock-only; a real
-// correctness/consent bug the moment a real provider (Lemlist) is
-// connected, since "send to this one person" must not fan out to others.
+// correctness/consent bug the moment a real provider is connected, since
+// "send to this one person" must not fan out to others.
 //
 // A provider result is only a failure when its status is literally
-// 'failed' — SendEmailResult.status also has a 'queued' outcome (real for
-// lib/outbound/sending/providers/lemlist.ts, which enqueues into Lemlist's
-// own async scheduler rather than sending synchronously like Gmail/mock).
-// Both 'sent' and 'queued' mean "successfully handed off to the sending
-// provider" from this app's perspective, so both advance the campaign
-// contact to 'sent' here — outbound_campaign_contacts has no separate
-// "handed off but not yet delivered" state, and the distinction is still
-// preserved in the event's own detail.providerStatus for anyone inspecting
-// the timeline.
+// 'failed' — SendEmailResult.status also has a 'queued' outcome, kept
+// generic for any future async-scheduler-style provider (Gmail/mock both
+// send synchronously and only ever return 'sent'). Both 'sent' and 'queued'
+// mean "successfully handed off to the sending provider" from this app's
+// perspective, so both advance the campaign contact to 'sent' here —
+// outbound_campaign_contacts has no separate "handed off but not yet
+// delivered" state, and the distinction is still preserved in the event's
+// own detail.providerStatus for anyone inspecting the timeline.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'

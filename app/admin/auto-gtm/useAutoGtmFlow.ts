@@ -99,7 +99,7 @@ export function useAutoGtmFlow() {
   const [sendingSelected, setSendingSelected] = useState(false)
   const [campaignContactStatus, setCampaignContactStatus] = useState<Record<string, SendOutcomeDetail>>({})
   // Was hardcoded '(mock)' in every send toast regardless of the actually-
-  // active sending provider — misleading once a real vendor (Lemlist) is
+  // active sending provider — misleading once a real vendor (e.g. Gmail) is
   // connected. Same fetch-and-check pattern as ReviewSendStep's own badge.
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
 

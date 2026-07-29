@@ -53,21 +53,23 @@ describe('GmailSendingProvider.sendEmail', () => {
     expect(result.error).toContain('quota exceeded')
   })
 
-  it('succeeds and returns the Gmail message id', async () => {
+  it('succeeds and returns the Gmail thread id (not the message id) as providerMessageId', async () => {
     vi.mocked(getGmailCredential).mockResolvedValue(CRED)
     vi.mocked(refreshAccessToken).mockResolvedValue({ ok: true, accessToken: 'AT', expiresIn: 3600 })
-    vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'msg-1' })
+    vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'msg-1', threadId: 'thread-1' })
 
     const result = await GmailSendingProvider.sendEmail(REQUEST)
     expect(result.status).toBe('sent')
-    expect(result.providerMessageId).toBe('msg-1')
+    // Deliberate (2026-07-29): providerMessageId is the thread id, since that's
+    // what free reply tracking (check-replies/route.ts) polls against.
+    expect(result.providerMessageId).toBe('thread-1')
     expect(result.providerUsed).toBe('gmail')
   })
 
   it('passes contactEmail/subject/body through to sendGmailMessage unchanged', async () => {
     vi.mocked(getGmailCredential).mockResolvedValue(CRED)
     vi.mocked(refreshAccessToken).mockResolvedValue({ ok: true, accessToken: 'AT', expiresIn: 3600 })
-    vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'msg-1' })
+    vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'msg-1', threadId: 'thread-1' })
 
     await GmailSendingProvider.sendEmail(REQUEST)
     expect(sendGmailMessage).toHaveBeenCalledWith(

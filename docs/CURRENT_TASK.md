@@ -1,63 +1,70 @@
 # Current Task
 
-## Auto Flow Review & Send (step 5) redesign — items 1 and 3 DONE (2026-07-29)
+## Sending vendor — REVERSED 2026-07-29: Lemlist removed, Gmail (free) is now the path — pick this up first
 
-Three gaps were queued 2026-07-28 from live Lemlist-integration testing. Items
-1 (inline editing) and 3 (checkbox multi-select) are now implemented and
-live-verified; item 2 (follow-up scheduling) is still open and needs its own
-architecture session — see below.
+**What happened, in order, same day:**
+1. Auto Flow Review & Send redesign items 1 (inline editing) and 3
+   (checkbox multi-select) were built and "live-verified" against a real
+   saved run — see `DECISIONS.md`'s "Review & Send redesign" section for
+   what was built.
+2. That verification pass **believed** it had confirmed no real send
+   happened (dialog opened, Cancel clicked, checked afterward). It was
+   wrong — a real email was sent via Lemlist to a real contact (Kumar
+   Gururaj, kumar.g@mahindra.com) during that same browser-automation
+   session, most likely from a misclick during the Cancel-button
+   verification steps. See `DECISIONS.md`'s "Incident (2026-07-29)"
+   section for full detail and the lesson for future verification passes
+   (deactivate any real sending provider before interactive click-testing
+   of send-adjacent UI).
+3. The user asked, reasonably, why a paid vendor (Lemlist) was even active
+   given a free path (Gmail) already existed in this codebase, and asked
+   for Lemlist to be **removed completely** — confirming they'd already
+   done the Google Cloud OAuth app setup on their end.
+4. Lemlist was removed entirely (provider, client, webhook receiver, tests,
+   settings UI, and the database row itself — see `DECISIONS.md`'s
+   "Outreach send vendor — REVERSED" section for the full file list and
+   the new `DELETE /api/admin/outbound/integrations/[capability]` route
+   this required).
+5. Free, poll-on-demand Gmail reply tracking was scoped, then built, same
+   session — see `DECISIONS.md`'s "Free reply tracking (Gmail)" section.
 
-1. **DONE — last-moment edit control.** `ReviewSendStep.tsx` now lets the
-   SDR edit recipient email, subject, and body directly on this screen via
-   one combined "Edit" toggle per contact (email + subject + body save
-   together). Subject/body reuse the existing `PATCH /api/admin/outbound/
-   contacts/[id]/generated-content` route (same one Outreach's own "Edit"
-   button calls). Recipient email is a **new** `PATCH /api/admin/outbound/
-   contacts/[id]` route (previously DELETE-only) — a manually-typed email
-   clears `email_confidence`, stamps `email_finder_provider: 'manual'`, so
-   the UI never shows stale "high confidence, found by Prospeo" badges for
-   an address the SDR just typed in. New `updateContactEmail()` in
-   `useAutoGtmFlow.ts`. "From address"/mailbox selection was NOT built —
-   still a separate, bigger decision per the original note below.
-2. **NOT DONE — follow-ups still shown but never actually sent.** Unchanged
-   from the original note: `scheduleFollowups()` on both
-   `lib/outbound/sending/providers/gmail.ts` and `.../lemlist.ts` always
-   returns `scheduled: false` — no scheduler/cron, no reply-detection.
-   Needs its own architecture session, not a UI tweak.
-3. **DONE — checkbox multi-select replaces "Send All".** Each ready-to-send
-   contact now has a checkbox (defaults to none selected, per-contact and a
-   "Select all (N ready)" toggle), and the button reads "Send Selected (N)"
-   instead of "Send All (N)". `useAutoGtmFlow.ts`'s `sendAllContacts()` /
-   `sendingAll` renamed to `sendSelectedContacts(contactIds)` /
-   `sendingSelected` to take an explicit id list instead of reaching for
-   every contact.
+**Current state**:
+- Sending is on `mock` right now — safe, nothing sends for real.
+- `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are configured and confirmed
+  live (the OAuth `/start` route correctly redirects to a real Google
+  consent URL).
+- **No `gmail` row exists yet in `outbound_integrations`** — the per-account
+  OAuth consent has NOT been completed inside this app yet, only the
+  app-level client id/secret. The user needs to go to
+  `/admin/outbound/integrations`, select Gmail for Email Sending, and click
+  "Connect with Google" themselves (a real Google consent screen — not
+  something the assistant can click through on their behalf). Once that's
+  done, Gmail becomes the active sending provider automatically (the OAuth
+  callback route auto-deactivates any other `sending` row and activates
+  `gmail`).
+- Reply tracking (`POST /api/admin/outbound/campaigns/[id]/check-replies`,
+  a "Check for Replies" button on the Campaigns page) is code-complete and
+  unit-tested but **not yet live-verified against a real Gmail thread** —
+  needs the OAuth consent step above first, since there's no real inbox to
+  poll against yet. Also note: the `gmail.metadata` scope was added as
+  part of this work — if the user had connected Gmail before this session
+  (they hadn't, per the point above), they'd need to click "Reconnect with
+  Google" once to pick up read access; moot for a first-time connection.
 
-**Verified**: `tsc --noEmit` clean, full suite 603/603. Live-verified in the
-browser against a real saved run (mahindra.com, resumed via
-`?runId=...&step=5`) — confirmed real-provider badge ("Live: lemlist"),
-checkbox selection updating the Send Selected count, inline edit for both
-subject (persisted via API, confirmed via a direct GET) and recipient email
-(persisted, correctly flipped the contact from "no email, skipped" to
-checkbox-selectable and updated the "N emails found" summary), and the
-confirm dialog's real-vendor warning copy. Did **not** click through an
-actual send — Cancel was used to close the confirm dialog without sending,
-consistent with the standing rule that real sends need explicit per-batch
-confirmation.
+**Next step, in order**: (1) user completes the Gmail OAuth consent
+click-through, (2) confirm Gmail shows up as connected in
+`/admin/outbound/integrations` with the right email, (3) a real,
+explicitly-confirmed test send + a real reply-check pass against an actual
+reply, before trusting either path live.
 
-**Discrepancy found and worth flagging**: `docs/CURRENT_TASK.md`'s Lemlist
-section below still says the user "needs to create a real Lemlist account
-and generate an API key" — but the live `/api/admin/outbound/integrations`
-data checked during this session shows Lemlist is **already** the active
-sending provider with a real credential configured
-(`credential_last_four: "e185"`, `last_test_status: "success"`, a real
-`campaignId`). Whether an actual end-to-end send has been tried against it
-is still unconfirmed — worth a real (explicitly-confirmed) test send in a
-future session rather than assuming either the stale "not set up yet" note
-or the credential's mere presence.
-
-Do item 2 (follow-up scheduling) as its own architecture session given it
-needs new infrastructure, not just UI work — same "one deliverable per
-session" discipline as the rest of this repo's history.
+**Still open, unrelated to the above**: item 2 from the original Review &
+Send redesign queue (2026-07-28) — follow-ups are shown on the Review &
+Send screen but never actually sent, on any schedule or reply-triggered
+cancellation. `scheduleFollowups()` on `lib/outbound/sending/providers/
+gmail.ts` still honestly reports `scheduled: false` — this needs its own
+architecture session (a real scheduler/cron + reply-triggered cancellation
+logic), not a UI tweak, same "one deliverable per session" discipline as
+the rest of this repo's history.
 
 ## Milestone
 

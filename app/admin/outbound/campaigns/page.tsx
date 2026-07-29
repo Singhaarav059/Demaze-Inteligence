@@ -48,10 +48,12 @@ export default function OutboundCampaignsPage() {
     enqueuing,
     sending,
     pausingOrResuming,
+    checkingReplies,
     createCampaign,
     enqueueContacts,
     sendCampaign,
     pauseOrResume,
+    checkReplies,
   } = useOutboundCampaigns()
 
   const [newCampaignName, setNewCampaignName] = useState('')
@@ -175,7 +177,20 @@ export default function OutboundCampaignsPage() {
                 >
                   Resume
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={checkingReplies || campaignContacts.length === 0}
+                  onClick={checkReplies}
+                >
+                  {checkingReplies ? <Spinner className="size-3.5" /> : null}
+                  Check for Replies
+                </Button>
               </div>
+              <p className="text-xs text-muted-foreground/60">
+                Free, on-demand only — this checks Gmail threads when you click it, not
+                automatically. Only works while Gmail is the active sending provider.
+              </p>
             </CardContent>
           </Card>
 

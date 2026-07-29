@@ -1,11 +1,18 @@
 // ============================================================
-// Admin: Outbound Integration — PUT /api/admin/outbound/integrations/[capability]
+// Admin: Outbound Integration — PUT / DELETE /api/admin/outbound/integrations/[capability]
 // ============================================================
-// Upserts the provider row for one capability. If api_key is present it's
-// encrypted before storage — the plaintext value is never persisted or
+// PUT — Upserts the provider row for one capability. If api_key is present
+// it's encrypted before storage — the plaintext value is never persisted or
 // echoed back. Setting is_active=true deactivates every other provider row
 // for the same capability first, so exactly one stays active (also
 // enforced at the DB level by idx_outbound_integrations_capability_active).
+//
+// DELETE — Removes a decommissioned provider's row entirely (e.g. Lemlist,
+// removed 2026-07-29 in favor of free Gmail sending — see docs/DECISIONS.md).
+// Deactivating already stops a provider from being used; this is for when
+// its stored config/credential shouldn't linger at all. Refuses to delete
+// the currently-active row for a capability — switch to a different
+// provider first, so a capability is never left with zero rows.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -86,4 +93,50 @@ export async function PUT(
   }
 
   return NextResponse.json({ success: true, id: data.id })
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ capability: string }> }
+) {
+  const authError = verifyAdminRequest(req)
+  if (authError) return authError
+
+  const { capability } = await params
+  if (!isOutboundCapability(capability)) {
+    return NextResponse.json({ success: false, error: `Unknown capability: ${capability}` }, { status: 400 })
+  }
+
+  const providerName = req.nextUrl.searchParams.get('provider_name')
+  if (!providerName) {
+    return NextResponse.json({ success: false, error: 'provider_name query param is required' }, { status: 400 })
+  }
+
+  const supabase = createServerClient()
+
+  const { data: existing } = await supabase
+    .from('outbound_integrations')
+    .select('is_active')
+    .eq('capability', capability)
+    .eq('provider_name', providerName)
+    .maybeSingle()
+
+  if (existing?.is_active) {
+    return NextResponse.json(
+      { success: false, error: `"${providerName}" is the active provider for ${capability} — switch to a different one before deleting it.` },
+      { status: 409 }
+    )
+  }
+
+  const { error } = await supabase
+    .from('outbound_integrations')
+    .delete()
+    .eq('capability', capability)
+    .eq('provider_name', providerName)
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
 }

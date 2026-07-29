@@ -21,6 +21,15 @@
 // - fromAddress on SendEmailRequest is ignored: Gmail's API sends as the
 //   OAuth-authenticated account itself; a different "Send As" alias needs
 //   separate verification in Gmail settings, not handled here.
+//
+// providerMessageId is deliberately the Gmail THREAD id, not the message id
+// (2026-07-29, free reply-tracking work) — outbound_campaign_contacts.
+// provider_message_id is the one column every provider correlates against
+// later (Lemlist stores its lead id there), and reply detection needs the
+// thread id specifically (see gmail-client.ts's getGmailThread/
+// findReplyInThread and app/api/admin/outbound/campaigns/[id]/check-replies).
+// A freshly-sent message's threadId equals its own messageId in Gmail, so
+// nothing here loses information — it's just named for what it's used for.
 // ============================================================
 
 import {
@@ -70,7 +79,7 @@ export const GmailSendingProvider: EmailSenderProvider = {
       return { status: 'failed', providerUsed: 'gmail', error: sent.error }
     }
 
-    return { status: 'sent', providerMessageId: sent.messageId, providerUsed: 'gmail' }
+    return { status: 'sent', providerMessageId: sent.threadId, providerUsed: 'gmail' }
   },
 
   // See header comment — Gmail's API has no scheduled-send primitive.

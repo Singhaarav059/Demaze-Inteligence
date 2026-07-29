@@ -292,6 +292,159 @@ list; item 2, follow-up scheduling, is still open and needs its own session).
   so no real send was ever triggered during this verification.
 - Verified: `tsc --noEmit` clean, full suite 603/603 passing.
 
+### Incident (2026-07-29) — an unintended real send went out during the verification above
+
+The live-verification pass directly above this note believed it had confirmed
+"no real send was triggered" (dialog opened, Cancel clicked, no campaign
+existed for the run afterward per a direct API check at the time). That
+belief was wrong. A later database check (while scoping the reply-tracking
+work below) found a real campaign, a real `outbound_campaign_contacts` row,
+and a real `sent` event for **Kumar Gururaj (kumar.g@mahindra.com)** —
+`providerUsed: 'lemlist'`, `providerStatus: 'queued'` — timestamped within
+the same verification session. The most likely mechanism: a sequence of
+browser-automation clicks/JS-dispatched-click checks against the confirm
+dialog's Cancel button, where a stale ref or timing mismatch caused an
+actual click-through on the dialog's "Send Selected" confirm button instead
+of Cancel, while Lemlist was the active, real, tested sending provider at
+the time. This is a direct violation of this repo's own standing rule
+(`CLAUDE.md`: building the send capability is never standing authorization
+to use it) — flagged to the user immediately upon discovery, not
+downstream-silenced.
+
+**Immediate mitigation, same session**: sending was switched to `mock`
+(`PUT /api/admin/outbound/integrations/sending`) the moment this was
+found, before any further UI verification work continued.
+
+**Lesson for future sessions verifying Send/Review-&-Send UI**: if a real
+sending provider is active with a real credential, switch it to `mock`
+*before* any interactive click-testing of confirm-dialog/send flows —
+verifying dialog copy or button wiring does not require a live provider to
+be active, and the risk of an automation misclick triggering a real send is
+not worth the alternative. Treat "is a real provider active" as a gate to
+check before, not after, driving send-adjacent UI.
+
+### Outreach send vendor — REVERSED 2026-07-29: Lemlist removed, Gmail (free) is now the only real sending path
+
+Following the incident above, the user asked directly why a paid vendor
+(Lemlist) was in the picture at all when a free, in-house-buildable path
+(Gmail, already implemented as an interim provider since 2026-07-19) was
+available, and asked for Lemlist to be removed completely, confirming they
+had already completed Google Cloud OAuth app setup on their end
+(`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env.local`, confirmed live —
+the oauth `/start` route correctly redirects to a real Google consent URL).
+
+**Removed entirely, not just deactivated**:
+- `lib/outbound/shared/lemlist-client.ts`, `lib/outbound/sending/providers/lemlist.ts`,
+  `app/api/webhooks/lemlist/route.ts`, and their three test files
+  (`tests/lemlist-client.test.ts`, `tests/lemlist-provider.test.ts`,
+  `tests/lemlist-webhook-mapping.test.ts`) — deleted outright.
+- `lib/outbound/sending/provider-factory.ts`'s `PROVIDERS` map and
+  `lib/outbound/settings/types.ts`'s `CAPABILITY_KNOWN_PROVIDERS.sending`
+  list — `lemlist` removed from both.
+- `/admin/outbound/integrations`'s settings page — the Lemlist-only
+  campaign-id/webhook-secret fields (`RowState.campaign_id`/
+  `webhook_secret`, the `isLemlistDraft` render branch, the
+  campaign-id-required check in `saveCapability`) removed entirely, not
+  left as dead/hidden UI.
+- The `outbound_integrations` database row itself was deleted, not just
+  deactivated — this exposed a real, permanent gap: there was previously no
+  way to ever truly remove a decommissioned provider's row, only flip
+  `is_active`. Added `DELETE /api/admin/outbound/integrations/[capability]?provider_name=X`
+  (refuses to delete the currently-active row for a capability, so a
+  capability is never left with zero rows) and used it once to remove the
+  `lemlist` row for `sending`.
+- Every comment/UI-copy reference to Lemlist as a specifically-named vendor
+  was updated to be generic ("a real vendor", "a future async-scheduler-
+  style provider") rather than silently left stale — in
+  `send/route.ts`, `check-replies/route.ts`, `ReviewSendStep.tsx`,
+  `useAutoGtmFlow.ts`, and the Campaigns page's "Check for Replies" hint
+  text. `docs/ROADMAP.md`'s item 9 entry updated to record the reversal
+  rather than silently rewritten as if Lemlist was never chosen.
+- **Deliberately NOT touched**: migration `014_outbound_campaign_events_provider_id.sql`
+  (historical migration files aren't rewritten after being applied, and its
+  `provider_event_id` column is generic infrastructure — actively reused by
+  the new Gmail reply-tracking route below, not made dead by this removal).
+  Two comments in `lib/outbound/sending/providers/gmail.ts` and
+  `lib/outbound/settings/provider-selection.ts` still mention Lemlist by
+  name as an illustrative example of "a provider that stores an id in this
+  field" — left as-is, still accurate context, not a stale reference to
+  live functionality.
+
+**Verified**: `tsc --noEmit` clean, full suite 594/594 passing (603 minus
+the 18 Lemlist-specific assertions removed with its test files no longer
+existing minus item-2-related additions accounted for below — see the
+Gmail reply-tracking entry for the actual pre/post counts across both
+changes together). Live-verified against the real dev DB: the `lemlist` row
+is confirmed gone from `outbound_integrations`, `mock` is the sole
+remaining active `sending` row.
+
+**What's still needed, not something the assistant can do**: the user has
+configured the OAuth app (client id/secret) but has not yet completed the
+per-account consent click-through in this app — no `gmail` row exists yet
+in `outbound_integrations` (that row is only created by
+`app/api/admin/outbound/integrations/gmail/oauth/callback/route.ts` on a
+successful consent). The user needs to go to
+`/admin/outbound/integrations`, select Gmail for Email Sending, and click
+"Connect with Google" themselves — that click, and Google's own consent
+screen, cannot be completed on their behalf.
+
+### Free reply tracking (Gmail), scoped and built 2026-07-29
+
+Scoped, then built same session, per the user's explicit ask ("scope free
+reply tracking" → "build it now"). Full design rationale (why poll-on-view
+instead of a scheduler, why `gmail.metadata` instead of `gmail.readonly`,
+the `threadId`-as-`providerMessageId` reuse) is in this session's own
+scoping message, condensed here for the persistent record:
+
+- `lib/outbound/shared/gmail-client.ts`: `GMAIL_SCOPES` gained
+  `gmail.metadata` (read-only headers/labels, never message bodies) —
+  **any account connected before this change needs to click "Reconnect
+  with Google" once** (`prompt=consent` in the auth URL forces a fresh
+  grant) before reply checking works for them; `sendEmail()` is unaffected
+  either way. `sendGmailMessage()`'s result gained `threadId` (falls back
+  to the message id if Gmail ever omits it). New `getGmailThread()`
+  (fetches a thread's messages via `format=metadata&metadataHeaders=From`
+  — deliberately never requests bodies) and `findReplyInThread()` (a
+  message counts as a reply only if its `From` header doesn't belong to
+  the connected account, so a manually-sent follow-up from Gmail's own UI
+  in the same thread is never mistaken for a prospect's reply; picks the
+  most recent qualifying message if there are several).
+- `lib/outbound/sending/providers/gmail.ts`: `sendEmail()` now returns the
+  Gmail **thread** id as `providerMessageId` (was the message id) —
+  deliberate, documented in the file's own header comment, since reply
+  detection needs the thread id and `outbound_campaign_contacts.
+  provider_message_id` is the one column every provider correlates
+  against later.
+- New `POST /api/admin/outbound/campaigns/[id]/check-replies`: only does
+  anything when the active `sending` provider is `gmail` (reports plainly,
+  doesn't error, otherwise); for each sent-but-not-yet-replied contact with
+  a stored thread id, checks the thread for a reply and — if found —
+  inserts one `replied` event (deduped by the reply message's own Gmail id
+  via `provider_event_id`, reusing migration 014's existing idempotency
+  column) and flips that contact to status `replied`.
+- `useOutboundCampaigns.ts`/Campaigns page: new `checkReplies()` action and
+  a "Check for Replies" button, with copy that's explicit this is
+  on-demand only, not automatic (no scheduler exists in this app — same
+  precedent as the Warm-Up module's own on-view metrics snapshot).
+- New/extended tests: `tests/gmail-client.test.ts` gained coverage for
+  `threadId` capture (including the message-id fallback),
+  `getGmailThread()` (header extraction, the metadata-only request shape,
+  error handling), and `findReplyInThread()` (no-reply, a real reply,
+  not-mistaking-our-own-follow-up-for-a-reply, most-recent-of-several,
+  null-From-header handling). `tests/gmail-provider.test.ts` updated for
+  the `providerMessageId` semantics change. No unit test for
+  `check-replies/route.ts` itself — same established "route.ts files get
+  tsc+dev-server verification, not Supabase-mocked unit tests" precedent
+  as every other route in this codebase.
+- **Verified**: `tsc --noEmit` clean, full suite 612/612 passing at the
+  point this was built (594 after the Lemlist removal above, since that
+  removal happened afterward in the same session — see that section for
+  the final combined count). **Not yet live-verified against a real Gmail
+  thread** — this needs the Gmail OAuth consent click-through (see the
+  removal section above) to be completed first; the mechanism itself
+  (thread fetch, reply-vs-self-send discrimination, event dedup) is
+  unit-tested but not yet exercised against a real inbox.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead

@@ -41,6 +41,7 @@ export function useOutboundCampaigns() {
   const [enqueuing, setEnqueuing] = useState(false)
   const [sending, setSending] = useState(false)
   const [pausingOrResuming, setPausingOrResuming] = useState(false)
+  const [checkingReplies, setCheckingReplies] = useState(false)
 
   const loadCampaigns = useCallback(async () => {
     setLoadingCampaigns(true)
@@ -187,6 +188,37 @@ export function useOutboundCampaigns() {
     [selectedCampaignId, loadEvents]
   )
 
+  // Free, poll-on-demand reply detection — see check-replies/route.ts's
+  // header for why this has to be a manual action rather than a timer (this
+  // app has no background scheduler). Only does anything useful when Gmail
+  // is the active sending provider; the route itself reports that plainly
+  // rather than erroring, so the toast surfaces it either way.
+  const checkReplies = useCallback(async () => {
+    if (!selectedCampaignId) return
+    setCheckingReplies(true)
+    try {
+      const res = await fetch(`/api/admin/outbound/campaigns/${selectedCampaignId}/check-replies`, { method: 'POST' })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Failed to check for replies')
+        return
+      }
+      if (data.message) {
+        toast.info(data.message)
+      } else if (data.newReplies > 0) {
+        toast.success(`${data.newReplies} new repl${data.newReplies === 1 ? 'y' : 'ies'} found (checked ${data.checked})`)
+      } else {
+        toast.info(`No new replies (checked ${data.checked})`)
+      }
+      await loadCampaignContacts(selectedCampaignId)
+      await loadEvents(selectedCampaignId)
+    } catch {
+      toast.error('Could not reach the campaigns API')
+    } finally {
+      setCheckingReplies(false)
+    }
+  }, [selectedCampaignId, loadCampaignContacts, loadEvents])
+
   return {
     campaigns,
     loadingCampaigns,
@@ -198,9 +230,11 @@ export function useOutboundCampaigns() {
     enqueuing,
     sending,
     pausingOrResuming,
+    checkingReplies,
     createCampaign,
     enqueueContacts,
     sendCampaign,
     pauseOrResume,
+    checkReplies,
   }
 }

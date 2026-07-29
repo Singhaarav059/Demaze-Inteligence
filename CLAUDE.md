@@ -2098,13 +2098,16 @@ real bottleneck after this initiative's changes.
   above — those are validated against real data, not speculative, and are now the
   highest-priority signal-extraction work
 - **Email-finding, generation, QA, and send implementation** — all built
-  (see "Outbound Workflow Modules" sessions above, plus the 2026-07-28
-  Lemlist sending provider — `docs/DECISIONS.md`'s "Outreach send (Phase 2,
-  item 9)" section for full detail). What's NOT done is real-vendor
-  verification: the user still needs to create a Lemlist account, generate
-  an API key, and manually build a merge-tag campaign template before any
-  real send can happen — until then this stays inert regardless of what
-  code exists.
+  (see "Outbound Workflow Modules" sessions above). **Vendor reversed
+  2026-07-29**: Lemlist (added 2026-07-28) was removed entirely at the
+  user's request in favor of Gmail (free, OAuth-based, already an interim
+  provider since 2026-07-19) — see `docs/DECISIONS.md`'s "Outreach send
+  (Phase 2, item 9)" section for the full history including the removal
+  and the incident that prompted it. What's NOT done: the user has
+  configured the Google Cloud OAuth app but hasn't yet clicked through the
+  per-account consent screen in this app (no `gmail` row exists in
+  `outbound_integrations` yet) — until then sending stays on `mock`
+  regardless of what code exists.
 - ~~Decision-maker/contact discovery implementation — blocked on a
   people-data vendor decision~~ **RESOLVED (2026-07-28, corrected status)**
   — this bullet was stale. The vendor decision (Prospeo, `search-person`

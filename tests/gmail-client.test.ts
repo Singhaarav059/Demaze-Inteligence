@@ -19,6 +19,8 @@ import {
   refreshAccessToken,
   sendGmailMessage,
   fetchGmailAddress,
+  getGmailThread,
+  findReplyInThread,
   GMAIL_SCOPES,
 } from '../lib/outbound/shared/gmail-client'
 
@@ -163,7 +165,21 @@ describe('sendGmailMessage', () => {
     vi.restoreAllMocks()
   })
 
-  it('returns ok:true with the Gmail message id on success', async () => {
+  it('returns ok:true with the Gmail message id and thread id on success', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'msg-123', threadId: 'thread-123' }),
+    }))
+
+    const result = await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Hi', bodyText: 'Body' })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.messageId).toBe('msg-123')
+      expect(result.threadId).toBe('thread-123')
+    }
+  })
+
+  it('falls back to the message id as threadId if Gmail omits threadId', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: 'msg-123' }),
@@ -171,7 +187,7 @@ describe('sendGmailMessage', () => {
 
     const result = await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Hi', bodyText: 'Body' })
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.messageId).toBe('msg-123')
+    if (result.ok) expect(result.threadId).toBe('msg-123')
   })
 
   it('returns ok:false with Gmail\'s error message on failure', async () => {
@@ -203,5 +219,107 @@ describe('fetchGmailAddress', () => {
   it('returns null on a non-ok response rather than throwing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }))
     expect(await fetchGmailAddress('AT')).toBeNull()
+  })
+})
+
+describe('getGmailThread', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('extracts id + From header for every message in the thread', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        messages: [
+          { id: 'm1', payload: { headers: [{ name: 'From', value: 'me@example.com' }] } },
+          { id: 'm2', payload: { headers: [{ name: 'Subject', value: 'Re: Hi' }, { name: 'From', value: 'Prospect <p@corp.com>' }] } },
+        ],
+      }),
+    }))
+
+    const result = await getGmailThread('thread-1', 'AT')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.messages).toEqual([
+        { id: 'm1', from: 'me@example.com' },
+        { id: 'm2', from: 'Prospect <p@corp.com>' },
+      ])
+    }
+  })
+
+  it('requests only metadata + the From header, never full message bodies', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [] }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGmailThread('thread-1', 'AT')
+    const calledUrl = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(calledUrl.searchParams.get('format')).toBe('metadata')
+    expect(calledUrl.searchParams.get('metadataHeaders')).toBe('From')
+  })
+
+  it('returns ok:false on a non-ok response rather than throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: { message: 'Not Found' } }),
+    }))
+
+    const result = await getGmailThread('missing-thread', 'AT')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('Not Found')
+  })
+})
+
+describe('findReplyInThread', () => {
+  const CONNECTED = 'me@example.com'
+
+  it('reports no reply when the thread only has our own sent message', () => {
+    const result = findReplyInThread([{ id: 'm1', from: 'Me <me@example.com>' }], CONNECTED)
+    expect(result.hasReply).toBe(false)
+  })
+
+  it('reports a reply from a message whose From header does not match the connected account', () => {
+    const result = findReplyInThread(
+      [
+        { id: 'm1', from: 'Me <me@example.com>' },
+        { id: 'm2', from: 'Prospect <p@corp.com>' },
+      ],
+      CONNECTED
+    )
+    expect(result.hasReply).toBe(true)
+    expect(result.replyMessageId).toBe('m2')
+    expect(result.fromHeader).toBe('Prospect <p@corp.com>')
+  })
+
+  it('does not mistake our own follow-up (sent from Gmail\'s own UI in the same thread) for a reply', () => {
+    const result = findReplyInThread(
+      [
+        { id: 'm1', from: 'Me <me@example.com>' },
+        { id: 'm2', from: 'me@example.com' },
+      ],
+      CONNECTED
+    )
+    expect(result.hasReply).toBe(false)
+  })
+
+  it('picks the most recent qualifying message when there are multiple replies', () => {
+    const result = findReplyInThread(
+      [
+        { id: 'm1', from: 'Me <me@example.com>' },
+        { id: 'm2', from: 'Prospect <p@corp.com>' },
+        { id: 'm3', from: 'Me <me@example.com>' },
+        { id: 'm4', from: 'Prospect <p@corp.com>' },
+      ],
+      CONNECTED
+    )
+    expect(result.hasReply).toBe(true)
+    expect(result.replyMessageId).toBe('m4')
+  })
+
+  it('treats a message with no From header as not-us, not as a reply-blocker for later messages', () => {
+    const result = findReplyInThread([{ id: 'm1', from: null }, { id: 'm2', from: 'Prospect <p@corp.com>' }], CONNECTED)
+    expect(result.hasReply).toBe(true)
+    expect(result.replyMessageId).toBe('m2')
   })
 })

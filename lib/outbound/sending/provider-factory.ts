@@ -8,7 +8,6 @@
 import { getActiveProviderName } from '@/lib/outbound/settings/provider-selection'
 import { MockEmailSenderProvider } from './providers/mock'
 import { GmailSendingProvider } from './providers/gmail'
-import { LemlistSendingProvider } from './providers/lemlist'
 import type {
   EmailSenderProvider,
   SendEmailRequest,
@@ -20,7 +19,6 @@ import type {
 const PROVIDERS: Record<string, EmailSenderProvider> = {
   mock: MockEmailSenderProvider,
   gmail: GmailSendingProvider,
-  lemlist: LemlistSendingProvider,
 }
 
 async function resolveProvider(): Promise<EmailSenderProvider> {
