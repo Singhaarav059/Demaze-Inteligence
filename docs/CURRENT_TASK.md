@@ -1,82 +1,61 @@
 # Current Task
 
-## Sending vendor — REVERSED 2026-07-29: Lemlist removed, Gmail (free) is now the path — pick this up first
+## Sending vendor — REVERSED 2026-07-29: Lemlist removed, Gmail (free) is now the path — COMPLETE, fully live-verified
 
-**What happened, in order, same day:**
-1. Auto Flow Review & Send redesign items 1 (inline editing) and 3
-   (checkbox multi-select) were built and "live-verified" against a real
-   saved run — see `DECISIONS.md`'s "Review & Send redesign" section for
-   what was built.
-2. That verification pass **believed** it had confirmed no real send
-   happened (dialog opened, Cancel clicked, checked afterward). It was
-   wrong — a real email was sent via Lemlist to a real contact (Kumar
-   Gururaj, kumar.g@mahindra.com) during that same browser-automation
-   session, most likely from a misclick during the Cancel-button
-   verification steps. See `DECISIONS.md`'s "Incident (2026-07-29)"
-   section for full detail and the lesson for future verification passes
-   (deactivate any real sending provider before interactive click-testing
-   of send-adjacent UI).
-3. The user asked, reasonably, why a paid vendor (Lemlist) was even active
-   given a free path (Gmail) already existed in this codebase, and asked
-   for Lemlist to be **removed completely** — confirming they'd already
-   done the Google Cloud OAuth app setup on their end.
-4. Lemlist was removed entirely (provider, client, webhook receiver, tests,
-   settings UI, and the database row itself — see `DECISIONS.md`'s
-   "Outreach send vendor — REVERSED" section for the full file list and
-   the new `DELETE /api/admin/outbound/integrations/[capability]` route
-   this required).
-5. Free, poll-on-demand Gmail reply tracking was scoped, then built, same
-   session — see `DECISIONS.md`'s "Free reply tracking (Gmail)" section.
-6. **The user then completed the Gmail OAuth consent click-through**
-   (connected as `singhaarav059@gmail.com` — confirmed via a real `gmail`
-   row in `outbound_integrations`, `is_active: true`). Testing the
-   connection immediately surfaced a real, pre-existing bug:
-   `getGmailCredential()` had been silently broken since 2026-07-19
-   (double-decrypting an already-decrypted credential, always returning
-   `null`) — undetected until now because no prior session had a genuine
-   OAuth connection to exercise it against. **Fixed same session** — see
-   `DECISIONS.md`'s "RESOLVED same day" entry right after the reply-
-   tracking section for the full root cause and fix.
+**Full arc, same day, in order** (full detail in `DECISIONS.md`'s "Outreach
+send (Phase 2, item 9)" section and its dated subsections):
+1. Review & Send redesign items 1+3 built and "verified" — but that
+   verification was wrong; a real email went out via Lemlist during the
+   browser-automation session (`DECISIONS.md`'s "Incident (2026-07-29)").
+2. User asked why a paid vendor was active at all given Gmail (free)
+   already existed, and had Lemlist **removed completely** — provider,
+   client, webhook receiver, tests, settings UI, and the stored DB row
+   itself (new `DELETE /api/admin/outbound/integrations/[capability]`
+   route was needed for the last part).
+3. Free, poll-on-demand Gmail reply tracking was scoped and built.
+4. User completed the Gmail OAuth consent click-through
+   (`singhaarav059@gmail.com`) — which immediately surfaced a real,
+   pre-existing bug: `getGmailCredential()` had silently double-decrypted
+   every real stored credential since 2026-07-19, undetected until a real
+   OAuth connection finally existed to trigger it. **Fixed.**
+5. A real test send to the user's own address succeeded, confirming the
+   full send path (credential → token refresh → Gmail send) works.
+6. A real cross-account reply-tracking test (2 separate real email
+   addresses, replying from each) found a **second** real bug: the
+   `check-replies` route silently swallowed a DB insert error and flipped
+   a contact to `replied` with no event ever recorded. Root cause: migration
+   `014_outbound_campaign_events_provider_id.sql` (written for the now-
+   removed Lemlist webhook work) had **never actually been applied** to the
+   live database. **Fixed the silent-failure bug in code, and the user
+   applied the missing migration.**
+7. Re-ran the full cross-account reply-tracking test after both fixes:
+   **fully passing** — real reply detected, real event recorded with the
+   correct `provider_event_id` for dedup, contact correctly flipped to
+   `replied`, and a repeat `check-replies` call confirmed idempotency (no
+   double-processing).
 
-**Current state (updated after the fix above)**:
-- Gmail is connected and **active** as the sending provider — real
-  credential, `POST /api/admin/outbound/integrations/sending/test` now
-  returns `status: success` against the live row.
-- `refreshAccessToken()` was confirmed working live against the real
-  stored refresh token (via the diagnostic script used to root-cause the
-  bug above, since deleted).
-- **DONE (2026-07-29, explicitly confirmed by the user first)**: a real
-  test send to the user's own connected address
-  (`singhaarav059@gmail.com`) succeeded — `sendEmail()` called directly via
-  a throwaway script (same pattern as the credential-bug diagnostic
-  script, deleted after use, never committed), result
-  `{ status: 'sent', providerMessageId: '19fac84229cac6aa', providerUsed:
-  'gmail' }`. This confirms the full real send path works end to end:
-  credential resolve → token refresh → Gmail `messages.send` → real
-  delivery. Went straight to `lib/outbound/sending/provider-factory.ts`'s
-  `sendEmail()` rather than through the campaign/contact UI flow, since the
-  thing being verified was purely "does a real Gmail send succeed," not
-  the campaign machinery (already covered by existing tests/code review).
-- **Still not done**: reply tracking
-  (`POST /api/admin/outbound/campaigns/[id]/check-replies`) has not been
-  exercised against a real Gmail thread yet — needs a real reply in that
-  test thread first, then an explicitly-confirmed `check-replies` run.
-  Note this test send did NOT go through `outbound_campaigns`/
-  `outbound_campaign_contacts` (see above), so there's no
-  `provider_message_id`/thread id stored anywhere for `check-replies` to
-  poll against yet — verifying reply tracking will need a send that DOES
-  go through the normal campaign flow (e.g. a real Auto Flow run, or a
-  manually-created test contact + campaign), not this one-off script.
-- The `gmail.metadata` read scope needed for reply tracking was already
-  part of the consent the user granted (added before their OAuth
-  click-through), so no separate "Reconnect with Google" step is needed —
-  that would only have mattered if they'd connected before this scope was
-  added, which didn't happen here.
+**Status: COMPLETE.** Gmail is the active sending provider with a real,
+working, tested credential. Real send confirmed. Real reply detection
+confirmed, including the specific cross-account discrimination logic
+(`findReplyInThread()`) working correctly on genuine live data, not just
+mocked unit tests. Two real bugs found via this verification (not assumed
+away) were fixed in the same session.
 
-**Next step**: to verify reply tracking, send a real test email through
-the normal campaign flow (not a one-off script) so its thread id gets
-persisted, reply to it from a different inbox, then run `check-replies`
-against that campaign — explicit confirmation needed before that send too.
+**One structural limitation found, not a bug**: a self-addressed test
+(sending to the same account that's doing the sending) can never be used
+to verify the reply/self-send discriminator — Gmail gives no signal
+(neither `From` header nor `labelIds`) that distinguishes "the account
+replied to itself" from "the account sent itself a follow-up." Real usage
+(sending to an actual prospect's different address) doesn't have this
+ambiguity — confirmed by the successful cross-account test above.
+
+**Test data left behind, not yet cleaned up**: a real campaign ("Reply
+Tracking Verification Test") and 3 test contacts
+(`singhaarav059@gmail.com`, `singhaarav0921@gmail.com`,
+`singhaarav0599@gmail.com`, all under company "Reply Tracking Test 2")
+exist in the database from this verification — worth deleting via the
+Contacts/Campaigns pages if the user wants a clean slate, not done
+automatically since deletion wasn't asked for.
 
 **Still open, unrelated to the above**: item 2 from the original Review &
 Send redesign queue (2026-07-28) — follow-ups are shown on the Review &

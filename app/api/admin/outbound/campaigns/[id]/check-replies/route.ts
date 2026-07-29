@@ -81,6 +81,7 @@ export async function POST(
   }
 
   let newReplies = 0
+  const errors: string[] = []
 
   for (const contact of contacts ?? []) {
     const threadId = contact.provider_message_id as string
@@ -104,7 +105,16 @@ export async function POST(
       if (existing) continue // already recorded on a previous check
     }
 
-    await supabase.from('outbound_campaign_events').insert({
+    // FIXED (2026-07-29): this insert's error used to be silently discarded
+    // — a contact could get flipped to 'replied' below with no
+    // corresponding event ever recorded (exactly what happened live: a
+    // not-yet-applied migration 014 meant provider_event_id didn't exist
+    // yet, the insert failed with a schema-cache error, and nothing
+    // surfaced it). Now the status flip is skipped and the failure is
+    // reported in the response if the event can't be recorded — same
+    // "don't silently continue past a write you can't verify" discipline
+    // this repo's other silent-failure fixes already established.
+    const { error: insertError } = await supabase.from('outbound_campaign_events').insert({
       campaign_id: campaignId,
       campaign_contact_id: contact.id,
       event_type: 'replied',
@@ -112,10 +122,20 @@ export async function POST(
       detail: { source: 'gmail_poll', threadId, fromHeader: 'fromHeader' in reply ? reply.fromHeader : undefined },
     })
 
-    await supabase
+    if (insertError) {
+      errors.push(`contact ${contact.id}: failed to record reply event — ${insertError.message}`)
+      continue
+    }
+
+    const { error: updateError } = await supabase
       .from('outbound_campaign_contacts')
       .update({ status: 'replied', updated_at: new Date().toISOString() })
       .eq('id', contact.id)
+
+    if (updateError) {
+      errors.push(`contact ${contact.id}: event recorded but status update failed — ${updateError.message}`)
+      continue
+    }
 
     newReplies += 1
   }
@@ -124,5 +144,6 @@ export async function POST(
     success: true,
     checked: contacts?.length ?? 0,
     newReplies,
+    errors: errors.length > 0 ? errors : undefined,
   })
 }

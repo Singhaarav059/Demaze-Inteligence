@@ -516,6 +516,104 @@ verifying reply tracking needs a send that goes through the normal
 campaign flow instead (e.g. a real Auto Flow run), a real reply landing in
 that thread, then an explicitly-confirmed `check-replies` call.
 
+### Reply tracking live-verified through a real campaign (2026-07-29) — found 2 real bugs along the way
+
+Built a real test campaign end to end via the actual API routes (contacts →
+generated-content seeded directly, since manually-set test content doesn't
+need real AI generation → campaign → enqueue → send), rather than the
+one-off script used for the earlier send-only test — this time the goal
+was specifically to exercise `check-replies` against real
+`outbound_campaign_contacts.provider_message_id` data.
+
+**First real send + self-reply test (contact: `singhaarav059@gmail.com`,
+the connected account itself)**: `check-replies` correctly reported
+`newReplies: 0` even after a real reply was sent. Root-caused directly (not
+assumed) via a raw Gmail thread fetch: both messages in the thread carried
+identical `From: Aarav Singh <singhaarav059@gmail.com>` AND identical
+`SENT`+`SENT`/`INBOX` labels — because the test emailed the connected
+account itself, Gmail mirrors both the sent message and the "received"
+copy into the same inbox with no signal distinguishing "we sent this" from
+"someone replied." This is a genuine structural limitation of self-
+addressed testing specifically (confirmed by inspecting raw `labelIds` —
+neither the From-header check nor a label-based alternative can
+discriminate when sender and recipient are the same account), not a bug in
+`findReplyInThread()` itself — real usage (sending to a different
+person's address) doesn't have this ambiguity, and the unit tests already
+cover that case with distinct mocked addresses.
+
+**Second test, cross-account (2 new contacts, `singhaarav0921@gmail.com`
+and `singhaarav0599@gmail.com` — real, different accounts the user
+supplied specifically for this)**: after a reply from one of them,
+`check-replies` reported `newReplies: 1` — correct detection. But
+inspecting `outbound_campaign_events` showed **no `replied` event was
+actually recorded**, even though the contact's status had flipped to
+`replied`. This is a real bug, not a fluke, root-caused via a direct insert
+reproduction (a throwaway script, not guessed): the `outbound_campaign_events`
+insert failed with `PGRST204: Could not find the 'provider_event_id'
+column of 'outbound_campaign_events' in the schema cache` — **migration
+`014_outbound_campaign_events_provider_id.sql` (added for the Lemlist
+webhook work, flagged even at the time as "not yet applied to the live
+DB") was never actually run against this database**, Lemlist's removal
+notwithstanding — the column this reply-tracking work also depends on for
+idempotent dedup simply doesn't exist in the live table yet.
+
+**Two real fixes, not one**:
+1. **The actual missing migration** — needs the user to run
+   `014_outbound_campaign_events_provider_id.sql` in the Supabase dashboard
+   SQL editor, same manual-apply precedent as every other migration in
+   this repo. Not yet done as of this writing.
+2. **A real silent-failure bug in `check-replies/route.ts`**, independent
+   of the missing migration and worth fixing regardless: the event
+   insert's error was never checked, so it failed completely silently
+   while the code continued on to flip the contact's status to `replied`
+   anyway — exactly the "silent zero" failure shape this codebase's own
+   2026-07-24 audit chain (see `CLAUDE.md`) exists to catch. Fixed: the
+   insert's error is now checked; on failure, the status flip is skipped
+   and the error is collected into a new `errors: string[]` field on the
+   response (only present when non-empty). The contact-status update's own
+   error is now checked the same way, for symmetry. `useOutboundCampaigns.ts`'s
+   `checkReplies()` now toasts each error individually, alongside (not
+   instead of) the success/count toast — a partial failure shouldn't hide
+   behind an otherwise-good-looking "1 new reply found" message.
+   `tsc --noEmit` clean, full suite 597/597 passing (route.ts changes
+   aren't unit-tested, same established precedent as every other route in
+   this codebase).
+- The incorrectly-flipped contact (`singhaarav0921@gmail.com`'s
+  campaign-contact row) was manually reverted from `replied` back to
+  `sent` via a direct one-off script (not through any UI action) so it can
+  be cleanly reprocessed — with a real event now actually recorded — once
+  the migration is applied and `check-replies` is run again.
+
+**Not yet fully closed out**: the migration still needs to be applied by
+the user before a final confirming `check-replies` run can prove the event
+now gets recorded correctly end to end.
+
+### CLOSED OUT (2026-07-29) — migration applied, reply tracking fully verified end to end
+
+User applied migration 014 in the Supabase dashboard. Re-running
+`check-replies` against the same real campaign now succeeds cleanly with
+no errors: `{ checked: 3, newReplies: 1 }`. Confirmed via a direct
+`outbound_campaign_events` query — a real `replied` event now exists with
+`provider_event_id: "19fac915b6f69d88"` (the reply message's own Gmail id)
+and `detail.fromHeader: "Aarav singh <singhaarav0921@gmail.com>"` — a
+genuinely different address than the connected sending account
+(`singhaarav059@gmail.com`), proving the cross-account discrimination in
+`findReplyInThread()` works correctly on real data (not just mocked unit
+tests) — the self-send ambiguity found earlier really was structural to
+same-account testing, not a bug in this logic. The campaign-contact row
+correctly flipped to `status: 'replied'`.
+
+**Idempotency also confirmed live**: running `check-replies` again
+immediately after returned `{ checked: 2, newReplies: 0 }` — the now-
+replied contact is correctly excluded from re-checking (`SENT_STATUSES`
+filter), and no duplicate event or double status-flip occurred.
+
+This closes out the full Gmail sending + free reply-tracking arc: real
+send confirmed (single-recipient), real cross-account reply detection
+confirmed, real idempotent event recording confirmed, and two real bugs
+(the credential double-decrypt, and this session's silent event-insert
+failure) were found and fixed along the way rather than assumed away.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead

@@ -210,6 +210,13 @@ export function useOutboundCampaigns() {
       } else {
         toast.info(`No new replies (checked ${data.checked})`)
       }
+      // Surfaced even alongside a success/newReplies toast above — a
+      // partial failure (e.g. one contact's reply detected but not
+      // recorded) shouldn't be hidden behind an otherwise-good-looking
+      // summary. See check-replies/route.ts's 2026-07-29 fix.
+      if (Array.isArray(data.errors)) {
+        for (const err of data.errors) toast.error(err)
+      }
       await loadCampaignContacts(selectedCampaignId)
       await loadEvents(selectedCampaignId)
     } catch {
