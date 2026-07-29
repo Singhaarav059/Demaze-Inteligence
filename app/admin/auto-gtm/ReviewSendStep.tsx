@@ -20,6 +20,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
+import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 
 // What's pending confirmation, if anything — a single piece of state covers
 // both "Send All" and a per-contact "Send Email" so only one ConfirmDialog
@@ -93,6 +94,13 @@ export function ReviewSendStep({
   const [generatedByContact, setGeneratedByContact] = useState<Record<string, GeneratedContent | null>>({})
   const [loading, setLoading] = useState(true)
   const [pendingSend, setPendingSend] = useState<PendingSend>(null)
+  // Was hardcoded 'Demo mode' regardless of the actually-active sending
+  // provider — a real bug once a real vendor (Lemlist) is connected, since
+  // the confirm dialog's "Mock sending only, no real email goes out yet"
+  // text would then be actively false at the exact moment someone clicks
+  // Send. null while loading = treated as mock (safe default: don't imply
+  // "real" before we've confirmed it).
+  const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -110,6 +118,25 @@ export function ReviewSendStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts.map(c => c.id).join(',')])
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/outbound/integrations')
+        const data = await res.json()
+        if (!data.success) return
+        const sendingRow = (data.integrations as OutboundIntegrationRow[]).find(
+          row => row.capability === 'sending' && row.is_active
+        )
+        setSendingProviderName(sendingRow?.provider_name ?? 'mock')
+      } catch {
+        setSendingProviderName('mock')
+      }
+    })()
+  }, [])
+
+  const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
+
   const readyToSend = contacts.filter(
     c => c.email && generatedByContact[c.id]?.email_draft && campaignContactStatus[c.id]?.status !== 'sent'
   )
@@ -120,10 +147,17 @@ export function ReviewSendStep({
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             Review &amp; Send
-            <Badge variant="secondary" className="text-[10px]">Demo mode</Badge>
+            {isRealSendingProvider ? (
+              <Badge variant="destructive" className="text-[10px]">
+                Live: {sendingProviderName}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-[10px]">Demo mode</Badge>
+            )}
             <InfoTooltip>
-              No real email leaves the app yet, a real sending service (like Smartlead or Instantly)
-              hasn&apos;t been connected. Once one is, this same button sends for real.
+              {isRealSendingProvider
+                ? `A real sending provider (${sendingProviderName}) is connected. Send Email / Send All will send real emails to real recipients.`
+                : "No real email leaves the app yet, a real sending service hasn't been connected. Once one is, this same button sends for real."}
             </InfoTooltip>
           </h2>
           <p className="text-xs text-muted-foreground/70 mt-0.5">Final read-through before sending.</p>
@@ -223,8 +257,16 @@ export function ReviewSendStep({
         title={pendingSend?.kind === 'all' ? `Send to ${pendingSend.count} contact${pendingSend.count === 1 ? '' : 's'}?` : 'Send this email?'}
         description={
           pendingSend?.kind === 'all'
-            ? `Sends the drafted email to all ${pendingSend.count} ready contacts. Mock sending only, no real email goes out yet.`
-            : `Sends the drafted email to ${pendingSend?.kind === 'one' ? pendingSend.name : ''}. Mock sending only, no real email goes out yet.`
+            ? `Sends the drafted email to all ${pendingSend.count} ready contacts. ${
+                isRealSendingProvider
+                  ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
+                  : 'Mock sending only, no real email goes out yet.'
+              }`
+            : `Sends the drafted email to ${pendingSend?.kind === 'one' ? pendingSend.name : ''}. ${
+                isRealSendingProvider
+                  ? `This is a REAL send via ${sendingProviderName} — a real email will go out.`
+                  : 'Mock sending only, no real email goes out yet.'
+              }`
         }
         confirmLabel={pendingSend?.kind === 'all' ? 'Send All' : 'Send'}
         loading={pendingSend?.kind === 'all' ? sendingAll : sendingContactId === (pendingSend?.kind === 'one' ? pendingSend.contactId : null)}

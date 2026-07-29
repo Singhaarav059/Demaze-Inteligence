@@ -98,6 +98,27 @@ export function useAutoGtmFlow() {
   const [sendingContactId, setSendingContactId] = useState<string | null>(null)
   const [sendingAll, setSendingAll] = useState(false)
   const [campaignContactStatus, setCampaignContactStatus] = useState<Record<string, SendOutcomeDetail>>({})
+  // Was hardcoded '(mock)' in every send toast regardless of the actually-
+  // active sending provider — misleading once a real vendor (Lemlist) is
+  // connected. Same fetch-and-check pattern as ReviewSendStep's own badge.
+  const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/outbound/integrations')
+        const data = await res.json()
+        if (!data.success) return
+        const sendingRow = (data.integrations as Array<{ capability: string; provider_name: string; is_active: boolean }>).find(
+          row => row.capability === 'sending' && row.is_active
+        )
+        setSendingProviderName(sendingRow?.provider_name ?? 'mock')
+      } catch {
+        setSendingProviderName('mock')
+      }
+    })()
+  }, [])
 
   // ── Batch upload mode ─────────────────────────────────────────
   const [inputMode, setInputMode] = useState<InputMode>('single')
@@ -624,7 +645,14 @@ export function useAutoGtmFlow() {
           return []
         }
 
-        const sendRes = await fetch(`/api/admin/outbound/campaigns/${cId}/send`, { method: 'POST' })
+        // contact_ids scopes this send to exactly the requested contacts —
+        // see send/route.ts's 2026-07-28 fix. Without this, sendOneContact()
+        // would fan out to every other still-queued contact in the campaign.
+        const sendRes = await fetch(`/api/admin/outbound/campaigns/${cId}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contact_ids: contactIds }),
+        })
         const sendData = await sendRes.json()
         if (!sendData.success) {
           toast.error(sendData.error ?? 'Send failed')
@@ -665,13 +693,18 @@ export function useAutoGtmFlow() {
       try {
         const [outcome] = await enqueueAndSend([contactId])
         if (!outcome) return
-        if (outcome.status === 'sent') toast.success('Sent (mock), no real email leaves the app yet')
-        else toast.warning(outcome.reason ?? `Could not send: ${outcome.status}`)
+        if (outcome.status === 'sent') {
+          toast.success(
+            sendingProviderName && sendingProviderName !== 'mock'
+              ? `Sent via ${sendingProviderName}`
+              : 'Sent (mock), no real email leaves the app yet'
+          )
+        } else toast.warning(outcome.reason ?? `Could not send: ${outcome.status}`)
       } finally {
         setSendingContactId(null)
       }
     },
-    [enqueueAndSend]
+    [enqueueAndSend, sendingProviderName]
   )
 
   const sendAllContacts = useCallback(async () => {
@@ -689,11 +722,12 @@ export function useAutoGtmFlow() {
       const sent = outcomes.filter(o => o.status === 'sent').length
       const skipped = outcomes.filter(o => o.status === 'skipped').length
       const failed = outcomes.filter(o => o.status === 'failed').length
-      toast.success(`Sent (mock): ${sent} sent, ${skipped} skipped, ${failed} failed`)
+      const prefix = sendingProviderName && sendingProviderName !== 'mock' ? `Sent via ${sendingProviderName}` : 'Sent (mock)'
+      toast.success(`${prefix}: ${sent} sent, ${skipped} skipped, ${failed} failed`)
     } finally {
       setSendingAll(false)
     }
-  }, [contacts, enqueueAndSend])
+  }, [contacts, enqueueAndSend, sendingProviderName])
 
   return {
     step,

@@ -1,5 +1,48 @@
 # Current Task
 
+## Next milestone (queued 2026-07-28, not started — pick this up first)
+
+**Auto Flow Review & Send (step 5) redesign.** Surfaced by the user during
+real live testing of the just-completed Lemlist integration — three
+distinct, real gaps, discussed and agreed on but deliberately NOT
+implemented this session (user asked to start fresh in a new session):
+
+1. **No last-moment edit control.** `ReviewSendStep.tsx` shows subject/body
+   read-only — editing only happens earlier in the Outreach step (4), no
+   way back into it from here. Agreed direction: make subject/body directly
+   editable inline on this screen (reuse the existing `PATCH
+   /api/admin/outbound/contacts/[id]/generated-content` route — same one
+   Outreach's own "Edit" button already calls, just not wired here).
+   Recipient email should also become editable here (the auto-found email
+   isn't always the one the user wants). "From address" / which mailbox
+   sends is a bigger, separate decision — Gmail always sends as the OAuth-
+   connected account, Lemlist sends via whatever sender is assigned on the
+   Lemlist campaign itself — neither supports a per-send mailbox choice
+   today. Don't build multi-mailbox selection without confirming it's
+   actually wanted first.
+2. **Follow-ups are shown but never actually sent — at all, not on any
+   schedule, not conditionally on reply.** This is the biggest gap, not
+   just a UI issue: `scheduleFollowups()` on both `lib/outbound/sending/
+   providers/gmail.ts` and `.../lemlist.ts` always returns
+   `scheduled: false` (documented limitation, not a bug) — there is no
+   scheduler/cron and no reply-detection wired to cancel a pending
+   follow-up. Showing all follow-ups on the Review & Send screen today is
+   arguably misleading since none of them fire on their own. This needs
+   real backend infrastructure (a scheduler + reply-ingestion feeding
+   into it) designed as its own piece — not a quick fix.
+3. **No real multi-select — only "Send All" or one-at-a-time.** A per-row
+   "Send Email" button already exists (and a real bug in it was just fixed
+   2026-07-28 — see `DECISIONS.md`'s "Outreach send" entry: it used to
+   accidentally also send every other already-queued contact in the
+   campaign, not just the one clicked). Agreed direction: replace "Send
+   All" with checkboxes per contact + a "Send Selected" button, defaulting
+   to none selected.
+
+Do the smaller two (1 and 3) as one session if reasonable; treat 2 (follow-
+up scheduling) as its own architecture session given it needs new
+infrastructure, not just UI work — same "one deliverable per session"
+discipline as the rest of this repo's history.
+
 ## Milestone
 
 **Outreach Intelligence Layer field-naming reconciliation** (Roadmap Phase 2,

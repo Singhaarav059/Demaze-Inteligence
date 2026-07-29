@@ -216,6 +216,40 @@ scraper/classifier/prompt file edit before trusting a live run reflects it.
   email; `sendEmail()` cannot even run yet without a real API key + a
   manually-built Lemlist campaign template, neither of which exist.
 
+### Follow-up fix (2026-07-29) — single-contact "Send Email" was fanning out to the whole campaign
+
+Found during the same live testing pass that queued the Review & Send
+redesign (see `CURRENT_TASK.md`): `POST /api/admin/outbound/campaigns/[id]/send`
+had no way to scope a send to one contact — it always sent every `'queued'`
+contact in the campaign. `useAutoGtmFlow.ts`'s per-row "Send Email" button
+calls this same endpoint after enqueuing just the one clicked contact, so
+clicking it silently also sent every other already-queued contact in the
+same campaign. Harmless while sending was mock-only; a real correctness/
+consent bug the moment Lemlist (a real vendor) is connected, since "send to
+this one person" must never fan out to others without their own explicit
+confirmation.
+
+**Fixed**: `send/route.ts` now accepts an optional `{ contact_ids: string[]
+}` request body and filters the `'queued'` query to just those contact ids
+when provided; omitted (Send All's own call) keeps sending every queued
+contact, which is the correct existing "Send All" behavior. `useAutoGtmFlow.ts`'s
+`enqueueAndSend()` now passes `contact_ids` on every call, so the single-
+contact path is properly scoped.
+
+**Also fixed in the same pass**: the "Demo mode" badge (`ReviewSendStep.tsx`)
+and every send toast (`useAutoGtmFlow.ts`) were hardcoded regardless of the
+actually-active sending provider — both would have kept claiming "mock"/
+"no real email goes out" even after a real vendor (Lemlist) is connected
+and live. Both now fetch `/api/admin/outbound/integrations` once on mount
+and check whether the active `sending` capability provider is `'mock'` or
+real, showing a `Live: {provider}` badge and matching toast text
+(`Sent via {provider}`) once it is.
+
+Verified: `tsc --noEmit` clean, full suite 603/603 passing. Not live-tested
+against a real Lemlist send (no API key/campaign template exists yet, per
+the section above) — verified via the existing mock provider path plus
+reading the scoping logic directly.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead

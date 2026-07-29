@@ -8,6 +8,17 @@
 // draft) — contacts missing one are skipped, left 'queued' for retry,
 // not silently marked done.
 //
+// Optional body: { contact_ids?: string[] } — scopes the send to exactly
+// those contacts. Omitted (or Send All's own call) means every 'queued'
+// contact in the campaign, which IS the intended "Send All" behavior.
+// FIXED (2026-07-28): this used to have no such filter at all, so
+// useAutoGtmFlow's sendOneContact() — which enqueues just one contact and
+// calls this same endpoint — would actually send every OTHER already-queued
+// contact in the campaign too, not just the one the user clicked "Send
+// Email" on. Silent and harmless while sending was mock-only; a real
+// correctness/consent bug the moment a real provider (Lemlist) is
+// connected, since "send to this one person" must not fan out to others.
+//
 // A provider result is only a failure when its status is literally
 // 'failed' — SendEmailResult.status also has a 'queued' outcome (real for
 // lib/outbound/sending/providers/lemlist.ts, which enqueues into Lemlist's
@@ -39,13 +50,22 @@ export async function POST(
   if (authError) return authError
 
   const { id: campaignId } = await params
+  const body = await req.json().catch(() => ({}))
+  const contactIdsFilter: string[] | undefined = Array.isArray(body?.contact_ids) ? body.contact_ids : undefined
+
   const supabase = createServerClient()
 
-  const { data: queued, error: fetchError } = await supabase
+  let queuedQuery = supabase
     .from('outbound_campaign_contacts')
     .select('id, contact_id')
     .eq('campaign_id', campaignId)
     .eq('status', 'queued')
+
+  if (contactIdsFilter && contactIdsFilter.length > 0) {
+    queuedQuery = queuedQuery.in('contact_id', contactIdsFilter)
+  }
+
+  const { data: queued, error: fetchError } = await queuedQuery
 
   if (fetchError) {
     return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
