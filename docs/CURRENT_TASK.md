@@ -1,47 +1,63 @@
 # Current Task
 
-## Next milestone (queued 2026-07-28, not started — pick this up first)
+## Auto Flow Review & Send (step 5) redesign — items 1 and 3 DONE (2026-07-29)
 
-**Auto Flow Review & Send (step 5) redesign.** Surfaced by the user during
-real live testing of the just-completed Lemlist integration — three
-distinct, real gaps, discussed and agreed on but deliberately NOT
-implemented this session (user asked to start fresh in a new session):
+Three gaps were queued 2026-07-28 from live Lemlist-integration testing. Items
+1 (inline editing) and 3 (checkbox multi-select) are now implemented and
+live-verified; item 2 (follow-up scheduling) is still open and needs its own
+architecture session — see below.
 
-1. **No last-moment edit control.** `ReviewSendStep.tsx` shows subject/body
-   read-only — editing only happens earlier in the Outreach step (4), no
-   way back into it from here. Agreed direction: make subject/body directly
-   editable inline on this screen (reuse the existing `PATCH
-   /api/admin/outbound/contacts/[id]/generated-content` route — same one
-   Outreach's own "Edit" button already calls, just not wired here).
-   Recipient email should also become editable here (the auto-found email
-   isn't always the one the user wants). "From address" / which mailbox
-   sends is a bigger, separate decision — Gmail always sends as the OAuth-
-   connected account, Lemlist sends via whatever sender is assigned on the
-   Lemlist campaign itself — neither supports a per-send mailbox choice
-   today. Don't build multi-mailbox selection without confirming it's
-   actually wanted first.
-2. **Follow-ups are shown but never actually sent — at all, not on any
-   schedule, not conditionally on reply.** This is the biggest gap, not
-   just a UI issue: `scheduleFollowups()` on both `lib/outbound/sending/
-   providers/gmail.ts` and `.../lemlist.ts` always returns
-   `scheduled: false` (documented limitation, not a bug) — there is no
-   scheduler/cron and no reply-detection wired to cancel a pending
-   follow-up. Showing all follow-ups on the Review & Send screen today is
-   arguably misleading since none of them fire on their own. This needs
-   real backend infrastructure (a scheduler + reply-ingestion feeding
-   into it) designed as its own piece — not a quick fix.
-3. **No real multi-select — only "Send All" or one-at-a-time.** A per-row
-   "Send Email" button already exists (and a real bug in it was just fixed
-   2026-07-28 — see `DECISIONS.md`'s "Outreach send" entry: it used to
-   accidentally also send every other already-queued contact in the
-   campaign, not just the one clicked). Agreed direction: replace "Send
-   All" with checkboxes per contact + a "Send Selected" button, defaulting
-   to none selected.
+1. **DONE — last-moment edit control.** `ReviewSendStep.tsx` now lets the
+   SDR edit recipient email, subject, and body directly on this screen via
+   one combined "Edit" toggle per contact (email + subject + body save
+   together). Subject/body reuse the existing `PATCH /api/admin/outbound/
+   contacts/[id]/generated-content` route (same one Outreach's own "Edit"
+   button calls). Recipient email is a **new** `PATCH /api/admin/outbound/
+   contacts/[id]` route (previously DELETE-only) — a manually-typed email
+   clears `email_confidence`, stamps `email_finder_provider: 'manual'`, so
+   the UI never shows stale "high confidence, found by Prospeo" badges for
+   an address the SDR just typed in. New `updateContactEmail()` in
+   `useAutoGtmFlow.ts`. "From address"/mailbox selection was NOT built —
+   still a separate, bigger decision per the original note below.
+2. **NOT DONE — follow-ups still shown but never actually sent.** Unchanged
+   from the original note: `scheduleFollowups()` on both
+   `lib/outbound/sending/providers/gmail.ts` and `.../lemlist.ts` always
+   returns `scheduled: false` — no scheduler/cron, no reply-detection.
+   Needs its own architecture session, not a UI tweak.
+3. **DONE — checkbox multi-select replaces "Send All".** Each ready-to-send
+   contact now has a checkbox (defaults to none selected, per-contact and a
+   "Select all (N ready)" toggle), and the button reads "Send Selected (N)"
+   instead of "Send All (N)". `useAutoGtmFlow.ts`'s `sendAllContacts()` /
+   `sendingAll` renamed to `sendSelectedContacts(contactIds)` /
+   `sendingSelected` to take an explicit id list instead of reaching for
+   every contact.
 
-Do the smaller two (1 and 3) as one session if reasonable; treat 2 (follow-
-up scheduling) as its own architecture session given it needs new
-infrastructure, not just UI work — same "one deliverable per session"
-discipline as the rest of this repo's history.
+**Verified**: `tsc --noEmit` clean, full suite 603/603. Live-verified in the
+browser against a real saved run (mahindra.com, resumed via
+`?runId=...&step=5`) — confirmed real-provider badge ("Live: lemlist"),
+checkbox selection updating the Send Selected count, inline edit for both
+subject (persisted via API, confirmed via a direct GET) and recipient email
+(persisted, correctly flipped the contact from "no email, skipped" to
+checkbox-selectable and updated the "N emails found" summary), and the
+confirm dialog's real-vendor warning copy. Did **not** click through an
+actual send — Cancel was used to close the confirm dialog without sending,
+consistent with the standing rule that real sends need explicit per-batch
+confirmation.
+
+**Discrepancy found and worth flagging**: `docs/CURRENT_TASK.md`'s Lemlist
+section below still says the user "needs to create a real Lemlist account
+and generate an API key" — but the live `/api/admin/outbound/integrations`
+data checked during this session shows Lemlist is **already** the active
+sending provider with a real credential configured
+(`credential_last_four: "e185"`, `last_test_status: "success"`, a real
+`campaignId`). Whether an actual end-to-end send has been tried against it
+is still unconfirmed — worth a real (explicitly-confirmed) test send in a
+future session rather than assuming either the stale "not set up yet" note
+or the credential's mere presence.
+
+Do item 2 (follow-up scheduling) as its own architecture session given it
+needs new infrastructure, not just UI work — same "one deliverable per
+session" discipline as the rest of this repo's history.
 
 ## Milestone
 

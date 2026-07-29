@@ -570,9 +570,10 @@ export default function AutoGtmFlowPage() {
             contacts={sortedContacts}
             campaignContactStatus={flow.campaignContactStatus}
             sendingContactId={flow.sendingContactId}
-            sendingAll={flow.sendingAll}
+            sendingSelected={flow.sendingSelected}
             sendOneContact={flow.sendOneContact}
-            sendAllContacts={flow.sendAllContacts}
+            sendSelectedContacts={flow.sendSelectedContacts}
+            updateContactEmail={flow.updateContactEmail}
           />
           <div className="flex justify-start">
             <Button variant="outline" onClick={() => flow.setStep(4)}>

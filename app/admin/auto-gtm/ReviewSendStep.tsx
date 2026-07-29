@@ -6,14 +6,18 @@
 // Fetches each contact's already-generated content on mount (persisted
 // server-side by OutreachStep, so nothing needs to survive the step 4->5
 // unmount) and shows the full picture — contact, email, phone, selected
-// subject, full email body, full follow-up sequence — plus the only two
-// actions this step exposes: Send Email (one contact) and Send All. Both
-// are built on useAutoGtmFlow's sendOneContact/sendAllContacts, which
-// drive the existing (mock-only) sending infrastructure under the hood —
-// "campaign" is never a word used in this UI.
+// subject, full email body, full follow-up sequence — plus this step's
+// actions: per-contact inline editing (subject/body/recipient email),
+// Send Email (one contact), and checkbox multi-select + Send Selected
+// (2026-07-29 redesign — replaces the old unconditional "Send All", see
+// docs/CURRENT_TASK.md's queued Review & Send redesign items 1 and 3).
+// Both send paths are built on useAutoGtmFlow's sendOneContact/
+// sendSelectedContacts, which drive the existing sending infrastructure
+// under the hood — "campaign" is never a word used in this UI.
 // ============================================================
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
@@ -23,13 +27,16 @@ import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundC
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 
 // What's pending confirmation, if anything — a single piece of state covers
-// both "Send All" and a per-contact "Send Email" so only one ConfirmDialog
-// is ever rendered at a time (2026-07-19 fix: neither action had ANY
-// confirmation before this — see CLAUDE.md's standing rule that sending
-// real email always requires per-batch confirmation once real send
+// both "Send Selected" and a per-contact "Send Email" so only one
+// ConfirmDialog is ever rendered at a time (2026-07-19 fix: neither action
+// had ANY confirmation before this — see CLAUDE.md's standing rule that
+// sending real email always requires per-batch confirmation once real send
 // infrastructure exists; building the confirm UX now means it's already in
 // place when that happens, not bolted on later).
-type PendingSend = { kind: 'all'; count: number } | { kind: 'one'; contactId: string; name: string } | null
+type PendingSend =
+  | { kind: 'selected'; contactIds: string[]; count: number }
+  | { kind: 'one'; contactId: string; name: string }
+  | null
 
 interface EmailDraft {
   fullText: string
@@ -52,6 +59,12 @@ interface GeneratedContent {
 interface SendOutcomeDetail {
   status: 'sent' | 'skipped' | 'failed'
   reason?: string
+}
+
+interface EditDraft {
+  email: string
+  subject: string
+  body: string
 }
 
 async function fetchGenerated(contactId: string): Promise<GeneratedContent | null> {
@@ -80,20 +93,26 @@ export function ReviewSendStep({
   contacts,
   campaignContactStatus,
   sendingContactId,
-  sendingAll,
+  sendingSelected,
   sendOneContact,
-  sendAllContacts,
+  sendSelectedContacts,
+  updateContactEmail,
 }: {
   contacts: OutboundContact[]
   campaignContactStatus: Record<string, SendOutcomeDetail>
   sendingContactId: string | null
-  sendingAll: boolean
+  sendingSelected: boolean
   sendOneContact: (contactId: string) => Promise<void>
-  sendAllContacts: () => Promise<void>
+  sendSelectedContacts: (contactIds: string[]) => Promise<void>
+  updateContactEmail: (contactId: string, email: string) => Promise<boolean>
 }) {
   const [generatedByContact, setGeneratedByContact] = useState<Record<string, GeneratedContent | null>>({})
   const [loading, setLoading] = useState(true)
   const [pendingSend, setPendingSend] = useState<PendingSend>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [editingContactId, setEditingContactId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   // Was hardcoded 'Demo mode' regardless of the actually-active sending
   // provider — a real bug once a real vendor (Lemlist) is connected, since
   // the confirm dialog's "Mock sending only, no real email goes out yet"
@@ -137,9 +156,120 @@ export function ReviewSendStep({
 
   const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
 
-  const readyToSend = contacts.filter(
-    c => c.email && generatedByContact[c.id]?.email_draft && campaignContactStatus[c.id]?.status !== 'sent'
+  const readyToSend = useMemo(
+    () =>
+      contacts.filter(
+        c => c.email && generatedByContact[c.id]?.email_draft && campaignContactStatus[c.id]?.status !== 'sent'
+      ),
+    [contacts, generatedByContact, campaignContactStatus]
   )
+  const readyIds = useMemo(() => new Set(readyToSend.map(c => c.id)), [readyToSend])
+
+  // Selection never holds an id that's no longer ready to send (e.g. it
+  // just got marked 'sent' by a prior send) — pruned defensively rather
+  // than trusted to stay in sync with readyIds on its own.
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const next = new Set([...prev].filter(id => readyIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [readyIds])
+
+  function toggleSelected(contactId: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(contactId)) next.delete(contactId)
+      else next.add(contactId)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => (prev.size === readyToSend.length ? new Set() : new Set(readyIds)))
+  }
+
+  function startEditing(contact: OutboundContact) {
+    const generated = generatedByContact[contact.id]
+    setEditDraft({
+      email: contact.email ?? '',
+      subject: generated?.selected_subject_line ?? '',
+      body: generated?.email_draft?.fullText ?? '',
+    })
+    setEditingContactId(contact.id)
+  }
+
+  function cancelEditing() {
+    setEditingContactId(null)
+    setEditDraft(null)
+  }
+
+  async function saveEditing(contact: OutboundContact) {
+    if (!editDraft) return
+    setSavingEdit(true)
+    try {
+      const generated = generatedByContact[contact.id]
+      const trimmedEmail = editDraft.email.trim()
+
+      const tasks: Promise<boolean>[] = []
+
+      if (trimmedEmail !== (contact.email ?? '')) {
+        tasks.push(updateContactEmail(contact.id, trimmedEmail))
+      }
+
+      const subjectChanged = editDraft.subject !== (generated?.selected_subject_line ?? '')
+      const bodyChanged = editDraft.body !== (generated?.email_draft?.fullText ?? '')
+      if (subjectChanged || bodyChanged) {
+        tasks.push(
+          (async () => {
+            try {
+              const res = await fetch(`/api/admin/outbound/contacts/${contact.id}/generated-content`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  selected_subject_line: editDraft.subject,
+                  email_draft: { ...generated?.email_draft, fullText: editDraft.body },
+                }),
+              })
+              const data = await res.json()
+              if (!data.success) {
+                toast.error(data.error ?? 'Failed to save draft edits')
+                return false
+              }
+              setGeneratedByContact(prev => ({
+                ...prev,
+                [contact.id]: {
+                  selected_subject_line: data.generated.selected_subject_line,
+                  email_draft: data.generated.email_draft,
+                  followups: prev[contact.id]?.followups ?? null,
+                },
+              }))
+              return true
+            } catch {
+              toast.error('Could not reach the generation API')
+              return false
+            }
+          })()
+        )
+      }
+
+      if (tasks.length === 0) {
+        cancelEditing()
+        return
+      }
+
+      const results = await Promise.all(tasks)
+      if (results.every(Boolean)) {
+        toast.success('Changes saved')
+        cancelEditing()
+      }
+      // Leave the edit form open with whatever succeeded still applied
+      // locally if one of the two saves failed — the failing call already
+      // showed its own toast.error, and closing here would silently discard
+      // the other, still-unsaved edit too.
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -156,7 +286,7 @@ export function ReviewSendStep({
             )}
             <InfoTooltip>
               {isRealSendingProvider
-                ? `A real sending provider (${sendingProviderName}) is connected. Send Email / Send All will send real emails to real recipients.`
+                ? `A real sending provider (${sendingProviderName}) is connected. Send Email / Send Selected will send real emails to real recipients.`
                 : "No real email leaves the app yet, a real sending service hasn't been connected. Once one is, this same button sends for real."}
             </InfoTooltip>
           </h2>
@@ -164,11 +294,11 @@ export function ReviewSendStep({
         </div>
         <Button
           size="lg"
-          disabled={sendingAll || readyToSend.length === 0}
-          onClick={() => setPendingSend({ kind: 'all', count: readyToSend.length })}
+          disabled={sendingSelected || selectedIds.size === 0}
+          onClick={() => setPendingSend({ kind: 'selected', contactIds: [...selectedIds], count: selectedIds.size })}
         >
-          {sendingAll ? <Spinner className="size-3.5" /> : null}
-          Send All ({readyToSend.length})
+          {sendingSelected ? <Spinner className="size-3.5" /> : null}
+          Send Selected ({selectedIds.size})
         </Button>
       </div>
 
@@ -178,27 +308,51 @@ export function ReviewSendStep({
         </div>
       ) : (
         <div className="space-y-3">
+          {readyToSend.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground/70 px-1">
+              <input
+                type="checkbox"
+                checked={selectedIds.size === readyToSend.length}
+                onChange={toggleSelectAll}
+                aria-label="Select all ready contacts"
+              />
+              Select all ({readyToSend.length} ready)
+            </label>
+          )}
           {contacts.map(contact => {
             const generated = generatedByContact[contact.id]
             const outcome = campaignContactStatus[contact.id]
             const isSending = sendingContactId === contact.id
+            const isReady = readyIds.has(contact.id)
             const canSend = Boolean(contact.email && generated?.email_draft) && outcome?.status !== 'sent'
+            const isEditing = editingContactId === contact.id
 
             return (
               <div key={contact.id} className="rounded-lg border border-border bg-card px-4 py-3 space-y-2.5">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-foreground">{contact.person_name}</span>
-                      {contact.title_hint && (
-                        <span className="text-xs text-muted-foreground/70">{contact.title_hint}</span>
-                      )}
-                      {outcome && <Badge variant={sendStatusBadgeVariant(outcome.status)}>{outcome.status}</Badge>}
+                  <div className="min-w-0 flex items-start gap-2.5">
+                    {isReady && (
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selectedIds.has(contact.id)}
+                        onChange={() => toggleSelected(contact.id)}
+                        aria-label={`Select ${contact.person_name}`}
+                      />
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-foreground">{contact.person_name}</span>
+                        {contact.title_hint && (
+                          <span className="text-xs text-muted-foreground/70">{contact.title_hint}</span>
+                        )}
+                        {outcome && <Badge variant={sendStatusBadgeVariant(outcome.status)}>{outcome.status}</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground/70 mt-0.5">
+                        {contact.email ?? 'No email, will be skipped'} · Phone: Not Available
+                      </div>
+                      {outcome?.reason && <p className="text-xs text-muted-foreground/60 mt-0.5">{outcome.reason}</p>}
                     </div>
-                    <div className="text-xs text-muted-foreground/70 mt-0.5">
-                      {contact.email ?? 'No email, will be skipped'} · Phone: Not Available
-                    </div>
-                    {outcome?.reason && <p className="text-xs text-muted-foreground/60 mt-0.5">{outcome.reason}</p>}
                   </div>
                   <Button
                     size="sm"
@@ -212,14 +366,67 @@ export function ReviewSendStep({
                 </div>
 
                 {generated?.email_draft ? (
-                  <div className="rounded-md border border-border bg-background/50 p-3 space-y-1">
-                    <p className="text-xs text-foreground whitespace-pre-wrap">
-                      <span className="text-muted-foreground/70">Subject: </span>
-                      {generated.selected_subject_line}
-                      {'\n\n'}
-                      {generated.email_draft.fullText}
-                    </p>
-                  </div>
+                  isEditing && editDraft ? (
+                    <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground/70" htmlFor={`email-${contact.id}`}>
+                          Recipient email
+                        </label>
+                        <input
+                          id={`email-${contact.id}`}
+                          type="email"
+                          value={editDraft.email}
+                          onChange={e => setEditDraft(d => (d ? { ...d, email: e.target.value } : d))}
+                          className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground/70" htmlFor={`subject-${contact.id}`}>
+                          Subject
+                        </label>
+                        <input
+                          id={`subject-${contact.id}`}
+                          type="text"
+                          value={editDraft.subject}
+                          onChange={e => setEditDraft(d => (d ? { ...d, subject: e.target.value } : d))}
+                          className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground/70" htmlFor={`body-${contact.id}`}>
+                          Body
+                        </label>
+                        <textarea
+                          id={`body-${contact.id}`}
+                          value={editDraft.body}
+                          onChange={e => setEditDraft(d => (d ? { ...d, body: e.target.value } : d))}
+                          rows={8}
+                          className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground whitespace-pre-wrap"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => saveEditing(contact)} disabled={savingEdit}>
+                          {savingEdit ? <Spinner className="size-3.5" /> : null}
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={savingEdit}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-border bg-background/50 p-3 space-y-1.5">
+                      <p className="text-xs text-foreground whitespace-pre-wrap">
+                        <span className="text-muted-foreground/70">Subject: </span>
+                        {generated.selected_subject_line}
+                        {'\n\n'}
+                        {generated.email_draft.fullText}
+                      </p>
+                      <Button size="sm" variant="outline" onClick={() => startEditing(contact)}>
+                        Edit
+                      </Button>
+                    </div>
+                  )
                 ) : (
                   <p className="text-xs text-muted-foreground/60">
                     No draft yet for this contact. Go back to Outreach to draft one.
@@ -254,10 +461,10 @@ export function ReviewSendStep({
       <ConfirmDialog
         open={pendingSend !== null}
         onOpenChange={open => { if (!open) setPendingSend(null) }}
-        title={pendingSend?.kind === 'all' ? `Send to ${pendingSend.count} contact${pendingSend.count === 1 ? '' : 's'}?` : 'Send this email?'}
+        title={pendingSend?.kind === 'selected' ? `Send to ${pendingSend.count} contact${pendingSend.count === 1 ? '' : 's'}?` : 'Send this email?'}
         description={
-          pendingSend?.kind === 'all'
-            ? `Sends the drafted email to all ${pendingSend.count} ready contacts. ${
+          pendingSend?.kind === 'selected'
+            ? `Sends the drafted email to the ${pendingSend.count} selected contact${pendingSend.count === 1 ? '' : 's'}. ${
                 isRealSendingProvider
                   ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
                   : 'Mock sending only, no real email goes out yet.'
@@ -268,11 +475,17 @@ export function ReviewSendStep({
                   : 'Mock sending only, no real email goes out yet.'
               }`
         }
-        confirmLabel={pendingSend?.kind === 'all' ? 'Send All' : 'Send'}
-        loading={pendingSend?.kind === 'all' ? sendingAll : sendingContactId === (pendingSend?.kind === 'one' ? pendingSend.contactId : null)}
+        confirmLabel={pendingSend?.kind === 'selected' ? 'Send Selected' : 'Send'}
+        loading={pendingSend?.kind === 'selected' ? sendingSelected : sendingContactId === (pendingSend?.kind === 'one' ? pendingSend.contactId : null)}
         onConfirm={() => {
-          if (pendingSend?.kind === 'all') void sendAllContacts().then(() => setPendingSend(null))
-          else if (pendingSend?.kind === 'one') void sendOneContact(pendingSend.contactId).then(() => setPendingSend(null))
+          if (pendingSend?.kind === 'selected') {
+            void sendSelectedContacts(pendingSend.contactIds).then(() => {
+              setSelectedIds(new Set())
+              setPendingSend(null)
+            })
+          } else if (pendingSend?.kind === 'one') {
+            void sendOneContact(pendingSend.contactId).then(() => setPendingSend(null))
+          }
         }}
       />
     </div>

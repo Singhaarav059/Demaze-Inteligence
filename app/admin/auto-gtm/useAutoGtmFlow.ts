@@ -96,7 +96,7 @@ export function useAutoGtmFlow() {
   const [pendingAction, setPendingAction] = useState<Record<string, ContactActionKind | undefined>>({})
   const [campaignId, setCampaignId] = useState<string | null>(null)
   const [sendingContactId, setSendingContactId] = useState<string | null>(null)
-  const [sendingAll, setSendingAll] = useState(false)
+  const [sendingSelected, setSendingSelected] = useState(false)
   const [campaignContactStatus, setCampaignContactStatus] = useState<Record<string, SendOutcomeDetail>>({})
   // Was hardcoded '(mock)' in every send toast regardless of the actually-
   // active sending provider — misleading once a real vendor (Lemlist) is
@@ -159,7 +159,7 @@ export function useAutoGtmFlow() {
     setPendingAction({})
     setCampaignId(null)
     setSendingContactId(null)
-    setSendingAll(false)
+    setSendingSelected(false)
     setCampaignContactStatus({})
     setInputMode('single')
     setBatchCompanies([])
@@ -587,6 +587,29 @@ export function useAutoGtmFlow() {
     }
   }, [])
 
+  // Review & Send's last-moment recipient-email edit — the auto-found email
+  // isn't always the one the user wants to send to. Returns true/false so
+  // the caller (ReviewSendStep) knows whether to also save its draft edits.
+  const updateContactEmail = useCallback(async (contactId: string, email: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/outbound/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Failed to update email')
+        return false
+      }
+      setContacts(prev => prev.map(c => (c.id === contactId ? data.contact : c)))
+      return true
+    } catch {
+      toast.error('Could not reach the contacts API')
+      return false
+    }
+  }, [])
+
   // Lazily creates the underlying campaign the first time anything is sent
   // — "campaign" is deliberately never surfaced as a concept in the guided
   // flow's UI/copy, it's just the existing sending infrastructure this hook
@@ -618,9 +641,10 @@ export function useAutoGtmFlow() {
 
   // Enqueues the given contact ids and sends whatever is queued — the send
   // route only ever touches rows still 'queued', so calling this repeatedly
-  // (e.g. Send Email on one contact, then Send All later) is safe and never
-  // double-sends. Shared by sendOneContact/sendAllContacts, which differ
-  // only in which contact ids they pass. Returns the outcome for each
+  // (e.g. Send Email on one contact, then Send Selected on others later) is
+  // safe and never double-sends. Shared by sendOneContact/
+  // sendSelectedContacts, which differ only in which contact ids they pass.
+  // Returns the outcome for each
   // requested contact id, resolved from the send response's
   // campaign-contact-row ids back to contact ids (the id space
   // campaignContactStatus is keyed by, matching every other piece of state).
@@ -707,14 +731,17 @@ export function useAutoGtmFlow() {
     [enqueueAndSend, sendingProviderName]
   )
 
-  const sendAllContacts = useCallback(async () => {
-    if (contacts.length === 0) {
-      toast.error('No contacts to send yet')
+  // Replaces the old "Send All" — Review & Send now defaults to nothing
+  // selected and requires an explicit checkbox pick, so this always takes
+  // an explicit contact-id list rather than reaching for every contact.
+  const sendSelectedContacts = useCallback(async (contactIds: string[]) => {
+    if (contactIds.length === 0) {
+      toast.error('No contacts selected')
       return
     }
-    setSendingAll(true)
+    setSendingSelected(true)
     try {
-      const outcomes = await enqueueAndSend(contacts.map(c => c.id))
+      const outcomes = await enqueueAndSend(contactIds)
       // An empty result here means enqueueAndSend already failed and shown
       // its own toast.error — showing "0 sent, 0 skipped, 0 failed" as a
       // success toast on top of that would be misleading (2026-07-19 fix).
@@ -725,9 +752,9 @@ export function useAutoGtmFlow() {
       const prefix = sendingProviderName && sendingProviderName !== 'mock' ? `Sent via ${sendingProviderName}` : 'Sent (mock)'
       toast.success(`${prefix}: ${sent} sent, ${skipped} skipped, ${failed} failed`)
     } finally {
-      setSendingAll(false)
+      setSendingSelected(false)
     }
-  }, [contacts, enqueueAndSend, sendingProviderName])
+  }, [enqueueAndSend, sendingProviderName])
 
   return {
     step,
@@ -753,12 +780,13 @@ export function useAutoGtmFlow() {
     pendingAction,
     findEmailForContact,
     deleteContact,
+    updateContactEmail,
     campaignId,
     campaignContactStatus,
     sendingContactId,
-    sendingAll,
+    sendingSelected,
     sendOneContact,
-    sendAllContacts,
+    sendSelectedContacts,
     batchCompanies,
     batchUploading,
     batchUploadError,

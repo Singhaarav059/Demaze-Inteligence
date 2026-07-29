@@ -250,6 +250,48 @@ against a real Lemlist send (no API key/campaign template exists yet, per
 the section above) — verified via the existing mock provider path plus
 reading the scoping logic directly.
 
+### Review & Send redesign, items 1 + 3 (2026-07-29)
+
+Implements 2 of the 3 gaps queued 2026-07-28 (`CURRENT_TASK.md` has the full
+list; item 2, follow-up scheduling, is still open and needs its own session).
+
+- **Inline editing**: `ReviewSendStep.tsx` gained a per-contact "Edit" toggle
+  that opens recipient email + subject + body as editable fields together
+  (a single edit/save cycle, not three separate ones). Subject/body PATCH
+  the existing `outbound_generated_content` route unchanged. Recipient email
+  required a genuinely new route — `contacts/[id]/route.ts` was DELETE-only
+  before this — so `PATCH /api/admin/outbound/contacts/[id]` was added,
+  taking `{ email: string }` and clearing `email_confidence`/stamping
+  `email_finder_provider: 'manual'` so a hand-typed address never carries
+  forward a stale "found by Prospeo, high confidence" badge from before the
+  edit. New `updateContactEmail()` in `useAutoGtmFlow.ts`, same
+  fetch-then-`setContacts(prev => prev.map(...))` pattern as
+  `findEmailForContact()`.
+- **Checkbox multi-select**: replaces the old unconditional "Send All".
+  Contacts that are actually ready to send (has email + has a draft + not
+  already sent) get a checkbox, defaulting to none checked; a "Select all (N
+  ready)" toggle sits above the list. `sendAllContacts()`/`sendingAll` in
+  `useAutoGtmFlow.ts` were renamed to `sendSelectedContacts(contactIds)`/
+  `sendingSelected` — takes an explicit id array instead of reaching for
+  every contact in state, since the button no longer means "everyone."
+- **Live-verified**, not just `tsc`+tests: resumed a real saved run
+  (mahindra.com, `?runId=...&step=5`) against the dev server. Confirmed: the
+  real-provider badge shows `Live: lemlist` (this run's environment has
+  Lemlist configured as the active sending provider with a real credential —
+  see the flagged discrepancy in `CURRENT_TASK.md`), selecting a contact's
+  checkbox correctly updates "Send Selected (N)", editing and saving a
+  subject line persists server-side (confirmed via a direct GET against
+  `generated-content` after save, then reverted), editing and saving a
+  recipient email persists, correctly flips that contact into
+  checkbox-selectable, and updates the page's "N emails found" summary
+  (confirmed, then reverted to leave the test contact's data as found).
+  Opened the "Send Selected" confirm dialog to verify its real-vendor
+  warning copy (`"This is a REAL send via lemlist — real emails will go
+  out"`), then closed it via Cancel without sending — no campaign was
+  created for this run as a result (confirmed via a direct API check),
+  so no real send was ever triggered during this verification.
+- Verified: `tsc --noEmit` clean, full suite 603/603 passing.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead
