@@ -445,6 +445,61 @@ scoping message, condensed here for the persistent record:
   (thread fetch, reply-vs-self-send discrimination, event dedup) is
   unit-tested but not yet exercised against a real inbox.
 
+### RESOLVED same day (2026-07-29) — `getGmailCredential()` was silently broken since 2026-07-19, caught the moment a real OAuth connection was finally made
+
+The user completed the Gmail OAuth consent click-through (connected as
+`singhaarav059@gmail.com`, confirmed via a real `gmail` row appearing in
+`outbound_integrations` with `is_active: true`). Testing the connection
+(`POST /api/admin/outbound/integrations/sending/test`) reported failure —
+`"gmail — no API key configured"` — despite the row genuinely having a
+real `credential_encrypted` value. Root-caused directly (a throwaway
+`scripts/_diagnose-gmail.ts`, deleted after use, calling the real
+`getGmailCredential()`/`decodeGmailCredential()`/`getActiveCredential()`
+functions against the live DB row) rather than guessing: `decodeGmailCredential(rawEncryptedBlob)`
+worked fine when called on the actual encrypted column value, but
+`getGmailCredential()` itself returned `null`.
+
+**Real cause**: `getGmailCredential()` called
+`decodeGmailCredential(await getActiveCredential('sending'))` — but
+`getActiveCredential()` (`lib/outbound/settings/provider-selection.ts`)
+already decrypts `credential_encrypted` before returning it, and
+`decodeGmailCredential()` ALSO decrypts its input internally (it's meant to
+take the raw encrypted blob, symmetric with `encodeGmailCredential`). So
+`getGmailCredential()` was decrypting an already-decrypted plaintext JSON
+string a second time — `decryptCredential()` throws on anything that isn't
+real AES-GCM ciphertext (by design, see its own doc comment), so this
+silently and unconditionally returned `null` for every real stored Gmail
+credential, from the very first session Gmail sending was wired up
+(2026-07-19) until today. It went undetected for over a week of real
+commits specifically because no prior session had a genuine completed
+OAuth consent to exercise this exact path against — `isAvailable()`
+returning `false` looked identical to "nothing connected yet," which was
+true in every prior session for an unrelated reason.
+
+**Fixed**: extracted the shape-check into a new
+`parseGmailCredentialJson()` (JSON.parse + field-shape check, no
+decryption) — `decodeGmailCredential()` now decrypts then calls it;
+`getGmailCredential()` calls it directly on `getActiveCredential()`'s
+already-decrypted return value, with no second decrypt. New regression
+tests in `tests/gmail-client.test.ts` mock `getActiveCredential` to return
+exactly what it really returns in production (decrypted plaintext, not a
+re-encrypted blob) — the previous test suite only ever tested
+`decodeGmailCredential` directly against a freshly `encodeGmailCredential`-produced
+blob, which never exercised the double-decrypt path at all, which is
+exactly why this bug shipped undetected across two Gmail-touching sessions
+(the interim sending provider build, and this session's own scope+reply-
+tracking work) before now.
+
+**Verified end-to-end, not just via the diagnostic script**: after the
+fix, `POST /api/admin/outbound/integrations/sending/test` against the same
+live row now returns `{"status": "success", "message": "gmail — credential
+configured."}`. `tsc --noEmit` clean, full suite 597/597 passing (594 + 3
+new regression tests). **Still not done**: an actual real test send and a
+real reply-check pass against a genuine reply — this fix only confirms the
+credential resolves and the refresh token is valid
+(`refreshAccessToken()` succeeded live too, via the same diagnostic run),
+not that a full send round-trip works end to end.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead

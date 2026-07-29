@@ -8,13 +8,20 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { randomBytes } from 'crypto'
-import { encryptCredential } from '../lib/outbound/settings/credential-crypto'
+import { encryptCredential, decryptCredential } from '../lib/outbound/settings/credential-crypto'
+
+vi.mock('../lib/outbound/settings/provider-selection', () => ({
+  getActiveCredential: vi.fn(),
+}))
+
+import { getActiveCredential } from '../lib/outbound/settings/provider-selection'
 import {
   base64UrlEncode,
   buildMimeMessage,
   buildAuthUrl,
   encodeGmailCredential,
   decodeGmailCredential,
+  getGmailCredential,
   exchangeCodeForTokens,
   refreshAccessToken,
   sendGmailMessage,
@@ -111,6 +118,53 @@ describe('encodeGmailCredential / decodeGmailCredential', () => {
     const blob = encodeGmailCredential(cred)
     const tampered = blob.slice(0, -4) + 'abcd'
     expect(decodeGmailCredential(tampered)).toBeNull()
+  })
+})
+
+describe('getGmailCredential', () => {
+  const ORIGINAL_KEY = process.env.CREDENTIALS_ENCRYPTION_KEY
+
+  beforeEach(() => {
+    process.env.CREDENTIALS_ENCRYPTION_KEY = randomBytes(32).toString('base64')
+    vi.mocked(getActiveCredential).mockReset()
+  })
+
+  afterEach(() => {
+    if (ORIGINAL_KEY === undefined) delete process.env.CREDENTIALS_ENCRYPTION_KEY
+    else process.env.CREDENTIALS_ENCRYPTION_KEY = ORIGINAL_KEY
+  })
+
+  // REGRESSION (2026-07-29): getGmailCredential() used to call
+  // decodeGmailCredential(stored) directly on getActiveCredential()'s
+  // return value — but getActiveCredential() already decrypts
+  // credential_encrypted before returning it (see
+  // lib/outbound/settings/provider-selection.ts), so this was decrypting
+  // an already-decrypted plaintext JSON string a second time.
+  // decryptCredential() throws on anything that isn't real AES-GCM
+  // ciphertext, so this silently returned null for every real stored Gmail
+  // credential, undetected until a real OAuth connection was made and this
+  // path was finally exercised live. getActiveCredential is mocked here to
+  // return exactly what it really returns in production — decrypted
+  // plaintext — not a re-encrypted blob, so this test would have caught
+  // the bug.
+  it('parses a real stored credential correctly (does not double-decrypt)', async () => {
+    const cred = { clientId: 'cid', clientSecret: 'secret', refreshToken: 'refresh-tok', email: 'me@gmail.com' }
+    const encryptedBlob = encodeGmailCredential(cred)
+    const alreadyDecryptedPlaintext = decryptCredential(encryptedBlob)
+    vi.mocked(getActiveCredential).mockResolvedValue(alreadyDecryptedPlaintext)
+
+    const result = await getGmailCredential()
+    expect(result).toEqual(cred)
+  })
+
+  it('returns null when no credential is stored', async () => {
+    vi.mocked(getActiveCredential).mockResolvedValue(null)
+    expect(await getGmailCredential()).toBeNull()
+  })
+
+  it('returns null rather than throwing if the stored value is not valid JSON', async () => {
+    vi.mocked(getActiveCredential).mockResolvedValue('not json at all')
+    expect(await getGmailCredential()).toBeNull()
   })
 })
 

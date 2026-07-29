@@ -27,35 +27,40 @@
    this required).
 5. Free, poll-on-demand Gmail reply tracking was scoped, then built, same
    session — see `DECISIONS.md`'s "Free reply tracking (Gmail)" section.
+6. **The user then completed the Gmail OAuth consent click-through**
+   (connected as `singhaarav059@gmail.com` — confirmed via a real `gmail`
+   row in `outbound_integrations`, `is_active: true`). Testing the
+   connection immediately surfaced a real, pre-existing bug:
+   `getGmailCredential()` had been silently broken since 2026-07-19
+   (double-decrypting an already-decrypted credential, always returning
+   `null`) — undetected until now because no prior session had a genuine
+   OAuth connection to exercise it against. **Fixed same session** — see
+   `DECISIONS.md`'s "RESOLVED same day" entry right after the reply-
+   tracking section for the full root cause and fix.
 
-**Current state**:
-- Sending is on `mock` right now — safe, nothing sends for real.
-- `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are configured and confirmed
-  live (the OAuth `/start` route correctly redirects to a real Google
-  consent URL).
-- **No `gmail` row exists yet in `outbound_integrations`** — the per-account
-  OAuth consent has NOT been completed inside this app yet, only the
-  app-level client id/secret. The user needs to go to
-  `/admin/outbound/integrations`, select Gmail for Email Sending, and click
-  "Connect with Google" themselves (a real Google consent screen — not
-  something the assistant can click through on their behalf). Once that's
-  done, Gmail becomes the active sending provider automatically (the OAuth
-  callback route auto-deactivates any other `sending` row and activates
-  `gmail`).
-- Reply tracking (`POST /api/admin/outbound/campaigns/[id]/check-replies`,
-  a "Check for Replies" button on the Campaigns page) is code-complete and
-  unit-tested but **not yet live-verified against a real Gmail thread** —
-  needs the OAuth consent step above first, since there's no real inbox to
-  poll against yet. Also note: the `gmail.metadata` scope was added as
-  part of this work — if the user had connected Gmail before this session
-  (they hadn't, per the point above), they'd need to click "Reconnect with
-  Google" once to pick up read access; moot for a first-time connection.
+**Current state (updated after the fix above)**:
+- Gmail is connected and **active** as the sending provider — real
+  credential, `POST /api/admin/outbound/integrations/sending/test` now
+  returns `status: success` against the live row.
+- `refreshAccessToken()` was confirmed working live against the real
+  stored refresh token (via the diagnostic script used to root-cause the
+  bug above, since deleted).
+- **Not yet done**: an actual real test send has not been tried (only
+  credential resolution + token refresh were confirmed), and reply
+  tracking (`POST /api/admin/outbound/campaigns/[id]/check-replies`) has
+  not been exercised against a real Gmail thread yet — both need explicit,
+  deliberate confirmation before spending a real send/testing against a
+  real inbox, per this repo's standing safety rule.
+- The `gmail.metadata` read scope needed for reply tracking was already
+  part of the consent the user just granted (added before their OAuth
+  click-through), so no separate "Reconnect with Google" step is needed —
+  that would only have mattered if they'd connected before this scope was
+  added, which didn't happen here.
 
-**Next step, in order**: (1) user completes the Gmail OAuth consent
-click-through, (2) confirm Gmail shows up as connected in
-`/admin/outbound/integrations` with the right email, (3) a real,
-explicitly-confirmed test send + a real reply-check pass against an actual
-reply, before trusting either path live.
+**Next step, in order**: (1) an explicitly-confirmed real test send to
+verify the full send round-trip works end to end, (2) after a real reply
+exists in that thread, an explicitly-confirmed `check-replies` run to
+verify the poll-based reply detection actually catches it.
 
 **Still open, unrelated to the above**: item 2 from the original Review &
 Send redesign queue (2026-07-28) — follow-ups are shown on the Review &

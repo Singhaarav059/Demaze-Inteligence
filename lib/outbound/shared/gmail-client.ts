@@ -68,12 +68,13 @@ export function encodeGmailCredential(cred: GmailCredential): string {
   return encryptCredential(JSON.stringify(cred))
 }
 
-// Never throws — a corrupted/foreign blob (wrong key, tampered, or simply
-// not a Gmail credential) resolves to null, same "null means treat as
-// unconfigured" contract as getProspeoApiKey().
-export function decodeGmailCredential(blob: string): GmailCredential | null {
+// Shared shape-check for an already-decrypted JSON string — never throws,
+// used by both decodeGmailCredential (which decrypts first) and
+// getGmailCredential (whose input is already plaintext, see its own
+// comment below for why that distinction matters).
+function parseGmailCredentialJson(json: string): GmailCredential | null {
   try {
-    const parsed = JSON.parse(decryptCredential(blob))
+    const parsed = JSON.parse(json)
     if (
       parsed && typeof parsed === 'object' &&
       typeof parsed.clientId === 'string' &&
@@ -88,10 +89,36 @@ export function decodeGmailCredential(blob: string): GmailCredential | null {
   }
 }
 
+// Never throws — a corrupted/foreign blob (wrong key, tampered, or simply
+// not a Gmail credential) resolves to null, same "null means treat as
+// unconfigured" contract as getProspeoApiKey(). Takes the raw ENCRYPTED
+// blob (e.g. straight from a DB row's credential_encrypted column) —
+// decrypts it internally. Do not pass an already-decrypted string here;
+// see getGmailCredential below for the one place this distinction bit us.
+export function decodeGmailCredential(blob: string): GmailCredential | null {
+  try {
+    return parseGmailCredentialJson(decryptCredential(blob))
+  } catch {
+    return null
+  }
+}
+
+// FIXED (2026-07-29): this used to call decodeGmailCredential(stored),
+// which decrypts its input internally — but getActiveCredential() already
+// returns the DECRYPTED plaintext, so this was decrypting an
+// already-decrypted JSON string a second time. decryptCredential() throws
+// on anything that isn't real AES-GCM ciphertext (see its own doc comment
+// — "malformed blob" / auth-tag failure), so this silently and
+// unconditionally returned null for every real stored Gmail credential
+// ever, from the very first session Gmail sending was wired up
+// (2026-07-19) until this bug was caught here. It went unnoticed for that
+// long specifically because no session before this one had a real
+// completed OAuth consent to exercise the live path against — isAvailable()
+// returning false looked identical to "no credential connected yet."
 export async function getGmailCredential(): Promise<GmailCredential | null> {
   const stored = await getActiveCredential('sending')
   if (!stored) return null
-  return decodeGmailCredential(stored)
+  return parseGmailCredentialJson(stored)
 }
 
 export function buildAuthUrl(params: { clientId: string; redirectUri: string; state: string }): string {
