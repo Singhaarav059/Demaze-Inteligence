@@ -45,22 +45,38 @@
 - `refreshAccessToken()` was confirmed working live against the real
   stored refresh token (via the diagnostic script used to root-cause the
   bug above, since deleted).
-- **Not yet done**: an actual real test send has not been tried (only
-  credential resolution + token refresh were confirmed), and reply
-  tracking (`POST /api/admin/outbound/campaigns/[id]/check-replies`) has
-  not been exercised against a real Gmail thread yet — both need explicit,
-  deliberate confirmation before spending a real send/testing against a
-  real inbox, per this repo's standing safety rule.
+- **DONE (2026-07-29, explicitly confirmed by the user first)**: a real
+  test send to the user's own connected address
+  (`singhaarav059@gmail.com`) succeeded — `sendEmail()` called directly via
+  a throwaway script (same pattern as the credential-bug diagnostic
+  script, deleted after use, never committed), result
+  `{ status: 'sent', providerMessageId: '19fac84229cac6aa', providerUsed:
+  'gmail' }`. This confirms the full real send path works end to end:
+  credential resolve → token refresh → Gmail `messages.send` → real
+  delivery. Went straight to `lib/outbound/sending/provider-factory.ts`'s
+  `sendEmail()` rather than through the campaign/contact UI flow, since the
+  thing being verified was purely "does a real Gmail send succeed," not
+  the campaign machinery (already covered by existing tests/code review).
+- **Still not done**: reply tracking
+  (`POST /api/admin/outbound/campaigns/[id]/check-replies`) has not been
+  exercised against a real Gmail thread yet — needs a real reply in that
+  test thread first, then an explicitly-confirmed `check-replies` run.
+  Note this test send did NOT go through `outbound_campaigns`/
+  `outbound_campaign_contacts` (see above), so there's no
+  `provider_message_id`/thread id stored anywhere for `check-replies` to
+  poll against yet — verifying reply tracking will need a send that DOES
+  go through the normal campaign flow (e.g. a real Auto Flow run, or a
+  manually-created test contact + campaign), not this one-off script.
 - The `gmail.metadata` read scope needed for reply tracking was already
-  part of the consent the user just granted (added before their OAuth
+  part of the consent the user granted (added before their OAuth
   click-through), so no separate "Reconnect with Google" step is needed —
   that would only have mattered if they'd connected before this scope was
   added, which didn't happen here.
 
-**Next step, in order**: (1) an explicitly-confirmed real test send to
-verify the full send round-trip works end to end, (2) after a real reply
-exists in that thread, an explicitly-confirmed `check-replies` run to
-verify the poll-based reply detection actually catches it.
+**Next step**: to verify reply tracking, send a real test email through
+the normal campaign flow (not a one-off script) so its thread id gets
+persisted, reply to it from a different inbox, then run `check-replies`
+against that campaign — explicit confirmation needed before that send too.
 
 **Still open, unrelated to the above**: item 2 from the original Review &
 Send redesign queue (2026-07-28) — follow-ups are shown on the Review &

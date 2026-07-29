@@ -494,11 +494,27 @@ tracking work) before now.
 fix, `POST /api/admin/outbound/integrations/sending/test` against the same
 live row now returns `{"status": "success", "message": "gmail — credential
 configured."}`. `tsc --noEmit` clean, full suite 597/597 passing (594 + 3
-new regression tests). **Still not done**: an actual real test send and a
-real reply-check pass against a genuine reply — this fix only confirms the
-credential resolves and the refresh token is valid
-(`refreshAccessToken()` succeeded live too, via the same diagnostic run),
-not that a full send round-trip works end to end.
+new regression tests).
+
+**Real test send confirmed, same day, explicit confirmation given first**:
+the user asked for a real test email to their own connected address
+(`singhaarav059@gmail.com`). Called `sendEmail()` directly via a throwaway
+script (same disposable-script pattern as the diagnostic above, deleted
+after use, never committed) rather than through the campaign/contact UI —
+the thing being verified was purely "does a real Gmail send succeed,"
+already known-good campaign/contact machinery didn't need re-exercising.
+Result: `{ status: 'sent', providerMessageId: '19fac84229cac6aa',
+providerUsed: 'gmail' }` — a real send, confirmed delivered. This closes
+out the "not that a full send round-trip works end to end" gap this
+section originally flagged.
+
+**Still not done**: reply tracking has not been exercised against a real
+Gmail thread. The test send above deliberately bypassed
+`outbound_campaigns`/`outbound_campaign_contacts` (see reasoning above), so
+its thread id was never persisted anywhere `check-replies` can poll —
+verifying reply tracking needs a send that goes through the normal
+campaign flow instead (e.g. a real Auto Flow run), a real reply landing in
+that thread, then an explicitly-confirmed `check-replies` call.
 
 ## Competitor Discovery Engine (Phase 2, item 1)
 
