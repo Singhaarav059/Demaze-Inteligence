@@ -57,14 +57,30 @@ exist in the database from this verification — worth deleting via the
 Contacts/Campaigns pages if the user wants a clean slate, not done
 automatically since deletion wasn't asked for.
 
-**Still open, unrelated to the above**: item 2 from the original Review &
-Send redesign queue (2026-07-28) — follow-ups are shown on the Review &
+**RESOLVED 2026-07-29 — item 2 from the original Review & Send redesign
+queue (2026-07-28) is now built.** Follow-ups were shown on the Review &
 Send screen but never actually sent, on any schedule or reply-triggered
 cancellation. `scheduleFollowups()` on `lib/outbound/sending/providers/
-gmail.ts` still honestly reports `scheduled: false` — this needs its own
-architecture session (a real scheduler/cron + reply-triggered cancellation
-logic), not a UI tweak, same "one deliverable per session" discipline as
-the rest of this repo's history.
+gmail.ts` still honestly reports `scheduled: false` (Gmail has no
+send-later API) — but real scheduling now exists one layer up: a new
+`lib/outbound/sending/followup-schedule.ts` (pure, no new table/migration —
+reuses `outbound_campaign_contacts.status`/`updated_at`) computes when a
+contact's next follow-up (3/4/7 days apart, per-step not cumulative) is
+due, and a new `POST /api/admin/outbound/campaigns/[id]/process-followups`
+route sends it — checking the Gmail thread for a reply FIRST and cancelling
+the follow-up if one's found (reply-triggered cancellation), same shape as
+`check-replies`. Follow-ups now also thread into the original Gmail
+conversation (new `threadId`/`inReplyTo`/`References` support in
+`gmail-client.ts`) instead of landing as disconnected new emails. Same
+on-demand precedent as the rest of this app (no background scheduler
+exists) — a new "Process Follow-ups" button on `/admin/outbound/campaigns`,
+next to "Check for Replies". Full detail, including a real safety gap found
+and fixed (neither this new button nor the pre-existing "Send Queued"
+button had a confirm dialog, despite Gmail being live-active with a real
+credential when this was built), in `DECISIONS.md`'s "Follow-up scheduler
+built (2026-07-29)" section. `tsc --noEmit` clean, full suite 615/615.
+**Not done**: an actual send-and-verify-it-threads-correctly pass against a
+real Gmail thread — deliberately deferred, see that section for why.
 
 ## Milestone
 

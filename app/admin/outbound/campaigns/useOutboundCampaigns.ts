@@ -42,6 +42,7 @@ export function useOutboundCampaigns() {
   const [sending, setSending] = useState(false)
   const [pausingOrResuming, setPausingOrResuming] = useState(false)
   const [checkingReplies, setCheckingReplies] = useState(false)
+  const [processingFollowups, setProcessingFollowups] = useState(false)
 
   const loadCampaigns = useCallback(async () => {
     setLoadingCampaigns(true)
@@ -226,6 +227,43 @@ export function useOutboundCampaigns() {
     }
   }, [selectedCampaignId, loadCampaignContacts, loadEvents])
 
+  // Follow-up scheduling (2026-07-29) — see followup-schedule.ts and
+  // process-followups/route.ts's headers for why this is on-demand too:
+  // this app has no background scheduler, so "scheduled" means "computed
+  // as due and sent whenever someone clicks this," same shape as
+  // checkReplies above.
+  const processFollowups = useCallback(async () => {
+    if (!selectedCampaignId) return
+    setProcessingFollowups(true)
+    try {
+      const res = await fetch(`/api/admin/outbound/campaigns/${selectedCampaignId}/process-followups`, { method: 'POST' })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Failed to process follow-ups')
+        return
+      }
+      if (data.message) {
+        toast.info(data.message)
+      } else {
+        const parts = [`${data.sent} sent`]
+        if (data.cancelledByReply > 0) parts.push(`${data.cancelledByReply} cancelled (replied)`)
+        if (data.skipped > 0) parts.push(`${data.skipped} skipped`)
+        if (data.failed > 0) parts.push(`${data.failed} failed`)
+        if (data.sent > 0 || data.cancelledByReply > 0 || data.failed > 0) {
+          toast.success(`Follow-ups: ${parts.join(', ')} (${data.notDue} not due yet)`)
+        } else {
+          toast.info(`No follow-ups due yet (${data.checked} contact(s) checked)`)
+        }
+      }
+      await loadCampaignContacts(selectedCampaignId)
+      await loadEvents(selectedCampaignId)
+    } catch {
+      toast.error('Could not reach the campaigns API')
+    } finally {
+      setProcessingFollowups(false)
+    }
+  }, [selectedCampaignId, loadCampaignContacts, loadEvents])
+
   return {
     campaigns,
     loadingCampaigns,
@@ -238,10 +276,12 @@ export function useOutboundCampaigns() {
     sending,
     pausingOrResuming,
     checkingReplies,
+    processingFollowups,
     createCampaign,
     enqueueContacts,
     sendCampaign,
     pauseOrResume,
     checkReplies,
+    processFollowups,
   }
 }

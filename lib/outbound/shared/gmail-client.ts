@@ -243,11 +243,20 @@ function encodeSubjectHeader(subject: string): string {
   return `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`
 }
 
-export function buildMimeMessage(params: { to: string; subject: string; bodyText: string; from?: string }): string {
+export function buildMimeMessage(params: {
+  to: string
+  subject: string
+  bodyText: string
+  from?: string
+  inReplyTo?: string
+  references?: string
+}): string {
   const lines = [
     `To: ${params.to}`,
     ...(params.from ? [`From: ${params.from}`] : []),
     `Subject: ${encodeSubjectHeader(params.subject)}`,
+    ...(params.inReplyTo ? [`In-Reply-To: ${params.inReplyTo}`] : []),
+    ...(params.references ? [`References: ${params.references}`] : []),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: 7bit',
@@ -261,8 +270,27 @@ export type GmailSendResult =
   | { ok: true; messageId: string; threadId: string }
   | { ok: false; error: string }
 
+// threadId/inReplyTo/references (added 2026-07-29 for follow-up scheduling,
+// see lib/outbound/sending/followup-schedule.ts) let a follow-up land in the
+// SAME Gmail thread as the original send instead of starting a new one —
+// required for check-replies/route.ts's reply polling (which only ever looks
+// at outbound_campaign_contacts.provider_message_id, set once at the
+// original send) to keep seeing replies to a thread that now also contains
+// follow-ups. Gmail requires both the threadId field AND RFC-compliant
+// In-Reply-To/References headers referencing a message already in that
+// thread before it will actually group a new send into it — passing only
+// one or the other is not sufficient.
 export async function sendGmailMessage(
-  params: { accessToken: string; to: string; subject: string; bodyText: string; from?: string },
+  params: {
+    accessToken: string
+    to: string
+    subject: string
+    bodyText: string
+    from?: string
+    threadId?: string
+    inReplyTo?: string
+    references?: string
+  },
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<GmailSendResult> {
   const raw = base64UrlEncode(buildMimeMessage(params))
@@ -276,7 +304,7 @@ export async function sendGmailMessage(
         Authorization: `Bearer ${params.accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ raw }),
+      body: JSON.stringify({ raw, ...(params.threadId ? { threadId: params.threadId } : {}) }),
       signal: controller.signal,
     })
     const json = await res.json().catch(() => null)
@@ -303,17 +331,24 @@ export async function sendGmailMessage(
 interface GmailThreadMessage {
   id: string
   from: string | null
+  // RFC822 Message-Id header (added 2026-07-29 alongside From) — needed to
+  // build In-Reply-To/References on a follow-up send so Gmail actually
+  // groups it into this same thread. Never the body, still gmail.metadata-
+  // scoped. Optional (not every caller/test fixture needs it, only
+  // getLastMessageIdHeader does) — getGmailThread always populates it.
+  messageIdHeader?: string | null
 }
 
 export type GmailThreadResult =
   | { ok: true; messages: GmailThreadMessage[] }
   | { ok: false; error: string }
 
-// format=metadata + metadataHeaders=From deliberately never requests message
-// bodies — this only ever sees who a message is from, matching the
-// gmail.metadata scope's own read-only-headers guarantee. Used by
-// checkGmailThreadForReply() below, and directly by anything that just
-// wants the raw per-message From headers for a thread.
+// format=metadata + metadataHeaders=From,Message-Id deliberately never
+// requests message bodies — this only ever sees who a message is from and
+// its RFC822 id, matching the gmail.metadata scope's own read-only-headers
+// guarantee. Used by findReplyInThread() below (reply polling) and
+// getLastMessageIdHeader() (follow-up threading), and directly by anything
+// that just wants the raw per-message headers for a thread.
 export async function getGmailThread(
   threadId: string,
   accessToken: string,
@@ -325,7 +360,8 @@ export async function getGmailThread(
   try {
     const url = new URL(`${GMAIL_THREADS_URL}/${threadId}`)
     url.searchParams.set('format', 'metadata')
-    url.searchParams.set('metadataHeaders', 'From')
+    url.searchParams.append('metadataHeaders', 'From')
+    url.searchParams.append('metadataHeaders', 'Message-Id')
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -340,7 +376,8 @@ export async function getGmailThread(
 
     const messages: GmailThreadMessage[] = json.messages.map((m: { id: string; payload?: { headers?: Array<{ name: string; value: string }> } }) => {
       const fromHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'from')
-      return { id: m.id, from: fromHeader?.value ?? null }
+      const messageIdHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'message-id')
+      return { id: m.id, from: fromHeader?.value ?? null, messageIdHeader: messageIdHeader?.value ?? null }
     })
 
     return { ok: true, messages }
@@ -370,4 +407,18 @@ export function findReplyInThread(messages: GmailThreadMessage[], connectedEmail
   const last = replies[replies.length - 1]
   if (!last) return { hasReply: false }
   return { hasReply: true, replyMessageId: last.id, fromHeader: last.from ?? undefined }
+}
+
+// Used when sending a follow-up into an existing thread (see
+// lib/outbound/sending/followup-schedule.ts / process-followups/route.ts):
+// the newest message's own Message-Id header becomes the next send's
+// In-Reply-To (and References, since this app only ever sends one follow-up
+// at a time and doesn't track the full ancestor chain — a single-entry
+// References header is valid RFC 2822 and is what Gmail's own grouping
+// heuristic actually keys off, so this doesn't need the full chain to work).
+export function getLastMessageIdHeader(messages: GmailThreadMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].messageIdHeader) return messages[i].messageIdHeader as string
+  }
+  return undefined
 }

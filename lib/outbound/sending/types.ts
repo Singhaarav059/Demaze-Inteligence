@@ -16,6 +16,12 @@ export interface SendEmailRequest {
   subject: string
   body: string
   fromAddress?: string
+  // Threading (added 2026-07-29 for follow-up scheduling, see
+  // followup-schedule.ts): lets a provider that supports it (Gmail) group
+  // this send into an existing conversation instead of starting a new one.
+  // Providers without a threading concept (mock) just ignore both.
+  threadId?: string
+  inReplyTo?: string
 }
 
 export type SendEmailStatus = 'sent' | 'queued' | 'failed'

@@ -19,8 +19,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
 import { useOutboundCampaigns } from './useOutboundCampaigns'
+import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
+
+// Both Send Queued and Process Follow-ups can trigger a REAL send once a
+// real sending provider (e.g. Gmail) is active — see CLAUDE.md's standing
+// rule that sending real email always requires explicit per-batch
+// confirmation, and docs/DECISIONS.md's 2026-07-29 incident note on this
+// exact page's sibling (ReviewSendStep.tsx) for why neither of these can
+// be allowed to fire with a single unguarded click once that's true.
+type PendingAction = 'send' | 'followups' | null
 
 interface AvailableContact {
   id: string
@@ -49,18 +59,26 @@ export default function OutboundCampaignsPage() {
     sending,
     pausingOrResuming,
     checkingReplies,
+    processingFollowups,
     createCampaign,
     enqueueContacts,
     sendCampaign,
     pauseOrResume,
     checkReplies,
+    processFollowups,
   } = useOutboundCampaigns()
 
   const [newCampaignName, setNewCampaignName] = useState('')
   const [availableContacts, setAvailableContacts] = useState<AvailableContact[]>([])
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set())
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null)
+  // null while loading = treated as mock, same safe-default convention as
+  // ReviewSendStep.tsx's identical state (don't imply "real" before the
+  // active provider is actually confirmed).
+  const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
 
   const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId) ?? null
+  const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
 
   const loadAvailableContacts = useCallback(async () => {
     try {
@@ -70,6 +88,23 @@ export default function OutboundCampaignsPage() {
     } catch {
       // non-fatal — the enqueue picker just stays empty
     }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/outbound/integrations')
+        const data = await res.json()
+        if (!data.success) return
+        const sendingRow = (data.integrations as OutboundIntegrationRow[]).find(
+          row => row.capability === 'sending' && row.is_active
+        )
+        setSendingProviderName(sendingRow?.provider_name ?? 'mock')
+      } catch {
+        setSendingProviderName('mock')
+      }
+    })()
   }, [])
 
   useEffect(() => {
@@ -157,7 +192,11 @@ export default function OutboundCampaignsPage() {
                 <Badge variant={statusBadgeVariant(selectedCampaign.status)}>{selectedCampaign.status}</Badge>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" disabled={sending || campaignContacts.length === 0} onClick={sendCampaign}>
+                <Button
+                  size="sm"
+                  disabled={sending || campaignContacts.length === 0}
+                  onClick={() => setPendingAction('send')}
+                >
                   {sending ? <Spinner className="size-3.5" /> : null}
                   Send Queued
                 </Button>
@@ -186,10 +225,24 @@ export default function OutboundCampaignsPage() {
                   {checkingReplies ? <Spinner className="size-3.5" /> : null}
                   Check for Replies
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={processingFollowups || campaignContacts.length === 0 || selectedCampaign.status === 'paused'}
+                  onClick={() => setPendingAction('followups')}
+                >
+                  {processingFollowups ? <Spinner className="size-3.5" /> : null}
+                  Process Follow-ups
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground/60">
                 Free, on-demand only — this checks Gmail threads when you click it, not
                 automatically. Only works while Gmail is the active sending provider.
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Process Follow-ups sends whichever follow-up in each contact&apos;s sequence
+                is due (3/4/7 days apart) and skips anyone who already replied — also
+                on-demand, click it rather than waiting for a timer.
               </p>
             </CardContent>
           </Card>
@@ -270,6 +323,34 @@ export default function OutboundCampaignsPage() {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        onOpenChange={open => { if (!open) setPendingAction(null) }}
+        title={pendingAction === 'followups' ? 'Process due follow-ups?' : 'Send queued emails?'}
+        description={
+          pendingAction === 'followups'
+            ? `Sends whichever follow-up is due for each contact in this campaign and cancels any whose thread already has a reply. ${
+                isRealSendingProvider
+                  ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
+                  : 'Mock sending only, no real email goes out yet.'
+              }`
+            : `Sends the drafted email to every queued contact in this campaign. ${
+                isRealSendingProvider
+                  ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
+                  : 'Mock sending only, no real email goes out yet.'
+              }`
+        }
+        confirmLabel={pendingAction === 'followups' ? 'Process Follow-ups' : 'Send Queued'}
+        loading={pendingAction === 'followups' ? processingFollowups : sending}
+        onConfirm={() => {
+          if (pendingAction === 'followups') {
+            void processFollowups().then(() => setPendingAction(null))
+          } else if (pendingAction === 'send') {
+            void sendCampaign().then(() => setPendingAction(null))
+          }
+        }}
+      />
     </div>
   )
 }

@@ -614,6 +614,109 @@ confirmed, real idempotent event recording confirmed, and two real bugs
 (the credential double-decrypt, and this session's silent event-insert
 failure) were found and fixed along the way rather than assumed away.
 
+### Follow-up scheduler built (2026-07-29) — closes out item 2 of the Review & Send redesign queue
+
+Same "no background scheduler anywhere" constraint as Warm-Up's on-view
+metrics and `check-replies`' on-demand polling above — there is no queue/
+cron process in this app, so "scheduled" means "computed as due and sent
+whenever an admin clicks a button," not a timer firing on its own. Built
+entirely on state this app already persists (`outbound_campaign_contacts.
+status`/`updated_at`) — no new table, no new migration.
+
+- New `lib/outbound/sending/followup-schedule.ts` (pure functions, no I/O):
+  `nextFollowupSequence(status)` maps `sent → 1`, `followup_1 → 2`,
+  `followup_2 → 3`, everything else (including `followup_3`, the max) →
+  `null`. `isFollowupDue(status, lastActionAt, now)` uses
+  `FOLLOWUP_INTERVALS_DAYS = [3, 4, 7]` as PER-STEP intervals (days since
+  the previous send in the sequence, not cumulative from the original
+  send) — `updated_at` already gets overwritten on every status advance, so
+  it doubles as "when did the last outreach to this contact happen" with no
+  new column needed. `buildFollowupSubject(originalSubject)` prefixes
+  `"Re: "` (skipped if already present) — every follow-up reuses the
+  ORIGINAL subject, not the follow-up draft's own AI-generated subject,
+  because Gmail requires the Subject header to match for thread grouping
+  (the draft's own subject/angle text is still shown to the SDR for review
+  in `ReviewSendStep.tsx`, just not sent as the literal header).
+- **Gmail threading added** (`lib/outbound/shared/gmail-client.ts`) so a
+  follow-up lands in the SAME thread as the original send, not a new one —
+  required for `check-replies` (which only ever polls
+  `outbound_campaign_contacts.provider_message_id`, set once at the
+  original send) to keep seeing replies after follow-ups go out. Gmail
+  requires both the `threadId` field on the send request AND RFC-compliant
+  `In-Reply-To`/`References` headers referencing a message already in that
+  thread — `buildMimeMessage()`/`sendGmailMessage()` gained optional
+  `threadId`/`inReplyTo`/`references` params; `getGmailThread()` now also
+  requests the `Message-Id` header (alongside the existing `From`) via a
+  second `metadataHeaders` query param, still gmail.metadata-scoped, never
+  the body; new `getLastMessageIdHeader()` picks the newest message's
+  Message-Id to chain off. `SendEmailRequest` (the provider-agnostic type)
+  gained matching optional `threadId`/`inReplyTo` fields — `mock` ignores
+  them harmlessly, `GmailSendingProvider.sendEmail()` passes them through
+  (using the same value for both `inReplyTo` and `References`, since this
+  app only ever sends one follow-up at a time and doesn't track the full
+  ancestor chain — a single-entry References header is valid RFC 2822 and
+  is what Gmail's own grouping heuristic actually keys off).
+  `EmailSenderProvider.scheduleFollowups()` itself stays an honest
+  `scheduled: false` stub on both providers, unchanged — real scheduling
+  lives one layer up, in the new route below, which just calls `sendEmail()`
+  again later; nothing calls `scheduleFollowups()`.
+- New `POST /api/admin/outbound/campaigns/[id]/process-followups`: for each
+  contact at `sent`/`followup_1`/`followup_2` whose next follow-up is due,
+  if Gmail is active and a thread id is on file, checks the thread for a
+  reply FIRST (reusing `getGmailThread`/`findReplyInThread`, refreshed once
+  per call not per contact, same discipline as `check-replies`) — a reply
+  found there cancels the follow-up entirely (reply-triggered cancellation)
+  via the same idempotent 'replied' event/status-flip pattern
+  `check-replies` already uses. Otherwise sends the next follow-up from
+  `outbound_generated_content.followups` threaded into the original
+  conversation, advances status to `followup_N`, and records a `'sent'`
+  event with `detail.followupSequence` (no new `event_type` value needed —
+  the existing CHECK constraint already allows `'sent'`). A contact missing
+  an email or missing generated content for that sequence is skipped, left
+  at its current status for retry next time — never silently marked done,
+  same discipline as `send/route.ts`. Works for any active provider (follow-
+  up SENDING is provider-agnostic via the existing `sendEmail()`); the
+  reply-check specifically only runs for Gmail, same limitation
+  `check-replies` already has.
+- **Real safety gap found and fixed before any interactive testing**: unlike
+  `ReviewSendStep.tsx`'s Send Email/Send Selected (which already got a
+  `ConfirmDialog` in the 2026-07-29 redesign above), neither this page's new
+  "Process Follow-ups" button NOR its pre-existing "Send Queued" button had
+  any confirmation — both are send-capable, and the incident earlier in this
+  same document happened via exactly this shape of unguarded click. Found
+  this while checking the active sending provider before any browser
+  testing (per this document's own "Lesson for future sessions" note) and
+  discovering Gmail was live-active with a real credential. Fixed: both
+  buttons on `/admin/outbound/campaigns` now open a shared `ConfirmDialog`
+  (same component, same real-vendor-warning copy pattern as
+  `ReviewSendStep.tsx`) before calling `sendCampaign()`/`processFollowups()`.
+- **Live-verified carefully, given Gmail was genuinely active**: confirmed
+  "Process Follow-ups" is disabled while a campaign is paused (matches
+  "Pause" itself), then — with Gmail confirmed as the real active provider —
+  clicked the button to open the dialog only, read its rendered text
+  directly via `document.querySelector('[data-slot="alert-dialog-popup"]')`
+  (`get_page_text` doesn't reach portal content) to confirm it correctly
+  read *"This is a REAL send via gmail — real emails will go out,"*
+  confirmed zero network requests fired from opening it, then dismissed by
+  navigating away rather than clicking Cancel/Confirm inside the dialog —
+  deliberately not exercising the actual send path interactively, per this
+  document's own incident above, rather than risking a misclick triggering
+  a real Gmail send during verification.
+- **Verified**: `tsc --noEmit` clean, full suite 615/615 passing (597 +
+  18 new — `tests/followup-schedule.test.ts`'s pure-logic coverage, plus
+  extended `tests/gmail-client.test.ts`/`tests/gmail-provider.test.ts` for
+  the new threading fields). No unit test for `process-followups/route.ts`
+  itself, same established "route.ts files get tsc+dev-server verification,
+  not Supabase-mocked unit tests" precedent as `check-replies/route.ts`.
+- **Not done**: the actual send-a-follow-up-and-confirm-it-lands-in-the-
+  same-thread path has not been exercised against a real Gmail thread —
+  deliberately, per the safety reasoning above. Whoever verifies this live
+  next should switch sending to `mock` first if doing any further
+  interactive click-testing near these buttons, confirm a real follow-up
+  send with Gmail only when actually intending to send it (explicit
+  confirmation, one recipient), and check the sent message actually
+  appears in the original Gmail thread rather than as a new one.
+
 ## Competitor Discovery Engine (Phase 2, item 1)
 
 - Search-grounded, not LLM-narrated — supersedes/deprecates the dead

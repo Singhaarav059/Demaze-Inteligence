@@ -12,9 +12,16 @@
 // - scheduleFollowups: Gmail's API has no "send later" primitive (that's a
 //   Gmail *client* UI feature, not exposed via users.messages.send) — this
 //   always reports scheduled:false rather than faking success. Real
-//   follow-up scheduling needs a background job/queue that re-invokes
-//   sendEmail() at the right time, which doesn't exist yet — out of scope
-//   for "wire up Gmail for now."
+//   follow-up scheduling (2026-07-29) lives one layer up instead, at the app
+//   level, not inside this provider: lib/outbound/sending/followup-schedule.ts
+//   computes when a contact's next follow-up is due from
+//   outbound_campaign_contacts.status/updated_at, and
+//   app/api/admin/outbound/campaigns/[id]/process-followups/route.ts
+//   re-invokes sendEmail() (this same function, just called again later,
+//   on-demand — see that route's header for why this app has no real
+//   background scheduler) with SendEmailRequest.threadId/inReplyTo set so
+//   the follow-up lands in the original thread. This method itself stays an
+//   honest stub — nothing calls it.
 // - pauseCampaign/resumeCampaign: Gmail has no concept of a campaign; these
 //   are app-owned state (outbound_campaigns.status, written by the API
 //   route, same as the mock provider) — trivially report success here.
@@ -73,6 +80,9 @@ export const GmailSendingProvider: EmailSenderProvider = {
       to: request.contactEmail,
       subject: request.subject,
       bodyText: request.body,
+      threadId: request.threadId,
+      inReplyTo: request.inReplyTo,
+      references: request.inReplyTo,
     })
 
     if (!sent.ok) {

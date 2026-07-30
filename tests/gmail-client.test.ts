@@ -28,6 +28,7 @@ import {
   fetchGmailAddress,
   getGmailThread,
   findReplyInThread,
+  getLastMessageIdHeader,
   GMAIL_SCOPES,
 } from '../lib/outbound/shared/gmail-client'
 
@@ -61,6 +62,22 @@ describe('buildMimeMessage', () => {
 
     const withFrom = buildMimeMessage({ to: 'a@b.com', subject: 'S', bodyText: 'B', from: 'me@example.com' })
     expect(withFrom).toContain('From: me@example.com')
+  })
+
+  it('omits In-Reply-To/References when not provided, includes them when provided (follow-up threading)', () => {
+    const untitled = buildMimeMessage({ to: 'a@b.com', subject: 'S', bodyText: 'B' })
+    expect(untitled).not.toContain('In-Reply-To:')
+    expect(untitled).not.toContain('References:')
+
+    const threaded = buildMimeMessage({
+      to: 'a@b.com',
+      subject: 'Re: S',
+      bodyText: 'B',
+      inReplyTo: '<orig@mail.gmail.com>',
+      references: '<orig@mail.gmail.com>',
+    })
+    expect(threaded).toContain('In-Reply-To: <orig@mail.gmail.com>')
+    expect(threaded).toContain('References: <orig@mail.gmail.com>')
   })
 })
 
@@ -255,6 +272,19 @@ describe('sendGmailMessage', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toContain('Insufficient Permission')
   })
+
+  it('includes threadId in the request body when provided (follow-up threading), omits it otherwise', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'msg-1', threadId: 'thread-1' }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Hi', bodyText: 'Body' })
+    let body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.threadId).toBeUndefined()
+
+    await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Re: Hi', bodyText: 'Body', threadId: 'thread-1' })
+    body = JSON.parse(fetchMock.mock.calls[1][1].body as string)
+    expect(body.threadId).toBe('thread-1')
+  })
 })
 
 describe('fetchGmailAddress', () => {
@@ -281,13 +311,13 @@ describe('getGmailThread', () => {
     vi.restoreAllMocks()
   })
 
-  it('extracts id + From header for every message in the thread', async () => {
+  it('extracts id + From + Message-Id header for every message in the thread', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         messages: [
-          { id: 'm1', payload: { headers: [{ name: 'From', value: 'me@example.com' }] } },
-          { id: 'm2', payload: { headers: [{ name: 'Subject', value: 'Re: Hi' }, { name: 'From', value: 'Prospect <p@corp.com>' }] } },
+          { id: 'm1', payload: { headers: [{ name: 'From', value: 'me@example.com' }, { name: 'Message-Id', value: '<m1@mail.gmail.com>' }] } },
+          { id: 'm2', payload: { headers: [{ name: 'Subject', value: 'Re: Hi' }, { name: 'From', value: 'Prospect <p@corp.com>' }, { name: 'Message-Id', value: '<m2@mail.gmail.com>' }] } },
         ],
       }),
     }))
@@ -296,20 +326,31 @@ describe('getGmailThread', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.messages).toEqual([
-        { id: 'm1', from: 'me@example.com' },
-        { id: 'm2', from: 'Prospect <p@corp.com>' },
+        { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>' },
+        { id: 'm2', from: 'Prospect <p@corp.com>', messageIdHeader: '<m2@mail.gmail.com>' },
       ])
     }
   })
 
-  it('requests only metadata + the From header, never full message bodies', async () => {
+  it('is null-safe for messageIdHeader when a message has no Message-Id header', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [{ id: 'm1', payload: { headers: [{ name: 'From', value: 'me@example.com' }] } }] }),
+    }))
+
+    const result = await getGmailThread('thread-1', 'AT')
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.messages[0].messageIdHeader).toBeNull()
+  })
+
+  it('requests only metadata + the From and Message-Id headers, never full message bodies', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [] }) })
     vi.stubGlobal('fetch', fetchMock)
 
     await getGmailThread('thread-1', 'AT')
     const calledUrl = new URL(fetchMock.mock.calls[0][0] as string)
     expect(calledUrl.searchParams.get('format')).toBe('metadata')
-    expect(calledUrl.searchParams.get('metadataHeaders')).toBe('From')
+    expect(calledUrl.searchParams.getAll('metadataHeaders')).toEqual(['From', 'Message-Id'])
   })
 
   it('returns ok:false on a non-ok response rather than throwing', async () => {
@@ -375,5 +416,28 @@ describe('findReplyInThread', () => {
     const result = findReplyInThread([{ id: 'm1', from: null }, { id: 'm2', from: 'Prospect <p@corp.com>' }], CONNECTED)
     expect(result.hasReply).toBe(true)
     expect(result.replyMessageId).toBe('m2')
+  })
+})
+
+describe('getLastMessageIdHeader', () => {
+  it('returns the most recent message\'s Message-Id header for follow-up threading', () => {
+    const result = getLastMessageIdHeader([
+      { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>' },
+      { id: 'm2', from: 'me@example.com', messageIdHeader: '<m2@mail.gmail.com>' },
+    ])
+    expect(result).toBe('<m2@mail.gmail.com>')
+  })
+
+  it('skips backwards past a trailing message with no Message-Id header', () => {
+    const result = getLastMessageIdHeader([
+      { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>' },
+      { id: 'm2', from: 'me@example.com', messageIdHeader: null },
+    ])
+    expect(result).toBe('<m1@mail.gmail.com>')
+  })
+
+  it('returns undefined for an empty thread or one with no Message-Id headers at all', () => {
+    expect(getLastMessageIdHeader([])).toBeUndefined()
+    expect(getLastMessageIdHeader([{ id: 'm1', from: 'me@example.com', messageIdHeader: null }])).toBeUndefined()
   })
 })

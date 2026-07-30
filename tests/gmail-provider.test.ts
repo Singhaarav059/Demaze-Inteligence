@@ -76,6 +76,17 @@ describe('GmailSendingProvider.sendEmail', () => {
       expect.objectContaining({ accessToken: 'AT', to: 'lead@example.com', subject: 'Hi', bodyText: 'Body text' })
     )
   })
+
+  it('passes threadId/inReplyTo through for follow-up threading (references mirrors inReplyTo)', async () => {
+    vi.mocked(getGmailCredential).mockResolvedValue(CRED)
+    vi.mocked(refreshAccessToken).mockResolvedValue({ ok: true, accessToken: 'AT', expiresIn: 3600 })
+    vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'msg-2', threadId: 'thread-1' })
+
+    await GmailSendingProvider.sendEmail({ ...REQUEST, threadId: 'thread-1', inReplyTo: '<orig@mail.gmail.com>' })
+    expect(sendGmailMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', inReplyTo: '<orig@mail.gmail.com>', references: '<orig@mail.gmail.com>' })
+    )
+  })
 })
 
 describe('GmailSendingProvider — capability gaps reported honestly, not faked', () => {
