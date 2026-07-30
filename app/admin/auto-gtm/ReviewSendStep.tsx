@@ -89,6 +89,12 @@ function sendStatusBadgeVariant(status: SendOutcomeDetail['status']) {
   return 'destructive' as const
 }
 
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
+}
+
 export function ReviewSendStep({
   contacts,
   campaignContactStatus,
@@ -120,6 +126,10 @@ export function ReviewSendStep({
   // Send. null while loading = treated as mock (safe default: don't imply
   // "real" before we've confirmed it).
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
+  // Which contact's full draft is shown in the detail pane (right side of the
+  // split view) — mirrors a master-detail layout (contact list left, full
+  // email preview right) instead of the old one-card-per-contact stacked list.
+  const [activeContactId, setActiveContactId] = useState<string | null>(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -174,6 +184,20 @@ export function ReviewSendStep({
       return next.size === prev.size ? prev : next
     })
   }, [readyIds])
+
+  // Default the detail pane to the first contact, and fall back to another
+  // one if the currently-active contact disappears from the list.
+  useEffect(() => {
+    setActiveContactId(prev => {
+      if (prev && contacts.some(c => c.id === prev)) return prev
+      return contacts[0]?.id ?? null
+    })
+  }, [contacts])
+
+  function selectContact(contactId: string) {
+    if (contactId !== activeContactId) cancelEditing()
+    setActiveContactId(contactId)
+  }
 
   function toggleSelected(contactId: string) {
     setSelectedIds(prev => {
@@ -306,41 +330,91 @@ export function ReviewSendStep({
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
           <Spinner className="size-4" /> Loading drafts…
         </div>
+      ) : contacts.length === 0 ? (
+        <p className="text-xs text-muted-foreground/60 py-4">No contacts to review.</p>
       ) : (
-        <div className="space-y-3">
-          {readyToSend.length > 0 && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground/70 px-1">
-              <input
-                type="checkbox"
-                checked={selectedIds.size === readyToSend.length}
-                onChange={toggleSelectAll}
-                aria-label="Select all ready contacts"
-              />
-              Select all ({readyToSend.length} ready)
-            </label>
-          )}
-          {contacts.map(contact => {
-            const generated = generatedByContact[contact.id]
-            const outcome = campaignContactStatus[contact.id]
-            const isSending = sendingContactId === contact.id
-            const isReady = readyIds.has(contact.id)
-            const canSend = Boolean(contact.email && generated?.email_draft) && outcome?.status !== 'sent'
-            const isEditing = editingContactId === contact.id
+        <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col md:flex-row">
+          {/* Left: compact contact list — click a row to preview its draft on the right */}
+          <div className="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-border">
+            {readyToSend.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground/70 px-3 py-2 border-b border-border">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === readyToSend.length}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all ready contacts"
+                />
+                Select all ({readyToSend.length} ready)
+              </label>
+            )}
+            <div className="max-h-[560px] overflow-y-auto divide-y divide-border">
+              {contacts.map(contact => {
+                const generated = generatedByContact[contact.id]
+                const outcome = campaignContactStatus[contact.id]
+                const isReady = readyIds.has(contact.id)
+                const isActive = activeContactId === contact.id
 
-            return (
-              <div key={contact.id} className="rounded-lg border border-border bg-card px-4 py-3 space-y-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-start gap-2.5">
+                return (
+                  <div
+                    key={contact.id}
+                    className={`flex items-center gap-2 px-3 py-2 ${isActive ? 'bg-accent' : 'hover:bg-accent/40'}`}
+                  >
                     {isReady && (
                       <input
                         type="checkbox"
-                        className="mt-1"
                         checked={selectedIds.has(contact.id)}
                         onChange={() => toggleSelected(contact.id)}
                         aria-label={`Select ${contact.person_name}`}
                       />
                     )}
-                    <div>
+                    <button
+                      type="button"
+                      onClick={() => selectContact(contact.id)}
+                      className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                      aria-current={isActive ? 'true' : undefined}
+                    >
+                      <span className="size-7 shrink-0 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground">
+                        {initialsOf(contact.person_name)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-foreground truncate">{contact.person_name}</span>
+                          {outcome && (
+                            <Badge variant={sendStatusBadgeVariant(outcome.status)} className="text-[9px] px-1 py-0">
+                              {outcome.status}
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground/70 truncate">
+                          {contact.title_hint || contact.email || 'No email'}
+                        </span>
+                        {!generated?.email_draft && (
+                          <span className="block text-[10px] text-muted-foreground/50">no draft</span>
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Right: full draft (To / Subject / Body) for the selected contact */}
+          <div className="flex-1 min-w-0 p-4 space-y-3">
+            {(() => {
+              const contact = contacts.find(c => c.id === activeContactId)
+              if (!contact) return <p className="text-xs text-muted-foreground/60">Select a contact to preview.</p>
+
+              const generated = generatedByContact[contact.id]
+              const outcome = campaignContactStatus[contact.id]
+              const isSending = sendingContactId === contact.id
+              const canSend = Boolean(contact.email && generated?.email_draft) && outcome?.status !== 'sent'
+              const isEditing = editingContactId === contact.id
+
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground">{contact.person_name}</span>
                         {contact.title_hint && (
@@ -348,113 +422,113 @@ export function ReviewSendStep({
                         )}
                         {outcome && <Badge variant={sendStatusBadgeVariant(outcome.status)}>{outcome.status}</Badge>}
                       </div>
-                      <div className="text-xs text-muted-foreground/70 mt-0.5">
-                        {contact.email ?? 'No email, will be skipped'} · Phone: Not Available
-                      </div>
                       {outcome?.reason && <p className="text-xs text-muted-foreground/60 mt-0.5">{outcome.reason}</p>}
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!canSend || isSending}
+                      onClick={() => setPendingSend({ kind: 'one', contactId: contact.id, name: contact.person_name })}
+                    >
+                      {isSending ? <Spinner className="size-3.5" /> : null}
+                      {outcome?.status === 'sent' ? 'Sent' : 'Send Email'}
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!canSend || isSending}
-                    onClick={() => setPendingSend({ kind: 'one', contactId: contact.id, name: contact.person_name })}
-                  >
-                    {isSending ? <Spinner className="size-3.5" /> : null}
-                    {outcome?.status === 'sent' ? 'Sent' : 'Send Email'}
-                  </Button>
-                </div>
 
-                {generated?.email_draft ? (
-                  isEditing && editDraft ? (
-                    <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground/70" htmlFor={`email-${contact.id}`}>
-                          Recipient email
-                        </label>
-                        <input
-                          id={`email-${contact.id}`}
-                          type="email"
-                          value={editDraft.email}
-                          onChange={e => setEditDraft(d => (d ? { ...d, email: e.target.value } : d))}
-                          className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground/70" htmlFor={`subject-${contact.id}`}>
-                          Subject
-                        </label>
-                        <input
-                          id={`subject-${contact.id}`}
-                          type="text"
-                          value={editDraft.subject}
-                          onChange={e => setEditDraft(d => (d ? { ...d, subject: e.target.value } : d))}
-                          className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground/70" htmlFor={`body-${contact.id}`}>
-                          Body
-                        </label>
-                        <textarea
-                          id={`body-${contact.id}`}
-                          value={editDraft.body}
-                          onChange={e => setEditDraft(d => (d ? { ...d, body: e.target.value } : d))}
-                          rows={8}
-                          className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground whitespace-pre-wrap"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => saveEditing(contact)} disabled={savingEdit}>
-                          {savingEdit ? <Spinner className="size-3.5" /> : null}
-                          Save
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={savingEdit}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-border bg-background/50 p-3 space-y-1.5">
-                      <p className="text-xs text-foreground whitespace-pre-wrap">
-                        <span className="text-muted-foreground/70">Subject: </span>
-                        {generated.selected_subject_line}
-                        {'\n\n'}
-                        {generated.email_draft.fullText}
-                      </p>
-                      <Button size="sm" variant="outline" onClick={() => startEditing(contact)}>
-                        Edit
-                      </Button>
-                    </div>
-                  )
-                ) : (
-                  <p className="text-xs text-muted-foreground/60">
-                    No draft yet for this contact. Go back to Outreach to draft one.
-                  </p>
-                )}
-
-                {generated?.followups && generated.followups.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground/70">Follow-up sequence:</p>
-                    {generated.followups.map(f => (
-                      <div key={f.sequence} className="rounded-md border border-border bg-background/50 p-2.5 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-foreground">
-                            Follow-up {f.sequence}: {f.angle}
-                          </span>
-                          <Badge variant={urgencyBadgeVariant(f.urgency)} className="text-[10px]">
-                            {f.urgency}
-                          </Badge>
+                  {generated?.email_draft ? (
+                    isEditing && editDraft ? (
+                      <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground/70" htmlFor={`email-${contact.id}`}>
+                            To
+                          </label>
+                          <input
+                            id={`email-${contact.id}`}
+                            type="email"
+                            value={editDraft.email}
+                            onChange={e => setEditDraft(d => (d ? { ...d, email: e.target.value } : d))}
+                            className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+                          />
                         </div>
-                        <p className="text-xs text-muted-foreground/70">Subject: {f.subject}</p>
-                        <p className="text-xs text-foreground whitespace-pre-wrap">{f.body}</p>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground/70" htmlFor={`subject-${contact.id}`}>
+                            Subject
+                          </label>
+                          <input
+                            id={`subject-${contact.id}`}
+                            type="text"
+                            value={editDraft.subject}
+                            onChange={e => setEditDraft(d => (d ? { ...d, subject: e.target.value } : d))}
+                            className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground/70" htmlFor={`body-${contact.id}`}>
+                            Body
+                          </label>
+                          <textarea
+                            id={`body-${contact.id}`}
+                            value={editDraft.body}
+                            onChange={e => setEditDraft(d => (d ? { ...d, body: e.target.value } : d))}
+                            rows={10}
+                            className="w-full rounded border border-input bg-background px-2 py-1 text-xs text-foreground whitespace-pre-wrap"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => saveEditing(contact)} disabled={savingEdit}>
+                            {savingEdit ? <Spinner className="size-3.5" /> : null}
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={savingEdit}>
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+                    ) : (
+                      <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
+                        <div className="text-xs text-muted-foreground/70">
+                          To: <span className="text-foreground">{contact.email ?? 'No email, will be skipped'}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground/70">
+                          Subject: <span className="text-foreground font-medium">{generated.selected_subject_line}</span>
+                        </div>
+                        <p className="text-xs text-foreground whitespace-pre-wrap pt-2 border-t border-border/60">
+                          {generated.email_draft.fullText}
+                        </p>
+                        <Button size="sm" variant="outline" onClick={() => startEditing(contact)}>
+                          Edit
+                        </Button>
+                      </div>
+                    )
+                  ) : (
+                    <p className="text-xs text-muted-foreground/60">
+                      No draft yet for this contact. Go back to Outreach to draft one.
+                    </p>
+                  )}
+
+                  {generated?.followups && generated.followups.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground/70">Follow-up sequence:</p>
+                      {generated.followups.map(f => (
+                        <div key={f.sequence} className="rounded-md border border-border bg-background/50 p-2.5 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-foreground">
+                              Follow-up {f.sequence}: {f.angle}
+                            </span>
+                            <Badge variant={urgencyBadgeVariant(f.urgency)} className="text-[10px]">
+                              {f.urgency}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground/70">Subject: {f.subject}</p>
+                          <p className="text-xs text-foreground whitespace-pre-wrap">{f.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+          </div>
         </div>
       )}
 
