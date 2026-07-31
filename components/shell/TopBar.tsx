@@ -20,7 +20,13 @@ import {
 
 export function TopBar() {
   const pathname = usePathname()
-  const entry = NAV.find((n) => n.href === pathname)
+  // Exact match first, then longest-prefix startsWith — same active-detection
+  // shape as Sidebar.tsx, needed now that /admin/outbound has real sub-pages
+  // (previously every NAV entry was a single page, so exact match alone
+  // was enough).
+  const entry =
+    NAV.find((n) => n.href === pathname) ??
+    NAV.find((n) => pathname.startsWith(n.href + '/'))
   const meta = { section: entry?.label ?? 'Workspace', hint: entry?.hint ?? '' }
 
   return (

@@ -34,13 +34,32 @@ export function nextFollowupSequence(status: string): 1 | 2 | 3 | null {
   return STATUS_TO_NEXT_SEQUENCE[status] ?? null
 }
 
-export function isFollowupDue(status: string, lastActionAt: string | Date, now: Date = new Date()): boolean {
+// intervalsDays defaults to the hardcoded FOLLOWUP_INTERVALS_DAYS constant,
+// but every real call site now threads through the admin-configurable value
+// from lib/outbound/sending/followup-settings.ts instead (Session 2, the
+// Follow-up Control Panel) — the default here just keeps this function safe
+// to call before that settings table exists/is reachable.
+export function nextFollowupDueAt(
+  status: string,
+  lastActionAt: string | Date,
+  intervalsDays: readonly [number, number, number] = FOLLOWUP_INTERVALS_DAYS
+): Date | null {
   const sequence = nextFollowupSequence(status)
-  if (sequence === null) return false
-  const intervalDays = FOLLOWUP_INTERVALS_DAYS[sequence - 1]
+  if (sequence === null) return null
+  const intervalDays = intervalsDays[sequence - 1]
   const lastActionMs = typeof lastActionAt === 'string' ? new Date(lastActionAt).getTime() : lastActionAt.getTime()
-  const dueAtMs = lastActionMs + intervalDays * 24 * 60 * 60 * 1000
-  return now.getTime() >= dueAtMs
+  return new Date(lastActionMs + intervalDays * 24 * 60 * 60 * 1000)
+}
+
+export function isFollowupDue(
+  status: string,
+  lastActionAt: string | Date,
+  now: Date = new Date(),
+  intervalsDays: readonly [number, number, number] = FOLLOWUP_INTERVALS_DAYS
+): boolean {
+  const dueAt = nextFollowupDueAt(status, lastActionAt, intervalsDays)
+  if (!dueAt) return false
+  return now.getTime() >= dueAt.getTime()
 }
 
 // Gmail only groups a new send into an existing thread when (among other

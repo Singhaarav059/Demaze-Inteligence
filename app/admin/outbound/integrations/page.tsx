@@ -23,7 +23,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
+import { GuideNote } from '@/components/ui/guide-note'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { staggerList, listItem } from '@/lib/motion'
 import {
   OUTBOUND_CAPABILITIES,
@@ -193,15 +194,22 @@ function OutboundIntegrationsPageInner() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <OutboundToolsNav />
-      <div className="mb-6">
-        <h1 className="text-lg font-semibold text-foreground">Outbound Integrations</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure the vendor behind each outbound capability. Every capability works today via a
-          built-in mock provider. Adding a real vendor here is a config change, not a code change.
+    <div className="max-w-2xl space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Integrations</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Vendor providers for each outbound capability.
         </p>
       </div>
+
+      <GuideNote>
+        <p>
+          Every capability below works today via a built-in mock provider — nothing breaks if you
+          leave everything as-is. Switching one to a real vendor here is a config change, not a
+          code change: pick a provider, save (or connect via OAuth for Gmail), then Test Connection
+          to confirm it's live.
+        </p>
+      </GuideNote>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8">
@@ -251,18 +259,25 @@ function OutboundIntegrationsPageInner() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label htmlFor={`${capability}-provider`}>Provider</Label>
-                        <select
-                          id={`${capability}-provider`}
+                        <Select
+                          items={knownProviders.map(p => ({
+                            value: p,
+                            label: p === 'mock' ? 'Mock (built-in, no key needed)' : p,
+                          }))}
                           value={draft.provider_name}
-                          onChange={e => updateDraft(capability, { provider_name: e.target.value })}
-                          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                          onValueChange={value => updateDraft(capability, { provider_name: value as string })}
                         >
-                          {knownProviders.map(p => (
-                            <option key={p} value={p}>
-                              {p === 'mock' ? 'Mock (built-in, no key needed)' : p}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger id={`${capability}-provider`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {knownProviders.map(p => (
+                              <SelectItem key={p} value={p}>
+                                {p === 'mock' ? 'Mock (built-in, no key needed)' : p}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       {isGmailDraft ? (
                         <div className="space-y-1">

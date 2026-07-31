@@ -6,6 +6,7 @@
 // ============================================================
 
 import { getActiveProviderName } from '@/lib/outbound/settings/provider-selection'
+import { isSuppressed } from './suppression'
 import { MockEmailSenderProvider } from './providers/mock'
 import { GmailSendingProvider } from './providers/gmail'
 import type {
@@ -32,7 +33,22 @@ export async function checkAvailability(): Promise<{ available: boolean; provide
   return { available: await provider.isAvailable(), providerUsed: provider.name }
 }
 
+// Checked before resolving/calling any provider — every real send path
+// (initial "Send Queued", manual "Send Now", scheduled follow-ups) funnels
+// through this one function, so this is the single place a suppression
+// needs to be enforced. See lib/outbound/sending/suppression.ts's header
+// for why this fails open (treats a DB read error as "not suppressed")
+// rather than blocking every send in the app on that table being reachable.
 export async function sendEmail(request: SendEmailRequest): Promise<SendEmailResult> {
+  const suppression = await isSuppressed(request.contactEmail)
+  if (suppression.suppressed) {
+    return {
+      status: 'suppressed',
+      providerUsed: 'suppression-list',
+      error: `${request.contactEmail} is on the suppression list (${suppression.reason}) — not sent.`,
+    }
+  }
+
   const provider = await resolveProvider()
   if (!(await provider.isAvailable())) {
     return { status: 'failed', providerUsed: provider.name, error: `Provider "${provider.name}" is not available.` }

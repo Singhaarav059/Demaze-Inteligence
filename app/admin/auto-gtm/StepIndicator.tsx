@@ -20,7 +20,7 @@ import { Spinner } from '@/components/ui/spinner'
 
 // Exported so page.tsx can reuse the same labels for its step-change
 // screen-reader announcement instead of duplicating this list.
-export const STEPS = ['Research', 'Decision Makers', 'Contact Info', 'Outreach', 'Review & Send'] as const
+export const STEPS = ['Research', 'Decision Makers', 'Contact Info', 'Outreach & Send'] as const
 
 // Matches company-discovery/page.tsx's StepHeader checkmark-morph transition
 // exactly, so this pattern feels identical everywhere it appears.

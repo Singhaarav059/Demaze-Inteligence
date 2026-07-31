@@ -337,6 +337,11 @@ interface GmailThreadMessage {
   // scoped. Optional (not every caller/test fixture needs it, only
   // getLastMessageIdHeader does) — getGmailThread always populates it.
   messageIdHeader?: string | null
+  // Subject header (added Session 3, suppression list) — still just a
+  // header, still gmail.metadata-scoped, no body access. Used by
+  // looksLikeBounce() below to tell a real prospect reply apart from an
+  // automated delivery-failure notification landing in the same thread.
+  subject?: string | null
 }
 
 export type GmailThreadResult =
@@ -362,6 +367,7 @@ export async function getGmailThread(
     url.searchParams.set('format', 'metadata')
     url.searchParams.append('metadataHeaders', 'From')
     url.searchParams.append('metadataHeaders', 'Message-Id')
+    url.searchParams.append('metadataHeaders', 'Subject')
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -377,7 +383,13 @@ export async function getGmailThread(
     const messages: GmailThreadMessage[] = json.messages.map((m: { id: string; payload?: { headers?: Array<{ name: string; value: string }> } }) => {
       const fromHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'from')
       const messageIdHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'message-id')
-      return { id: m.id, from: fromHeader?.value ?? null, messageIdHeader: messageIdHeader?.value ?? null }
+      const subjectHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'subject')
+      return {
+        id: m.id,
+        from: fromHeader?.value ?? null,
+        messageIdHeader: messageIdHeader?.value ?? null,
+        subject: subjectHeader?.value ?? null,
+      }
     })
 
     return { ok: true, messages }
@@ -407,6 +419,26 @@ export function findReplyInThread(messages: GmailThreadMessage[], connectedEmail
   const last = replies[replies.length - 1]
   if (!last) return { hasReply: false }
   return { hasReply: true, replyMessageId: last.id, fromHeader: last.from ?? undefined }
+}
+
+// A bounce is one specific shape of "reply from someone other than the
+// connected account" — findReplyInThread() above can't tell it apart from a
+// genuine prospect reply on its own, so callers (check-replies/route.ts,
+// process-followup.ts) run this against whatever findReplyInThread already
+// found before treating it as a real reply. Deliberately conservative: only
+// the well-known automated-sender local-parts (mailer-daemon, postmaster —
+// the two that are effectively universal across mail systems, not provider-
+// specific) OR an unambiguous delivery-failure subject line. A real
+// prospect's From/Subject won't collide with either check; a false negative
+// here just means a bounce gets (incorrectly but safely) treated as a real
+// reply, never the other way round.
+const BOUNCE_FROM_PATTERN = /\b(mailer-daemon|postmaster)@/i
+const BOUNCE_SUBJECT_PATTERN = /\b(delivery status notification|undelivered mail returned to sender|mail delivery failed|failure notice)\b/i
+
+export function looksLikeBounce(message: GmailThreadMessage): boolean {
+  if (message.from && BOUNCE_FROM_PATTERN.test(message.from)) return true
+  if (message.subject && BOUNCE_SUBJECT_PATTERN.test(message.subject)) return true
+  return false
 }
 
 // Used when sending a follow-up into an existing thread (see

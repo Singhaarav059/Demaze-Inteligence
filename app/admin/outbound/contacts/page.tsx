@@ -21,7 +21,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
-import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
+import { GuideNote } from '@/components/ui/guide-note'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { staggerList, listItem } from '@/lib/motion'
 import { getLeadershipContacts } from '@/lib/pipeline/analysis-sections'
 import { useOutboundContacts, guessCompanyName } from './useOutboundContacts'
@@ -72,35 +73,43 @@ export default function OutboundContactsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-      <OutboundToolsNav />
+    <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">Outbound Contacts</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Pick a researched company, then add contacts. Manually typing in a name (from Sales
-          Navigator, a lead list, etc.) stays the default path. Decision-Maker Discovery below is a
-          separate, explicit action. It surfaces candidates for you to review, and nothing is added
-          as a contact until you select it.
+        <h2 className="text-base font-semibold text-foreground">Contacts</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Manually-entered or discovered contacts, grouped by researched company.
         </p>
       </div>
+
+      <GuideNote>
+        <p>
+          Pick a researched company, then add contacts. Manually typing in a name (from Sales
+          Navigator, a lead list, etc.) stays the default path. <strong>Decision-Maker Discovery</strong>{' '}
+          below is a separate, explicit action — it surfaces candidates for you to review, and
+          nothing is added as a contact until you select it.
+        </p>
+      </GuideNote>
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-1">
           <Label htmlFor="run-picker">Company (from Research run history)</Label>
-          <select
-            id="run-picker"
+          <Select
+            items={runs.map(run => ({ value: run.id, label: run.domain || run.company_url }))}
             value={selectedRunId ?? ''}
-            onChange={e => setSelectedRunId(e.target.value || null)}
+            onValueChange={value => setSelectedRunId((value as string) || null)}
             disabled={loadingRuns}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           >
-            <option value="">{loadingRuns ? 'Loading runs…' : 'Select a company…'}</option>
-            {runs.map(run => (
-              <option key={run.id} value={run.id}>
-                {run.domain || run.company_url}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="run-picker">
+              <SelectValue placeholder={loadingRuns ? 'Loading runs…' : 'Select a company…'} />
+            </SelectTrigger>
+            <SelectContent>
+              {runs.map(run => (
+                <SelectItem key={run.id} value={run.id}>
+                  {run.domain || run.company_url}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 

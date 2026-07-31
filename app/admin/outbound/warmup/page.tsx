@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Progress } from '@/components/ui/progress'
 import { EmptyState } from '@/components/ui/empty-state'
-import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
+import { GuideNote } from '@/components/ui/guide-note'
 
 interface LiveStatus {
   status: 'not_started' | 'warming' | 'warmed' | 'paused'
@@ -93,15 +93,21 @@ export default function OutboundWarmupPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-      <OutboundToolsNav />
+    <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">Email Warm-Up</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Mock warm-up simulation: metrics are computed from elapsed time, not a real
-          inbox-placement test. A real provider (Smartlead/Instantly) is a future vendor decision.
+        <h2 className="text-base font-semibold text-foreground">Warm-Up</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Mailbox warm-up status and metrics.
         </p>
       </div>
+
+      <GuideNote>
+        <p>
+          <strong>Mock simulation:</strong> metrics are computed from elapsed time since a mailbox
+          started warming, not a real inbox-placement test. A real provider (Smartlead/Instantly)
+          is a future vendor decision — add a mailbox below to see how the ramp works.
+        </p>
+      </GuideNote>
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-3">

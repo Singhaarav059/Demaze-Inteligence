@@ -206,10 +206,13 @@ export function useOutboundCampaigns() {
       }
       if (data.message) {
         toast.info(data.message)
-      } else if (data.newReplies > 0) {
-        toast.success(`${data.newReplies} new repl${data.newReplies === 1 ? 'y' : 'ies'} found (checked ${data.checked})`)
+      } else if (data.newReplies > 0 || data.newBounces > 0) {
+        const parts = []
+        if (data.newReplies > 0) parts.push(`${data.newReplies} new repl${data.newReplies === 1 ? 'y' : 'ies'}`)
+        if (data.newBounces > 0) parts.push(`${data.newBounces} new bounce${data.newBounces === 1 ? '' : 's'} (address${data.newBounces === 1 ? '' : 'es'} suppressed)`)
+        toast.success(`${parts.join(', ')} found (checked ${data.checked})`)
       } else {
-        toast.info(`No new replies (checked ${data.checked})`)
+        toast.info(`No new replies or bounces (checked ${data.checked})`)
       }
       // Surfaced even alongside a success/newReplies toast above — a
       // partial failure (e.g. one contact's reply detected but not
@@ -247,9 +250,10 @@ export function useOutboundCampaigns() {
       } else {
         const parts = [`${data.sent} sent`]
         if (data.cancelledByReply > 0) parts.push(`${data.cancelledByReply} cancelled (replied)`)
+        if (data.cancelledByBounce > 0) parts.push(`${data.cancelledByBounce} cancelled (bounced, address suppressed)`)
         if (data.skipped > 0) parts.push(`${data.skipped} skipped`)
         if (data.failed > 0) parts.push(`${data.failed} failed`)
-        if (data.sent > 0 || data.cancelledByReply > 0 || data.failed > 0) {
+        if (data.sent > 0 || data.cancelledByReply > 0 || data.cancelledByBounce > 0 || data.failed > 0) {
           toast.success(`Follow-ups: ${parts.join(', ')} (${data.notDue} not due yet)`)
         } else {
           toast.info(`No follow-ups due yet (${data.checked} contact(s) checked)`)

@@ -3,17 +3,18 @@
 // ============================================================
 // Auto Flow — /admin/auto-gtm
 // ============================================================
-// One continuous inline flow, 5 Explee-style stages: Research (single URL
+// One continuous inline flow, 4 Explee-style stages: Research (single URL
 // or Excel/CSV batch upload) -> Decision Makers (found automatically, user
 // just selects who to keep) -> Contact Information (email/phone/LinkedIn
-// looked up automatically, results only) -> Outreach (subject/email/
-// follow-ups drafted automatically, edit or switch subject) -> Review &
-// Send (final read-through, Send Email / Send All). Every step reuses an
+// looked up automatically, results only) -> Outreach & Send (subject/email/
+// follow-ups drafted automatically, edit or switch subject, then send from
+// the same screen — drafting and sending used to be two separate steps,
+// merged into one per 2026-07-31 user request). Every step reuses an
 // already-built, already-tested component/route — ResearchCard
 // (intelligence-lab), DecisionMakerFinder (outbound/contacts),
-// ContactInfoStep/OutreachStep/ReviewSendStep (this folder), lib/batch/*
+// ContactInfoStep/OutreachStep (this folder), lib/batch/*
 // (file-parser/company-dedup/quota-pause, same as Wizard's batch mode),
-// the campaigns API (used under the hood by Review & Send's buttons —
+// the campaigns API (used under the hood by Outreach & Send's buttons —
 // framed to the user as "send emails," never "campaign", that language
 // tested as confusing). This page's job is purely orchestration: holding
 // state across steps instead of losing it at a page-navigation boundary,
@@ -61,7 +62,6 @@ import { DecisionMakerFinder, type DecisionMakerFinderHandle } from '@/app/admin
 import { StepIndicator, STEPS } from './StepIndicator'
 import { ContactInfoStep } from './ContactInfoStep'
 import { OutreachStep } from './OutreachStep'
-import { ReviewSendStep } from './ReviewSendStep'
 import { useAutoGtmFlow, type BatchCompanyStatus } from './useAutoGtmFlow'
 
 // Hedged as "likely current activity", not measured fact — there's no
@@ -169,13 +169,7 @@ export default function AutoGtmFlowPage() {
       loading: committingDm,
     }
   } else if (flow.step === 3) {
-    nextAction = { label: 'Continue to Outreach', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
-  } else if (flow.step === 4) {
-    nextAction = {
-      label: 'Continue to Review & Send',
-      onClick: () => flow.setStep(5),
-      disabled: flow.contacts.length === 0,
-    }
+    nextAction = { label: 'Continue to Outreach & Send', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
   }
 
   return (
@@ -216,7 +210,7 @@ export default function AutoGtmFlowPage() {
           <StepIndicator
             current={flow.step}
             maxReached={flow.maxStepReached}
-            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5)}
+            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4)}
             nextAction={nextAction}
           />
         </CardContent>
@@ -551,22 +545,11 @@ export default function AutoGtmFlowPage() {
         </>
       )}
 
-      {/* Step 4: Outreach (subject/email/follow-ups drafted automatically) */}
+      {/* Step 4: Outreach & Send (subject/email/follow-ups drafted automatically, send from the same screen) */}
 
       {flow.step === 4 && (
         <>
-          <OutreachStep contacts={sortedContacts} />
-          <Button variant="outline" onClick={() => flow.setStep(3)}>
-            ← Back
-          </Button>
-        </>
-      )}
-
-      {/* Step 5: Review & Send */}
-
-      {flow.step === 5 && (
-        <>
-          <ReviewSendStep
+          <OutreachStep
             contacts={sortedContacts}
             campaignContactStatus={flow.campaignContactStatus}
             sendingContactId={flow.sendingContactId}
@@ -575,11 +558,9 @@ export default function AutoGtmFlowPage() {
             sendSelectedContacts={flow.sendSelectedContacts}
             updateContactEmail={flow.updateContactEmail}
           />
-          <div className="flex justify-start">
-            <Button variant="outline" onClick={() => flow.setStep(4)}>
-              ← Back
-            </Button>
-          </div>
+          <Button variant="outline" onClick={() => flow.setStep(3)}>
+            ← Back
+          </Button>
         </>
       )}
 

@@ -14,6 +14,12 @@ export interface CompletionRequest {
   // When true, the provider uses guided JSON mode (NIM-native).
   // The pipeline always sets this to true for structured analysis.
   jsonMode: boolean
+  // Per-provider timeout override (ms), see provider-factory.ts's
+  // getCompletion(). Defaults to 150_000 (calibrated for the long
+  // narrative/research-extraction call) when omitted — short-output calls
+  // (subject lines, email, follow-ups) should pass a much shorter value so a
+  // hanging/slow provider fails fast instead of eating minutes per attempt.
+  timeoutMs?: number
 }
 
 export interface CompletionResponse {

@@ -12,6 +12,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { getResearchCardData } from '@/app/admin/intelligence-lab/ResearchCard'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import { humanizeText } from '@/lib/text/humanize'
@@ -70,6 +72,7 @@ function toRunResult(run: Run): RunResult {
 }
 
 export default function RunHistoryPage() {
+  const router = useRouter()
   const [runs, setRuns] = useState<Run[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -192,16 +195,24 @@ export default function RunHistoryPage() {
               {op === 'all' ? 'All' : op === 'scraper_only' ? 'Scraper' : op === 'analysis' ? 'Analysis' : 'Pipeline'}
             </button>
           ))}
-          <select
-            aria-label="Sort runs"
+          <Select
+            items={[
+              { value: 'newest', label: 'Newest first' },
+              { value: 'oldest', label: 'Oldest first' },
+              { value: 'company', label: 'Company (A–Z)' },
+            ]}
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="text-xs rounded-md border border-border bg-card px-2 py-1.5 text-muted-foreground"
+            onValueChange={value => setSortBy(value as typeof sortBy)}
           >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="company">Company (A–Z)</option>
-          </select>
+            <SelectTrigger aria-label="Sort runs" className="h-auto w-auto rounded-md border-border bg-card px-2 py-1.5 text-xs text-muted-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="company">Company (A–Z)</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             size="sm"
             variant="outline"
@@ -313,14 +324,36 @@ export default function RunHistoryPage() {
                       </p>
                     )}
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3 border-border bg-card text-foreground/90 hover:bg-accent"
-                      onClick={(e) => { e.stopPropagation(); fetchDetail(run.id) }}
-                    >
-                      {isExpanded ? 'Hide Report' : 'View Report'}
-                    </Button>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border bg-card text-foreground/90 hover:bg-accent"
+                        onClick={(e) => { e.stopPropagation(); fetchDetail(run.id) }}
+                      >
+                        {isExpanded ? 'Hide Report' : 'View Report'}
+                      </Button>
+                      {/* Only offered when there's a real analysis result to
+                          build contacts/outreach on top of (cardData is null
+                          for scraper-only runs or a run that failed before
+                          producing a result) — never for an incomplete run.
+                          Always opens at step 2 (Decision Makers); Auto
+                          Flow's own resumeFromRun() unlocks further pills
+                          (Contact Info / Outreach & Send) once it discovers
+                          contacts or a campaign already exist for this run,
+                          so this link never needs to guess how far a given
+                          run actually got. */}
+                      {cardData && run.status === 'completed' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-border bg-card text-foreground/90 hover:bg-accent"
+                          onClick={(e) => { e.stopPropagation(); router.push(`/admin/auto-gtm?runId=${run.id}&step=2`) }}
+                        >
+                          Resume in Auto Flow
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">

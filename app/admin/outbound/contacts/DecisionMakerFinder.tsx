@@ -21,7 +21,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { StageProgress, type ProgressStage } from '@/components/ui/stage-progress'
 import { staggerList, listItem } from '@/lib/motion'
 import { DEFAULT_TARGET_TITLES } from '@/lib/outbound/decision-maker-discovery/types'
@@ -132,50 +131,65 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   const [adding, setAdding] = useState(false)
   const [hasAutoStarted, setHasAutoStarted] = useState(false)
   const [showTitlesInput, setShowTitlesInput] = useState(!compact)
-  // Auto Flow's autoStart previously fired handleDiscover() the instant this
-  // component mounted, with zero confirmation — a real cost-incurring search
-  // (Decision-Maker Discovery's active provider is a real vendor, Prospeo,
-  // per /admin/outbound/integrations, not mock) firing silently on arrival
-  // at this step. Gated behind a one-time confirm dialog (2026-07-19 fix) —
-  // the manual "Find Decision Makers"/"Search Again" button stays a single
-  // click with no extra confirmation, since an explicit click already is
-  // the user's consent.
-  //
-  // Refined (2026-07-19, second pass): the confirm dialog used to fire
-  // unconditionally, even while the active provider is the free 'mock' one
-  // (the seeded default — see migration 010) — pure friction with no real
-  // cost behind it. Now it only asks when the currently-active provider for
-  // this capability is a real, non-mock vendor; on mock it searches
-  // immediately, same as before this fix existed. If the provider check
-  // itself fails (e.g. Supabase unreachable), err toward asking rather than
-  // risking a silent paid search.
-  const [showAutoStartConfirm, setShowAutoStartConfirm] = useState(false)
+  // Auto Flow's autoStart fires handleDiscover() the instant this component
+  // mounts (once a cache lookup has confirmed there's nothing to restore),
+  // no manual click or confirmation required — this is a deliberate product
+  // decision (2026-07-31): the user explicitly asked for decision-maker
+  // search to run automatically rather than waiting on a "Search" click,
+  // reversing the 2026-07-19 confirm-dialog gate that used to sit here. That
+  // gate existed because a real vendor (Prospeo) spends paid credits per
+  // search — that cost is now accepted as the price of a fully automatic
+  // flow rather than guarded per-run. If this needs to be revisited, the
+  // isPaidProvider check + ConfirmDialog this replaced are in git history.
+  // True once the initial cache lookup (below) has resolved either way —
+  // gates the "Adjust titles"/candidate-list UI from flashing empty before
+  // a cached search has had a chance to populate it.
+  const [checkingCache, setCheckingCache] = useState(true)
 
+  // Runs once on mount, regardless of autoStart: first checks for an
+  // already-cached search for this run (migration 015) — a cache hit
+  // restores the exact prior candidate list with nothing re-spent, and
+  // skips auto-searching entirely. Only on a cache MISS does autoStart's
+  // immediate search kick in. This replaces the old effect, which
+  // unconditionally re-ran a real (often paid) search on every remount —
+  // a page refresh, or navigating away from and back to this step — since
+  // hasAutoStarted was only ever component-local state, never persisted.
   useEffect(() => {
-    if (!autoStart || hasAutoStarted) return
-    // One-time guard-flag pattern (hasAutoStarted itself prevents re-firing),
-    // not a derived-state anti-pattern.
+    if (hasAutoStarted) return
+    // One-time guard-flag pattern (hasAutoStarted itself prevents
+    // re-firing), not a derived-state anti-pattern.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasAutoStarted(true)
     void (async () => {
-      let isPaidProvider = true
       try {
-        const res = await fetch('/api/admin/outbound/integrations')
-        const data = await res.json()
-        if (data.success) {
-          const row = (data.integrations as Array<{ capability: string; provider_name: string; is_active: boolean }>).find(
-            r => r.capability === 'decision_maker_discovery' && r.is_active
-          )
-          isPaidProvider = Boolean(row && row.provider_name !== 'mock')
+        const cacheRes = await fetch(
+          `/api/admin/outbound/decision-makers/discover?source_run_id=${encodeURIComponent(sourceRunId)}`
+        )
+        const cacheData = await cacheRes.json()
+        if (cacheData.success && cacheData.cached) {
+          const cached = cacheData.cached as {
+            candidates: DecisionMakerCandidate[]
+            providerUsed: string
+            targetTitles: string[]
+          }
+          setCandidates(cached.candidates)
+          setCandidatesProvider(cached.providerUsed)
+          setSelectedCandidates(new Set(cached.candidates.map((_, i) => i)))
+          if (cached.targetTitles?.length) setTargetTitlesInput(cached.targetTitles.join(', '))
+          return // cache hit — restored, nothing to search
         }
       } catch {
-        // Leave isPaidProvider=true — ask rather than risk a silent paid search.
+        // Cache lookup failing just means we fall through below, same as a
+        // genuine cache miss.
+      } finally {
+        setCheckingCache(false)
       }
-      if (isPaidProvider) setShowAutoStartConfirm(true)
-      else void handleDiscover()
+
+      if (!autoStart) return
+      void handleDiscover()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, hasAutoStarted])
+  }, [hasAutoStarted])
 
   async function handleDiscover() {
     const titles = targetTitlesInput
@@ -193,6 +207,10 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           domain,
           targetTitles: titles.length ? titles : undefined,
           leadershipContacts: leadershipContacts?.length ? leadershipContacts : undefined,
+          // Lets the route cache this result (migration 015) so a later
+          // remount restores it instead of re-searching — see this
+          // component's own mount effect above.
+          sourceRunId,
         }),
       })
       const data = await res.json()
@@ -228,6 +246,15 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
       else next.add(index)
       return next
     })
+  }
+
+  // Everything found starts pre-selected (see handleDiscover above), so in
+  // practice this is mostly used to deselect-all after unchecking a few by
+  // hand, then re-select-all without clicking every row again.
+  function toggleSelectAllCandidates() {
+    setSelectedCandidates(prev =>
+      prev.size === candidates.length ? new Set() : new Set(candidates.map((_, i) => i))
+    )
   }
 
   useEffect(() => {
@@ -277,8 +304,8 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
         <div>
           <h2 className="text-sm font-semibold text-foreground">Find Decision Makers</h2>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            {autoStart && showAutoStartConfirm
-              ? 'This search uses paid credits, waiting for your confirmation before running it.'
+            {checkingCache
+              ? 'Checking for a previously saved search…'
               : autoStart && compact
               ? 'Searching automatically using common titles (CEO, CTO, VP Operations, etc). Found candidates start checked below, uncheck anyone you don’t want, then hit Continue.'
               : autoStart
@@ -286,6 +313,12 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
               : 'Searches for candidate decision-makers by title. Found candidates start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'}
           </p>
         </div>
+        {checkingCache ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+            <Spinner className="size-3.5" /> Loading…
+          </div>
+        ) : (
+        <>
         {showTitlesInput ? (
           <div className="space-y-1">
             <Label htmlFor="target-titles">Target titles (comma-separated)</Label>
@@ -319,9 +352,18 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
 
         {candidates.length > 0 && (
           <div className="pt-2 border-t border-border space-y-2">
-            <p className="text-xs text-muted-foreground/70">
-              {candidates.length} candidate{candidates.length === 1 ? '' : 's'} found
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground/70">
+                {candidates.length} candidate{candidates.length === 1 ? '' : 's'} found
+              </p>
+              <button
+                type="button"
+                onClick={toggleSelectAllCandidates}
+                className="text-xs text-muted-foreground/70 underline hover:text-foreground"
+              >
+                {selectedCandidates.size === candidates.length ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
             <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
               {candidates.map((candidate, i) => (
                 <motion.label
@@ -361,15 +403,9 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
             )}
           </div>
         )}
+        </>
+        )}
       </CardContent>
-      <ConfirmDialog
-        open={showAutoStartConfirm}
-        onOpenChange={open => { if (!open) setShowAutoStartConfirm(false) }}
-        title="Search for decision makers?"
-        description="This looks up decision makers for this company using the currently configured provider, which may use paid credits if a real vendor (not the mock) is active in Outbound Integrations. Nothing is added as a contact until you review and select from the results."
-        confirmLabel="Search"
-        onConfirm={() => { setShowAutoStartConfirm(false); void handleDiscover() }}
-      />
     </Card>
   )
 })

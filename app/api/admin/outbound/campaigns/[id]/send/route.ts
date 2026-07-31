@@ -28,6 +28,12 @@
 // outbound_campaign_contacts has no separate "handed off but not yet
 // delivered" state, and the distinction is still preserved in the event's
 // own detail.providerStatus for anyone inspecting the timeline.
+//
+// A 'suppressed' result (Session 3 — sendEmail() itself checked
+// outbound_suppression_list before even attempting the send) is bucketed as
+// 'skipped', not 'failed' — same as "no generated email yet": nothing went
+// wrong, the send was correctly never attempted, and the contact stays
+// 'queued' rather than being marked done.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -105,6 +111,10 @@ export async function POST(
 
     if (result.status === 'failed') {
       outcomes.push({ campaignContactId: item.id, status: 'failed', reason: result.error })
+      continue
+    }
+    if (result.status === 'suppressed') {
+      outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: result.error })
       continue
     }
 

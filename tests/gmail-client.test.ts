@@ -29,6 +29,7 @@ import {
   getGmailThread,
   findReplyInThread,
   getLastMessageIdHeader,
+  looksLikeBounce,
   GMAIL_SCOPES,
 } from '../lib/outbound/shared/gmail-client'
 
@@ -311,7 +312,7 @@ describe('getGmailThread', () => {
     vi.restoreAllMocks()
   })
 
-  it('extracts id + From + Message-Id header for every message in the thread', async () => {
+  it('extracts id + From + Message-Id + Subject header for every message in the thread', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -326,8 +327,8 @@ describe('getGmailThread', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.messages).toEqual([
-        { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>' },
-        { id: 'm2', from: 'Prospect <p@corp.com>', messageIdHeader: '<m2@mail.gmail.com>' },
+        { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>', subject: null },
+        { id: 'm2', from: 'Prospect <p@corp.com>', messageIdHeader: '<m2@mail.gmail.com>', subject: 'Re: Hi' },
       ])
     }
   })
@@ -343,14 +344,14 @@ describe('getGmailThread', () => {
     if (result.ok) expect(result.messages[0].messageIdHeader).toBeNull()
   })
 
-  it('requests only metadata + the From and Message-Id headers, never full message bodies', async () => {
+  it('requests only metadata + the From, Message-Id, and Subject headers, never full message bodies', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [] }) })
     vi.stubGlobal('fetch', fetchMock)
 
     await getGmailThread('thread-1', 'AT')
     const calledUrl = new URL(fetchMock.mock.calls[0][0] as string)
     expect(calledUrl.searchParams.get('format')).toBe('metadata')
-    expect(calledUrl.searchParams.getAll('metadataHeaders')).toEqual(['From', 'Message-Id'])
+    expect(calledUrl.searchParams.getAll('metadataHeaders')).toEqual(['From', 'Message-Id', 'Subject'])
   })
 
   it('returns ok:false on a non-ok response rather than throwing', async () => {
@@ -416,6 +417,36 @@ describe('findReplyInThread', () => {
     const result = findReplyInThread([{ id: 'm1', from: null }, { id: 'm2', from: 'Prospect <p@corp.com>' }], CONNECTED)
     expect(result.hasReply).toBe(true)
     expect(result.replyMessageId).toBe('m2')
+  })
+})
+
+describe('looksLikeBounce', () => {
+  it('detects a mailer-daemon sender', () => {
+    expect(looksLikeBounce({ id: 'm1', from: 'Mail Delivery Subsystem <mailer-daemon@googlemail.com>', subject: null })).toBe(true)
+  })
+
+  it('detects a postmaster sender', () => {
+    expect(looksLikeBounce({ id: 'm1', from: 'postmaster@corp.com', subject: null })).toBe(true)
+  })
+
+  it('detects a delivery-failure subject even with an unrecognized sender', () => {
+    expect(looksLikeBounce({ id: 'm1', from: 'System <noreply@corp.com>', subject: 'Undelivered Mail Returned to Sender' })).toBe(true)
+    expect(looksLikeBounce({ id: 'm1', from: 'System <noreply@corp.com>', subject: 'Delivery Status Notification (Failure)' })).toBe(true)
+  })
+
+  it('does not flag a genuine prospect reply', () => {
+    expect(looksLikeBounce({ id: 'm1', from: 'Prospect <p@corp.com>', subject: 'Re: Quick question' })).toBe(false)
+  })
+
+  it('does not false-positive on an unrelated sender/subject containing similar words', () => {
+    // "Undelivered" alone (no "mail returned to sender") shouldn't match —
+    // same discipline as this repo's other short-keyword false-positive
+    // fixes (matchesKeyword's 'ir'-inside-'wire').
+    expect(looksLikeBounce({ id: 'm1', from: 'Ops <ops@corp.com>', subject: 'Package undelivered, please advise' })).toBe(false)
+  })
+
+  it('is null-safe when subject/from are missing', () => {
+    expect(looksLikeBounce({ id: 'm1', from: null, subject: null })).toBe(false)
   })
 })
 

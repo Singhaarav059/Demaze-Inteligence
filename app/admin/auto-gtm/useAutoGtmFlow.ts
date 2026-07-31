@@ -44,7 +44,7 @@ import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { DecisionMakerCandidate } from '@/lib/outbound/decision-maker-discovery/types'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 
-export type FlowStep = 1 | 2 | 3 | 4 | 5
+export type FlowStep = 1 | 2 | 3 | 4
 export type InputMode = 'single' | 'batch'
 export type BatchCompanyStatus = 'pending' | 'researching' | 'discovering' | 'done' | 'failed'
 type ContactActionKind = 'find-email' | 'delete'
@@ -100,7 +100,7 @@ export function useAutoGtmFlow() {
   const [campaignContactStatus, setCampaignContactStatus] = useState<Record<string, SendOutcomeDetail>>({})
   // Was hardcoded '(mock)' in every send toast regardless of the actually-
   // active sending provider — misleading once a real vendor (e.g. Gmail) is
-  // connected. Same fetch-and-check pattern as ReviewSendStep's own badge.
+  // connected. Same fetch-and-check pattern as OutreachStep's own badge.
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
 
   useEffect(() => {
@@ -185,10 +185,22 @@ export function useAutoGtmFlow() {
       setResult({ success: true, domain: run.domain, analysisResult: run.final_result })
       const contactsRes = await fetch(`/api/admin/outbound/contacts?source_run_id=${run.id}`)
       const contactsData = await contactsRes.json()
-      if (contactsData.success) setContacts(contactsData.contacts)
+      if (contactsData.success) {
+        setContacts(contactsData.contacts)
+        // Contacts already exist for this run, so decision-maker selection
+        // (step 2) is already done — unlock at least step 3 regardless of
+        // which step the URL opened at (e.g. a Resume link from Run History
+        // always opens at step 2, since History has no cheap way to know how
+        // far a given run actually got without fetching this same data).
+        // This only ever widens which StepIndicator pills are clickable —
+        // it never changes which step's content is shown first.
+        if (contactsData.contacts.length > 0) {
+          setMaxStepReached(prev => (prev < 3 ? 3 : prev))
+        }
+      }
 
       // Restore campaign/send state too (2026-07-19 fix) — without this, a
-      // mid-flow refresh at the Review & Send step loses campaignId, and
+      // mid-flow refresh at the Outreach & Send step loses campaignId, and
       // ensureCampaignId() would then create a BRAND NEW campaign on the
       // next Send click. Since send status is scoped per-campaign, that new
       // campaign's contacts all start 'queued' again — re-sending to
@@ -199,6 +211,12 @@ export function useAutoGtmFlow() {
       const campaignsData = await campaignsRes.json()
       const existingCampaign = campaignsData.success ? campaignsData.campaigns?.[0] : null
       if (existingCampaign) {
+        // A campaign only ever gets created from Outreach & Send's own send
+        // actions (ensureCampaignId(), called lazily on first Send) — its
+        // existence means this run reached step 4 before, so every pill
+        // unlocks (same "widen maxStepReached, never touch step" discipline
+        // as the contacts check above).
+        setMaxStepReached(prev => (prev < 4 ? 4 : prev))
         setCampaignId(existingCampaign.id)
         const campaignContactsRes = await fetch(`/api/admin/outbound/campaigns/${existingCampaign.id}/contacts`)
         const campaignContactsData = await campaignContactsRes.json()
@@ -241,7 +259,7 @@ export function useAutoGtmFlow() {
     const params = new URLSearchParams(window.location.search)
     const resumeRunId = params.get('runId')
     const resumeStep = Number(params.get('step'))
-    if (resumeStep >= 1 && resumeStep <= 5) {
+    if (resumeStep >= 1 && resumeStep <= 4) {
       // One-time client-only URL-sync on mount, not a derived-state anti-pattern.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStepState(resumeStep as FlowStep)
@@ -587,9 +605,10 @@ export function useAutoGtmFlow() {
     }
   }, [])
 
-  // Review & Send's last-moment recipient-email edit — the auto-found email
-  // isn't always the one the user wants to send to. Returns true/false so
-  // the caller (ReviewSendStep) knows whether to also save its draft edits.
+  // Outreach & Send's last-moment recipient-email edit — the auto-found
+  // email isn't always the one the user wants to send to. Returns
+  // true/false so the caller (OutreachStep) knows whether to also save its
+  // draft edits.
   const updateContactEmail = useCallback(async (contactId: string, email: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/admin/outbound/contacts/${contactId}`, {
@@ -731,7 +750,7 @@ export function useAutoGtmFlow() {
     [enqueueAndSend, sendingProviderName]
   )
 
-  // Replaces the old "Send All" — Review & Send now defaults to nothing
+  // Replaces the old "Send All" — Outreach & Send now defaults to nothing
   // selected and requires an explicit checkbox pick, so this always takes
   // an explicit contact-id list rather than reaching for every contact.
   const sendSelectedContacts = useCallback(async (contactIds: string[]) => {

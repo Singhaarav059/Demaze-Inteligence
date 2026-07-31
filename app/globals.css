@@ -89,6 +89,12 @@
    as the Linear reference in DESIGN.md.
    ------------------------------------------------------------ */
 .dark {
+  /* No light theme exists (see comment above) — telling the browser this
+     unconditionally is what makes native controls (select dropdowns,
+     checkboxes, scrollbars) render with dark, legible chrome instead of
+     falling back to a white popup with our light-on-dark text color
+     inherited into it (the "invisible <option> list" bug). */
+  color-scheme: dark;
   --radius: 0.625rem;
   --background: oklch(0.145 0.003 285);
   --foreground: oklch(0.96 0.003 285);

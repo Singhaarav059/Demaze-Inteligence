@@ -1,12 +1,56 @@
 // ============================================================
 // AI Provider Factory
 // ============================================================
-// NVIDIA NIM (only provider — OpenRouter removed 2026-07-18):
-// Full list replaced 2026-07-18 after live-testing every catalog model this
-// account is actually entitled to invoke (most catalog entries 404 with
-// "Not found for account" despite being listed — entitlement, not a typo)
-// against a realistic ~2000-char scraped-content-shaped prompt at
-// max_tokens=1200 (production's real budget, not a toy one-liner):
+// Chain changed 2026-07-30 (second pass, same day) — Gemini is now the
+// default, Qwen and ZenMux (tried briefly earlier the same day) removed
+// entirely, not just deprioritized:
+//   - Gemini (gemini-3.6-flash via Google's OpenAI-compatible endpoint,
+//     https://generativelanguage.googleapis.com/v1beta/openai/): 6.4s
+//     single-sample latency, clean valid JSON, evidence-grounded extraction
+//     on par with or better than every other candidate tried today —
+//     dramatically faster than everything else tested (Qwen ~37-44s,
+//     ZenMux ~55s, and even the prior NVIDIA default gpt-oss-120b ~7.3s).
+//     Made the new default on this result.
+//   - Qwen (qwen3.7-plus via DashScope) and ZenMux (z-ai/glm-4.7-flash-free)
+//     were both live-tested first (clean JSON, but 37-55s latency each) and
+//     briefly wired in ahead of NVIDIA NIM — removed outright once Gemini's
+//     result came back, since Gemini beats both on every axis tested
+//     (latency, quality) and there's no reason to keep two clearly-inferior
+//     options in the fallback chain just because they were tried first.
+//   - Still only a single sample for Gemini, same caveat as every other
+//     candidate here — NVIDIA NIM (gpt-oss-120b -> deepseek-v4-pro, proven
+//     under real 2026-07-22 production traffic, see history below) is kept
+//     as the fallback specifically so a bad run on Gemini still falls
+//     through to a previously-proven chain rather than hard-failing.
+//
+// CONFIRMED same day, real production traffic — Gemini systematically fails
+// on SHORT-output calls (subject-line generation's maxTokens=1024/2048 loop,
+// lib/outbound/generation/generate-subject-lines.ts) with the exact same
+// empty/truncated-JSON failure class as the historical nemotron/inkling
+// drops above. Root cause, confirmed against Google's own docs
+// (ai.google.dev/gemini-api/docs/openai): "reasoning cannot be turned off
+// for Gemini 2.5 Pro or 3 models" — gemini-3.6-flash's internal thinking
+// tokens always count against max_tokens with no way to disable them, so a
+// small budget lets thinking consume the whole request before any visible
+// JSON is emitted. The single-sample eval above only exercised the
+// long-content research-extraction call shape (maxTokens=4096), which is
+// why this wasn't caught before wiring Gemini in as the default.
+// Deliberately NOT fixed by branching providers per max_tokens or reverting
+// Gemini — the existing looksLikeJson() guard + fallback-to-NVIDIA already
+// handles this safely (confirmed live: Gemini fails fast, NVIDIA picks up
+// the slack, no crash, no malformed output reaches a caller), so this is
+// accepted as a real but non-fatal latency cost on short-output calls
+// specifically, not something worth adding branching complexity to solve
+// right now. Revisit if this proves to meaningfully slow down generation
+// calls in practice, or if a future Gemini SDK update allows disabling
+// thinking for Gemini 3 models.
+//
+// Prior history — NVIDIA NIM (was the only provider, OpenRouter removed
+// 2026-07-18): full list replaced 2026-07-18 after live-testing every
+// catalog model this account is actually entitled to invoke (most catalog
+// entries 404 with "Not found for account" despite being listed —
+// entitlement, not a typo) against a realistic ~2000-char scraped-content-
+// shaped prompt at max_tokens=1200 (production's real budget at the time):
 //   - meta/llama-3.1-70b-instruct, z-ai/glm-5.2: timed out (>80s) at this
 //     input size, despite looking fine on a trivial prompt — dropped.
 //   - minimaxai/minimax-m3: consistently hit the full 90s LLM_TIMEOUT_MS in
@@ -23,30 +67,31 @@
 //     absorbing almost every one of those failures as the fallback. Dropped
 //     entirely rather than kept as a fallback — removed the "single sample,
 //     don't fully trust it" list.
-// Confirmed working, ranked by real production reliability (2026-07-22),
-// not just the original single-sample latency test:
-//   1. openai/gpt-oss-120b           (default — 7.3s single-sample latency,
-//                                     clean JSON, was already absorbing the
-//                                     vast majority of production traffic as
-//                                     the de facto fallback; needs a real
-//                                     token budget or its reasoning preamble
-//                                     alone exhausts a small max_tokens and
+// Confirmed working, ranked by real production reliability (2026-07-22):
+//   1. openai/gpt-oss-120b           (7.3s single-sample latency, clean
+//                                     JSON, was already absorbing the vast
+//                                     majority of production traffic as the
+//                                     de facto fallback; needs a real token
+//                                     budget or its reasoning preamble alone
+//                                     exhausts a small max_tokens and
 //                                     returns null content — fine at
 //                                     production's 4096+ default)
-//   2. deepseek-ai/deepseek-v4-pro   (fallback — 19.1s single-sample latency,
-//                                     clean JSON, strongest-quality fallback,
+//   2. deepseek-ai/deepseek-v4-pro   (19.1s single-sample latency, clean
+//                                     JSON, strongest-quality fallback,
 //                                     100% success rate on live 2026-07-22
 //                                     traffic when it was reached)
 // ============================================================
 
-import { NvidiaProvider } from './providers/nvidia-nim'
+import { OpenAICompatibleProvider } from './providers/openai-compatible'
 import type { AIProvider, CompletionRequest, CompletionResponse } from './types'
+
+const GEMINI_MODELS = [process.env.GEMINI_MODEL ?? 'gemini-3.6-flash']
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 
 const NVIDIA_NIM_MODELS = [
   process.env.NVIDIA_NIM_MODEL ?? 'openai/gpt-oss-120b',
   'deepseek-ai/deepseek-v4-pro',
 ]
-
 const NVIDIA_NIM_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
 // Confirmed live (2026-07-19) against thinkingmachines/inkling on short
@@ -56,11 +101,33 @@ const NVIDIA_NIM_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 // finish_reason='stop' — not truncation, since it happens identically at
 // max_tokens=8192. No exception is thrown by the provider in this case, so
 // without this check a 200-OK-but-garbage response "wins" forever and the
-// fallback loop below never advances to gpt-oss-120b/deepseek-v4-pro, both
-// already confirmed reliable for this exact prompt shape.
+// fallback loop below never advances to the next provider. Same guard now
+// protects Gemini too — not yet proven immune to this failure mode under
+// real traffic (see header comment).
 function looksLikeJson(content: string): boolean {
   const trimmed = content.trim()
   return trimmed.length >= 10 && trimmed.includes('{') && trimmed.includes('}')
+}
+
+// Rate-limit circuit breaker (2026-07-30) — confirmed live via real,
+// repeated back-to-back log lines: once Gemini starts returning 429s, EVERY
+// subsequent request within the same rate-limit window tries it again
+// anyway, wastes a round-trip finding out it's still 429ing, then falls
+// through to NVIDIA. In-memory only (per server process, resets on
+// restart) — this is a short-lived operational cooldown, not a persisted
+// setting, so that's an acceptable scope. Keyed per-vendor (namePrefix),
+// not per-model — a 429 on a vendor's key almost always applies account-
+// wide, not to one specific model.
+const RATE_LIMIT_COOLDOWN_MS = 60_000
+const rateLimitedUntil: Record<string, number> = {}
+
+function isRateLimited(vendorKey: string): boolean {
+  const until = rateLimitedUntil[vendorKey]
+  return typeof until === 'number' && Date.now() < until
+}
+
+function looksLikeRateLimit(message: string): boolean {
+  return /\b429\b/.test(message) || /rate.?limit/i.test(message)
 }
 
 async function tryProvider(
@@ -88,6 +155,53 @@ async function tryProvider(
   return result
 }
 
+// Tries every model in `models` (in order) against one vendor's endpoint,
+// returning the first success or null if the vendor has no API key
+// configured at all (not an error — just "this vendor isn't set up", same
+// as the old per-vendor `if (process.env.X_API_KEY)` guards). Any per-model
+// failure is pushed onto the shared `errors` list so the final "all
+// providers failed" error (if every vendor is exhausted) still shows the
+// full picture across both vendors, not just the last one tried.
+async function tryVendorChain(
+  models: string[],
+  baseUrl: string,
+  apiKey: string | undefined,
+  namePrefix: string,
+  displayPrefix: string,
+  request: CompletionRequest,
+  timeoutMs: number,
+  errors: string[],
+): Promise<CompletionResponse | null> {
+  if (!apiKey) return null
+  if (isRateLimited(namePrefix)) {
+    console.warn(`[AI] Skipping ${displayPrefix} — rate-limited within the last ${RATE_LIMIT_COOLDOWN_MS}ms, not retrying yet`)
+    errors.push(`${displayPrefix}: skipped, recently rate-limited`)
+    return null
+  }
+  for (const model of models) {
+    const label = model.split('/').pop() ?? model
+    const provider = new OpenAICompatibleProvider(
+      `${namePrefix}_${label.replace(/[^a-z0-9]/gi, '_')}`,
+      `${displayPrefix} (${label})`,
+      { base_url: baseUrl, model, max_tokens: 4096, temperature: 0.3 },
+      apiKey,
+    )
+    try {
+      return await tryProvider(provider, request, timeoutMs)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(`[AI] Provider failed: ${provider.displayName} -- ${message}`)
+      errors.push(`${provider.displayName}: ${message}`)
+      if (looksLikeRateLimit(message)) {
+        rateLimitedUntil[namePrefix] = Date.now() + RATE_LIMIT_COOLDOWN_MS
+        console.warn(`[AI] ${displayPrefix} rate-limited — skipping it for the next ${RATE_LIMIT_COOLDOWN_MS}ms`)
+        break // no point trying this vendor's other models either, same account/key
+      }
+    }
+  }
+  return null
+}
+
 export async function getCompletion(
   request: CompletionRequest
 ): Promise<CompletionResponse> {
@@ -97,28 +211,24 @@ export async function getCompletion(
   // the chain hit the 90s ceiling on a real large-content run, not a fluke
   // (confirmed by 90000ms-exact timeouts on both, back to back). 150s gives
   // genuinely large/reasoning-heavy completions realistic room without
-  // uncapping the request.
-  const LLM_TIMEOUT_MS = 150_000
+  // uncapping the request. This is the DEFAULT, used when the caller doesn't
+  // specify request.timeoutMs — confirmed live (2026-07-30) that a short-
+  // output generation call (subject lines/email/follow-ups) can otherwise
+  // hang for the full 150s TWICE (both NVIDIA fallback models) before
+  // failing, a ~5 minute wait for what should be a quick call. Callers doing
+  // short-output generation should pass a much shorter override.
+  const LLM_TIMEOUT_MS = request.timeoutMs ?? 150_000
   const errors: string[] = []
 
-  // NVIDIA NIM chain (only provider)
-  if (process.env.NVIDIA_NIM_API_KEY) {
-    for (const model of NVIDIA_NIM_MODELS) {
-      const label = model.split('/').pop() ?? model
-      const provider = new NvidiaProvider(
-        `nvidia_nim_${label.replace(/[^a-z0-9]/gi, '_')}`,
-        `NVIDIA NIM (${label})`,
-        { base_url: NVIDIA_NIM_BASE_URL, model, max_tokens: 4096, temperature: 0.3 },
-      )
-      try {
-        return await tryProvider(provider, request, LLM_TIMEOUT_MS)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        console.warn(`[AI] Provider failed: ${provider.displayName} -- ${message}`)
-        errors.push(`${provider.displayName}: ${message}`)
-      }
-    }
-  }
+  const geminiResult = await tryVendorChain(
+    GEMINI_MODELS, GEMINI_BASE_URL, process.env.GEMINI_API_KEY, 'gemini', 'Gemini', request, LLM_TIMEOUT_MS, errors
+  )
+  if (geminiResult) return geminiResult
+
+  const nvidiaResult = await tryVendorChain(
+    NVIDIA_NIM_MODELS, NVIDIA_NIM_BASE_URL, process.env.NVIDIA_NIM_API_KEY, 'nvidia_nim', 'NVIDIA NIM', request, LLM_TIMEOUT_MS, errors
+  )
+  if (nvidiaResult) return nvidiaResult
 
   throw new Error(
     `All AI providers failed.\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
@@ -126,5 +236,5 @@ export async function getCompletion(
 }
 
 export async function getDefaultProviderName(): Promise<string | null> {
-  return 'nvidia_nim_gpt_oss_120b'
+  return 'gemini_gemini_3_6_flash'
 }

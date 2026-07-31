@@ -24,7 +24,10 @@ export interface SendEmailRequest {
   inReplyTo?: string
 }
 
-export type SendEmailStatus = 'sent' | 'queued' | 'failed'
+// 'suppressed' (Session 3, suppression list) means sendEmail() refused to
+// even attempt the send because the recipient is on
+// outbound_suppression_list — never something a provider itself returns.
+export type SendEmailStatus = 'sent' | 'queued' | 'failed' | 'suppressed'
 
 export interface SendEmailResult {
   status: SendEmailStatus

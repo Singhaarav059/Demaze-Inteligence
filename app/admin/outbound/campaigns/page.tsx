@@ -10,7 +10,8 @@
 // silently marked sent.
 // ============================================================
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Inbox, Clock } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,8 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
-import { OutboundToolsNav } from '@/components/shell/OutboundToolsNav'
+import { GuideNote } from '@/components/ui/guide-note'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { useOutboundCampaigns } from './useOutboundCampaigns'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 
@@ -28,8 +30,9 @@ import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 // real sending provider (e.g. Gmail) is active — see CLAUDE.md's standing
 // rule that sending real email always requires explicit per-batch
 // confirmation, and docs/DECISIONS.md's 2026-07-29 incident note on this
-// exact page's sibling (ReviewSendStep.tsx) for why neither of these can
-// be allowed to fire with a single unguarded click once that's true.
+// exact page's sibling (OutreachStep.tsx, Auto Flow's merged Outreach &
+// Send step) for why neither of these can be allowed to fire with a single
+// unguarded click once that's true.
 type PendingAction = 'send' | 'followups' | null
 
 interface AvailableContact {
@@ -47,6 +50,22 @@ function statusBadgeVariant(status: string) {
 }
 
 export default function OutboundCampaignsPage() {
+  return (
+    <Suspense fallback={null}>
+      <OutboundCampaignsPageInner />
+    </Suspense>
+  )
+}
+
+function OutboundCampaignsPageInner() {
+  // Lets the Overview page's unified email table link straight to the
+  // campaign a given row belongs to (?campaign=<id>) instead of leaving the
+  // admin to find it in the dropdown themselves. Only applied once, on
+  // mount — doesn't fight the dropdown if the admin picks a different
+  // campaign afterward.
+  const searchParams = useSearchParams()
+  const campaignFromUrl = searchParams.get('campaign')
+
   const {
     campaigns,
     loadingCampaigns,
@@ -73,12 +92,17 @@ export default function OutboundCampaignsPage() {
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set())
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   // null while loading = treated as mock, same safe-default convention as
-  // ReviewSendStep.tsx's identical state (don't imply "real" before the
+  // OutreachStep.tsx's identical state (don't imply "real" before the
   // active provider is actually confirmed).
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
 
   const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId) ?? null
   const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
+
+  useEffect(() => {
+    if (campaignFromUrl) setSelectedCampaignId(campaignFromUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignFromUrl])
 
   const loadAvailableContacts = useCallback(async () => {
     try {
@@ -129,21 +153,39 @@ export default function OutboundCampaignsPage() {
   const enqueueableContacts = availableContacts.filter(c => !alreadyEnqueuedIds.has(c.id))
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-      <OutboundToolsNav />
+    <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">Outbound Campaigns</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          A campaign is a batch of prepared emails sent together to a group of contacts. This is
-          the manual/debug version of that step, most of the time you&apos;ll create and send a
-          campaign from the Auto Flow page instead, right after preparing outreach.
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Test/demo mode: no real email is delivered here. A real sending service (like Smartlead
-          or Instantly) hasn&apos;t been connected yet. This page is the working UI for that, ready to
-          switch over once one is.
+        <h2 className="text-base font-semibold text-foreground">Campaigns</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Batches of prepared emails, sent together to a group of contacts.
         </p>
       </div>
+
+      <GuideNote>
+        <p>
+          This is the manual/debug version of sending — most of the time you&apos;ll create and send a
+          campaign from Auto Flow instead, right after preparing outreach. Come here to inspect a
+          queue, pause/resume, or trigger a send by hand.
+        </p>
+        <p>
+          {isRealSendingProvider ? (
+            <>
+              <strong>Live sending:</strong> the active provider is <strong>{sendingProviderName}</strong>{' '}
+              — real email goes out from here, gated by the confirmation dialog on every send.
+            </>
+          ) : (
+            <>
+              <strong>Test/demo mode:</strong> no real email is delivered here yet. Sending is built
+              to go straight through your own connected Gmail account (OAuth, no per-email vendor
+              fee, no Smartlead/Instantly needed) — connect it in{' '}
+              <a href="/admin/outbound/integrations" className="underline underline-offset-2 hover:text-foreground">
+                Integrations
+              </a>{' '}
+              to switch this page over from mock to live.
+            </>
+          )}
+        </p>
+      </GuideNote>
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-3">
@@ -166,20 +208,23 @@ export default function OutboundCampaignsPage() {
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-1">
           <Label htmlFor="campaign-picker">Campaign</Label>
-          <select
-            id="campaign-picker"
+          <Select
+            items={campaigns.map(c => ({ value: c.id, label: `${c.name} (${c.status})` }))}
             value={selectedCampaignId ?? ''}
-            onChange={e => setSelectedCampaignId(e.target.value || null)}
+            onValueChange={value => setSelectedCampaignId((value as string) || null)}
             disabled={loadingCampaigns}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           >
-            <option value="">{loadingCampaigns ? 'Loading…' : 'Select a campaign…'}</option>
-            {campaigns.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.status})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="campaign-picker">
+              <SelectValue placeholder={loadingCampaigns ? 'Loading…' : 'Select a campaign…'} />
+            </SelectTrigger>
+            <SelectContent>
+              {campaigns.map(c => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} ({c.status})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
