@@ -1,8 +1,21 @@
+'use client'
+
+import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/shell/BrandMark'
 import { SmoothScroll } from '@/components/shell/SmoothScroll'
 import { ScrollReveal } from '@/components/shell/ScrollReveal'
 import { MotionConfigProvider } from '@/components/shell/MotionConfigProvider'
+import { MagneticButton } from '@/components/shell/MagneticButton'
+import { CursorGlow } from '@/components/shell/CursorGlow'
+import { TiltCard } from '@/components/shell/TiltCard'
+import { HowItWorksScrolly } from '@/components/shell/HowItWorksScrolly'
+import { LandingMobileNav } from '@/components/shell/LandingMobileNav'
+import { ScrollProgressBar } from '@/components/shell/ScrollProgressBar'
+import { DiscoveryIcon } from '@/components/shell/nav-icons'
+import { FactoryIcon, SignalIcon, GearIcon, TargetIcon, SparkleIcon } from '@/components/shell/landing-icons'
 
 const NAV_LINKS = [
   { label: 'How it works', href: '#how-it-works' },
@@ -40,61 +53,124 @@ const STEPS = [
 
 const RESEARCH_AREAS = [
   {
-    label: '🏭',
+    icon: FactoryIcon,
     title: 'Company Overview',
     description: 'What they do, who they sell to, how many plants, where they operate. The context your SDR needs before hitting send.',
     accent: 'border-chart-5/40 bg-chart-5/10',
   },
   {
-    label: '📡',
+    icon: SignalIcon,
     title: 'Recent Signals',
     description: 'Expansions, automation investments, hiring surges, certifications, digital initiatives, recent activity that creates outreach urgency.',
     accent: 'border-chart-1/40 bg-chart-1/10',
   },
   {
-    label: '⚙️',
+    icon: GearIcon,
     title: 'Pain Points',
     description: 'Operational pain points specific to their business model, observed from their content or inferred from their industry. Always labeled.',
     accent: 'border-chart-3/40 bg-chart-3/10',
   },
   {
-    label: '🎯',
+    icon: TargetIcon,
     title: 'AI Opportunities',
     description: 'The Demaze services most relevant to this company, matched to their signals, with a one-line rationale for each. Only real evidence, no forced fit.',
     accent: 'border-chart-2/40 bg-chart-2/10',
+    featured: true,
   },
   {
-    label: '✨',
+    icon: SparkleIcon,
     title: 'Personalization Summary',
     description: 'A tailored outreach angle grounded in the company’s strongest signal, the specific "why now" a rep can lead with.',
     accent: 'border-chart-1/40 bg-chart-1/10',
+    featured: true,
   },
   {
-    label: '🔎',
+    icon: DiscoveryIcon,
     title: 'Evidence-backed',
     description: 'Every point is labeled observed vs. inferred and traced to a source, so reps trust what they read before they reach out.',
     accent: 'border-chart-4/40 bg-chart-4/10',
   },
 ]
 
-const OUTPUTS = [
-  'Company name, summary & business model',
-  'Industry & sub-industry classification',
-  'Headquarters & size estimate',
-  'Recent news & growth signals',
-  'Pain points (observed + inferred)',
-  'AI opportunities with entry points',
-  'Personalization summary (outreach angle)',
-  'Lead with (Demaze service to pitch)',
-  'Why now (company-specific trigger)',
-  'Evidence labeled observed vs. inferred',
+const OUTPUT_GROUPS = [
+  {
+    label: 'Company profile',
+    items: [
+      'Company name, summary & business model',
+      'Industry & sub-industry classification',
+      'Headquarters & size estimate',
+    ],
+  },
+  {
+    label: 'Research findings',
+    items: [
+      'Recent news & growth signals',
+      'Pain points (observed + inferred)',
+      'AI opportunities with entry points',
+    ],
+  },
+  {
+    label: 'Ready to send',
+    items: [
+      'Personalization summary (outreach angle)',
+      'Lead with (Demaze service to pitch)',
+      'Why now (company-specific trigger)',
+      'Evidence labeled observed vs. inferred',
+    ],
+  },
 ]
 
 export default function Home() {
+  const heroRef = useRef<HTMLElement>(null)
+  const reducedMotion = useReducedMotion()
+
+  // Scrollspy: highlight whichever section's anchor the user has scrolled
+  // to, so the nav reflects where you are on the page (not just where you
+  // can jump to). rootMargin carves a thin band near vertical-center of
+  // the viewport — a section only counts "active" once it's genuinely in
+  // the reading area, not the instant its top edge appears at the bottom.
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
+  useEffect(() => {
+    const ids = NAV_LINKS.map((link) => link.href.slice(1))
+    const elements = ids.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el)
+    if (elements.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting)
+        if (visible.length === 0) return
+        const topmost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b))
+        setActiveSectionId(topmost.target.id)
+      },
+      { rootMargin: '-40% 0px -50% 0px', threshold: 0 },
+    )
+    elements.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [])
+  const { scrollYProgress: heroProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  })
+  const glowY = useTransform(heroProgress, [0, 1], reducedMotion ? [0, 0] : [0, 160])
+  const gridY = useTransform(heroProgress, [0, 1], reducedMotion ? [0, 0] : [0, -60])
+  const heroContentY = useTransform(heroProgress, [0, 1], reducedMotion ? [0, 0] : [0, 80])
+  const heroOpacity = useTransform(heroProgress, [0, 0.8], [1, 0])
+
   return (
     <MotionConfigProvider>
     <SmoothScroll>
     <div className="dark min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/30">
+
+      <ScrollProgressBar />
+
+      {/* Skip link — visually hidden until focused, so keyboard users don't
+          have to tab through the header nav on every page load. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
 
       {/* Navigation */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
@@ -105,77 +181,137 @@ export default function Home() {
               <span className="text-sm font-semibold tracking-tight text-foreground">Demaze AI</span>
             </div>
             <nav className="hidden md:flex items-center gap-6">
-              {NAV_LINKS.map((link) => (
-                <a key={link.label} href={link.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  {link.label}
-                </a>
-              ))}
+              {NAV_LINKS.map((link) => {
+                const isActive = activeSectionId === link.href.slice(1)
+                return (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    aria-current={isActive ? 'location' : undefined}
+                    className={cn(
+                      'text-sm transition-colors px-1 py-2',
+                      isActive ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {link.label}
+                  </a>
+                )
+              })}
             </nav>
           </div>
-          <Link
-            href="/admin/intelligence-lab"
-            className="text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg transition-colors"
-          >
-            Open Agent
-          </Link>
+          <div className="flex items-center gap-2">
+            <MagneticButton>
+              <Link
+                href="/admin/intelligence-lab"
+                className="text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg transition-colors"
+              >
+                Open Agent
+              </Link>
+            </MagneticButton>
+            <LandingMobileNav links={NAV_LINKS} />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
 
         {/* Hero */}
-        <section className="relative overflow-hidden pt-24 pb-20 px-6">
+        <section ref={heroRef} className="relative overflow-hidden pt-24 pb-20 px-6">
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-b from-primary/10 via-primary-hover/5 to-transparent rounded-full blur-3xl" />
-            <div
-              className="absolute inset-0 opacity-40"
+            <motion.div
+              style={{ y: glowY }}
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-b from-primary/10 via-primary-hover/5 to-transparent rounded-full blur-3xl"
+            />
+            <motion.div
               style={{
+                y: gridY,
                 backgroundImage:
                   'radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 40%, transparent) 1px, transparent 0)',
                 backgroundSize: '32px 32px',
               }}
+              className="absolute inset-0 opacity-40"
             />
           </div>
 
-          <div className="relative max-w-4xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 text-xs font-medium text-primary border border-primary/30 bg-primary/10 rounded-full px-4 py-1.5">
+          <CursorGlow containerRef={heroRef} />
+
+          <motion.div
+            style={{ y: heroContentY, opacity: heroOpacity }}
+            className="relative max-w-4xl mx-auto text-center space-y-8"
+          >
+            {/* Staged entrance on first load — badge, headline, subhead, CTAs
+                reveal in sequence rather than the hero appearing fully-formed.
+                `initial`/`animate` (mount-triggered, not scroll-triggered) is
+                independent of this wrapper's own scroll-linked `opacity`
+                above — each nested element's own opacity compounds with its
+                ancestor's, no property conflict. MotionConfig's ancestor
+                reducedMotion="user" (see MotionConfigProvider) collapses
+                these to their end state instantly, no manual gating needed. */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0, ease: [0.16, 1, 0.3, 1] }}
+              className="inline-flex items-center gap-2 text-xs font-medium text-primary border border-primary/30 bg-primary/10 rounded-full px-4 py-1.5"
+            >
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
               Manufacturing &amp; Automotive · Outbound Research
-            </div>
+            </motion.div>
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tighter leading-[1.05]">
+            <motion.h1
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tighter leading-[1.05]"
+            >
               Research any company.{' '}
               <span className="bg-gradient-to-r from-primary via-primary-hover to-primary bg-clip-text text-transparent">
                 Personalize every outreach.
               </span>
-            </h1>
+            </motion.h1>
 
-            <p className="text-muted-foreground text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto">
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="text-muted-foreground text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto"
+            >
               Paste a company URL. The agent reads their site, surfaces their pain points,
               matches Demaze services, and hands you a personalization summary, in under 60 seconds.
-            </p>
+            </motion.p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <Link
-                href="/admin/intelligence-lab"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm px-6 py-3 rounded-xl transition-colors"
-              >
-                Research a company
-                <span aria-hidden>→</span>
-              </Link>
-              <Link
-                href="/admin/run-history"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground text-sm px-6 py-3 rounded-xl transition-colors"
-              >
-                View past research
-              </Link>
-            </div>
-          </div>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2"
+            >
+              <MagneticButton>
+                <Link
+                  href="/admin/intelligence-lab"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm px-6 py-3 rounded-xl transition-colors"
+                >
+                  Research a company
+                  <span aria-hidden>→</span>
+                </Link>
+              </MagneticButton>
+              <MagneticButton>
+                <Link
+                  href="/admin/run-history"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground text-sm px-6 py-3 rounded-xl transition-colors"
+                >
+                  View past research
+                </Link>
+              </MagneticButton>
+            </motion.div>
+          </motion.div>
         </section>
 
         {/* Stats */}
         <section className="border-y border-border bg-card/40">
           <div className="max-w-5xl mx-auto px-6 py-10">
+            <p className="text-center text-xs font-mono text-muted-foreground uppercase tracking-widest mb-8">
+              What a research brief delivers
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
               {STATS.map((stat, i) => (
                 <ScrollReveal key={stat.label} delay={i * 0.08} className="text-center space-y-1">
@@ -188,32 +324,27 @@ export default function Home() {
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="py-24 px-6">
-          <div className="max-w-5xl mx-auto">
+        <section id="how-it-works" className="relative py-24 sm:py-0">
+          {/* Subtle ambient glow — same restrained "primary color, low
+              opacity, blurred" treatment as the hero, reused here rather
+              than a new decorative pattern, so long sections of flat
+              background don't feel like an abrupt stack. Kept faint per
+              this design system's own "accent used scarcely, never as a
+              decorative fill" rule (see globals.css). */}
+          <div
+            aria-hidden
+            className="absolute inset-0 -z-10 pointer-events-none overflow-hidden"
+          >
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.06] rounded-full blur-3xl" />
+          </div>
+          <div className="max-w-5xl mx-auto px-6 sm:pt-24">
             <ScrollReveal className="text-center space-y-3 mb-16">
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">How it works</p>
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Three steps to a personalized brief</h2>
             </ScrollReveal>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {STEPS.map((step, i) => (
-                <ScrollReveal key={step.number} delay={i * 0.1} className="relative group">
-                  {i < STEPS.length - 1 && (
-                    <div className="hidden sm:block absolute top-8 left-full w-6 h-px bg-border z-10" />
-                  )}
-                  <div className="rounded-2xl border border-border bg-card p-6 space-y-4 hover:border-primary/50 transition-colors h-full">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${step.color} flex items-center justify-center`}>
-                      <span className="text-white font-bold text-sm">{step.number}</span>
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
-                    </div>
-                  </div>
-                </ScrollReveal>
-              ))}
-            </div>
           </div>
+
+          <HowItWorksScrolly steps={STEPS as [typeof STEPS[0], typeof STEPS[1], typeof STEPS[2]]} />
         </section>
 
         {/* Research areas */}
@@ -231,16 +362,25 @@ export default function Home() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {RESEARCH_AREAS.map((area, i) => (
-                <ScrollReveal
-                  key={area.title}
-                  delay={i * 0.06}
-                  className={`rounded-xl border p-5 space-y-3 hover:bg-accent/40 transition-colors ${area.accent}`}
-                >
-                  <span className="text-2xl" role="img" aria-hidden>{area.label}</span>
-                  <div className="space-y-1.5">
-                    <h3 className="text-sm font-semibold text-foreground">{area.title}</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{area.description}</p>
-                  </div>
+                <ScrollReveal key={area.title} delay={i * 0.06} parallax={i % 2 === 0 ? 18 : -18}>
+                  <TiltCard
+                    className={cn(
+                      'relative rounded-xl border p-5 space-y-3 hover:bg-accent/40 transition-colors',
+                      area.accent,
+                      area.featured && 'ring-1 ring-primary/30',
+                    )}
+                  >
+                    {area.featured && (
+                      <span className="absolute top-3 right-3 text-[9px] font-semibold uppercase tracking-widest text-primary/80">
+                        Key output
+                      </span>
+                    )}
+                    <area.icon className="size-6 text-foreground/80" />
+                    <div className="space-y-1.5">
+                      <h3 className="text-sm font-semibold text-foreground">{area.title}</h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{area.description}</p>
+                    </div>
+                  </TiltCard>
                 </ScrollReveal>
               ))}
             </div>
@@ -269,16 +409,25 @@ export default function Home() {
                 </Link>
               </ScrollReveal>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {OUTPUTS.map((output, i) => (
-                  <ScrollReveal
-                    key={output}
-                    delay={i * 0.04}
-                    className="flex items-center gap-2.5 text-xs text-muted-foreground bg-card border border-border rounded-lg px-3 py-2.5 hover:border-primary/50 hover:text-foreground/90 transition-colors"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                    {output}
-                  </ScrollReveal>
+              <div className="space-y-5">
+                {OUTPUT_GROUPS.map((group, gi) => (
+                  <div key={group.label}>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80 mb-2">
+                      {group.label}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {group.items.map((output, i) => (
+                        <ScrollReveal
+                          key={output}
+                          delay={(gi * group.items.length + i) * 0.04}
+                          className="flex items-center gap-2.5 text-xs text-muted-foreground bg-card border border-border rounded-lg px-3 py-2.5 hover:border-primary/50 hover:text-foreground/90 transition-colors"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                          {output}
+                        </ScrollReveal>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -333,7 +482,10 @@ export default function Home() {
         </section>
 
         {/* CTA */}
-        <section className="py-24 px-6">
+        <section className="relative py-24 px-6">
+          <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/[0.06] rounded-full blur-3xl" />
+          </div>
           <ScrollReveal className="max-w-3xl mx-auto text-center space-y-6">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
               Try it on your next prospect
@@ -342,18 +494,22 @@ export default function Home() {
               Paste any manufacturing or automotive company URL and get a full research brief, pain points, AI opportunities, and a personalization summary, in under 60 seconds.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link
-                href="/admin/intelligence-lab"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm px-8 py-3.5 rounded-xl transition-colors"
-              >
-                Open Research Agent <span aria-hidden>→</span>
-              </Link>
-              <Link
-                href="/admin/run-history"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground text-sm px-8 py-3.5 rounded-xl transition-colors"
-              >
-                Browse past research
-              </Link>
+              <MagneticButton>
+                <Link
+                  href="/admin/intelligence-lab"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm px-8 py-3.5 rounded-xl transition-colors"
+                >
+                  Open Research Agent <span aria-hidden>→</span>
+                </Link>
+              </MagneticButton>
+              <MagneticButton>
+                <Link
+                  href="/admin/run-history"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground text-sm px-8 py-3.5 rounded-xl transition-colors"
+                >
+                  Browse past research
+                </Link>
+              </MagneticButton>
             </div>
           </ScrollReveal>
         </section>
@@ -367,7 +523,7 @@ export default function Home() {
             <BrandMark size="xs" />
             <span className="text-xs font-medium text-muted-foreground">Demaze Technologies</span>
           </div>
-          <p className="text-xs text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground">
             Internal outbound research tool, not for public distribution
           </p>
         </div>
