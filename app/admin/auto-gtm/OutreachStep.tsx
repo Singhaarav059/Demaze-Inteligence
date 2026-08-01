@@ -177,7 +177,7 @@ async function switchSubjectAndRegenerate(contactId: string, subject: string): P
 }
 
 export function OutreachStep({
-  contacts,
+  contacts: allContacts,
   campaignContactStatus,
   sendingContactId,
   sendingSelected,
@@ -193,6 +193,13 @@ export function OutreachStep({
   sendSelectedContacts: (contactIds: string[]) => Promise<void>
   updateContactEmail: (contactId: string, email: string) => Promise<boolean>
 }) {
+  // Contacts with no email can't be sent to and can't be drafted for without
+  // burning AI credits on content that has nowhere to go — discard them
+  // before this step ever sees them, rather than showing them with a
+  // disabled/fallback state. Scoped to this step's own rendering only (the
+  // full contact list, including no-email ones, is still what earlier
+  // steps and the flow's own contact-count summary read from).
+  const contacts = useMemo(() => allContacts.filter(c => c.email), [allContacts])
   const [drafts, setDrafts] = useState<Record<string, GeneratedContent | null>>({})
   // Per-contact, not a single shared value — drafting now runs for several
   // contacts at once (see DRAFT_CONCURRENCY below), so both need to be
@@ -214,9 +221,6 @@ export function OutreachStep({
   // Which contact's full draft is shown in the detail pane (right side of
   // the split view).
   const [activeContactId, setActiveContactId] = useState<string | null>(null)
-  // Typed-in email for a no-email contact's manual "add email & draft"
-  // override — scoped to whichever contact is active, cleared on switch.
-  const [manualEmail, setManualEmail] = useState('')
 
   function beginDrafting(contactId: string) {
     setDraftingIds(prev => new Set(prev).add(contactId))
@@ -258,19 +262,6 @@ export function OutreachStep({
       while (cursor < missing.length) {
         const contact = missing[cursor++]
 
-        // A contact with no email will be skipped when sending anyway (see
-        // the "will be skipped when sending" badge below) — auto-drafting
-        // for one still burns 3 real AI calls (subjects/email/followups)
-        // for content that can't be sent yet. Skip the AI calls entirely;
-        // still check for an already-existing draft (e.g. from before an
-        // email was removed, or drafted manually via draftForContact below)
-        // so it isn't silently thrown away.
-        if (!contact.email) {
-          const existing = await fetchGenerated(contact.id)
-          setDrafts(prev => ({ ...prev, [contact.id]: existing }))
-          continue
-        }
-
         beginDrafting(contact.id)
         try {
           const existing = await fetchGenerated(contact.id)
@@ -290,28 +281,17 @@ export function OutreachStep({
     await Promise.all(Array.from({ length: Math.min(DRAFT_CONCURRENCY, missing.length) }, worker))
   }, [contacts, drafts])
 
-  // Manual override for a no-email contact: save the typed-in email, then
-  // draft for real. The only way to get an email onto such a contact today
-  // (Contact Info's automatic finder already ran and came up empty) is to
-  // type one in here.
-  const draftForContact = useCallback(
-    async (contact: OutboundContact, email?: string) => {
-      if (email) {
-        const ok = await updateContactEmail(contact.id, email)
-        if (!ok) return
-      }
-      beginDrafting(contact.id)
-      try {
-        const generated = await autoDraft(contact.id, stage => setContactDraftingStage(contact.id, stage))
-        setDrafts(prev => ({ ...prev, [contact.id]: generated }))
-      } catch {
-        toast.error(`Could not draft an email for ${contact.person_name}`)
-      } finally {
-        endDrafting(contact.id)
-      }
-    },
-    [updateContactEmail]
-  )
+  const draftForContact = useCallback(async (contact: OutboundContact) => {
+    beginDrafting(contact.id)
+    try {
+      const generated = await autoDraft(contact.id, stage => setContactDraftingStage(contact.id, stage))
+      setDrafts(prev => ({ ...prev, [contact.id]: generated }))
+    } catch {
+      toast.error(`Could not draft an email for ${contact.person_name}`)
+    } finally {
+      endDrafting(contact.id)
+    }
+  }, [])
 
   useEffect(() => {
     // Intentional fetch-on-dependency-change, not a derived-state anti-pattern.
@@ -370,7 +350,6 @@ export function OutreachStep({
   function selectContact(contactId: string) {
     if (contactId !== activeContactId) {
       cancelEditing()
-      setManualEmail('')
     }
     setActiveContactId(contactId)
   }
@@ -608,7 +587,7 @@ export function OutreachStep({
                           )}
                         </span>
                         <span className="block text-[11px] text-muted-foreground/70 truncate">
-                          {contact.title_hint || contact.email || 'No email'}
+                          {contact.title_hint || contact.email}
                         </span>
                         {isDraftingThis && (
                           <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
@@ -616,9 +595,7 @@ export function OutreachStep({
                           </span>
                         )}
                         {!generated?.email_draft && !isDraftingThis && (
-                          <span className="block text-[10px] text-muted-foreground/50">
-                            {contact.email ? 'no draft' : 'no email — drafting skipped'}
-                          </span>
+                          <span className="block text-[10px] text-muted-foreground/50">no draft</span>
                         )}
                       </span>
                     </button>
@@ -655,7 +632,6 @@ export function OutreachStep({
                           <span className="text-xs text-muted-foreground/70">{contact.title_hint}</span>
                         )}
                         {outcome && <Badge variant={sendStatusBadgeVariant(outcome.status)}>{outcome.status}</Badge>}
-                        {!contact.email && <Badge variant="outline">no email, will be skipped when sending</Badge>}
                       </div>
                       {outcome?.reason && <p className="text-xs text-muted-foreground/60 mt-0.5">{outcome.reason}</p>}
                     </div>
@@ -754,7 +730,7 @@ export function OutreachStep({
                       !isSwitching && (
                         <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
                           <div className="text-xs text-muted-foreground/70">
-                            To: <span className="text-foreground">{contact.email ?? 'No email, will be skipped'}</span>
+                            To: <span className="text-foreground">{contact.email}</span>
                           </div>
                           <div className="text-xs text-muted-foreground/70">
                             Subject: <span className="text-foreground font-medium">{generated.selected_subject_line}</span>
@@ -769,39 +745,14 @@ export function OutreachStep({
                       )
                     )
                   ) : (
-                    !isDrafting &&
-                    (!contact.email ? (
-                      <div className="rounded-md border border-dashed border-border bg-background/50 p-3 space-y-2">
-                        <p className="text-xs text-muted-foreground/60">
-                          No email on file for this contact, so drafting was skipped to avoid spending AI credits on
-                          an email that can&apos;t be sent yet. Add one below to draft it.
-                        </p>
-                        <div className="flex gap-2">
-                          <input
-                            type="email"
-                            value={manualEmail}
-                            onChange={e => setManualEmail(e.target.value)}
-                            placeholder="name@company.com"
-                            aria-label={`Email for ${contact.person_name}`}
-                            className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
-                          />
-                          <Button
-                            size="sm"
-                            disabled={!manualEmail.trim()}
-                            onClick={() => void draftForContact(contact, manualEmail.trim())}
-                          >
-                            Save &amp; Draft
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
+                    !isDrafting && (
                       <div className="rounded-md border border-dashed border-border bg-background/50 p-3 space-y-2">
                         <p className="text-xs text-muted-foreground/60">No draft yet for this contact.</p>
                         <Button size="sm" variant="outline" onClick={() => void draftForContact(contact)}>
                           Draft Email
                         </Button>
                       </div>
-                    ))
+                    )
                   )}
 
                   <AnimatePresence initial={false}>
