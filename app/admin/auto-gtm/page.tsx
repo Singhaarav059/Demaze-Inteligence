@@ -323,13 +323,27 @@ export default function AutoGtmFlowPage() {
                   Full
                 </button>
               </div>
-              <Button onClick={flow.runResearch} disabled={flow.researching || !flow.url.trim()}>
-                {flow.researching ? (
+              <Button onClick={() => flow.runResearch()} disabled={flow.researching || !flow.url.trim()}>
+                {flow.researching && !flow.forcingFresh ? (
                   <>
                     <Spinner className="size-3.5" /> Researching…
                   </>
                 ) : (
                   'Research'
+                )}
+              </Button>
+              <Button
+                onClick={() => flow.runResearch({ force: true })}
+                disabled={flow.researching || !flow.url.trim()}
+                variant="outline"
+                title="Ignore any cached scrape for this URL and research it fresh"
+              >
+                {flow.researching && flow.forcingFresh ? (
+                  <>
+                    <Spinner className="size-3.5" /> Clearing cache…
+                  </>
+                ) : (
+                  '↻ Clear Cache & Re-Research'
                 )}
               </Button>
             </div>

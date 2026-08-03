@@ -20,12 +20,16 @@ import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIc
 // plus its own persistent sub-nav (AdminOutboundNav) is the one-click path
 // in now, same list just presented as a proper section instead of a flat
 // nav slot each.
+//
+// 2026-08-03: reordered so "Outbound Tools" sits above "History" — History
+// is a look-back/reference page (past runs), so it now sits last in the
+// primary flow ordering instead of splitting Discover from Outbound Tools.
 export const NAV = [
   { href: '/admin/auto-gtm', label: 'Auto Flow', icon: AutoFlowIcon, hint: 'Start here: research a company, find who to contact, and prepare outreach, one guided flow' },
   { href: '/admin/wizard', label: 'Research', icon: ResearchIcon, hint: 'Research a single company, or upload a spreadsheet of many' },
   { href: '/admin/company-discovery', label: 'Discover', icon: DiscoveryIcon, hint: 'Find new companies to target, given a description of who you sell to' },
-  { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: 'Past research runs you\'ve saved' },
   { href: '/admin/outbound', label: 'Outbound Tools', icon: OutboundToolsIcon, hint: 'Manual controls: contacts, campaigns, warm-up, and vendor integrations' },
+  { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: 'Past research runs you\'ve saved' },
 ] as const
 
 // Pages pulled out of primary nav on 2026-07-18 — still real, still linked

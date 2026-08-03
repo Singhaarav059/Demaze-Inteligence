@@ -69,6 +69,7 @@ export default function WizardPage() {
   const [url, setUrl] = useState('')
   const [mode, setMode] = useState<AnalysisMode>('full')
   const [running, setRunning] = useState(false)
+  const [forcingFresh, setForcingFresh] = useState(false)
   const [result, setResult] = useState<RunResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -124,11 +125,16 @@ export default function WizardPage() {
     }
   }, [url])
 
-  async function run() {
+  // opts.force clears any cached scrape for this URL server-side and
+  // scrapes fresh — the one-button "clear cache & rescrape" option next to
+  // Research below. Normal Research (force omitted) reuses a cached scrape
+  // when one exists, same as before.
+  async function run(opts: { force?: boolean } = {}) {
     const urlNormalized = url.trim()
     if (!urlNormalized) return
 
     setRunning(true)
+    setForcingFresh(Boolean(opts.force))
     setError(null)
     setResult(null)
 
@@ -136,7 +142,7 @@ export default function WizardPage() {
       const res = await fetch('/api/admin/test-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlNormalized, mode }),
+        body: JSON.stringify({ url: urlNormalized, mode, force: Boolean(opts.force) }),
       })
       const data: RunResult = await res.json()
       setResult(data)
@@ -389,8 +395,16 @@ export default function WizardPage() {
                 </button>
               </div>
 
-              <Button onClick={run} disabled={running || !url.trim()}>
-                {running ? <><Spinner /> Researching…</> : 'Research'}
+              <Button onClick={() => run()} disabled={running || !url.trim()}>
+                {running && !forcingFresh ? <><Spinner /> Researching…</> : 'Research'}
+              </Button>
+              <Button
+                onClick={() => run({ force: true })}
+                disabled={running || !url.trim()}
+                variant="outline"
+                title="Ignore any cached scrape for this URL and research it fresh"
+              >
+                {running && forcingFresh ? <><Spinner /> Clearing cache…</> : '↻ Clear Cache & Re-Research'}
               </Button>
             </div>
           </div>

@@ -89,6 +89,10 @@ export function useAutoGtmFlow() {
   const [url, setUrl] = useState('')
   const [mode, setMode] = useState<AnalysisMode>('full')
   const [researching, setResearching] = useState(false)
+  // Set only while a force-fresh (clear-cache) research call is in flight —
+  // purely a label flag for the "Clear Cache & Re-Research" button below,
+  // same "researching" state otherwise drives both buttons' disabled state.
+  const [forcingFresh, setForcingFresh] = useState(false)
   const [result, setResult] = useState<RunResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
@@ -152,6 +156,7 @@ export function useAutoGtmFlow() {
     setUrl('')
     setMode('full')
     setResearching(false)
+    setForcingFresh(false)
     setResult(null)
     setError(null)
     setRunId(null)
@@ -272,10 +277,15 @@ export function useAutoGtmFlow() {
   const companyName = result?.domain ? deriveCompanyName(result.domain, result.analysisResult) : ''
   const domain = result?.domain ?? ''
 
-  const runResearch = useCallback(async () => {
+  // opts.force clears any cached scrape for this URL server-side and
+  // researches fresh — the one-button "clear cache & rescrape" option
+  // rendered next to Research on Step 1. Normal Research (force omitted)
+  // reuses a cached scrape when one exists, same as before.
+  const runResearch = useCallback(async (opts: { force?: boolean } = {}) => {
     const urlNormalized = url.trim()
     if (!urlNormalized) return
     setResearching(true)
+    setForcingFresh(Boolean(opts.force))
     setError(null)
     setResult(null)
     // Starting a fresh research call means a new company (single mode is
@@ -291,7 +301,7 @@ export function useAutoGtmFlow() {
       const res = await fetch('/api/admin/test-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlNormalized, mode }),
+        body: JSON.stringify({ url: urlNormalized, mode, force: Boolean(opts.force) }),
       })
       const data: RunResult = await res.json()
       setResult(data)
@@ -788,6 +798,7 @@ export function useAutoGtmFlow() {
     mode,
     setMode,
     researching,
+    forcingFresh,
     result,
     error,
     runId,
