@@ -1836,6 +1836,80 @@ fallback mechanism already proven correct in the entry above), so
 itself starts failing at scale as the new default, re-open this note rather
 than assuming the 2-model chain is automatically safe.
 
+## RESOLVED 2026-08-03 — Gemini tier moved from AI Studio to Vertex AI Express Mode
+User requested switching the Gemini credential from an AI Studio API key
+(`GEMINI_API_KEY`, live-tested and made the default chain entry 2026-07-30 —
+see `lib/ai/provider-factory.ts`'s header history) to a Vertex AI API key.
+Investigated before writing code, since this looked like it might be a
+one-line env-var rename: confirmed via Google's own Express Mode API
+reference docs that **Vertex AI Express Mode does not expose an
+OpenAI-compatible chat/completions endpoint** — only the native
+`generateContent`/`streamGenerateContent`/`countTokens` REST methods at a
+global `aiplatform.googleapis.com` endpoint. The existing Gemini tier went
+through the generic `OpenAICompatibleProvider` (same class NVIDIA NIM
+uses); that class can't be pointed at Express Mode.
+**Fixed**: added `@google/genai` (Google's official unified SDK, ^2.15.0 —
+speaks both AI Studio and Vertex, selected via a `vertexai: true` flag) and
+a new `VertexGeminiProvider` (`lib/ai/providers/vertex-gemini.ts`) that
+calls `client.models.generateContent()` directly and maps the response back
+to this codebase's `CompletionResponse` shape. `provider-factory.ts` gained
+a parallel `tryVertexGeminiChain()` (mirrors `tryVendorChain()`'s shape —
+per-model try loop, rate-limit cooldown, error collection — but builds
+`VertexGeminiProvider` instances instead of `OpenAICompatibleProvider`
+ones, since there's no shared REST shape to parameterize over). Credential
+renamed `GEMINI_API_KEY` → `GEMINI_VERTEX_API_KEY` (`.env.example`
+updated) — deliberately a new name, not a reused one, so a stale AI-Studio
+key left in `.env.local` doesn't silently get picked up as if it were a
+valid Vertex key. `GEMINI_MODEL` (the model-override var) is unchanged —
+Gemini model names are the same across both backends. The assistant did
+not see or enter the user's actual key value at any point, per this
+project's standing credential-handling rule — `.env.local` still has the
+old `GEMINI_API_KEY=` line; the user needs to add their real Vertex Express
+Mode key under `GEMINI_VERTEX_API_KEY` themselves (get one at
+Google Cloud's Vertex AI Express Mode signup, no billing/GCP project
+required) and can remove the old line once confirmed working.
+**Bonus fix, user-approved as in-scope for this session**: the native
+`generateContent` API tracks thinking tokens (`usageMetadata.
+thoughtsTokenCount`) separately from visible output tokens
+(`candidatesTokenCount`) — `maxOutputTokens` only bounds the latter. This
+directly resolves the documented short-output empty-response bug (Gemini
+burning its whole OpenAI-style `max_tokens` budget on hidden reasoning
+before emitting visible JSON, see the 2026-07-30 header history above) —
+the OpenAI-compat shim, not something inherent to Gemini 3 models, was the
+actual root cause. `VertexGeminiProvider` sets `thinkingConfig.
+thinkingLevel: 'MINIMAL'` (not `thinkingBudget: 0` — confirmed via Google's
+current docs that Gemini 3 models cannot fully disable thinking, `MINIMAL`
+is the lowest available level).
+**Verified**: `tsc --noEmit` clean, full suite 621/621 passing (no existing
+test exercises `provider-factory.ts` directly — consistent with this file's
+own established precedent of verifying vendor/provider-chain changes via
+`tsc`+tests and deferring a live smoke test, not adding new test
+infrastructure for a config/vendor swap).
+
+**Live-verified same day**, once the user added their real
+`GEMINI_VERTEX_API_KEY` to `.env.local` (assistant never saw the value,
+only confirmed the var name was present via `grep -o` on the key name).
+Ran a temporary standalone script (`npx tsx`, deleted immediately after —
+not committed, same "throwaway probe" precedent as this file's own
+`__lint_probe.ts` note elsewhere) calling `getCompletion()` directly with
+real quota, explicit user confirmation given first, two shapes:
+1. A long-content `jsonMode` call (narrative-shaped, `maxTokens: 4096`) —
+   succeeded: `gemini_vertex_gemini_3_6_flash`, 2724ms, `finishReason:
+   STOP`, clean valid JSON (`company_summary` + `pain_points` array,
+   correctly grounded in the fake company description given).
+2. A short-output `jsonMode` call (subject-line-shaped, `maxTokens: 1024`,
+   the exact call shape that used to trigger the empty-response bug under
+   the old AI-Studio/OpenAI-compat shim) — succeeded: 1549ms, `finishReason:
+   STOP`, clean valid JSON (`subject_lines` array of 3 real strings). This
+   is the actual confirmation the `thinkingLevel: 'MINIMAL'` fix works
+   under real traffic, not just in theory — the whole reason this was
+   flagged as the one thing worth checking before trusting the swap.
+
+Both calls resolved on the first try (no fallback to NVIDIA NIM needed),
+both fast (under 3s), both clean JSON with no reasoning-channel leakage.
+**Vertex AI Express Mode swap (including the thinkingLevel fix) is now
+fully live-verified, not just code-complete.**
+
 ## Research-quality initiative — 2026-07-22, Session 1 of 3 (in progress)
 Triggered by a real Auto Flow run against Reliance Industries showing 5 pain
 points but 0 opportunities, and the user reporting this now happens with

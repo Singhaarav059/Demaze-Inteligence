@@ -1,9 +1,25 @@
 // ============================================================
 // AI Provider Factory
 // ============================================================
-// Chain changed 2026-07-30 (second pass, same day) — Gemini is now the
-// default, Qwen and ZenMux (tried briefly earlier the same day) removed
-// entirely, not just deprioritized:
+// Changed 2026-08-03 — Gemini tier moved from AI Studio (simple API key
+// against the OpenAI-compatible generativelanguage.googleapis.com endpoint)
+// to Vertex AI Express Mode (GEMINI_VERTEX_API_KEY, native generateContent
+// API via the new VertexGeminiProvider in ./providers/vertex-gemini.ts —
+// Express Mode doesn't expose an OpenAI-compatible endpoint, confirmed
+// against Google's own Express Mode API reference, so this vendor can't go
+// through tryVendorChain/OpenAICompatibleProvider the way NVIDIA does; it
+// gets its own tryVertexGeminiChain below). Same position in the fallback
+// order (tried first, NVIDIA NIM still the fallback), same model default
+// (gemini-3.6-flash). See vertex-gemini.ts's header for the thinkingLevel
+// fix this move also enabled. Not yet live-verified against a real Vertex
+// Express Mode key — same "verify via tsc, defer live run" precedent this
+// file's own history uses for every other vendor swap; whoever adds the
+// real key should smoke-test one real call before trusting this in
+// production.
+//
+// Prior history — Chain changed 2026-07-30 (second pass, same day): Gemini
+// (AI Studio) became the default, Qwen and ZenMux (tried briefly earlier the
+// same day) removed entirely, not just deprioritized:
 //   - Gemini (gemini-3.6-flash via Google's OpenAI-compatible endpoint,
 //     https://generativelanguage.googleapis.com/v1beta/openai/): 6.4s
 //     single-sample latency, clean valid JSON, evidence-grounded extraction
@@ -36,14 +52,24 @@
 // long-content research-extraction call shape (maxTokens=4096), which is
 // why this wasn't caught before wiring Gemini in as the default.
 // Deliberately NOT fixed by branching providers per max_tokens or reverting
-// Gemini — the existing looksLikeJson() guard + fallback-to-NVIDIA already
-// handles this safely (confirmed live: Gemini fails fast, NVIDIA picks up
-// the slack, no crash, no malformed output reaches a caller), so this is
-// accepted as a real but non-fatal latency cost on short-output calls
-// specifically, not something worth adding branching complexity to solve
-// right now. Revisit if this proves to meaningfully slow down generation
-// calls in practice, or if a future Gemini SDK update allows disabling
-// thinking for Gemini 3 models.
+// Gemini at the time — the existing looksLikeJson() guard + fallback-to-
+// NVIDIA handled it safely (confirmed live: Gemini fails fast, NVIDIA picks
+// up the slack, no crash, no malformed output reaches a caller), accepted as
+// a non-fatal latency cost, not something worth branching complexity to
+// solve right then.
+//
+// ADDRESSED 2026-08-03 as a side effect of the AI-Studio -> Vertex Express
+// Mode move above: the OpenAI-compatible shim was the actual root cause,
+// not something inherent to Gemini 3 — it maps thinking + visible output
+// into ONE combined max_tokens budget. The native generateContent API
+// (VertexGeminiProvider) tracks them separately (usageMetadata.
+// thoughtsTokenCount vs candidatesTokenCount; maxOutputTokens only bounds
+// the latter), and thinkingConfig.thinkingLevel: MINIMAL keeps reasoning as
+// low as Gemini 3 models allow (they still can't fully disable it, per
+// Google's docs). Not yet live-verified against the exact short-output call
+// shape that originally surfaced this (generate-subject-lines.ts's
+// maxTokens=1024/2048 loop) — worth confirming on the first real
+// short-output run against the new Vertex key.
 //
 // Prior history — NVIDIA NIM (was the only provider, OpenRouter removed
 // 2026-07-18): full list replaced 2026-07-18 after live-testing every
@@ -83,10 +109,10 @@
 // ============================================================
 
 import { OpenAICompatibleProvider } from './providers/openai-compatible'
+import { VertexGeminiProvider } from './providers/vertex-gemini'
 import type { AIProvider, CompletionRequest, CompletionResponse } from './types'
 
-const GEMINI_MODELS = [process.env.GEMINI_MODEL ?? 'gemini-3.6-flash']
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
+const VERTEX_GEMINI_MODELS = [process.env.GEMINI_MODEL ?? 'gemini-3.6-flash']
 
 const NVIDIA_NIM_MODELS = [
   process.env.NVIDIA_NIM_MODEL ?? 'openai/gpt-oss-120b',
@@ -155,13 +181,15 @@ async function tryProvider(
   return result
 }
 
-// Tries every model in `models` (in order) against one vendor's endpoint,
-// returning the first success or null if the vendor has no API key
-// configured at all (not an error — just "this vendor isn't set up", same
-// as the old per-vendor `if (process.env.X_API_KEY)` guards). Any per-model
-// failure is pushed onto the shared `errors` list so the final "all
-// providers failed" error (if every vendor is exhausted) still shows the
-// full picture across both vendors, not just the last one tried.
+// Tries every model in `models` (in order) against one OpenAI-compatible
+// vendor endpoint, returning the first success or null if the vendor has no
+// API key configured at all (not an error — just "this vendor isn't set
+// up", same as the old per-vendor `if (process.env.X_API_KEY)` guards). Any
+// per-model failure is pushed onto the shared `errors` list so the final
+// "all providers failed" error (if every vendor is exhausted) still shows
+// the full picture across both vendors, not just the last one tried.
+// NVIDIA NIM-only since 2026-08-03 — Vertex AI Express Mode doesn't speak
+// this shape, see tryVertexGeminiChain below.
 async function tryVendorChain(
   models: string[],
   baseUrl: string,
@@ -202,6 +230,49 @@ async function tryVendorChain(
   return null
 }
 
+// Vertex AI Express Mode counterpart to tryVendorChain above — same
+// shape (try each model in order, skip cleanly if unconfigured, respect the
+// shared rate-limit cooldown, collect errors), but builds VertexGeminiProvider
+// instances instead of OpenAICompatibleProvider ones, since Express Mode has
+// no OpenAI-compatible endpoint to point the generic class at.
+async function tryVertexGeminiChain(
+  models: string[],
+  apiKey: string | undefined,
+  request: CompletionRequest,
+  timeoutMs: number,
+  errors: string[],
+): Promise<CompletionResponse | null> {
+  if (!apiKey) return null
+  const vendorKey = 'gemini_vertex'
+  const displayPrefix = 'Gemini (Vertex)'
+  if (isRateLimited(vendorKey)) {
+    console.warn(`[AI] Skipping ${displayPrefix} — rate-limited within the last ${RATE_LIMIT_COOLDOWN_MS}ms, not retrying yet`)
+    errors.push(`${displayPrefix}: skipped, recently rate-limited`)
+    return null
+  }
+  for (const model of models) {
+    const provider = new VertexGeminiProvider(
+      `${vendorKey}_${model.replace(/[^a-z0-9]/gi, '_')}`,
+      `${displayPrefix} (${model})`,
+      model,
+      apiKey,
+    )
+    try {
+      return await tryProvider(provider, request, timeoutMs)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(`[AI] Provider failed: ${provider.displayName} -- ${message}`)
+      errors.push(`${provider.displayName}: ${message}`)
+      if (looksLikeRateLimit(message)) {
+        rateLimitedUntil[vendorKey] = Date.now() + RATE_LIMIT_COOLDOWN_MS
+        console.warn(`[AI] ${displayPrefix} rate-limited — skipping it for the next ${RATE_LIMIT_COOLDOWN_MS}ms`)
+        break // no point trying this vendor's other models either, same account/key
+      }
+    }
+  }
+  return null
+}
+
 export async function getCompletion(
   request: CompletionRequest
 ): Promise<CompletionResponse> {
@@ -220,8 +291,8 @@ export async function getCompletion(
   const LLM_TIMEOUT_MS = request.timeoutMs ?? 150_000
   const errors: string[] = []
 
-  const geminiResult = await tryVendorChain(
-    GEMINI_MODELS, GEMINI_BASE_URL, process.env.GEMINI_API_KEY, 'gemini', 'Gemini', request, LLM_TIMEOUT_MS, errors
+  const geminiResult = await tryVertexGeminiChain(
+    VERTEX_GEMINI_MODELS, process.env.GEMINI_VERTEX_API_KEY, request, LLM_TIMEOUT_MS, errors
   )
   if (geminiResult) return geminiResult
 
@@ -236,5 +307,5 @@ export async function getCompletion(
 }
 
 export async function getDefaultProviderName(): Promise<string | null> {
-  return 'gemini_gemini_3_6_flash'
+  return 'gemini_vertex_gemini_3_6_flash'
 }
