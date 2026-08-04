@@ -190,3 +190,20 @@
   backdrop-filter: blur(16px);
   border: 1px solid oklch(1 0 0 / 15%);
 }
+
+/* Safe-area insets (2026-08-04 mobile pass) — env(safe-area-inset-*) only
+   has a nonzero value once viewport-fit=cover is set (see app/layout.tsx's
+   viewport export); the fallback 0px keeps this harmless on browsers/
+   devices with no notch/home-indicator. Used by BottomTabBar. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* NOTE: no pb-tabbar @utility here — a calc()-in-@utility case (confirmed
+   live in this Tailwind v4.3.2 install: identical to pb-safe below except
+   for the calc() wrapper, and the calc() version silently produced zero
+   generated CSS while the plain env() version worked) meant the class
+   never actually compiled. app/admin/layout.tsx uses Tailwind's arbitrary-
+   value syntax directly instead (`pb-[calc(3.5rem_+_env(...))]`), which
+   goes through a different codepath and isn't affected. Kept this comment
+   here since anyone reaching for a "just add another @utility" fix for the
+   same clear-the-tab-bar problem will hit the identical wall. */

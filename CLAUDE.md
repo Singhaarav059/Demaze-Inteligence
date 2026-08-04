@@ -2332,6 +2332,134 @@ per-lookup Prospeo cost, needs its own explicit go-ahead before wiring
 live) — also still not built, deferred at the user's own request this
 time, not a unilateral call.
 
+## RESOLVED 2026-08-04 — mobile "app-like" pass on the admin product
+User asked to make "our website" mobile-compatible, "proper mobile style
+as an app would be." Scoped via a direct question first, since this repo
+has two distinct surfaces (public landing page vs. the internal admin
+product) and the two implied very different amounts of work — user picked
+**the admin product only**; the public landing page (already had a
+responsive/scrollytelling pass, see the 2026-07-xx commit) was
+deliberately left untouched this session.
+
+Audited first (resize to 375×812, programmatic overflow/touch-target
+scans via `document.documentElement.scrollWidth` + `getBoundingClientRect`
+— the Browser pane's screenshot tool wasn't available this session, so
+verification leaned on these instead, which turned out to be more
+precise than eyeballing anyway) before assuming what was broken. Found:
+existing `MobileNav.tsx` hamburger-drawer + `TopBar.tsx` were already
+solid (no horizontal overflow anywhere checked, decent a11y from the
+2026-07-19 pass), but nothing about the shell read as "an app" — no
+persistent bottom nav, not installable, no safe-area handling for a
+notched phone.
+
+**Built**:
+- **PWA manifest** (`app/manifest.ts`, Next's native manifest-route
+  convention, served at `/manifest.webmanifest`) — `start_url`/`scope`
+  both scoped to `/admin` only, matching the session's own scope decision.
+  `display: 'standalone'`, real theme/background colors (converted from
+  the theme's actual OKLCH `--background`/`--primary`/`--primary-hover`
+  values via the standard OKLab→sRGB reference formulas, not eyeballed —
+  see `scripts/generate-app-icons.mjs`'s `oklchToHex()`).
+- **Real app icons**, not placeholders — `scripts/generate-app-icons.mjs`
+  (kept in the repo, re-runnable if the theme's primary color ever
+  changes; not a throwaway) renders an SVG matching `BrandMark`'s exact
+  gradient "D" chip and rasterizes it via `sharp` (already a project
+  dependency) to `public/icons/`: 192/512 standard, a maskable-safe-area
+  512 variant (Android can crop icons to a circle/squircle/etc.; real
+  content needs to stay within roughly an 80% safe zone), and a 180px
+  Apple touch icon. Confirmed visually correct (`Read` on the generated
+  PNG) before shipping.
+- **Safe-area support** — `viewport-fit=cover` added to the `viewport`
+  export in `app/layout.tsx` (root layout, not just the admin layout,
+  since Next's viewport export is a single root-level thing) plus
+  `appleWebApp`/`icons.apple` metadata (iOS Safari doesn't read the web
+  manifest for install behavior, only these specific meta tags).
+  Deliberately did NOT set `maximumScale`/`userScalable: false` — that's
+  a real accessibility regression for low-vision users and isn't required
+  for anything "app-like" actually being asked for here.
+- **BottomTabBar** (`components/shell/BottomTabBar.tsx`) — the actual
+  headline change. A persistent 5-tab bottom bar (mirrors `nav-config.ts`'s
+  `NAV` exactly: Auto Flow/Research/Discover/Outbound/History) replacing
+  `MobileNav.tsx`'s hamburger-drawer as the primary mobile nav entry
+  point — a persistent bottom bar, not a drawer you have to open, is the
+  actual defining native-app navigation pattern (iOS Tab Bar / Android
+  Bottom Navigation); a hamburger drawer reads as "mobile website," not
+  "app," which is exactly the distinction the request was making.
+  `MobileNav.tsx` deleted outright (confirmed dead via repo-wide grep
+  first — nothing imported it once `TopBar.tsx` stopped rendering it;
+  `LandingMobileNav.tsx` is a separate, unrelated component for the public
+  landing page and was untouched). `SECONDARY_NAV` (Overview, Contacts,
+  Campaigns, Follow-ups, Suppression, Warm-Up, Integrations) still goes
+  through TopBar's existing "More tools" dropdown — out of scope for a
+  5-slot bottom bar.
+- **Sticky bottom CTA on Auto Flow** (`app/admin/auto-gtm/page.tsx` +
+  `StepIndicator.tsx`) — the flow's one "move forward" button
+  (`nextAction`) is hidden on mobile in `StepIndicator` (`hidden
+  md:inline-flex`) and duplicated as a full-width, thumb-reachable bar
+  fixed just above `BottomTabBar`, checkout-flow-style. This is Auto
+  Flow specifically (the "Start here" primary flow, most-used surface),
+  not a generic pattern applied everywhere — no other admin page got this
+  treatment this session.
+- Touch-target bump on `TopBar`'s "More tools" trigger (32px → 40px on
+  mobile, `size-10 md:size-8`) and the "Internal" badge hidden below the
+  `sm` breakpoint to reduce clutter now that the hamburger is gone.
+
+**Real bug found and fixed while building this, not just documented**:
+Tailwind v4.3.2 (`node_modules/tailwindcss` confirmed via
+`require('tailwindcss/package.json').version`) silently fails to
+generate ANY CSS for a custom `@utility` block whose value uses `calc()`
+— confirmed by a live isolating test: `@utility pb-tabbar { padding-bottom:
+calc(3.5rem + env(safe-area-inset-bottom, 0px)); }` produced zero CSS
+rules in any loaded stylesheet (checked via
+`document.styleSheets[].cssRules`, not guessed), while the byte-identical
+sibling `@utility pb-safe { padding-bottom: env(safe-area-inset-bottom,
+0px); }` (no `calc()`) compiled correctly. Swapping the `calc()` version
+down to a flat `padding-bottom: 3.5rem` (no `calc`) also compiled fine —
+isolates the bug to `calc()` specifically, not `env()`, not multi-value
+properties, not adjacency to other `@utility` blocks. **Worked around**,
+not fixed upstream (this is a Tailwind bug, not something to patch in
+this repo): both places needing the tab-bar-clearance value
+(`app/admin/layout.tsx`'s `<main>` padding, and the sticky-CTA bar's own
+`bottom` offset) use Tailwind's arbitrary-value bracket syntax directly
+in the className instead of a named `@utility`
+(`pb-[calc(3.5rem_+_env(safe-area-inset-bottom,0px))]` — underscores
+represent the required whitespace around `calc()`'s `+` operator, since
+arbitrary-value syntax can't contain raw spaces) — this goes through a
+different Tailwind codepath and isn't affected. Left an explicit comment
+in `globals.css` at the empty spot where `pb-tabbar` would have been
+defined, specifically so a future session hitting the same "content
+hides behind a fixed mobile bar" problem doesn't lose time rediscovering
+this the hard way.
+
+**Verified**: `tsc --noEmit` clean, full suite 633/633 (no new tests —
+this is layout/CSS/navigation-shape work with no new business logic to
+unit-test, consistent with this repo's own precedent of relying on live
+browser verification for pure UI changes). Live-verified at 375×812
+across Auto Flow, Research, Discover, Outbound Tools hub, and History:
+zero horizontal overflow on any page (checked programmatically via
+`scrollWidth` vs `clientWidth`, not eyeballed), `BottomTabBar` correctly
+shows `aria-current="page"` on the active tab, main content's bottom
+padding correctly clears the tab bar (56px, confirmed via
+`getComputedStyle`), the sticky CTA bar sits flush above the tab bar with
+no overlap (measured via `getBoundingClientRect`, not assumed), manifest
++ all 3 icon sizes + apple-touch-icon serve correctly (200 status,
+correct dimensions), and desktop (1280×800, explicitly NOT the Browser
+pane's own "desktop" resize preset — that preset renders at a much
+narrower actual width in this environment than its name implies, caught
+live rather than trusted) is fully unaffected: no tab bar, no extra
+padding, sidebar renders as before.
+
+**Not done, explicitly out of scope per the session's own scoping
+question**: the public landing page got no changes. Also not done,
+flagged but not pursued (lower priority, existing pages already had zero
+overflow at 375px so nothing was actually broken): a dedicated card-based
+mobile layout for the handful of table/dense-grid pages found during the
+initial audit (`run-history`, `outbound/overview`, `outbound/followups`,
+`intelligence-lab`, `company-discovery/CompanyMatchList`,
+`intelligence-lab/ComparisonPanel`, `auto-gtm/ContactInfoRow`) — worth a
+future look only if a real usability problem shows up on one of them
+specifically, not a blanket "redo every table" task.
+
 ## Outbound Workflow Modules — scope override (2026-07-17)
 **This section partially supersedes "DO NOT WORK ON RIGHT NOW" above.** The
 user explicitly authorized building architecture + mock providers for the

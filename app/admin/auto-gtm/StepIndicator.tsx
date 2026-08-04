@@ -121,9 +121,14 @@ export function StepIndicator({
           buttons used elsewhere in this page (touch-target pass) since
           this is the single most-clicked control in the entire flow.
           Phase C: bumped to size="lg" so it actually reads as the
-          dominant CTA it's described as, not just another default button. */}
+          dominant CTA it's described as, not just another default button.
+          Hidden on mobile (2026-08-04 mobile pass) — page.tsx renders a
+          sticky bottom-bar duplicate instead, so the CTA stays reachable
+          without scrolling back up to this header on a phone; this inline
+          copy would otherwise force the pill row to wrap awkwardly on
+          narrow screens anyway. */}
       {nextAction && (
-        <Button size="lg" onClick={nextAction.onClick} disabled={nextAction.disabled}>
+        <Button size="lg" onClick={nextAction.onClick} disabled={nextAction.disabled} className="hidden md:inline-flex">
           {nextAction.loading ? <Spinner className="size-3.5" /> : null}
           {nextAction.label}
         </Button>

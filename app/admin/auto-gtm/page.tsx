@@ -173,7 +173,7 @@ export default function AutoGtmFlowPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
+    <div className={cn('mx-auto max-w-3xl px-4 py-8 space-y-6', nextAction && 'pb-28 md:pb-8')}>
       <GlassCard>
         <CardContent className="space-y-5">
           <div className="flex items-start justify-between gap-3">
@@ -579,6 +579,27 @@ export default function AutoGtmFlowPage() {
       )}
 
         </motion.div>
+      )}
+
+      {/* Sticky bottom CTA — mobile only (2026-08-04 mobile pass). Mirrors
+          StepIndicator's nextAction button, which is hidden on mobile in
+          favor of this: a phone-sized checkout-flow-style sticky action bar
+          reads as "app" far more than requiring a scroll back to the header
+          to advance. Sits just above BottomTabBar (bottom offset = tab
+          bar's own 3.5rem height + its safe-area inset), not overlapping
+          it. Arbitrary-value calc()/env() here for the same reason
+          app/admin/layout.tsx uses it instead of a named @utility — see
+          globals.css's note on why calc() inside @utility silently failed
+          to compile in this Tailwind v4 install. */}
+      {nextAction && (
+        <div
+          className="fixed inset-x-0 bottom-[calc(3.5rem_+_env(safe-area-inset-bottom,0px))] z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:hidden"
+        >
+          <Button size="lg" className="w-full" onClick={nextAction.onClick} disabled={nextAction.disabled}>
+            {nextAction.loading ? <Spinner className="size-3.5" /> : null}
+            {nextAction.label}
+          </Button>
+        </div>
       )}
     </div>
   )

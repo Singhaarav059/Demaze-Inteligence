@@ -7,6 +7,7 @@
 import { Toaster } from 'sonner'
 import { Sidebar } from '@/components/shell/Sidebar'
 import { TopBar } from '@/components/shell/TopBar'
+import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { MotionConfigProvider } from '@/components/shell/MotionConfigProvider'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 
@@ -26,8 +27,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Sidebar />
         <div className="flex min-h-screen flex-col md:pl-60">
           <TopBar />
-          <main id="main-content" tabIndex={-1} className="flex-1 outline-none">{children}</main>
+          {/* Clears BottomTabBar's fixed height (its own min-h-14 = 3.5rem)
+              plus its safe-area inset on mobile — arbitrary-value syntax,
+              not a named @utility, see the note in globals.css for why.
+              md:pb-0 resets it once the tab bar itself is hidden (md:hidden)
+              and the desktop Sidebar takes over navigation instead. */}
+          <main id="main-content" tabIndex={-1} className="flex-1 pb-[calc(3.5rem_+_env(safe-area-inset-bottom,0px))] outline-none md:pb-0">{children}</main>
         </div>
+        <BottomTabBar />
       </div>
       <CommandPalette />
       <Toaster

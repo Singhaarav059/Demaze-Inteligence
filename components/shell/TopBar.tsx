@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { ChevronRightIcon } from './nav-icons'
-import { MobileNav } from './MobileNav'
 import { BrandMark } from './BrandMark'
 import { NAV, SECONDARY_NAV } from './nav-config'
 import {
@@ -32,9 +31,9 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 px-5 backdrop-blur">
       <div className="flex items-center gap-2 text-sm">
-        {/* Mobile nav (sidebar hidden < md) */}
-        <MobileNav />
-        {/* Mobile brand (sidebar hidden < md) */}
+        {/* Mobile brand (sidebar hidden < md — BottomTabBar covers primary
+            nav on mobile instead, so there's no hamburger trigger here
+            anymore, just the brand mark). */}
         <Link href="/admin/intelligence-lab" className="flex items-center gap-2 md:hidden">
           <BrandMark size="sm" />
         </Link>
@@ -62,7 +61,7 @@ export function TopBar() {
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="More tools"
-            className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:size-8"
           >
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
@@ -78,7 +77,10 @@ export function TopBar() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        {/* Hidden on the narrowest phones — with BottomTabBar covering
+            primary nav now, TopBar's mobile row only has real room for the
+            brand mark + section label + the two buttons above. */}
+        <span className="hidden rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline-block">
           Internal
         </span>
       </div>
