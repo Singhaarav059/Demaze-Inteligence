@@ -130,6 +130,7 @@ export function sourceTypeLabel(type: SourceType): string {
     news_article:                   'News Article',
     sustainability_report:          'Sustainability Report',
     corporate_website:              'Corporate Website',
+    regulatory_filing:              'SEC EDGAR Filing',
     other:                          'External Source',
   }
   return labels[type] ?? 'External Source'

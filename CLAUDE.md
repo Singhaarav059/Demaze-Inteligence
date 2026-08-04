@@ -2177,11 +2177,22 @@ real bottleneck after this initiative's changes.
   user's request in favor of Gmail (free, OAuth-based, already an interim
   provider since 2026-07-19) — see `docs/DECISIONS.md`'s "Outreach send
   (Phase 2, item 9)" section for the full history including the removal
-  and the incident that prompted it. What's NOT done: the user has
-  configured the Google Cloud OAuth app but hasn't yet clicked through the
-  per-account consent screen in this app (no `gmail` row exists in
-  `outbound_integrations` yet) — until then sending stays on `mock`
-  regardless of what code exists.
+  and the incident that prompted it. **Stale note corrected (2026-08-04)**:
+  this used to say the user hadn't clicked through Google's consent screen
+  yet, so sending stayed on `mock`. Checked the live `outbound_integrations`
+  table directly (not just old notes) and that's no longer true — the
+  `sending` capability's active row is `gmail`, and a live token-refresh
+  probe against Google's servers confirmed the connection genuinely still
+  works (fetched the real connected address). Sending is live, not pending.
+  Also found the same staleness for two other capabilities while checking:
+  `decision_maker_discovery` and `email_finder`/`enrichment` are ALSO
+  already active on `prospeo`, not `mock` — this file's other notes saying
+  otherwise (e.g. "reset to mock as the safe default" under the Prospeo
+  session below) describe a state that was later changed outside of a
+  documented session. Trust the live `/admin/outbound/integrations` page
+  or a direct `outbound_integrations` query over this file's narrative for
+  "is X actually on right now" — this file's dated history can lag actual
+  DB/provider state, not just code state.
 - ~~Decision-maker/contact discovery implementation — blocked on a
   people-data vendor decision~~ **RESOLVED (2026-07-28, corrected status)**
   — this bullet was stale. The vendor decision (Prospeo, `search-person`
@@ -2195,13 +2206,131 @@ real bottleneck after this initiative's changes.
 - **LinkedIn-driven architecture decisions**. LinkedIn scraping/automation
   stays excluded regardless of the above — contact discovery should go
   through a people-data API, not LinkedIn
-- Government-filings APIs (EDGAR/MCA) — logged as a future source category
-  (item 4's scope note), not being built now.
+- ~~Government-filings APIs (EDGAR/MCA) — logged as a future source
+  category (item 4's scope note), not being built now.~~ **RESOLVED for
+  EDGAR, MCA explicitly ruled out (2026-08-04)** — see the dedicated
+  "Government filings (EDGAR) enrichment source" section below.
 - RESOLVED (2026-07-10): the "more enrichment work — needs an explicit decision"
   note that used to be here is resolved. The decision was made: enrichment gets
   repositioned to a parallel, always-on stage (item 2), new source categories get
   added (item 4), PDF handling gets fixed (item 3). Work order and status are
   tracked in "Implementation sequence" below.
+
+## RESOLVED 2026-08-04 — Government filings (EDGAR) enrichment source; MCA
+## explicitly ruled out, not just deferred
+User asked to build out both remaining "marked excluded" items from a
+broader scope-expansion request (mobile enrichment and LinkedIn scraping
+were both explicitly excluded from this same request — see the LinkedIn
+note below). Researched both government-filings sources before writing any
+code, since the earlier assumption ("both are free public APIs") turned
+out to be only half true:
+- **SEC EDGAR**: genuinely free, public, no API key, no CAPTCHA — confirmed
+  against SEC's own EDGAR API documentation. Three services (ticker/CIK
+  map, Submissions API, XBRL company-facts API) need nothing but a
+  descriptive `User-Agent` header and respecting SEC's own ~10 req/sec
+  rate limit. Built.
+- **India's MCA company registry**: **no official public API exists at
+  all.** The only access path is the mca.gov.in web portal, and it's
+  CAPTCHA-gated even for basic free master-data lookups. Building
+  automation to solve/bypass a CAPTCHA is out of scope regardless of intent
+  — this is a hard line, not a judgment call, so MCA was NOT built. If
+  India company-filing data is wanted later, that's a paid third-party
+  aggregator decision (Probe42, Tofler, Zauba Corp, etc.) — a new vendor
+  choice needing its own explicit decision, same category as Prospeo/Gmail
+  were, not something to build toward silently.
+
+**Built**: new `lib/enrichment/sources/edgar-client.ts` —
+`fetchEdgarFilings(companyName)`. Resolves a company name against SEC's
+`company_tickers.json` ticker map via `matchTicker()` (pure, unit-tested
+without network), using the same "prefer under-confidence, refuse to guess
+when ambiguous" discipline as `website-discovery.ts`: exact normalized-name
+match wins outright; single-word queries require a full exact match (no
+loose containment); multi-word queries may match via word-boundary
+containment ONLY when exactly one candidate qualifies AND its own word
+count isn't wildly longer than the query's (guards against a short query
+matching an unrelated long title that happens to contain all its words).
+`normalizeName()` strips genuine legal-entity suffixes (Inc/Corp/Ltd/PLC/
+etc.) but deliberately does NOT strip "Holdings"/"Group" — unlike
+`website-discovery.ts`'s equivalent list, those are frequently part of a
+SEC-registered name's real distinguishing identity (e.g. "Blackstone
+Group"), not a stripped-off suffix; treating them as one caused two
+genuinely different synthetic test entities to collapse onto the same
+normalized form during testing, caught and fixed before this shipped. Also
+normalizes `&` to `and` and filters connector stopwords (and/the/of/a/an)
+so "Johnson & Johnson" and "Johnson and Johnson" resolve identically.
+
+On a confident match: fetches `data.sec.gov/submissions/CIK##########.json`
+(company profile + recent filings) and formats up to 8 recent filings into
+a `[SOURCE: SEC EDGAR Filings ...]` context block, matching this pipeline's
+existing block format exactly. Filings are sorted with 8-K/8-K-A/DEF 14A/
+S-1/424B first (the form types most likely to carry an actual trigger-event
+signal — executive changes, M&A, material agreements — per this file's own
+"named individual + explicit stated portfolio" signal-library entry), not
+just by date. The ticker map itself is cached at module scope but only on
+SUCCESS — a transient SEC outage on the first call must not permanently
+disable EDGAR lookups for the rest of the server process; found and fixed
+this exact bug while writing tests (an earlier draft cached on any
+resolved value including `null`, which also made the test file's per-test
+mocks leak into each other — fixed both by only caching a real result and
+having tests use `vi.resetModules()` + per-test dynamic import instead of
+a static top-level import).
+
+Wired into `lib/enrichment/web-enricher.ts`'s `discoverAndFetchExternalSources()`
+— runs in parallel (`Promise.all`) with the existing Tavily/Serper
+discovery, unconditionally (not gated on search-API keys, since it costs
+nothing and needs neither). When a match is found, it's prepended as a
+genuine 6th source that does NOT compete for the existing 5-slot Tavily/
+Serper fetch budget (no Firecrawl/PDF-fetch cost to it — the content is
+already fetched+formatted directly), same "additive, not a fallback"
+principle as the discovery+scrape overlap from Item 2. New `SourceType`
+`regulatory_filing` (very_high evidence strength, priority_score 98 — just
+below `annual_report`'s 100) registered in `discovery-engine.ts` and
+`source-prioritizer.ts`'s label map, even though it's never produced by
+`classifySourceType()` (EDGAR is deterministic, not search-derived) — kept
+in those central maps anyway so the rest of the pipeline (labels, tier
+rendering, `PrioritizedSource` shape) already knows how to handle it, same
+"one registry, not a parallel one" discipline as Item 4's new source types.
+
+New `.env.example` var `SEC_EDGAR_USER_AGENT` (optional — SEC's fair-access
+policy asks for a descriptive requester identity; a generic default is used
+if unset, so this works out of the box either way).
+
+**Verified**: `tsc --noEmit` clean, full suite 633/633 (12 new assertions
+in `tests/edgar-client.test.ts` — 8 for `matchTicker()`'s pure matching
+logic including the ambiguous-match and legal-suffix-collision cases found
+while writing them, 4 for `fetchEdgarFilings()` with `global.fetch`
+mocked). **Live-verified against SEC's real servers** (no pipeline/LLM
+quota needed — EDGAR itself is free): General Electric correctly resolved
+to its real CIK (40545) with genuinely current, real filings (an 8-K dated
+2026-07-16, Form 4s, a 13F-HR, a 10-Q — live data, not fixtures); Ador
+Welding and Bharat Forge (real companies from this repo's own benchmark
+set, both India-based and not SEC-registered) correctly and honestly
+returned no match rather than guessing — confirms the pipeline degrades
+cleanly for the large majority of researched companies (private, non-US,
+SMB) that will never have EDGAR coverage, exactly as designed.
+
+**Not done, explicitly out of scope per the finding above**: MCA/India
+company-filing data — needs a paid third-party vendor decision first, not
+a code task.
+
+## RESOLVED 2026-08-04 — LinkedIn scraping/automation: reconfirmed excluded,
+## mobile/phone enrichment: explicitly deferred (not this session)
+Same broader session as the EDGAR work above — user initially said "do all
+of them, even the one marked excluded" (referring to this file's own
+"DO NOT WORK ON RIGHT NOW" LinkedIn bullet), which is exactly the situation
+that bullet's own text says to "stop and flag it rather than proceeding."
+Flagged directly rather than silently building or silently skipping: asked
+what they actually meant (the already-supported manual-paste URL field vs.
+an official LinkedIn partner API vs. actual scraping/session automation)
+and explained the real risk of the third option (LinkedIn's User Agreement
+prohibition + active enforcement history — account bans, cease-and-desists,
+lawsuits) — user came back with no strong preference, so this defaulted to
+the safe read (LinkedIn stays excluded, no automation built) per this
+file's own standing rule. **Still excluded, unchanged.** Immediately after,
+user separately confirmed excluding mobile/phone enrichment too (real
+per-lookup Prospeo cost, needs its own explicit go-ahead before wiring
+live) — also still not built, deferred at the user's own request this
+time, not a unilateral call.
 
 ## Outbound Workflow Modules — scope override (2026-07-17)
 **This section partially supersedes "DO NOT WORK ON RIGHT NOW" above.** The

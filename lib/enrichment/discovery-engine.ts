@@ -25,6 +25,7 @@ export type SourceType =
   | 'news_article'
   | 'sustainability_report'
   | 'corporate_website'
+  | 'regulatory_filing'
   | 'other'
 
 export type EvidenceStrength = 'very_high' | 'high' | 'medium' | 'low'
@@ -99,6 +100,13 @@ const SOURCE_STRENGTH: Record<SourceType, EvidenceStrength> = {
   news_article:                   'medium',
   sustainability_report:          'medium',
   corporate_website:              'low',
+  // Not produced by classifySourceType() below — regulatory_filing comes
+  // exclusively from lib/enrichment/sources/edgar-client.ts's deterministic
+  // SEC EDGAR lookup, never from a Tavily/Serper search result. Kept in
+  // this map anyway so it's a real SourceType the rest of the pipeline
+  // (sourceTypeLabel, evidenceStrengthTier, PrioritizedSource) already
+  // knows how to render, same as every other type here.
+  regulatory_filing:              'very_high',
   other:                          'low',
 }
 
@@ -115,6 +123,7 @@ const PRIORITY_SCORE: Record<SourceType, number> = {
   news_article:                   45,
   sustainability_report:          40,
   corporate_website:              20,
+  regulatory_filing:              98,
   other:                          10,
 }
 

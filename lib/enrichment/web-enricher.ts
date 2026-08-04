@@ -39,6 +39,7 @@ import {
   evidenceStrengthTier,
   type PrioritizedSource,
 } from './source-prioritizer'
+import { fetchEdgarFilings } from './sources/edgar-client'
 
 // ── Public types ──────────────────────────────────────────────
 
@@ -411,12 +412,20 @@ export async function discoverAndFetchExternalSources(
   const tavilyKey = process.env.TAVILY_API_KEY
   const serperKey = process.env.SERPER_API_KEY
 
-  // ── Stage 1: Discovery (Tavily → Serper) ─────────────────────
-  let discovered: DiscoveredSource[] = []
-  if (tavilyKey || serperKey) {
-    discovered = await discoverEvidenceSources(companyName || domain, domain)
-    console.log(`[Enrichment] Discovery: ${discovered.length} sources via ${tavilyKey ? 'Tavily' : 'Serper'}`)
-  }
+  // ── Stage 1: Discovery (Tavily → Serper) — and, in parallel, SEC EDGAR
+  // (government filings — free, deterministic, no search-API cost, so it
+  // runs unconditionally, not gated on tavilyKey/serperKey being set) ────
+  const [discovered, edgarResult] = await Promise.all([
+    (tavilyKey || serperKey)
+      ? discoverEvidenceSources(companyName || domain, domain).then(d => {
+          console.log(`[Enrichment] Discovery: ${d.length} sources via ${tavilyKey ? 'Tavily' : 'Serper'}`)
+          return d
+        })
+      : Promise.resolve<DiscoveredSource[]>([]),
+    companyName ? fetchEdgarFilings(companyName) : Promise.resolve(null),
+  ])
+
+  if (edgarResult) console.log(`[Enrichment] SEC EDGAR: matched CIK ${edgarResult.cik} (${edgarResult.companyName})`)
 
   // ── Stage 2: Prioritize ───────────────────────────────────────
   const prioritized = discovered.length > 0 ? prioritizeSources(discovered, 5) : []
@@ -426,9 +435,32 @@ export async function discoverAndFetchExternalSources(
     ? await fetchPrioritizedSources(prioritized)
     : { contextBlocks: [], fetched: [] }
 
-  console.log(`[Enrichment] External: ${fetched.length} fetched → ${contextBlocks.length} blocks`)
+  // SEC EDGAR is a genuine, deterministic 6th source when it matches — it
+  // doesn't compete for the 5-slot Tavily/Serper fetch budget (no Firecrawl/
+  // search-API cost to it at all, the content is already fetched+formatted
+  // by edgar-client.ts), so it's prepended here rather than folded into
+  // prioritizeSources()'s capped selection.
+  const finalContextBlocks = edgarResult ? [edgarResult.contextBlock, ...contextBlocks] : contextBlocks
+  const finalPrioritized: PrioritizedSource[] = edgarResult
+    ? [
+        {
+          url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${edgarResult.cik}`,
+          title: `SEC EDGAR — ${edgarResult.companyName}`,
+          snippet: `CIK ${edgarResult.cik}`,
+          source_type: 'regulatory_filing',
+          evidence_strength: 'very_high',
+          priority_score: 98,
+          query_category: 'investor',
+          fetch_order: 0,
+          should_fetch: true,
+        },
+        ...prioritized.map(p => ({ ...p, fetch_order: p.fetch_order + 1 })),
+      ]
+    : prioritized
 
-  return { discovered, prioritized, contextBlocks }
+  console.log(`[Enrichment] External: ${fetched.length} fetched${edgarResult ? ' + 1 EDGAR' : ''} → ${finalContextBlocks.length} blocks`)
+
+  return { discovered, prioritized: finalPrioritized, contextBlocks: finalContextBlocks }
 }
 
 /**
