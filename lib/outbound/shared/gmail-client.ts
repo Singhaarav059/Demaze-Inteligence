@@ -543,6 +543,14 @@ export async function searchGmailMessages(
     const url = new URL(GMAIL_MESSAGES_URL)
     url.searchParams.set('q', query)
     url.searchParams.set('maxResults', '5')
+    // Gmail's messages.list excludes Spam/Trash by default — without this,
+    // a message that actually landed in Spam (exactly the case the warmup
+    // engine's spam-rescue step exists to catch) is invisible to this
+    // search entirely, causing it to silently look "not found" instead of
+    // "found, in spam" (live-confirmed 2026-08-10: a real spam-filed warmup
+    // exchange returned resultSizeEstimate:0 without this param, and was
+    // found immediately with it set).
+    url.searchParams.set('includeSpamTrash', 'true')
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
