@@ -19,6 +19,13 @@
 //
 // Aggregation happens in JS, not raw SQL/RPC — same convention this
 // codebase already uses throughout (e.g. the warmup engine's counter Maps).
+//
+// Optional ?domain= filter (added 2026-08-10) — lets a caller ask "does
+// this domain already have a tracked pipeline entry" before deciding
+// whether to create a new pipeline_test_runs row or update an existing
+// one. See useAutoGtmFlow.ts's runResearch() for the actual consumer:
+// re-researching a company already in this list now updates that same
+// run in place instead of inserting a duplicate row.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -51,6 +58,7 @@ export async function GET(req: NextRequest) {
 
   const limitParam = Number(req.nextUrl.searchParams.get('limit'))
   const limit = Number.isInteger(limitParam) && limitParam > 0 ? limitParam : 50
+  const domainFilter = req.nextUrl.searchParams.get('domain')?.trim().toLowerCase() || null
 
   const supabase = createServerClient()
   const intervalsDays = await getFollowupIntervals()
@@ -89,7 +97,7 @@ export async function GET(req: NextRequest) {
   const runById = new Map((runs ?? []).map((r: RunRow) => [r.id, r]))
   const now = new Date()
 
-  const companies = runIds
+  let companies = runIds
     .map(runId => {
       const rows = byRunId.get(runId)!
       const run = runById.get(runId)
@@ -125,7 +133,11 @@ export async function GET(req: NextRequest) {
       }
     })
     .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt))
-    .slice(0, limit)
+
+  if (domainFilter) {
+    companies = companies.filter(c => c.domain?.toLowerCase() === domainFilter)
+  }
+  companies = companies.slice(0, limit)
 
   return NextResponse.json({ success: true, companies, now: now.toISOString() })
 }

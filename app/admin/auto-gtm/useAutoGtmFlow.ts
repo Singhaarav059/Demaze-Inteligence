@@ -176,6 +176,87 @@ export function useAutoGtmFlow() {
     router.replace('/admin/auto-gtm')
   }, [router])
 
+  // Reloads contacts + campaign/send state for a given run id — extracted
+  // out of resumeFromRun (2026-08-10) so runResearch() can reuse the exact
+  // same restoration logic when re-researching a domain that already has a
+  // tracked pipeline entry, WITHOUT also overwriting result/url/runId the
+  // way a full resumeFromRun() would (runResearch already has fresher
+  // versions of those from the analysis call that just completed).
+  const restoreContactsAndCampaign = useCallback(async (id: string) => {
+    const contactsRes = await fetch(`/api/admin/outbound/contacts?source_run_id=${id}`)
+    const contactsData = await contactsRes.json()
+    let resumedContactIds: string[] = []
+    if (contactsData.success) {
+      setContacts(contactsData.contacts)
+      resumedContactIds = (contactsData.contacts as Array<{ id: string }>).map(c => c.id)
+      // Contacts already exist for this run, so decision-maker selection
+      // (step 2) is already done — unlock at least step 3 regardless of
+      // which step the URL opened at (e.g. a Resume link from Run History
+      // always opens at step 2, since History has no cheap way to know how
+      // far a given run actually got without fetching this same data).
+      // This only ever widens which StepIndicator pills are clickable —
+      // it never changes which step's content is shown first.
+      if (contactsData.contacts.length > 0) {
+        setMaxStepReached(prev => (prev < 3 ? 3 : prev))
+      }
+    }
+
+    // Restore campaign/send state too (2026-07-19 fix) — without this, a
+    // mid-flow refresh at the Outreach & Send step loses campaignId, and
+    // ensureCampaignId() would then create a BRAND NEW campaign on the
+    // next Send click. Since send status is scoped per-campaign, that new
+    // campaign's contacts all start 'queued' again — re-sending to
+    // contacts that were already sent under the original campaign.
+    //
+    // FIXED (2026-08-05): this used to look up
+    // `?source_run_id=${id}` against outbound_campaigns — works for a
+    // single-company campaign (which has source_run_id set), but silently
+    // finds NOTHING for a batch-originated company, since batch mode
+    // creates one SHARED campaign for the whole batch with
+    // source_run_id: null. That meant resuming into a batch-originated
+    // company never restored campaignId/campaignContactStatus at all —
+    // already-sent contacts would show as unsent, and clicking Send again
+    // would create a genuinely duplicate campaign for contacts that
+    // already had one. Fixed by looking up the campaign via THIS
+    // company's own contacts instead (?contact_ids=...,  a new filter on
+    // the same route) — outbound_contacts.source_run_id is reliably set
+    // per-company for both single and batch-created contacts, and any of
+    // those contacts' own outbound_campaign_contacts.campaign_id points at
+    // whichever campaign (dedicated or shared) they were actually
+    // enqueued into. Works identically for both cases; source_run_id is no
+    // longer used here at all.
+    const existingCampaign = resumedContactIds.length > 0
+      ? await (async () => {
+          const campaignsRes = await fetch(`/api/admin/outbound/campaigns?contact_ids=${resumedContactIds.join(',')}`)
+          const campaignsData = await campaignsRes.json()
+          return campaignsData.success ? campaignsData.campaigns?.[0] : null
+        })()
+      : null
+    if (existingCampaign) {
+      // A campaign only ever gets created from Outreach & Send's own send
+      // actions (ensureCampaignId(), called lazily on first Send) — its
+      // existence means this run reached step 4 before, so every pill
+      // unlocks, INCLUDING step 5 (Track & Follow Up) — that step has no
+      // completion gate of its own beyond a campaign existing, same
+      // "widen maxStepReached, never touch step" discipline as the
+      // contacts check above.
+      setMaxStepReached(prev => (prev < 5 ? 5 : prev))
+      setCampaignId(existingCampaign.id)
+      const campaignContactsRes = await fetch(`/api/admin/outbound/campaigns/${existingCampaign.id}/contacts`)
+      const campaignContactsData = await campaignContactsRes.json()
+      if (campaignContactsData.success) {
+        const restored: Record<string, SendOutcomeDetail> = {}
+        for (const row of campaignContactsData.contacts as Array<{ contact_id: string; status: string }>) {
+          // 'queued' means never sent (or skipped/failed and still
+          // retry-eligible) — leave it absent so the contact still shows
+          // as sendable. Anything past 'queued' means it went out.
+          if (row.status !== 'queued') restored[row.contact_id] = { status: 'sent' }
+        }
+        setCampaignContactStatus(restored)
+      }
+    }
+  }, [])
+
   const resumeFromRun = useCallback(async (id: string) => {
     try {
       // Fetch this one run directly by id — NOT the `?limit=50` list route.
@@ -199,85 +280,14 @@ export function useAutoGtmFlow() {
       // run — regardless of whether it was originally researched solo or as
       // part of a larger batch (batch's own progress state is pure React
       // state, never persisted, so there's nothing to reconstruct there
-      // anyway; see this function's campaign-lookup comment below for the
-      // related batch-campaign fix).
+      // anyway; see restoreContactsAndCampaign's own campaign-lookup comment
+      // for the related batch-campaign fix).
       setInputMode('single')
-      const contactsRes = await fetch(`/api/admin/outbound/contacts?source_run_id=${run.id}`)
-      const contactsData = await contactsRes.json()
-      let resumedContactIds: string[] = []
-      if (contactsData.success) {
-        setContacts(contactsData.contacts)
-        resumedContactIds = (contactsData.contacts as Array<{ id: string }>).map(c => c.id)
-        // Contacts already exist for this run, so decision-maker selection
-        // (step 2) is already done — unlock at least step 3 regardless of
-        // which step the URL opened at (e.g. a Resume link from Run History
-        // always opens at step 2, since History has no cheap way to know how
-        // far a given run actually got without fetching this same data).
-        // This only ever widens which StepIndicator pills are clickable —
-        // it never changes which step's content is shown first.
-        if (contactsData.contacts.length > 0) {
-          setMaxStepReached(prev => (prev < 3 ? 3 : prev))
-        }
-      }
-
-      // Restore campaign/send state too (2026-07-19 fix) — without this, a
-      // mid-flow refresh at the Outreach & Send step loses campaignId, and
-      // ensureCampaignId() would then create a BRAND NEW campaign on the
-      // next Send click. Since send status is scoped per-campaign, that new
-      // campaign's contacts all start 'queued' again — re-sending to
-      // contacts that were already sent under the original campaign.
-      //
-      // FIXED (2026-08-05): this used to look up
-      // `?source_run_id=${run.id}` against outbound_campaigns — works for a
-      // single-company campaign (which has source_run_id set), but silently
-      // finds NOTHING for a batch-originated company, since batch mode
-      // creates one SHARED campaign for the whole batch with
-      // source_run_id: null. That meant resuming into a batch-originated
-      // company never restored campaignId/campaignContactStatus at all —
-      // already-sent contacts would show as unsent, and clicking Send again
-      // would create a genuinely duplicate campaign for contacts that
-      // already had one. Fixed by looking up the campaign via THIS
-      // company's own contacts instead (?contact_ids=...,  a new filter on
-      // the same route) — outbound_contacts.source_run_id is reliably set
-      // per-company for both single and batch-created contacts, and any of
-      // those contacts' own outbound_campaign_contacts.campaign_id points at
-      // whichever campaign (dedicated or shared) they were actually
-      // enqueued into. Works identically for both cases; source_run_id is no
-      // longer used here at all.
-      const existingCampaign = resumedContactIds.length > 0
-        ? await (async () => {
-            const campaignsRes = await fetch(`/api/admin/outbound/campaigns?contact_ids=${resumedContactIds.join(',')}`)
-            const campaignsData = await campaignsRes.json()
-            return campaignsData.success ? campaignsData.campaigns?.[0] : null
-          })()
-        : null
-      if (existingCampaign) {
-        // A campaign only ever gets created from Outreach & Send's own send
-        // actions (ensureCampaignId(), called lazily on first Send) — its
-        // existence means this run reached step 4 before, so every pill
-        // unlocks, INCLUDING step 5 (Track & Follow Up) — that step has no
-        // completion gate of its own beyond a campaign existing, same
-        // "widen maxStepReached, never touch step" discipline as the
-        // contacts check above.
-        setMaxStepReached(prev => (prev < 5 ? 5 : prev))
-        setCampaignId(existingCampaign.id)
-        const campaignContactsRes = await fetch(`/api/admin/outbound/campaigns/${existingCampaign.id}/contacts`)
-        const campaignContactsData = await campaignContactsRes.json()
-        if (campaignContactsData.success) {
-          const restored: Record<string, SendOutcomeDetail> = {}
-          for (const row of campaignContactsData.contacts as Array<{ contact_id: string; status: string }>) {
-            // 'queued' means never sent (or skipped/failed and still
-            // retry-eligible) — leave it absent so the contact still shows
-            // as sendable. Anything past 'queued' means it went out.
-            if (row.status !== 'queued') restored[row.contact_id] = { status: 'sent' }
-          }
-          setCampaignContactStatus(restored)
-        }
-      }
+      await restoreContactsAndCampaign(run.id)
     } catch {
       // Resume is best-effort — a failed resume just leaves the flow at step 1.
     }
-  }, [])
+  }, [restoreContactsAndCampaign])
 
   // Resume from a saved run if the URL already has one (e.g. mid-flow refresh).
   // Read client-side only, after mount — see the file header for why this
@@ -348,44 +358,85 @@ export function useAutoGtmFlow() {
         return
       }
 
-      const saveRes = await fetch('/api/admin/test-runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_url: urlNormalized,
-          domain: data.domain,
-          operation: 'analysis',
-          status: 'completed',
-          scraped_pages: data.scrapeResult?.successfulUrls.length ?? 0,
-          failed_pages: data.scrapeResult?.failedUrls.length ?? 0,
-          quality_score: data.quality?.score ?? 0,
-          quality_note: data.quality?.note,
-          token_usage: data.aiMeta?.tokensUsed ?? 0,
-          provider_used: data.aiMeta?.provider,
-          model_used: data.aiMeta?.model,
-          ai_latency_ms: data.aiMeta?.latencyMs,
-          execution_time_ms: data.executionTimeMs,
-          scrape_time_ms: data.scrapeTimeMs,
-          analysis_time_ms: data.analysisTimeMs,
-          discovery_method: data.scrapeResult?.discoveryMethod,
-          website_discovery: data.websiteDiscovery ?? null,
-          scrape_result: data.scrapeResult,
-          final_result: data.analysisResult,
-          prompts: data.prompts,
-          error_message: data.error,
-        }),
-      })
+      // Before saving, check whether this domain already has a tracked
+      // pipeline entry (contacts/a campaign attached — the exact set
+      // /api/admin/outbound/pipeline surfaces as "Sent Companies" on this
+      // page). FIXED (2026-08-10): every research call used to unconditionally
+      // insert a brand-new pipeline_test_runs row, so re-researching a
+      // company you'd already sent to left a second, disconnected entry
+      // behind in that list — same domain, same company, no relation to the
+      // original run's contacts/campaign. If a match is found, that SAME
+      // run is updated in place (PATCH) instead of inserting a new one; a
+      // domain with no existing pipeline entry (first-time research, or a
+      // company that never got past decision-maker discovery) still gets a
+      // fresh row exactly as before.
+      let existingRunId: string | null = null
+      if (data.domain) {
+        try {
+          const pipelineRes = await fetch(`/api/admin/outbound/pipeline?domain=${encodeURIComponent(data.domain)}`)
+          const pipelineData = await pipelineRes.json()
+          if (pipelineData.success && pipelineData.companies?.length > 0) {
+            existingRunId = pipelineData.companies[0].runId
+          }
+        } catch {
+          // Best-effort — falls through to the normal insert path below.
+        }
+      }
+
+      const runPayload = {
+        company_url: urlNormalized,
+        domain: data.domain,
+        operation: 'analysis',
+        status: 'completed',
+        scraped_pages: data.scrapeResult?.successfulUrls.length ?? 0,
+        failed_pages: data.scrapeResult?.failedUrls.length ?? 0,
+        quality_score: data.quality?.score ?? 0,
+        quality_note: data.quality?.note,
+        token_usage: data.aiMeta?.tokensUsed ?? 0,
+        provider_used: data.aiMeta?.provider,
+        model_used: data.aiMeta?.model,
+        ai_latency_ms: data.aiMeta?.latencyMs,
+        execution_time_ms: data.executionTimeMs,
+        scrape_time_ms: data.scrapeTimeMs,
+        analysis_time_ms: data.analysisTimeMs,
+        discovery_method: data.scrapeResult?.discoveryMethod,
+        website_discovery: data.websiteDiscovery ?? null,
+        scrape_result: data.scrapeResult,
+        final_result: data.analysisResult,
+        prompts: data.prompts,
+        error_message: data.error,
+      }
+
+      const saveRes = existingRunId
+        ? await fetch(`/api/admin/test-runs/${existingRunId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(runPayload),
+          })
+        : await fetch('/api/admin/test-runs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(runPayload),
+          })
       const saveData = await saveRes.json()
       if (saveData.success) {
+        const resolvedRunId = existingRunId ?? saveData.id
         // Stay on step 1 — the user reviews the research result and clicks
         // Continue explicitly (see the Continue button rendered below the
         // ResearchCard, and the top-of-page continue control). Auto-
         // advancing here used to skip that review entirely.
-        setRunId(saveData.id)
+        setRunId(resolvedRunId)
         const params = new URLSearchParams()
         params.set('step', '1')
-        params.set('runId', saveData.id)
+        params.set('runId', resolvedRunId)
         router.replace(`/admin/auto-gtm?${params.toString()}`)
+        if (existingRunId) {
+          // Re-researching a company already in the pipeline — reload its
+          // existing contacts/campaign state so decision-maker discovery
+          // (step 2) doesn't re-run from scratch and create duplicate
+          // outbound_contacts rows for people already found under this run.
+          await restoreContactsAndCampaign(existingRunId)
+        }
       } else {
         // Every later step needs a saved runId to attach contacts/decision-
         // makers to (a contact's source_run_id is a UUID column; there's
@@ -397,7 +448,7 @@ export function useAutoGtmFlow() {
     } finally {
       setResearching(false)
     }
-  }, [url, mode, router])
+  }, [url, mode, router, restoreContactsAndCampaign])
 
   const addContactRow = useCallback((contact: OutboundContact) => {
     setContacts(prev => [contact, ...prev])
