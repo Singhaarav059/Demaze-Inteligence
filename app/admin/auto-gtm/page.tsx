@@ -62,6 +62,8 @@ import { DecisionMakerFinder, type DecisionMakerFinderHandle } from '@/app/admin
 import { StepIndicator, STEPS } from './StepIndicator'
 import { ContactInfoStep } from './ContactInfoStep'
 import { OutreachStep } from './OutreachStep'
+import { TrackFollowUpStep } from './TrackFollowUpStep'
+import { CompanyPipelineList } from './CompanyPipelineList'
 import { useAutoGtmFlow, type BatchCompanyStatus } from './useAutoGtmFlow'
 
 // Hedged as "likely current activity", not measured fact — there's no
@@ -170,6 +172,11 @@ export default function AutoGtmFlowPage() {
     }
   } else if (flow.step === 3) {
     nextAction = { label: 'Continue to Outreach & Send', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
+  } else if (flow.step === 4) {
+    // Gated on a campaign existing (i.e. at least one send/enqueue attempt
+    // has happened), not on send count — "0 sent" is still a valid,
+    // visitable state on the next step, same as this step's own empty states.
+    nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(5), disabled: !flow.campaignId }
   }
 
   return (
@@ -210,7 +217,7 @@ export default function AutoGtmFlowPage() {
           <StepIndicator
             current={flow.step}
             maxReached={flow.maxStepReached}
-            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4)}
+            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5)}
             nextAction={nextAction}
           />
         </CardContent>
@@ -359,6 +366,19 @@ export default function AutoGtmFlowPage() {
             <StageProgress active={flow.researching} stages={RESEARCH_STAGES} />
           </CardContent>
         </Card>
+      )}
+
+      {flow.step === 1 && flow.inputMode === 'single' && !hasResearch && (
+        <CompanyPipelineList
+          onResume={async runId => {
+            await flow.resumeFromRun(runId)
+            // Step 5 (Track & Follow Up), not step 4 — resuming here means
+            // "I already sent, let me check on it," not "let me draft/send
+            // again." Every row in this list has, by construction, already
+            // reached step 4, so step 5 is always a valid landing spot.
+            flow.setStep(5)
+          }}
+        />
       )}
 
       {flow.step === 1 && flow.inputMode === 'batch' && (
@@ -573,6 +593,19 @@ export default function AutoGtmFlowPage() {
             updateContactEmail={flow.updateContactEmail}
           />
           <Button variant="outline" onClick={() => flow.setStep(3)}>
+            ← Back
+          </Button>
+        </>
+      )}
+
+      {/* Step 5: Track & Follow Up (real send/open/reply status for this
+          company's contacts, continuing the flow past send instead of
+          leaving it as a dead end) */}
+
+      {flow.step === 5 && (
+        <>
+          <TrackFollowUpStep campaignId={flow.campaignId} contacts={flow.contacts} />
+          <Button variant="outline" onClick={() => flow.setStep(4)}>
             ← Back
           </Button>
         </>

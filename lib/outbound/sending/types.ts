@@ -22,6 +22,14 @@ export interface SendEmailRequest {
   // Providers without a threading concept (mock) just ignore both.
   threadId?: string
   inReplyTo?: string
+  // Open tracking (2026-08-05) — outbound_campaign_contacts.id for this
+  // specific send. Only the Gmail provider uses it (to embed a tracking
+  // pixel pointed at app/api/track/open/[campaignContactId]); providers
+  // without an HTML-body concept (mock) ignore it. Optional because a send
+  // with no known campaign_contact row yet (there isn't one) simply gets no
+  // pixel — same graceful-degradation shape as every other optional field
+  // here.
+  campaignContactId?: string
 }
 
 // 'suppressed' (Session 3, suppression list) means sendEmail() refused to

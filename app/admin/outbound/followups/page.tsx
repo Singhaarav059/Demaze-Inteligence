@@ -18,9 +18,12 @@
 // so it gets its own confirm too.
 // ============================================================
 
-import { useEffect, useState } from 'react'
-import { Clock, Mail } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
+import { toast } from 'sonner'
+import { ChevronRight, Clock, Mail } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,10 +32,20 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GuideNote } from '@/components/ui/guide-note'
+import { cn } from '@/lib/utils'
+import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
+import type { FollowupEngineTickSummary } from '@/lib/outbound/sending/followup-engine/run-tick'
 import { useFollowupPanel, type FollowupRow } from './useFollowupPanel'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 
 type PendingAction = { type: 'send' | 'stop'; row: FollowupRow } | null
+
+interface CompanyGroup {
+  companyName: string
+  rows: FollowupRow[]
+  overdueCount: number
+  earliestDueMs: number
+}
 
 function formatDue(dueAt: string | null, overdue: boolean) {
   if (!dueAt) return null
@@ -40,6 +53,41 @@ function formatDue(dueAt: string | null, overdue: boolean) {
   const days = Math.round(Math.abs(ms) / (24 * 60 * 60 * 1000))
   if (overdue) return days === 0 ? 'Due today' : `Overdue by ${days}d`
   return days === 0 ? 'Due today' : `Due in ${days}d`
+}
+
+// Groups the flat, due-soonest-sorted row list into one folder per company —
+// requested directly (2026-08-04): with multiple contacts across several
+// companies all owed follow-ups, the flat list made it hard to see "what's
+// outstanding for company X" without scanning every row. Groups themselves
+// stay sorted by their most urgent row (overdue groups first, then soonest
+// due) so the page still answers "what needs attention first" at a glance
+// even collapsed — the same promise the old flat list's sort order made.
+// Row order within a group is preserved exactly as the API returned it.
+function groupByCompany(rows: FollowupRow[]): CompanyGroup[] {
+  const byCompany = new Map<string, FollowupRow[]>()
+  for (const row of rows) {
+    const key = row.companyName || 'Unknown company'
+    const existing = byCompany.get(key)
+    if (existing) existing.push(row)
+    else byCompany.set(key, [row])
+  }
+
+  const groups: CompanyGroup[] = Array.from(byCompany.entries()).map(([companyName, groupRows]) => {
+    const overdueCount = groupRows.filter(r => r.overdue).length
+    const earliestDueMs = groupRows.reduce((min, r) => {
+      if (!r.dueAt) return min
+      const ms = new Date(r.dueAt).getTime()
+      return ms < min ? ms : min
+    }, Infinity)
+    return { companyName, rows: groupRows, overdueCount, earliestDueMs }
+  })
+
+  groups.sort((a, b) => {
+    if (a.overdueCount !== b.overdueCount) return b.overdueCount - a.overdueCount
+    return a.earliestDueMs - b.earliestDueMs
+  })
+
+  return groups
 }
 
 export default function FollowupPanelPage() {
@@ -60,6 +108,22 @@ export default function FollowupPanelPage() {
   const [editedBody, setEditedBody] = useState<Record<string, string>>({})
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
+  const [runningEngineTick, setRunningEngineTick] = useState(false)
+  const [engineTickSummary, setEngineTickSummary] = useState<FollowupEngineTickSummary | null>(null)
+  // Collapsed by default — "folder" you open, not a pre-expanded list; see
+  // groupByCompany()'s header comment for why.
+  const [openCompanies, setOpenCompanies] = useState<Set<string>>(new Set())
+
+  const companyGroups = useMemo(() => groupByCompany(rows), [rows])
+
+  function toggleCompany(companyName: string) {
+    setOpenCompanies(prev => {
+      const next = new Set(prev)
+      if (next.has(companyName)) next.delete(companyName)
+      else next.add(companyName)
+      return next
+    })
+  }
 
   useEffect(() => setIntervalDraft(intervals), [intervals])
 
@@ -81,15 +145,39 @@ export default function FollowupPanelPage() {
 
   const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
 
+  async function handleRunEngineTick() {
+    setRunningEngineTick(true)
+    try {
+      const res = await fetch('/api/admin/outbound/followups/engine/tick', { method: 'POST' })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Follow-up engine tick failed')
+        return
+      }
+      setEngineTickSummary(data.summary)
+      toast.success(
+        `Tick complete — ${data.summary.sent} sent, ${data.summary.contactsEligible} eligible, ${data.summary.cancelledByReply} cancelled by reply`
+      )
+      if (data.summary.errors?.length) toast.warning(`${data.summary.errors.length} error(s) during tick — see summary below`)
+    } catch {
+      toast.error('Could not reach the follow-up engine API')
+    } finally {
+      setRunningEngineTick(false)
+    }
+  }
+
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Follow-ups</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          What follow-up is due for whom, send now / stop, and the follow-up cadence.
-        </p>
-      </div>
+      <GlassCard>
+        <CardContent className="space-y-1">
+          <h2 className="text-base font-semibold text-foreground">Follow-ups</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            What follow-up is due for whom, send now / stop, and the follow-up cadence.
+          </p>
+        </CardContent>
+      </GlassCard>
 
+      <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
         <p>
           Every contact still owed a follow-up, across every campaign, sorted by what&apos;s due
@@ -134,6 +222,36 @@ export default function FollowupPanelPage() {
         </CardContent>
       </Card>
 
+      <Card className="border-border bg-card">
+        <CardContent className="px-5 py-4 space-y-3">
+          <h2 className="text-sm font-semibold text-foreground">Automatic Follow-Up Engine</h2>
+          <p className="text-xs text-muted-foreground/70">
+            When enabled, checks replies then auto-sends any follow-up that&apos;s past the cadence above{' '}
+            <strong>and</strong> confirmed unopened — no click needed. Run a tick manually here to verify it behaves
+            correctly before turning on the autonomous scheduler (<code>FOLLOWUP_ENGINE_ENABLED</code>).
+          </p>
+          <Button size="sm" variant="outline" disabled={runningEngineTick} onClick={handleRunEngineTick}>
+            {runningEngineTick ? <Spinner className="size-3.5" /> : null}
+            Run Follow-Up Engine Tick Now
+          </Button>
+          {engineTickSummary && (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1 sm:grid-cols-3">
+              <span>Campaigns checked: <span className="text-foreground">{engineTickSummary.campaignsChecked}</span></span>
+              <span>Eligible: <span className="text-foreground">{engineTickSummary.contactsEligible}</span></span>
+              <span>Sent: <span className="text-foreground">{engineTickSummary.sent}</span></span>
+              <span>Cancelled (reply): <span className="text-foreground">{engineTickSummary.cancelledByReply}</span></span>
+              <span>Cancelled (bounce): <span className="text-foreground">{engineTickSummary.cancelledByBounce}</span></span>
+              <span>Failed: <span className="text-foreground">{engineTickSummary.failed}</span></span>
+              {engineTickSummary.errors.length > 0 && (
+                <div className="col-span-full text-signal-medium mt-1">
+                  {engineTickSummary.errors.map((e, i) => <div key={i}>{e}</div>)}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
           <Spinner className="size-4" /> Loading…
@@ -141,103 +259,134 @@ export default function FollowupPanelPage() {
       ) : rows.length === 0 ? (
         <EmptyState icon={Mail} title="No contacts currently owed a follow-up" />
       ) : (
-        <div className="space-y-3">
-          {rows.map(row => {
-            const dueLabel = formatDue(row.dueAt, row.overdue)
-            const bodyValue = editedBody[row.id] ?? row.draftBody ?? ''
-            const bodyDirty = editedBody[row.id] !== undefined && editedBody[row.id] !== (row.draftBody ?? '')
-            const busy = busyRowId === row.id
-
+        <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
+          {companyGroups.map(group => {
+            const isOpen = openCompanies.has(group.companyName)
             return (
-              <Card key={row.id} className="border-border bg-card">
-                <CardContent className="px-5 py-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-foreground">{row.personName}</div>
-                      <div className="text-xs text-muted-foreground/70">
-                        {row.companyName}
-                        {row.email ? ` · ${row.email}` : ' · no email on file'}
-                      </div>
-                      <div className="text-xs text-muted-foreground/60 mt-0.5">
-                        {row.campaignName}
-                        {row.campaignPaused && <Badge variant="secondary" className="ml-1.5">campaign paused</Badge>}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant="outline">Step {row.sequence}</Badge>
-                      {dueLabel && (
-                        <span className={row.overdue ? 'text-xs font-medium text-destructive flex items-center gap-1' : 'text-xs text-muted-foreground/70 flex items-center gap-1'}>
-                          <Clock className="size-3" />
-                          {dueLabel}
-                        </span>
-                      )}
-                    </div>
+              <motion.div key={group.companyName} variants={listItem} className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => toggleCompany(group.companyName)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
+                >
+                  <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
+                  <span className="text-sm font-medium text-foreground truncate">{group.companyName}</span>
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {group.overdueCount > 0 && (
+                      <Badge className="text-[10px] bg-destructive/10 text-destructive border border-destructive/40">
+                        {group.overdueCount} overdue
+                      </Badge>
+                    )}
+                    <Badge variant="outline">
+                      {group.rows.length} follow-up{group.rows.length === 1 ? '' : 's'}
+                    </Badge>
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className="space-y-3 pl-4">
+                  {group.rows.map(row => {
+                    const dueLabel = formatDue(row.dueAt, row.overdue)
+                    const bodyValue = editedBody[row.id] ?? row.draftBody ?? ''
+                    const bodyDirty = editedBody[row.id] !== undefined && editedBody[row.id] !== (row.draftBody ?? '')
+                    const busy = busyRowId === row.id
+
+                    return (
+                      <Card key={row.id} className="border-border bg-card">
+                        <CardContent className="px-5 py-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-foreground">{row.personName}</div>
+                              <div className="text-xs text-muted-foreground/70">
+                                {row.email ?? 'no email on file'}
+                              </div>
+                              <div className="text-xs text-muted-foreground/60 mt-0.5">
+                                {row.campaignName}
+                                {row.campaignPaused && <Badge variant="secondary" className="ml-1.5">campaign paused</Badge>}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge variant="outline">Step {row.sequence}</Badge>
+                              {dueLabel && (
+                                <span className={row.overdue ? 'text-xs font-medium text-destructive flex items-center gap-1' : 'text-xs text-muted-foreground/70 flex items-center gap-1'}>
+                                  <Clock className="size-3" />
+                                  {dueLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {row.draftSubject && (
+                            <div className="text-xs text-muted-foreground">
+                              <span className="text-muted-foreground/60">Subject: </span>
+                              {row.draftSubject}
+                            </div>
+                          )}
+
+                          {row.draftBody === null ? (
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              No generated follow-up copy yet for this step — generate it on the Contacts page first.
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <textarea
+                                value={bodyValue}
+                                onChange={e => setEditedBody(prev => ({ ...prev, [row.id]: e.target.value }))}
+                                rows={4}
+                                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                              />
+                              {bodyDirty && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={savingDraftId === row.id}
+                                  onClick={async () => {
+                                    await saveDraft(row, bodyValue)
+                                    setEditedBody(prev => {
+                                      const next = { ...prev }
+                                      delete next[row.id]
+                                      return next
+                                    })
+                                  }}
+                                >
+                                  {savingDraftId === row.id ? <Spinner className="size-3.5" /> : null}
+                                  Save Copy
+                                </Button>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2 pt-1">
+                            <Button
+                              size="sm"
+                              disabled={busy || !row.email || row.draftBody === null || row.campaignPaused}
+                              onClick={() => setPendingAction({ type: 'send', row })}
+                            >
+                              {busy ? <Spinner className="size-3.5" /> : null}
+                              Send Now
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => setPendingAction({ type: 'stop', row })}
+                            >
+                              Stop Remaining Follow-ups
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
                   </div>
-
-                  {row.draftSubject && (
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-muted-foreground/60">Subject: </span>
-                      {row.draftSubject}
-                    </div>
-                  )}
-
-                  {row.draftBody === null ? (
-                    <p className="text-xs text-muted-foreground/60 italic">
-                      No generated follow-up copy yet for this step — generate it on the Contacts page first.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <textarea
-                        value={bodyValue}
-                        onChange={e => setEditedBody(prev => ({ ...prev, [row.id]: e.target.value }))}
-                        rows={4}
-                        className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                      />
-                      {bodyDirty && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={savingDraftId === row.id}
-                          onClick={async () => {
-                            await saveDraft(row, bodyValue)
-                            setEditedBody(prev => {
-                              const next = { ...prev }
-                              delete next[row.id]
-                              return next
-                            })
-                          }}
-                        >
-                          {savingDraftId === row.id ? <Spinner className="size-3.5" /> : null}
-                          Save Copy
-                        </Button>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      disabled={busy || !row.email || row.draftBody === null || row.campaignPaused}
-                      onClick={() => setPendingAction({ type: 'send', row })}
-                    >
-                      {busy ? <Spinner className="size-3.5" /> : null}
-                      Send Now
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => setPendingAction({ type: 'stop', row })}
-                    >
-                      Stop Remaining Follow-ups
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                )}
+              </motion.div>
             )
           })}
-        </div>
+        </motion.div>
       )}
+      </motion.div>
 
       <ConfirmDialog
         open={pendingAction !== null}

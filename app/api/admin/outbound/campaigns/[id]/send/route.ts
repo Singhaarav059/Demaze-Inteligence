@@ -107,6 +107,7 @@ export async function POST(
       contactEmail: contact.email,
       subject: generated.selected_subject_line,
       body: emailDraft.fullText,
+      campaignContactId: item.id,
     })
 
     if (result.status === 'failed') {

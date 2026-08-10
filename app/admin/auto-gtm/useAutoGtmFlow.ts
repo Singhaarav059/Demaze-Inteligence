@@ -44,7 +44,7 @@ import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { DecisionMakerCandidate } from '@/lib/outbound/decision-maker-discovery/types'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 
-export type FlowStep = 1 | 2 | 3 | 4
+export type FlowStep = 1 | 2 | 3 | 4 | 5
 export type InputMode = 'single' | 'batch'
 export type BatchCompanyStatus = 'pending' | 'researching' | 'discovering' | 'done' | 'failed'
 type ContactActionKind = 'find-email' | 'delete'
@@ -62,7 +62,7 @@ export interface BatchCompanyState {
   errorMessage?: string
 }
 
-function deriveCompanyName(domain: string, analysisResult: Record<string, unknown> | undefined): string {
+export function deriveCompanyName(domain: string, analysisResult: Record<string, unknown> | undefined): string {
   const fromResult = analysisResult?.company_name
   if (typeof fromResult === 'string' && fromResult.trim()) return fromResult
   return domain
@@ -188,10 +188,19 @@ export function useAutoGtmFlow() {
       setRunId(run.id)
       setUrl(run.company_url)
       setResult({ success: true, domain: run.domain, analysisResult: run.final_result })
+      // Resuming always presents a focused, single-company view of this one
+      // run — regardless of whether it was originally researched solo or as
+      // part of a larger batch (batch's own progress state is pure React
+      // state, never persisted, so there's nothing to reconstruct there
+      // anyway; see this function's campaign-lookup comment below for the
+      // related batch-campaign fix).
+      setInputMode('single')
       const contactsRes = await fetch(`/api/admin/outbound/contacts?source_run_id=${run.id}`)
       const contactsData = await contactsRes.json()
+      let resumedContactIds: string[] = []
       if (contactsData.success) {
         setContacts(contactsData.contacts)
+        resumedContactIds = (contactsData.contacts as Array<{ id: string }>).map(c => c.id)
         // Contacts already exist for this run, so decision-maker selection
         // (step 2) is already done — unlock at least step 3 regardless of
         // which step the URL opened at (e.g. a Resume link from Run History
@@ -209,19 +218,41 @@ export function useAutoGtmFlow() {
       // ensureCampaignId() would then create a BRAND NEW campaign on the
       // next Send click. Since send status is scoped per-campaign, that new
       // campaign's contacts all start 'queued' again — re-sending to
-      // contacts that were already sent under the original campaign. Single-
-      // company mode only (batch mode's campaigns use source_run_id: null,
-      // no single run to key off — out of scope for this fix).
-      const campaignsRes = await fetch(`/api/admin/outbound/campaigns?source_run_id=${run.id}`)
-      const campaignsData = await campaignsRes.json()
-      const existingCampaign = campaignsData.success ? campaignsData.campaigns?.[0] : null
+      // contacts that were already sent under the original campaign.
+      //
+      // FIXED (2026-08-05): this used to look up
+      // `?source_run_id=${run.id}` against outbound_campaigns — works for a
+      // single-company campaign (which has source_run_id set), but silently
+      // finds NOTHING for a batch-originated company, since batch mode
+      // creates one SHARED campaign for the whole batch with
+      // source_run_id: null. That meant resuming into a batch-originated
+      // company never restored campaignId/campaignContactStatus at all —
+      // already-sent contacts would show as unsent, and clicking Send again
+      // would create a genuinely duplicate campaign for contacts that
+      // already had one. Fixed by looking up the campaign via THIS
+      // company's own contacts instead (?contact_ids=...,  a new filter on
+      // the same route) — outbound_contacts.source_run_id is reliably set
+      // per-company for both single and batch-created contacts, and any of
+      // those contacts' own outbound_campaign_contacts.campaign_id points at
+      // whichever campaign (dedicated or shared) they were actually
+      // enqueued into. Works identically for both cases; source_run_id is no
+      // longer used here at all.
+      const existingCampaign = resumedContactIds.length > 0
+        ? await (async () => {
+            const campaignsRes = await fetch(`/api/admin/outbound/campaigns?contact_ids=${resumedContactIds.join(',')}`)
+            const campaignsData = await campaignsRes.json()
+            return campaignsData.success ? campaignsData.campaigns?.[0] : null
+          })()
+        : null
       if (existingCampaign) {
         // A campaign only ever gets created from Outreach & Send's own send
         // actions (ensureCampaignId(), called lazily on first Send) — its
         // existence means this run reached step 4 before, so every pill
-        // unlocks (same "widen maxStepReached, never touch step" discipline
-        // as the contacts check above).
-        setMaxStepReached(prev => (prev < 4 ? 4 : prev))
+        // unlocks, INCLUDING step 5 (Track & Follow Up) — that step has no
+        // completion gate of its own beyond a campaign existing, same
+        // "widen maxStepReached, never touch step" discipline as the
+        // contacts check above.
+        setMaxStepReached(prev => (prev < 5 ? 5 : prev))
         setCampaignId(existingCampaign.id)
         const campaignContactsRes = await fetch(`/api/admin/outbound/campaigns/${existingCampaign.id}/contacts`)
         const campaignContactsData = await campaignContactsRes.json()
@@ -264,7 +295,7 @@ export function useAutoGtmFlow() {
     const params = new URLSearchParams(window.location.search)
     const resumeRunId = params.get('runId')
     const resumeStep = Number(params.get('step'))
-    if (resumeStep >= 1 && resumeStep <= 4) {
+    if (resumeStep >= 1 && resumeStep <= 5) {
       // One-time client-only URL-sync on mount, not a derived-state anti-pattern.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStepState(resumeStep as FlowStep)
@@ -830,5 +861,6 @@ export function useAutoGtmFlow() {
     selectNoneBatch,
     stopBatch,
     runBatchThroughDecisionMakers,
+    resumeFromRun,
   }
 }

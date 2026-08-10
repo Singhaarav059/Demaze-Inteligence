@@ -1,10 +1,16 @@
 // ============================================================
 // Admin: Warm-Up Metrics — GET /api/admin/outbound/warmup/mailboxes/[id]/metrics
 // ============================================================
-// Computes the current live status and appends it as a new snapshot before
-// returning the full time-series — this app has no background scheduler,
-// so the trend accumulates one point per time this endpoint is viewed
-// rather than on a fixed interval.
+// For a manually-added mailbox (no credential_encrypted), unchanged from
+// before: computes the current mock live status and appends it as a new
+// snapshot on every view — no background job, the trend accumulates one
+// point per page view instead.
+//
+// For an OAuth-connected mailbox (2026-08-04, real warmup engine), this
+// route does NOT append anything — lib/outbound/warmup/engine/run-tick.ts
+// is the only writer of real snapshots now, on its own schedule (a tick,
+// not a page view). Appending a mock snapshot here for a real mailbox
+// would corrupt its real time-series with fake data interleaved in it.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -32,7 +38,7 @@ export async function GET(
     return NextResponse.json({ success: false, error: fetchError?.message ?? 'Mailbox not found' }, { status: 404 })
   }
 
-  if (mailbox.started_at) {
+  if (mailbox.started_at && !mailbox.credential_encrypted) {
     const live = await getWarmupStatus({
       mailboxAddress: mailbox.mailbox_address,
       startedAt: mailbox.started_at,

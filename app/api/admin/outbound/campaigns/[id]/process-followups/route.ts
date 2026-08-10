@@ -21,9 +21,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getFollowupIntervals } from '@/lib/outbound/sending/followup-settings'
-import { processFollowupForContact, resolveGmailContext, type FollowupOutcome } from '@/lib/outbound/sending/process-followup'
-
-const ELIGIBLE_STATUSES = ['sent', 'followup_1', 'followup_2']
+import {
+  processFollowupForContact,
+  resolveGmailContext,
+  FOLLOWUP_ELIGIBLE_STATUSES,
+  type FollowupOutcome,
+} from '@/lib/outbound/sending/process-followup'
 
 export async function POST(
   req: NextRequest,
@@ -59,7 +62,7 @@ export async function POST(
     .from('outbound_campaign_contacts')
     .select('id')
     .eq('campaign_id', campaignId)
-    .in('status', ELIGIBLE_STATUSES)
+    .in('status', FOLLOWUP_ELIGIBLE_STATUSES)
 
   if (fetchError) {
     return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })

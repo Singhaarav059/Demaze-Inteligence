@@ -2165,6 +2165,330 @@ explicitly deferred (see the plan's "Explicitly deferred" section) — worth
 revisiting only if a future session finds signal-sparse runs are still a
 real bottleneck after this initiative's changes.
 
+## BUILT 2026-08-05 — post-send tracking: open tracking, automatic
+## follow-up engine, persistent per-company pipeline list
+User asked what should happen after Auto Flow sends an email — track opens,
+auto-follow-up if unopened past the cadence, and a persistent per-company
+list to resume/check status later, instead of the flow just ending at send.
+Two explicit decisions made before any code, both real overrides of this
+app's usual caution, same category as the warmup engine's own authorization:
+(1) auto-follow-ups send **fully automatically**, no click required, once
+unopened past the existing cadence threshold; (2) the per-company list
+includes **batch-researched companies too**, not just single-company-mode
+ones. A third, safety-preserving decision: if open-tracking isn't
+configured, the auto-engine **fails closed** (skips entirely, logs a
+warning) rather than silently degrading into blind time-based auto-sending
+— this is what actually keeps decision (1) matching what was authorized
+("auto-send only if unopened") rather than quietly expanding it.
+
+**What was built**:
+- Migration `019_outbound_open_tracking.sql` — `outbound_campaign_contacts.
+  opened_at TIMESTAMPTZ NULL`, first-write-wins, the one signal both the
+  auto-engine and the pipeline list read.
+- Public (no admin auth — no `middleware.ts` exists in this repo, so this
+  is genuinely reachable by an email client) tracking-pixel route,
+  `app/api/track/open/[campaignContactId]/route.ts` — `campaignContactId`
+  IS `outbound_campaign_contacts.id` directly, no separate token column
+  (already an unguessable UUID; worst-case misuse just suppresses one
+  follow-up, never causes a wrong send). Idempotent first-open write +
+  best-effort `'opened'` event insert (the event type has existed in
+  migration 008's CHECK constraint since day one, just never written to
+  until now) — always serves the inline 34-byte 1×1 GIF regardless of any
+  DB outcome, confirmed live via curl with both a malformed id and a
+  well-formed-but-nonexistent one (both correctly returned `200 image/gif`
+  even before migration 019 was applied, proving the never-error contract).
+- HTML email support, previously nonexistent (`gmail-client.ts`'s
+  `buildMimeMessage()` was `text/plain` only, confirmed by direct code
+  read before assuming otherwise) — new optional `bodyHtml` param emits
+  real `multipart/alternative` (plain-text part first, HTML part last per
+  RFC 2046's client-preference ordering); omitted entirely, output is
+  byte-identical to the original plain-text-only behavior, zero risk to
+  existing sends. New `lib/outbound/shared/email-html.ts`'s
+  `plainTextToHtml()` — deliberately minimal (no styling/images beyond the
+  pixel) to avoid reading as marketing email to spam filters. The pixel
+  itself is built in `lib/outbound/sending/providers/gmail.ts` (app policy),
+  not `gmail-client.ts` (stays "dumb MIME mechanics") — only activates when
+  BOTH `campaignContactId` and the new `OUTBOUND_TRACKING_BASE_URL` env var
+  are present; otherwise plain-text-only, exactly as before. That env var
+  is required because there's no incoming-request context inside a
+  background scheduler tick to derive an origin from — must be set
+  explicitly in both `.env.local` and Railway's production config (a
+  localhost value is unreachable by real email clients).
+- Reply-check logic extracted verbatim from `check-replies/route.ts`'s loop
+  body into `lib/outbound/sending/reply-check.ts`'s
+  `checkRepliesForCampaign()` — preserves its exact fallback shape (the
+  `cred.email`-unset case) rather than unifying it with
+  `process-followup.ts`'s own separate inline check, which was written for
+  a different situation on purpose. The route is now a thin wrapper, zero
+  behavior change for the existing manual button.
+- Automatic follow-up engine, `lib/outbound/sending/followup-engine/` —
+  mirrors the warmup engine's pure (`tick-logic.ts`) / impure
+  (`run-tick.ts`) split exactly. `isAutoFollowupEligible()` is a strict AND
+  on top of the existing, unmodified `isFollowupDue()` — manual "Send Now"/
+  "Process Follow-ups" never pass through this gate, exactly as specified.
+  Per tick: checks replies first (via the extracted function above, so a
+  same-tick reply is never mistaken for "still eligible"), then selects
+  contacts that are both past cadence AND `opened_at IS NULL`, then sends
+  via the same unmodified `processFollowupForContact()` manual follow-ups
+  already use — no duplicated send logic anywhere. `FOLLOWUP_ELIGIBLE_
+  STATUSES` hoisted out of `process-followups/route.ts` into
+  `process-followup.ts` so both the manual route and the new engine select
+  from the identical status set. New manual tick route
+  (`/api/admin/outbound/followups/engine/tick`) + a "Run Follow-Up Engine
+  Tick Now" button and result summary on the Follow-ups page, same
+  "verify manually before trusting the scheduler" precedent as the warmup
+  engine's own manual tick button. New `FOLLOWUP_ENGINE_ENABLED`/
+  `FOLLOWUP_ENGINE_INTERVAL_MS` (default 1 hour) env vars, own separate
+  `setInterval` in `instrumentation.ts` (own flag, own dev-hot-reload guard,
+  own scheduler — not merged into the warmup one, different domain/risk
+  profile) — **ships with `FOLLOWUP_ENGINE_ENABLED` unset**, same
+  deliberate safe-default discipline as the warmup engine; nothing
+  auto-sends to a real prospect until the user flips this themselves.
+- **Real bug found and fixed during planning, not just during
+  implementation**: `useAutoGtmFlow.ts`'s `resumeFromRun()` looked up a
+  company's campaign via `GET /campaigns?source_run_id=<runId>` —  works
+  for a single-company campaign (which has `source_run_id` set), but
+  batch mode creates ONE SHARED campaign for the whole batch with
+  `source_run_id: null`, so this silently found nothing for any
+  batch-originated company. Consequence: resuming into one would never
+  restore `campaignId`/`campaignContactStatus`, already-sent contacts
+  would show as unsent, and clicking Send again would call
+  `ensureCampaignId()` and create a genuinely duplicate campaign for
+  contacts that already had one — a real duplicate-send risk once a real
+  sending provider is active (which, per this file's own 2026-08-04 entry,
+  it already is — Gmail). Fixed by looking up the campaign via the
+  company's own contacts instead: new `?contact_ids=` filter on
+  `GET /api/admin/outbound/campaigns` (finds whichever campaign already has
+  any of those contact ids enqueued, via `outbound_campaign_contacts`) —
+  works identically for single AND batch-originated companies since
+  `outbound_contacts.source_run_id` is reliably set per-company either way.
+  `resumeFromRun` also now explicitly sets `inputMode = 'single'` on
+  resume regardless of original research mode — a focused single-company
+  view, not an attempt to reconstruct batch progress state (which is pure
+  React state, never persisted, confirmed during research — out of scope).
+- Persistent per-company pipeline list — `GET /api/admin/outbound/pipeline`
+  groups by `outbound_contacts.source_run_id` (not by
+  `outbound_campaigns.source_run_id`), the same unification principle as
+  the `resumeFromRun` fix above, so one query naturally covers both
+  single-company and batch-originated companies with no special-casing.
+  Aggregates `contactsTotal/sentCount/openedCount/repliedCount/
+  bouncedCount/nextFollowupDueAt/lastActivityAt` per company in JS (this
+  codebase's established convention over raw SQL/RPC). New
+  `CompanyPipelineList.tsx`, styled per the Warm-Up/Follow-ups/Campaigns
+  restyle earlier this same day (`GlassCard` header, `framer-motion`
+  stagger, semantic-colored `PipelineStatusBadge`), rendered on Auto Flow's
+  Research step directly below the single-company input, gated on
+  `!hasResearch` so it's the landing state and gets out of the way once
+  actively researching. Resume hardcodes step 4 (Outreach & Send) — not a
+  guess, every row necessarily reached that step already since a campaign
+  only ever gets created from there.
+- **Real lint bug caught and fixed during this session**: `Date.now()`
+  called directly inside `PipelineStatusBadge`'s render body tripped this
+  repo's `react-hooks/purity` rule (impure call during render). Fixed by
+  capturing `nowMs` once from the pipeline API's own response timestamp
+  (a stable snapshot for the list's lifetime, which is also more correct
+  semantics here than a live-ticking clock) and threading it down as a
+  prop instead of calling `Date.now()` per row.
+
+**Verified**: `tsc --noEmit` clean, full suite 652/652 (646 pre-existing +
+6 new in `tests/followup-engine-tick-logic.test.ts` for
+`isAutoFollowupEligible`). Live-verified in the browser: Auto Flow's
+"Sent Companies" section renders its empty state correctly (even with the
+pipeline API still 500ing pre-migration — confirmed graceful degradation,
+not a crash), zero console errors; the Follow-ups page's new "Run
+Follow-Up Engine Tick Now" button works end-to-end through the real UI and
+correctly displays the fail-closed message and error summary. Tracking
+pixel route live-curl-verified to always return `200 image/gif` regardless
+of DB state (malformed id, well-formed-but-nonexistent id, both before
+migration 019 was applied) — the "never error to the email client"
+contract holds under real conditions, not just in theory.
+
+**RESOLVED 2026-08-05 (same day) — migration 019 applied, pipeline list +
+single-company resume live-verified against real data.** User ran the
+migration; `GET /api/admin/outbound/pipeline` went from a 500 (missing
+column) to real data — 7 companies, correct aggregate counts, correct
+relative timestamps. Live-clicked "Resume" on a real company (Mahindra &
+Mahindra Limited) via the actual Auto Flow UI: network trace confirmed
+`resumeFromRun`'s new `?contact_ids=` campaign lookup fired correctly
+(`GET /api/admin/outbound/campaigns?contact_ids=<this company's 4 contact
+ids>`), found the existing campaign, landed on step 4 with 4 contacts
+loaded, and the already-sent contact (Kumar Gururaj) correctly showed
+status `sent` rather than appearing unsent — confirms the duplicate-campaign
+bug this session fixed doesn't reproduce for a real single-company case.
+Zero console errors throughout.
+
+**Checked but NOT resolved — no batch-originated campaign exists in the
+real database yet.** Queried every real campaign directly
+(`GET /api/admin/outbound/campaigns`, no filter): all have a non-null
+`source_run_id` (single-company origin) except one row named "Test
+Campaign - Ador Welding," which is a manually-created debug-page test
+row, not a real Auto Flow batch send. So the actual bug scenario this
+session fixed (a SHARED campaign across multiple batch companies) has
+never been live-exercised against real data — the query mechanism is
+identical regardless of origin and is now proven correct for the
+single-company case, but the shared-campaign path specifically still
+needs a real batch (multi-company) research+send run through Auto Flow to
+create a batch campaign, then a resume into one of its companies, to be
+fully confirmed. User explicitly deferred this rather than forcing a
+throwaway batch run just to test it — pick up whenever a real batch send
+happens naturally.
+
+**RESOLVED 2026-08-05 (same day) — real end-to-end open-tracking send,
+live-verified with a real public origin.** `.env.local` only had a
+`localhost` value to point `OUTBOUND_TRACKING_BASE_URL` at, which — per
+this var's own documented requirement — is unreachable by real email
+clients, so this needed a real public origin this dev environment doesn't
+have on its own. Stood one up temporarily rather than waiting on a Railway
+deploy: `npx localtunnel --port 3000` first, which proved genuinely
+unreliable in practice (its process stayed alive but the public relay
+silently stopped responding mid-test — confirmed by curling the same URL
+repeatedly and getting connection failures while `localhost:3000` kept
+answering fine; a real test send through it landed in the inbox but
+`opened_at` never flipped, later explained by the dead tunnel rather than
+Gmail's spam-folder image-blocking, which was the first, wrong hypothesis).
+Switched to `npx cloudflared tunnel --url http://localhost:3000` (Cloudflare's
+account-less quick tunnel) instead — proved reliable across repeated curl
+checks — and re-ran the full test: created a throwaway test contact/
+campaign (`company_name: "Open Tracking Test"`, real `singhaarav042002@gmail.com`
+recipient, real LLM-generated content via the actual `generate-email`
+route, real send via the actual `campaigns/[id]/send` route — every step
+through this app's own real API, nothing bypassed), sent, user opened it
+in Gmail, and confirmed live: `outbound_campaign_contacts.opened_at` set
+to a real timestamp seconds after opening, a real `outbound_campaign_events`
+row with `event_type: 'opened'` and `detail: {"source":"tracking_pixel"}`
+alongside the real `'sent'` event from moments earlier. This is the actual
+proof this item needed — the full chain (real Gmail send → real HTML
+`multipart/alternative` body → real embedded pixel → real open → real DB
+write) now confirmed working under real conditions, not just unit-tested
+or curled in isolation. Test contact/campaigns intentionally left in the
+DB (clearly named, harmless, easy to identify/delete later) rather than
+cleaned up mid-verification. **Tunnel is temporary** — whichever one is
+running when this was written will not still be up later; whoever revisits
+`OUTBOUND_TRACKING_BASE_URL` needs either a fresh tunnel or (better, for
+anything beyond one-off testing) the real Railway production origin.
+
+**Real deliverability caveat surfaced by this same test, separate from
+open-tracking itself and NOT fixed here**: both test sends landed in
+Spam, including the second one (through the working `cloudflared` tunnel)
+— user had to manually mark it "not spam" before it opened normally.
+Tracking worked correctly once opened, but this is a genuine signal worth
+a future look, not dismissed as test noise. Plausible contributors, not
+confirmed: (a) this was a self-send (same Gmail address as both sender and
+recipient), a pattern Gmail's abuse heuristics are known to weight
+differently than mail to a distinct address; (b) the sending account's
+warmup status — this is the exact same account/problem space as this
+file's own 2026-08-04 DIY warmup engine entries elsewhere, so a
+not-yet-warmed-up (or insufficiently warmed) sending mailbox landing in
+spam is consistent with, not contradictory to, that work; (c) the test
+subject line itself ("Testing open tracking — please ignore") and generic
+LLM-drafted body contain exactly the kind of phrasing spam filters key on;
+(d) an HTML email whose only real payload beyond a few generic sentences
+is an invisible tracking pixel is itself a mildly spam-shaped structure.
+Not investigated further this session — flagging for whoever next touches
+sending deliverability, since it's a real, live-observed data point on
+the exact account this app's warmup engine is meant to be improving.
+
+1. Once `FOLLOWUP_ENGINE_ENABLED` is being considered: verify the
+   automatic engine's real behavior end-to-end (a follow-up actually
+   withheld for an opened email, actually sent for an unopened one past
+   cadence) before ever setting it `true` — same "manual tick first, trust
+   the scheduler later" discipline as the warmup engine. Not done this
+   session — this session's verification proved open-tracking itself
+   works, not the engine's own send-gating logic against real due
+   contacts.
+2. Live-verify the `resumeFromRun` batch-campaign fix against a real
+   batch-originated company (see the "Checked but NOT resolved" note
+   above) — deferred at the user's own request, not forgotten.
+
+## BUILT 2026-08-05 (same day) — Auto Flow step 5: "Track & Follow Up"
+After shipping open tracking, the automatic follow-up engine, and the
+persistent "Sent Companies" list, the user pointed out that Auto Flow
+itself still dead-ends at step 4 (Outreach & Send) — nothing links forward
+to any of it. The original ask was for the flow to literally continue:
+send → track opens → follow up, as one experience, not scattered across
+pages you have to already know to visit. This adds a real 5th step,
+reusing existing backend routes end to end — no new sending/tracking
+logic, purely a new UI surface plus step-machine plumbing.
+
+**What was built**:
+- `STEPS` in `StepIndicator.tsx` gained `'Track & Follow Up'` as a 5th
+  entry — confirmed via direct code read that this component is purely
+  data-driven off `STEPS.length` (no hardcoded `4` anywhere in it), and its
+  own header comment already said "5-step flow," stale until now.
+- `useAutoGtmFlow.ts`: `FlowStep` widened to `1|2|3|4|5`; the URL-sync
+  effect's upper bound `resumeStep <= 4` → `<= 5`; `resumeFromRun()`'s
+  campaign-found branch now widens `maxStepReached` to 5, not 4 — step 5
+  has no completion gate of its own beyond a campaign existing, same
+  reasoning step 4's own unlock already used.
+- New `app/admin/auto-gtm/TrackFollowUpStep.tsx` — self-contained, same
+  pattern as `OutreachStep`/`ContactInfoStep` (owns its own fetch/action
+  state rather than growing the central hook). Per contact: status badge,
+  opened/not-opened + timestamp, next-follow-up-due, and (only when
+  `nextFollowupSequence(status) !== null`) **Send Follow-up Now** /
+  **Stop Remaining** buttons — reusing the exact existing
+  `POST /followups/[id]/send-now` and `.../stop` routes the standalone
+  Follow-ups page already uses, behind the same `ConfirmDialog` real-send
+  warning discipline. One company-level **Check for Replies** button reuses
+  `POST /campaigns/[id]/check-replies`.
+- `app/api/admin/outbound/campaigns/[id]/contacts/route.ts`: additive-only
+  change — now also computes and returns `nextFollowupDueAt` per row (same
+  `getFollowupIntervals()` + `nextFollowupDueAt()` pair the pipeline list
+  route already uses), so the new step's due-date display doesn't need a
+  new endpoint.
+- **Real scoping issue handled deliberately, not incidentally**: a
+  batch-originated company shares ONE campaign with every other company in
+  its batch (this session's earlier `resumeFromRun` fix dealt with the
+  same fact) — so `GET /campaigns/[id]/contacts` can return OTHER
+  companies' contacts too. `TrackFollowUpStep` filters the response down
+  to just the `contacts` prop's ids (already correctly scoped to the
+  current company) before rendering, rather than assuming every row in the
+  campaign belongs to whoever's currently in the flow.
+- `page.tsx`: new step-4 `nextAction` branch — "Continue to Track & Follow
+  Up," gated on `flow.campaignId` existing (at least one send/enqueue
+  attempt), not on send count, so "0 sent" is still a valid, visitable
+  state. New step-5 JSX block with its own `← Back` to step 4.
+  `onStepClick`'s cast widened to include `5`.
+- `CompanyPipelineList.tsx`'s "Resume" handler changed from
+  `flow.setStep(4)` to `flow.setStep(5)` — resuming from Sent Companies
+  means "I already sent, let me check on it," so landing on Track & Follow
+  Up (not back on the send screen) is the correct destination now that it
+  exists.
+
+**Verified**: `tsc --noEmit` clean, full suite 652/652 (no regressions —
+confirmed the additive `nextFollowupDueAt` field doesn't break any
+existing caller of that route). Live-verified end to end against real
+data: resumed into Mahindra & Mahindra Limited from the Sent Companies
+list, landed correctly on `?step=5` (not 4), StepIndicator showed "Step 5
+of 5" with steps 1-4 marked done, and the real contact (Kumar Gururaj,
+status `stopped`, `opened_at: null`) rendered exactly matching a direct DB
+cross-check via curl — including the new `nextFollowupDueAt` field
+correctly computing `null` for a stopped contact. Confirmed the
+Send-Follow-up-Now/Stop buttons correctly do NOT render for a `stopped`
+contact (eligibility gating working). Clicked "Check for Replies" live —
+returned "Checked 0 — 0 new replies, 0 bounces" (correct: `stopped` is
+excluded from the reply-check's own status filter), zero console errors.
+Clicked "← Back," confirmed step 4 renders with "Continue to Track &
+Follow Up" present and enabled. Zero console errors throughout.
+
+**Not verified — genuine gaps, not oversights**:
+1. **Send Follow-up Now / Stop Remaining were never actually clicked
+   live** — the only real contact reachable through Auto Flow's resume
+   flow (Kumar Gururaj) already had status `stopped`, so those buttons
+   correctly didn't render for it, leaving nothing safe to click without
+   either sending a real unsolicited follow-up to a real prospect (not
+   done without the user's own explicit go-ahead each time, per this
+   repo's standing rule) or building fresh throwaway test data with a
+   proper `pipeline_test_runs` row just to reach it through the UI (not
+   done this pass). The routes themselves are pre-existing and unmodified
+   — only newly wired into this new UI — so this is a lower-risk gap than
+   it would be for genuinely new send logic, but it's still not
+   click-tested through this specific screen.
+2. **Batch-shared-campaign scoping was code-reviewed, not live-tested** —
+   same real gap already logged elsewhere in this file for the
+   `resumeFromRun` fix: no batch-originated campaign exists in the real
+   database yet to prove the filter-to-this-company's-contacts logic
+   against actual shared-campaign data.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
@@ -2331,6 +2655,205 @@ user separately confirmed excluding mobile/phone enrichment too (real
 per-lookup Prospeo cost, needs its own explicit go-ahead before wiring
 live) — also still not built, deferred at the user's own request this
 time, not a unilateral call.
+
+## BUILT 2026-08-04 — real DIY Gmail warmup engine (code-complete; migration
+## + Google Cloud + real OAuth connect still pending, all user-only steps)
+User asked whether real Gmail warmup was possible. Checked the actual code
+first rather than trusting this file's own prior notes (which had already
+been caught stale twice earlier this same day, for Gmail sending and
+decision-maker discovery): the Warm-Up dashboard was 100% simulated —
+`MockWarmupProvider.startWarmup()` a no-op stub, `getWarmupStatus()` a fake
+curve computed purely from elapsed time since `started_at`, mailboxes added
+by typing an address string with no OAuth, no credential storage at all.
+Explained the honest tradeoffs (real warmup needs either a paid vendor
+network or a DIY pool of owned mailboxes; this app also had no background
+scheduler anywhere). User chose: **DIY, using their own multiple real
+Gmail accounts, with a real scheduler built**, explicitly asking to
+replicate what commercial vendors do, for free. Went through `EnterPlanMode`
+given the scope (new migration, new OAuth flow, autonomous real-email-
+sending engine) and the safety-relevant nature of autonomous real sends —
+plan approved before any code was written; full plan preserved at
+`C:\Users\singh\.claude\plans\wondrous-strolling-metcalfe.md`.
+
+**What was built, all live-verified as far as possible without completing
+a real Google OAuth login (which only the account owner can do):**
+- Migration `018_outbound_warmup_engine.sql` — `credential_encrypted`/
+  `oauth_connected_at` added to `outbound_warmup_mailboxes` (nullable, so
+  existing manually-typed mailboxes keep working exactly as before, mock
+  display only); new `outbound_warmup_exchanges` table (one row per
+  warmup email sent between two pool mailboxes, tracking recipient-side
+  processing state — spam-landed/rescued/replied — for a LATER tick, not
+  instant processing).
+- `lib/outbound/shared/gmail-client.ts` extended, not duplicated: new
+  `GMAIL_WARMUP_SCOPES` (`gmail.modify` + `userinfo.email` — broader than
+  the sending capability's `gmail.send`+`gmail.metadata`, since warmup
+  needs to search inboxes, read/move labels, and send replies from the
+  RECIPIENT side, none of which `gmail.metadata`'s headers-only access
+  permits), `buildAuthUrl()` gained an optional `scopes` param (existing
+  sending OAuth flow unaffected, defaults to the old scope list), three new
+  functions (`searchGmailMessages`, `getGmailMessageLabels`,
+  `modifyGmailMessageLabels`) that didn't exist before since nothing
+  previously needed recipient-side inbox operations.
+- A SEPARATE OAuth pair (`app/api/admin/outbound/warmup/oauth/{start,
+  callback}/route.ts`) from the existing sending capability's — warmup is a
+  POOL (many simultaneously-connected Gmail accounts), architecturally
+  different from every other capability in this app which picks exactly
+  ONE active provider, so it can't reuse `outbound_integrations`'
+  single-active-row upsert pattern. Own state cookie
+  (`warmup_gmail_oauth_state`), preserves `started_at`/`status` on a
+  reconnect (never resets someone's warm-up ramp just because they
+  re-authorized).
+- Tick engine split the same way `lib/outbound/sending/followup-
+  schedule.ts`/`process-followup.ts` already are: `lib/outbound/warmup/
+  engine/tick-logic.ts` (pure, no I/O, injectable `rng`, unit-tested
+  without network — `computeDailySendCap`/`computeProcessDelayMs`/
+  `rollShouldReply`/`pickRecipient`/`shouldSkipThisTick`/content
+  generation/`buildRefToken`) and `lib/outbound/warmup/engine/run-tick.ts`
+  (impure — `runWarmupEngineTick()`, Phase A processes due exchanges
+  recipient-side — search by an embedded ref token, since a Gmail message
+  `id` is scoped per-mailbox and the sender's id isn't the recipient's id
+  for "the same" email, rescue from spam, mark read, probabilistic reply —
+  then Phase B sends new exchanges sender-side respecting each mailbox's
+  daily cap, then writes a real snapshot into the EXISTING
+  `outbound_warmup_metrics` table so the dashboard's chart code needed
+  zero changes). `lib/outbound/warmup/engine/templates.ts` — ~10 generic
+  subject/body templates with light variation slots, deliberately no LLM
+  call (free, no added latency, matches what was asked), deliberately
+  avoids the literal words test/warmup/automated anywhere in generated
+  content.
+- Every default is deliberately conservative, not just for its own sake —
+  a SMALL pool (a handful of the account owner's own Gmail accounts, not a
+  commercial vendor's network of thousands of independent mailboxes)
+  emailing itself too mechanically/frequently is itself a pattern that
+  could look bot-like to Gmail's abuse detection, which would defeat the
+  entire point: daily send cap ramps 1→2→3→4→5→6 over 30 days (well below
+  the old mock's fake ~7/day), process-after delay is a random 2-30h (real
+  engagement isn't instant), reply probability 35% (100% would itself be
+  unnatural), a 20% per-tick skip probability (breaks up the otherwise-
+  perfectly-regular interval-driven timing).
+- Scheduler wired into `instrumentation.ts` — this app's first-ever
+  background scheduler, a `setInterval` (default 30 min) gated behind
+  `WARMUP_ENGINE_ENABLED === 'true'`, **unset by default everywhere
+  including local dev** — the equivalent of this app's standing "explicit
+  confirmation before real sends" rule, applied to an autonomous process
+  instead of a per-click UI action. `globalThis.__warmupEngineStarted`
+  guards against double-registration on Next.js dev hot-reload. Only valid
+  because this app runs as a single persistent `next start` process on
+  Railway (the same fact `lib/rate-limit.ts`'s own in-memory store already
+  depends on) — would silently do nothing on a serverless platform. The
+  manual tick route (`POST /api/admin/outbound/warmup/engine/tick`,
+  admin-authed) deliberately does NOT check this flag — an admin's
+  explicit click is itself the confirmation, same reasoning already
+  applied elsewhere in this app.
+- UI: `app/admin/outbound/warmup/page.tsx` — "Connect a Gmail mailbox"
+  button alongside the existing manual "Add Mailbox" input (both kept),
+  an OAuth Connected vs. Manual (mock only) badge per mailbox
+  (`credential_encrypted != null`, never the encrypted value itself sent
+  to the client), a "Run Tick Now" button per connected mailbox, and a
+  collapsible Recent Activity list (new `GET .../[id]/exchanges` route) so
+  the engine isn't a total black box once running. `GuideNote` copy states
+  the honest scale/diversity caveat plainly, not just in this file.
+
+**A real fix made along the way, not just documented**: `[id]/metrics/
+route.ts` used to unconditionally compute-and-append a fake mock snapshot
+on every page view (the app's existing "no scheduler, accumulate on view"
+design). Now gated to `mailbox.started_at && !mailbox.credential_encrypted`
+— for an OAuth-connected mailbox, appending a mock snapshot on every page
+view would corrupt its real time-series (written only by the tick engine)
+with fake data interleaved into it.
+
+**Verified**: `tsc --noEmit` clean, full suite 646/646 (13 new assertions
+in `tests/warmup-tick-logic.test.ts` — ramp boundaries, delay range,
+probability thresholds, recipient-picking including the "pool too small,
+fall back to the only option" case, content generation never containing
+the literal words test/warmup/automated, ref-token derivation). **Live-
+verified as far as possible without completing a real Google login**:
+hit the manual tick route directly against the real (not-yet-migrated)
+Supabase DB — confirmed graceful degradation, not a crash:
+`"Failed to load mailboxes: column outbound_warmup_mailboxes.
+credential_encrypted does not exist"`, exactly the expected error before
+migration 018 is run. Navigated the real browser to the new OAuth start
+route (no login attempted or completed — entering the user's own Google
+credentials is not something this assistant does, regardless of whose
+account) — Google returned `Error 400: redirect_uri_mismatch`, which
+**proves** the entire request-construction chain works correctly
+(GOOGLE_CLIENT_ID passed through, `buildAuthUrl` assembled a request valid
+enough to reach Google's redirect-URI validation step, one of its last
+checks) — the only failure is the expected, already-flagged missing
+manual Google Cloud Console step.
+
+**Not done at write-time — since closed out live, see the 2026-08-05 entry
+directly below.**
+1. ~~Run `018_outbound_warmup_engine.sql` in the Supabase dashboard~~
+2. ~~Add the warmup OAuth redirect URI + test users in Google Cloud~~
+3. ~~Connect 2+ real accounts via "Connect a Gmail mailbox"~~
+4. ~~Confirm a real send happens, verified against real inboxes directly~~
+   — done for the send half; the recipient-side rescue/reply half (after
+   the `process_after` delay) is still open, see below.
+5. `WARMUP_ENGINE_ENABLED` should stay unset until the recipient-side half
+   of item 4 is confirmed too — turning on the autonomous scheduler in
+   Railway's production env config is a separate, deliberate step for the
+   user to take once satisfied, not something to flip preemptively.
+
+## RESOLVED 2026-08-05 — real Gmail warmup send confirmed live end-to-end
+(items 1-4's send half from the list above)
+User worked through the full manual checklist across one session, in
+order, each step surfacing the next real blocker rather than a code bug —
+worth recording precisely since three of the four blockers looked like
+app bugs at first glance and were not:
+1. Ran migration 018 in Supabase — resolved the earlier
+   `"Could not find the 'credential_encrypted' column"` error cleanly.
+2. First OAuth attempt failed `Error 400: redirect_uri_mismatch` even
+   after adding the redirect URI — root cause was the URI being added to
+   the WRONG OAuth client in Google Cloud Console (a different project's
+   client, app name "Potato App", not the one `GOOGLE_CLIENT_ID` in
+   `.env.local` actually points to). Confirmed by reading `.env.local`'s
+   `GOOGLE_CLIENT_ID` directly (safe to read — client IDs are non-secret,
+   sent in every authorize URL) and comparing against the client ID Google's
+   own error dialog reported back. Once added to the correct client
+   (`371887635787-...`, app name "fittifi"), the redirect_uri_mismatch
+   resolved.
+3. Next blocker was `Error 403: access_denied` — "fittifi has not
+   completed the Google verification process" — because the OAuth
+   consent screen is in Testing mode and the signing-in account wasn't
+   added as a test user yet. Resolved by adding the account under
+   Test users on the consent screen.
+4. Final blocker, only surfaced once 2 real mailboxes were actually
+   connected and a tick ran: `Gmail API has not been used in project
+   ... or it is disabled` — the OAuth consent flow itself doesn't require
+   the Gmail API to be enabled, only actually calling it does. Resolved by
+   enabling the Gmail API for the project via Google Cloud Console.
+   **A real, unrelated cosmetic finding surfaced in the same server log**:
+   Next.js's Edge Instrumentation static analysis flags `credential-
+   crypto.ts`/`run-tick.ts`'s `crypto` imports as unsupported-in-Edge-
+   Runtime warnings on every request — harmless, every request still
+   returned `200`, consistent with `instrumentation.ts`'s own
+   `NEXT_RUNTIME === 'nodejs'` gate meaning this code path never actually
+   executes in the Edge runtime; this is Next.js statically analyzing the
+   whole import graph regardless of the runtime gate, not a real bug. Not
+   fixed, not worth suppressing — flagging here so a future session
+   doesn't mistake it for something broken.
+
+After the Gmail API was enabled, `POST /api/admin/outbound/warmup/engine/tick`
+returned `{"newExchangesSent":2,"errors":[]}` — 2 real Gmail sends between
+`anyaunfltrd@gmail.com` and `singhaarav042002@gmail.com` (confirmed via
+`GET /mailboxes`: both now show `provider_name: "gmail"`,
+`oauth_connected: true`, replacing the earlier `mock` entries).
+**User directly confirmed both real Gmail inboxes received the emails** —
+the actual proof this needed, not just the API's own success claim. This is
+the first genuinely real send this engine has ever made; every prior
+warmup dashboard state in this app's history (see the original 2026-08-04
+build entry above) was either fully mocked or, immediately after building,
+unverified beyond a redirect_uri_mismatch proving the request-construction
+chain worked.
+
+**Still open, not done this session**: the recipient-side half of item 4 —
+confirming the ref-token exact-phrase Gmail search, spam-rescue, mark-read,
+and probabilistic-reply mechanics actually work against real Gmail data
+once each exchange's randomized `process_after` delay (2-30h) elapses.
+Needs a tick run again after that window with the same "check the real
+inbox directly" discipline used for the send half. `WARMUP_ENGINE_ENABLED`
+should stay unset (item 5) until that's confirmed too.
 
 ## RESOLVED 2026-08-04 — mobile "app-like" pass on the admin product
 User asked to make "our website" mobile-compatible, "proper mobile style

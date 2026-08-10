@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
+import { getFollowupIntervals } from '@/lib/outbound/sending/followup-settings'
+import { nextFollowupDueAt } from '@/lib/outbound/sending/followup-schedule'
 
 export async function GET(
   req: NextRequest,
@@ -29,7 +31,17 @@ export async function GET(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true, contacts: data ?? [] })
+  // Additive field (2026-08-05, Auto Flow's Track & Follow Up step) — every
+  // existing caller of this route (Campaigns page's Queue list,
+  // useAutoGtmFlow's resumeFromRun/enqueueAndSend) already ignores unknown
+  // response fields, so this doesn't change behavior for them.
+  const intervalsDays = await getFollowupIntervals()
+  const contacts = (data ?? []).map(cc => ({
+    ...cc,
+    nextFollowupDueAt: nextFollowupDueAt(cc.status, cc.updated_at, intervalsDays)?.toISOString() ?? null,
+  }))
+
+  return NextResponse.json({ success: true, contacts })
 }
 
 export async function POST(

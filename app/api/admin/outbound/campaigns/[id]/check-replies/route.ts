@@ -33,22 +33,19 @@
 // A found reply/bounce inserts one event (deduped by the message's own
 // Gmail id via provider_event_id, the same idempotency mechanism migration
 // 014 added for webhook-style retries).
+//
+// The actual per-contact loop lives in lib/outbound/sending/reply-check.ts
+// (extracted 2026-08-05) so the automatic follow-up engine can run the exact
+// same detection — this route is now just credential/token resolution +
+// calling that function, unchanged behavior otherwise.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getActiveProviderName } from '@/lib/outbound/settings/provider-selection'
-import {
-  getGmailCredential,
-  refreshAccessToken,
-  getGmailThread,
-  findReplyInThread,
-  looksLikeBounce,
-} from '@/lib/outbound/shared/gmail-client'
-import { addToSuppressionList } from '@/lib/outbound/sending/suppression'
-
-const SENT_STATUSES = ['sent', 'followup_1', 'followup_2', 'followup_3']
+import { getGmailCredential, refreshAccessToken } from '@/lib/outbound/shared/gmail-client'
+import { checkRepliesForCampaign } from '@/lib/outbound/sending/reply-check'
 
 export async function POST(
   req: NextRequest,
@@ -84,104 +81,13 @@ export async function POST(
   }
 
   const supabase = createServerClient()
-
-  const { data: contacts, error: fetchError } = await supabase
-    .from('outbound_campaign_contacts')
-    .select('id, contact_id, provider_message_id')
-    .eq('campaign_id', campaignId)
-    .in('status', SENT_STATUSES)
-    .not('provider_message_id', 'is', null)
-
-  if (fetchError) {
-    return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
-  }
-
-  let newReplies = 0
-  let newBounces = 0
-  const errors: string[] = []
-
-  for (const contact of contacts ?? []) {
-    const threadId = contact.provider_message_id as string
-    const thread = await getGmailThread(threadId, refreshed.accessToken)
-    if (!thread.ok) continue // one bad thread lookup shouldn't abort the whole batch
-
-    const reply = cred.email
-      ? findReplyInThread(thread.messages, cred.email)
-      : thread.messages.length > 1
-        ? { hasReply: true, replyMessageId: thread.messages[thread.messages.length - 1].id }
-        : { hasReply: false }
-
-    if (!reply.hasReply) continue
-
-    if (reply.replyMessageId) {
-      const { data: existing } = await supabase
-        .from('outbound_campaign_events')
-        .select('id')
-        .eq('provider_event_id', reply.replyMessageId)
-        .maybeSingle()
-      if (existing) continue // already recorded on a previous check
-    }
-
-    const replyMessage = thread.messages.find(m => m.id === reply.replyMessageId)
-    const isBounce = replyMessage ? looksLikeBounce(replyMessage) : false
-    const fromHeader = 'fromHeader' in reply ? reply.fromHeader : undefined
-
-    // FIXED (2026-07-29): this insert's error used to be silently discarded
-    // — a contact could get flipped to 'replied' below with no
-    // corresponding event ever recorded. Now the status flip is skipped and
-    // the failure is reported in the response if the event can't be
-    // recorded — same "don't silently continue past a write you can't
-    // verify" discipline this repo's other silent-failure fixes established.
-    const { error: insertError } = await supabase.from('outbound_campaign_events').insert({
-      campaign_id: campaignId,
-      campaign_contact_id: contact.id,
-      event_type: isBounce ? 'bounced' : 'replied',
-      provider_event_id: reply.replyMessageId ?? null,
-      detail: { source: 'gmail_poll', threadId, fromHeader },
-    })
-
-    if (insertError) {
-      errors.push(`contact ${contact.id}: failed to record ${isBounce ? 'bounce' : 'reply'} event — ${insertError.message}`)
-      continue
-    }
-
-    const { error: updateError } = await supabase
-      .from('outbound_campaign_contacts')
-      .update({ status: isBounce ? 'bounced' : 'replied', updated_at: new Date().toISOString() })
-      .eq('id', contact.id)
-
-    if (updateError) {
-      errors.push(`contact ${contact.id}: event recorded but status update failed — ${updateError.message}`)
-      continue
-    }
-
-    if (isBounce) {
-      newBounces += 1
-      const { data: outboundContact } = await supabase
-        .from('outbound_contacts')
-        .select('email')
-        .eq('id', contact.contact_id)
-        .maybeSingle()
-      if (outboundContact?.email) {
-        const suppressed = await addToSuppressionList({
-          email: outboundContact.email,
-          reason: 'bounced',
-          detail: fromHeader ? `Gmail bounce notice from: ${fromHeader}` : 'Gmail bounce detected during reply check.',
-          contactId: contact.contact_id,
-          campaignId,
-        })
-        if (!suppressed.ok) errors.push(`contact ${contact.id}: bounce detected but could not add to suppression list — ${suppressed.error}`)
-      }
-    } else {
-      newReplies += 1
-    }
-  }
+  const summary = await checkRepliesForCampaign(supabase, campaignId, refreshed.accessToken, cred.email)
 
   return NextResponse.json({
     success: true,
-    checked: contacts?.length ?? 0,
-    newReplies,
-    newBounces,
-    errors: errors.length > 0 ? errors : undefined,
+    checked: summary.checked,
+    newReplies: summary.newReplies,
+    newBounces: summary.newBounces,
+    errors: summary.errors.length > 0 ? summary.errors : undefined,
   })
 }

@@ -35,6 +35,7 @@ const GMAIL_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GMAIL_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 const GMAIL_SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'
 const GMAIL_THREADS_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/threads'
+const GMAIL_MESSAGES_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages'
 const DEFAULT_TIMEOUT_MS = 15000
 
 // gmail.metadata (added 2026-07-29 for free reply tracking) grants read
@@ -54,6 +55,22 @@ const DEFAULT_TIMEOUT_MS = 15000
 export const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/gmail.metadata',
+  'https://www.googleapis.com/auth/userinfo.email',
+]
+
+// Warmup-pool scope (2026-08-04, real DIY warmup engine) — broader than
+// GMAIL_SCOPES above on purpose. gmail.metadata (headers-only) can't search
+// message content, read label state, move a message out of spam, or mark
+// one read — all of which the warmup engine's recipient-side processing
+// needs (lib/outbound/warmup/engine/run-tick.ts). gmail.modify is Google's
+// "all read/write except permanent delete" scope: it also covers sending,
+// so a warmup-pool mailbox's credential works for every Gmail operation
+// this module exposes, unlike the narrower sending-only credential. This
+// is a SEPARATE OAuth grant from the sending capability's — see
+// app/api/admin/outbound/warmup/oauth/{start,callback}/route.ts — not a
+// widening of the existing sending scope.
+export const GMAIL_WARMUP_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/userinfo.email',
 ]
 
@@ -121,12 +138,12 @@ export async function getGmailCredential(): Promise<GmailCredential | null> {
   return parseGmailCredentialJson(stored)
 }
 
-export function buildAuthUrl(params: { clientId: string; redirectUri: string; state: string }): string {
+export function buildAuthUrl(params: { clientId: string; redirectUri: string; state: string; scopes?: string[] }): string {
   const url = new URL(GMAIL_AUTH_URL)
   url.searchParams.set('client_id', params.clientId)
   url.searchParams.set('redirect_uri', params.redirectUri)
   url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', GMAIL_SCOPES.join(' '))
+  url.searchParams.set('scope', (params.scopes ?? GMAIL_SCOPES).join(' '))
   url.searchParams.set('access_type', 'offline')
   // Forces Google to reissue a refresh_token even for a user who's
   // consented before — without this, a reconnect after a lost/invalidated
@@ -237,33 +254,71 @@ export function base64UrlEncode(input: string): string {
 
 // RFC 2047-encode the Subject header so non-ASCII (any language other than
 // plain English) survives — everything else in this minimal MIME message is
-// plain text/utf-8, no HTML, no attachments (matches SendEmailRequest's
-// current shape: subject + plain body only).
+// plain text/utf-8 (matches SendEmailRequest's original shape: subject +
+// plain body only), except when bodyHtml is supplied (open tracking,
+// 2026-08-05), in which case it goes out as multipart/alternative instead.
 function encodeSubjectHeader(subject: string): string {
   return `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`
+}
+
+// No external dependency for this — Node's crypto is already used elsewhere
+// in this codebase (credential-crypto.ts), and a MIME boundary just needs to
+// be a string unlikely to appear verbatim in the body.
+function randomBoundary(): string {
+  return `----=_Part_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
 }
 
 export function buildMimeMessage(params: {
   to: string
   subject: string
   bodyText: string
+  bodyHtml?: string
   from?: string
   inReplyTo?: string
   references?: string
 }): string {
-  const lines = [
+  const headerLines = [
     `To: ${params.to}`,
     ...(params.from ? [`From: ${params.from}`] : []),
     `Subject: ${encodeSubjectHeader(params.subject)}`,
     ...(params.inReplyTo ? [`In-Reply-To: ${params.inReplyTo}`] : []),
     ...(params.references ? [`References: ${params.references}`] : []),
     'MIME-Version: 1.0',
+  ]
+
+  if (!params.bodyHtml) {
+    return [
+      ...headerLines,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      params.bodyText,
+    ].join('\r\n')
+  }
+
+  // text/plain part first, text/html part last — RFC 2046 §5.1.4's
+  // "later parts are preferred" ordering, so an HTML-capable client renders
+  // the HTML (and its tracking pixel) while a plain-text-only client still
+  // gets a fully readable fallback.
+  const boundary = randomBoundary()
+  return [
+    ...headerLines,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: 7bit',
     '',
     params.bodyText,
-  ]
-  return lines.join('\r\n')
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    params.bodyHtml,
+    '',
+    `--${boundary}--`,
+  ].join('\r\n')
 }
 
 export type GmailSendResult =
@@ -286,6 +341,7 @@ export async function sendGmailMessage(
     to: string
     subject: string
     bodyText: string
+    bodyHtml?: string
     from?: string
     threadId?: string
     inReplyTo?: string
@@ -453,4 +509,140 @@ export function getLastMessageIdHeader(messages: GmailThreadMessage[]): string |
     if (messages[i].messageIdHeader) return messages[i].messageIdHeader as string
   }
   return undefined
+}
+
+// ============================================================
+// Warmup-pool recipient-side operations (2026-08-04)
+// ============================================================
+// None of these existed before the warmup engine — gmail.metadata (the
+// only scope this module previously dealt with) grants header-only read
+// access, not search, label state, or label modification. Callers must use
+// a gmail.modify-scoped access token (see GMAIL_WARMUP_SCOPES above); these
+// functions don't enforce that themselves, same "caller passes the right
+// token for what it's asking" contract as sendGmailMessage/getGmailThread.
+
+export type GmailSearchResult =
+  | { ok: true; ids: string[] }
+  | { ok: false; error: string }
+
+// q uses Gmail's own search-operator syntax (the same the Gmail search box
+// accepts) — the warmup engine searches for the ref token embedded in a
+// sent message's body (lib/outbound/warmup/engine/tick-logic.ts
+// buildRefToken), quoted for an exact-phrase match. Deliberately does NOT
+// restrict by label (no in:spam etc.) — the whole point is finding the
+// message wherever Gmail actually filed it, then checking its labels
+// separately (getGmailMessageLabels) to learn that placement.
+export async function searchGmailMessages(
+  query: string,
+  accessToken: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<GmailSearchResult> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const url = new URL(GMAIL_MESSAGES_URL)
+    url.searchParams.set('q', query)
+    url.searchParams.set('maxResults', '5')
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    })
+    const json = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      const detail = json?.error?.message || `HTTP ${res.status}`
+      return { ok: false, error: `Gmail search failed: ${detail}` }
+    }
+
+    const ids: string[] = Array.isArray(json?.messages)
+      ? json.messages.map((m: { id: string }) => m.id)
+      : []
+    return { ok: true, ids }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Network error calling Gmail messages.list API'
+    return { ok: false, error: controller.signal.aborted ? `Gmail search request timed out after ${timeoutMs}ms` : message }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export type GmailLabelsResult =
+  | { ok: true; labelIds: string[] }
+  | { ok: false; error: string }
+
+// format=minimal — labelIds only, still never touches body content, same
+// discipline as getGmailThread's format=metadata (just one step narrower:
+// minimal doesn't even return headers, only id/threadId/labelIds).
+export async function getGmailMessageLabels(
+  messageId: string,
+  accessToken: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<GmailLabelsResult> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const url = new URL(`${GMAIL_MESSAGES_URL}/${messageId}`)
+    url.searchParams.set('format', 'minimal')
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    })
+    const json = await res.json().catch(() => null)
+
+    if (!res.ok || !json) {
+      const detail = json?.error?.message || `HTTP ${res.status}`
+      return { ok: false, error: `Gmail message fetch failed: ${detail}` }
+    }
+
+    return { ok: true, labelIds: Array.isArray(json.labelIds) ? json.labelIds : [] }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Network error calling Gmail messages.get API'
+    return { ok: false, error: controller.signal.aborted ? `Gmail message request timed out after ${timeoutMs}ms` : message }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export type GmailModifyResult =
+  | { ok: true }
+  | { ok: false; error: string }
+
+// The actual "rescue from spam" (removeLabelIds:['SPAM'], addLabelIds:
+// ['INBOX']) and "mark read" (removeLabelIds:['UNREAD']) mechanism — both
+// are just this one primitive with different label lists, same as Gmail's
+// own web UI does under the hood.
+export async function modifyGmailMessageLabels(
+  messageId: string,
+  labels: { addLabelIds?: string[]; removeLabelIds?: string[] },
+  accessToken: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<GmailModifyResult> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(`${GMAIL_MESSAGES_URL}/${messageId}/modify`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(labels),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => null)
+      const detail = json?.error?.message || `HTTP ${res.status}`
+      return { ok: false, error: `Gmail label modify failed: ${detail}` }
+    }
+
+    return { ok: true }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Network error calling Gmail messages.modify API'
+    return { ok: false, error: controller.signal.aborted ? `Gmail modify request timed out after ${timeoutMs}ms` : message }
+  } finally {
+    clearTimeout(timeout)
+  }
 }

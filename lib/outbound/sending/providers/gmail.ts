@@ -44,6 +44,7 @@ import {
   refreshAccessToken,
   sendGmailMessage,
 } from '@/lib/outbound/shared/gmail-client'
+import { plainTextToHtml } from '@/lib/outbound/shared/email-html'
 import type {
   EmailSenderProvider,
   SendEmailRequest,
@@ -51,6 +52,22 @@ import type {
   ScheduleFollowupsRequest,
   ScheduleFollowupsResult,
 } from '../types'
+
+// Open tracking (2026-08-05) — app-specific policy, deliberately kept here
+// rather than in gmail-client.ts (which stays "dumb MIME/API mechanics").
+// Only activates when BOTH a campaignContactId is known AND
+// OUTBOUND_TRACKING_BASE_URL is configured — no incoming request context
+// exists here (this can be called from a background scheduler tick, not
+// just a browser-originated route), so the base URL can't be derived from
+// request.nextUrl.origin the way this app's other redirect URIs are; it
+// must be an explicit env var, set in both .env.local and Railway's
+// production config (see .env.example).
+function buildTrackingPixelHtml(bodyText: string, campaignContactId?: string): string | undefined {
+  const baseUrl = process.env.OUTBOUND_TRACKING_BASE_URL
+  if (!campaignContactId || !baseUrl) return undefined
+  const pixelUrl = `${baseUrl.replace(/\/+$/, '')}/api/track/open/${campaignContactId}`
+  return `${plainTextToHtml(bodyText)}\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;">`
+}
 
 export const GmailSendingProvider: EmailSenderProvider = {
   name: 'gmail',
@@ -80,6 +97,7 @@ export const GmailSendingProvider: EmailSenderProvider = {
       to: request.contactEmail,
       subject: request.subject,
       bodyText: request.body,
+      bodyHtml: buildTrackingPixelHtml(request.body, request.campaignContactId),
       threadId: request.threadId,
       inReplyTo: request.inReplyTo,
       references: request.inReplyTo,

@@ -12,8 +12,10 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { motion } from 'framer-motion'
 import { Inbox, Clock } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -23,6 +25,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
+import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import { useOutboundCampaigns } from './useOutboundCampaigns'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 
@@ -42,11 +46,15 @@ interface AvailableContact {
   email: string | null
 }
 
-function statusBadgeVariant(status: string) {
-  if (status === 'sent' || status === 'active') return 'default' as const
-  if (status === 'paused' || status === 'queued') return 'secondary' as const
-  if (status === 'bounced') return 'destructive' as const
-  return 'outline' as const
+function CampaignStatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    sent: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30',
+    active: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30',
+    queued: 'bg-accent text-muted-foreground',
+    paused: 'bg-signal-medium/10 text-signal-medium border border-signal-medium/30',
+    bounced: 'bg-destructive/10 text-destructive border border-destructive/40',
+  }
+  return <Badge className={cn('text-[10px]', map[status] ?? 'border border-border text-foreground')}>{status}</Badge>
 }
 
 export default function OutboundCampaignsPage() {
@@ -154,13 +162,16 @@ function OutboundCampaignsPageInner() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Campaigns</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Batches of prepared emails, sent together to a group of contacts.
-        </p>
-      </div>
+      <GlassCard>
+        <CardContent className="space-y-1">
+          <h2 className="text-base font-semibold text-foreground">Campaigns</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Batches of prepared emails, sent together to a group of contacts.
+          </p>
+        </CardContent>
+      </GlassCard>
 
+      <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
         <p>
           This is the manual/debug version of sending — most of the time you&apos;ll create and send a
@@ -234,7 +245,7 @@ function OutboundCampaignsPageInner() {
             <CardContent className="px-5 py-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">{selectedCampaign.name}</h2>
-                <Badge variant={statusBadgeVariant(selectedCampaign.status)}>{selectedCampaign.status}</Badge>
+                <CampaignStatusBadge status={selectedCampaign.status} />
               </div>
               <div className="flex gap-2">
                 <Button
@@ -335,16 +346,16 @@ function OutboundCampaignsPageInner() {
               {campaignContacts.length === 0 ? (
                 <EmptyState icon={Inbox} title="No contacts enqueued yet" className="border-none py-4" />
               ) : (
-                <div className="space-y-1.5">
+                <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-1.5">
                   {campaignContacts.map(cc => (
-                    <div key={cc.id} className="flex items-center justify-between text-xs">
+                    <motion.div key={cc.id} variants={listItem} className="flex items-center justify-between text-xs">
                       <span className="text-foreground">
                         {cc.outbound_contacts?.person_name ?? cc.contact_id} · {cc.outbound_contacts?.company_name}
                       </span>
-                      <Badge variant={statusBadgeVariant(cc.status)}>{cc.status}</Badge>
-                    </div>
+                      <CampaignStatusBadge status={cc.status} />
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               )}
             </CardContent>
           </Card>
@@ -355,19 +366,20 @@ function OutboundCampaignsPageInner() {
               {events.length === 0 ? (
                 <EmptyState icon={Clock} title="No events yet" className="border-none py-4" />
               ) : (
-                <div className="space-y-1.5">
+                <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-1.5">
                   {events.map(e => (
-                    <div key={e.id} className="flex items-center justify-between text-xs">
+                    <motion.div key={e.id} variants={listItem} className="flex items-center justify-between text-xs">
                       <Badge variant="outline">{e.event_type}</Badge>
                       <span className="text-muted-foreground/60">{new Date(e.occurred_at).toLocaleString()}</span>
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               )}
             </CardContent>
           </Card>
         </>
       )}
+      </motion.div>
 
       <ConfirmDialog
         open={pendingAction !== null}

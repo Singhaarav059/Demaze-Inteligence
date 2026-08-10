@@ -1,9 +1,14 @@
 // ============================================================
 // Admin: Warm-Up Mailboxes — GET / POST /api/admin/outbound/warmup/mailboxes
 // ============================================================
-// GET attaches a live-computed `live_status` to each mailbox (not stored —
-// computed fresh from started_at on every read) so the dashboard always
-// shows current numbers without needing a background job.
+// GET attaches a `live_status` to each mailbox. For a manually-added
+// mailbox (no credential_encrypted) this is unchanged from before: computed
+// fresh from started_at via the mock provider on every read, no background
+// job needed. For an OAuth-connected mailbox (2026-08-04, real warmup
+// engine) it instead reads the latest REAL row lib/outbound/warmup/engine/
+// run-tick.ts wrote into outbound_warmup_metrics — this route never
+// computes or writes a fake snapshot for those, only reads what the engine
+// already recorded.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -27,13 +32,42 @@ export async function GET(req: NextRequest) {
 
   const mailboxes = await Promise.all(
     (data ?? []).map(async mailbox => {
-      if (!mailbox.started_at) return { ...mailbox, live_status: null }
+      // credential_encrypted itself never leaves this route — only a
+      // boolean derived from its presence, same discipline every other
+      // vendor credential in this app follows (never expose the ciphertext
+      // to the client).
+      const oauthConnected = Boolean(mailbox.credential_encrypted)
+      const { credential_encrypted: _credential, ...publicMailbox } = mailbox
+
+      if (oauthConnected) {
+        const { data: latestMetric } = await supabase
+          .from('outbound_warmup_metrics')
+          .select('emails_sent_total, inbox_rate, spam_rate, domain_health_score')
+          .eq('mailbox_id', mailbox.id)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const liveStatus = latestMetric
+          ? {
+              status: mailbox.status === 'paused' ? ('paused' as const) : ('warming' as const),
+              emailsSentTotal: latestMetric.emails_sent_total,
+              inboxRate: latestMetric.inbox_rate,
+              spamRate: latestMetric.spam_rate,
+              domainHealthScore: latestMetric.domain_health_score,
+            }
+          : null // engine hasn't produced a real snapshot yet — honest "no data" rather than a fake one
+
+        return { ...publicMailbox, oauth_connected: true, live_status: liveStatus }
+      }
+
+      if (!mailbox.started_at) return { ...publicMailbox, oauth_connected: false, live_status: null }
       const liveStatus = await getWarmupStatus({
         mailboxAddress: mailbox.mailbox_address,
         startedAt: mailbox.started_at,
         isPaused: mailbox.status === 'paused',
       })
-      return { ...mailbox, live_status: liveStatus }
+      return { ...publicMailbox, oauth_connected: false, live_status: liveStatus }
     })
   )
 

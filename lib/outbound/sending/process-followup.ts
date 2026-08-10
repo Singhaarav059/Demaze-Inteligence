@@ -28,6 +28,15 @@ import { sendEmail } from './provider-factory'
 import { addToSuppressionList } from './suppression'
 import { nextFollowupSequence, isFollowupDue, buildFollowupSubject } from './followup-schedule'
 
+// Contact statuses that still have a follow-up left to send — 'followup_3'
+// is deliberately excluded (no followup_4 exists, see followup-schedule.ts's
+// STATUS_TO_NEXT_SEQUENCE). Shared by process-followups/route.ts (bulk,
+// manual) and the automatic follow-up engine
+// (lib/outbound/sending/followup-engine/run-tick.ts) so both select from the
+// exact same status set — hoisted here (2026-08-05) rather than duplicated,
+// was previously a local const only in process-followups/route.ts.
+export const FOLLOWUP_ELIGIBLE_STATUSES = ['sent', 'followup_1', 'followup_2']
+
 export interface FollowupOutcome {
   campaignContactId: string
   status: 'sent' | 'not_due' | 'cancelled_reply' | 'cancelled_bounce' | 'skipped' | 'failed'
@@ -189,6 +198,7 @@ export async function processFollowupForContact(
     body: draft.body,
     threadId: cc.provider_message_id ?? undefined,
     inReplyTo,
+    campaignContactId: cc.id,
   })
 
   if (result.status === 'failed') {
