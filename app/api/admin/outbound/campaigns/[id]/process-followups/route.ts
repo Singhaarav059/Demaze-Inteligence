@@ -15,6 +15,15 @@
 // (Session 2, Follow-up Control Panel) — shared with the new single-contact
 // "Send Now" action on the Follow-up Control Panel, which needs the exact
 // same logic minus the isFollowupDue gate (force=true).
+//
+// Optional body: { contact_ids?: string[] } — same scoping shape as
+// campaigns/[id]/send/route.ts. Added for Auto Flow's "Send All Due"
+// bulk action (TrackFollowUpStep.tsx): a batch-originated company shares
+// ONE campaign with every other company in its batch, so processing the
+// whole campaign unscoped would also send follow-ups for other companies'
+// contacts. Omitted (the standalone Campaigns page's own "Process
+// Follow-ups" button, which sends no body) means every eligible contact in
+// the campaign, unchanged.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -36,6 +45,8 @@ export async function POST(
   if (authError) return authError
 
   const { id: campaignId } = await params
+  const body = await req.json().catch(() => ({}))
+  const contactIdsFilter: string[] | undefined = Array.isArray(body?.contact_ids) ? body.contact_ids : undefined
   const supabase = createServerClient()
 
   const { data: campaign, error: campaignError } = await supabase
@@ -58,11 +69,17 @@ export async function POST(
   const gmail = await resolveGmailContext()
   const intervalsDays = await getFollowupIntervals()
 
-  const { data: contacts, error: fetchError } = await supabase
+  let contactsQuery = supabase
     .from('outbound_campaign_contacts')
     .select('id')
     .eq('campaign_id', campaignId)
     .in('status', FOLLOWUP_ELIGIBLE_STATUSES)
+
+  if (contactIdsFilter && contactIdsFilter.length > 0) {
+    contactsQuery = contactsQuery.in('contact_id', contactIdsFilter)
+  }
+
+  const { data: contacts, error: fetchError } = await contactsQuery
 
   if (fetchError) {
     return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
