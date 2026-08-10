@@ -1175,3 +1175,179 @@ status`/`updated_at`) — no new table, no new migration.
 
 **Market Intelligence Layer (Phase 2 item 6) is now COMPLETE, including live
 verification.**
+
+## Outreach Intelligence Layer (Phase 2, item 7) — 2026-07-23
+
+Rename-only, no new logic. `OutreachIntelligence`'s fields renamed to match
+this doc's own naming: `trigger`→`why_contact`, `problem`→`likely_problem`,
+`service`→`recommended_service`, `opening_angle`→`conversation_angle`
+(`why_now` was already correct). Updated consistently across the LLM
+prompt schema, `normalize.ts`, both admin UI render sites, the downloaded
+brief export, and outbound generation's input assembly. Full detail in
+`CLAUDE.md`'s Phase 2 item 7 entry.
+
+## Outbound Workflow Modules — architecture + Prospeo vendor decision (2026-07-17/18)
+
+**Scope override**: building the full send loop's scaffolding (mock
+providers only, no real vendor calls) was authorized ahead of any vendor
+decision, since mock-only scaffolding carries no vendor risk. This
+unblocked (but did not itself fulfill) the "email-finding/generation/QA/
+send" item in `CLAUDE.md`'s "do not work on" list — buyer/contact
+auto-discovery via LinkedIn stayed excluded regardless.
+
+**Standing pattern for all 8 modules** (Email Finder, Email Validation,
+Contact Enrichment, Generation, Email Sending, Email Warm-Up, Decision-maker
+Discovery, Integrations Settings): one capability = one `*Provider`
+interface, one file per implementation under `providers/` (`mock.ts`
+first), one `provider-factory.ts` per capability. Provider selection:
+`outbound_integrations` DB row (active-by-default is `mock`) → env var →
+`'mock'`. Credentials encrypted at rest (AES-256-GCM,
+`lib/outbound/settings/credential-crypto.ts`) — this repo's first
+credential-at-rest store. Adding a real vendor later never requires
+touching any other module — just a new provider class + env var + a flip
+in `/admin/outbound/integrations`.
+
+**Vendor decision — Prospeo (2026-07-18)**: chosen for Email Finder,
+Contact Enrichment, and Decision-maker Discovery (the `search-person`
+endpoint), via their unified `enrich-person` API. Not Apollo/PDL/
+Proxycurl/Hunter. Real Prospeo credits are spent per lookup — the Auto
+Flow UI gates the first auto-triggered decision-maker search behind a
+one-time confirm dialog. **Status: live, user-confirmed working.** See
+`CLAUDE.md`'s Prospeo/decision-maker-discovery sessions for the full
+build/verification history.
+
+**Standing rule, unchanged by any of the above**: contact discovery never
+goes through LinkedIn. Buyer/contact identity for a researched company is
+either manually entered or comes from a non-LinkedIn people-data API
+(Prospeo) — never scraped or automated against LinkedIn itself.
+
+## DIY Gmail warmup engine (2026-08-04/05)
+
+**Decision**: real warmup, built in-house against the user's own multiple
+Gmail accounts (OAuth pool), not a paid commercial warmup vendor. Chosen
+specifically because the user wanted to replicate what commercial vendors
+do, for free, using accounts they already own — a real trade-off consciously
+accepted: a small pool (a handful of owned mailboxes) mailing itself is
+inherently less diverse than a vendor's network of thousands of
+independent mailboxes, so every default (daily send cap ramp, randomized
+2-30h process delay, 35% reply probability, 20% per-tick skip probability)
+is deliberately conservative to avoid the pool itself reading as bot-like
+traffic to Gmail's abuse detection.
+
+**Architecture**: a separate OAuth connection per pool mailbox (own scopes,
+own credential row — different shape from every other capability in this
+app, which selects exactly ONE active provider; warmup needs many
+simultaneously-connected accounts). Tick logic split pure (`tick-logic.ts`)
+/ impure (`run-tick.ts`), same convention as the follow-up engine. Gated
+behind `WARMUP_ENGINE_ENABLED` (unset/off everywhere by default, including
+local dev) for the autonomous scheduler; a manual "Run Tick Now" button
+works regardless — same "verify manually before trusting the scheduler"
+precedent used throughout this app.
+
+**Status**: code-complete, and — as of 2026-08-05/2026-08-10 — both halves
+are live-verified against real Gmail data (real sends between two real
+connected accounts; real spam-rescue/mark-read/reply mechanics against a
+real due exchange, including a real bug found and fixed — see the
+2026-08-10 entry below). `WARMUP_ENGINE_ENABLED` is still deliberately left
+off — flipping it is a user decision, not something completing engineering
+verification implies.
+
+## Open tracking + automatic follow-up engine (2026-08-05)
+
+**Decision, an explicit override of this app's usual send-confirmation
+caution**: once a contact is confirmed (via a real tracking pixel) to have
+NOT opened a previous email past the existing follow-up cadence, the next
+follow-up sends **fully automatically, no click required** — this was an
+explicit, direct authorization from the user, not a default this app would
+otherwise assume. The batch-vs-single-company distinction was also
+explicitly widened: the persistent per-company pipeline list covers
+batch-researched companies too, not just single-company Auto Flow runs.
+
+**Safety mechanism that keeps the above from silently becoming something
+broader than authorized**: the engine fails CLOSED if open-tracking isn't
+configured (`OUTBOUND_TRACKING_BASE_URL` unset) — every contact would
+otherwise look "unopened forever," which would quietly degrade "auto-send
+only if confirmed unopened" into blind time-based auto-sending, an
+expansion of what was actually authorized. `isAutoFollowupEligible()` is
+the one place this rule lives, layered strictly on top of the existing
+`isFollowupDue()` — manual actions never pass through this extra gate.
+
+**Status**: code-complete since 2026-08-05; both halves of the gating
+logic (withhold-if-opened, send-if-unopened-and-due) live-verified against
+real Gmail sends 2026-08-10 (see below). `FOLLOWUP_ENGINE_ENABLED` remains
+off by default — same "verified capability is not standing authorization
+to enable the autonomous scheduler" reasoning as the warmup engine.
+
+## Government-filings enrichment: SEC EDGAR built, India's MCA explicitly excluded (2026-08-04)
+
+**SEC EDGAR**: built. Genuinely free, public, no API key, no CAPTCHA —
+just a descriptive User-Agent header and respecting SEC's own rate limit.
+Runs unconditionally in parallel with existing discovery, since it costs
+nothing.
+
+**India's MCA company registry**: **not built, and not a "later" item** —
+no official public API exists at all; the only access path is a
+CAPTCHA-gated web portal. Building automation to solve/bypass a CAPTCHA is
+a hard exclusion regardless of intent, not a judgment call. If India
+company-filing data is ever wanted, that requires a new paid third-party
+vendor decision (Probe42/Tofler/Zauba Corp-class), same category as the
+Prospeo/Gmail decisions above — not something to build toward by proxy.
+
+## Mobile "app-like" pass — admin product only (2026-08-04)
+
+**Scope decision, confirmed via a direct question before building
+anything**: "make the website mobile-compatible, app-like" was scoped to
+the internal admin product only. The public landing page (already had its
+own responsive/scrollytelling pass) was deliberately left untouched.
+Delivered: PWA manifest + real generated app icons, safe-area support, and
+a persistent bottom tab bar (the actual defining native-app navigation
+pattern) replacing the old hamburger drawer, which reads as "mobile
+website" rather than "app."
+
+## Three flagged-but-unfixed bugs closed out, live-verified (2026-08-10)
+
+Picked up from a standing list of gaps flagged-but-deliberately-deferred
+across several prior sessions (see `CLAUDE.md`'s "not done" notes). All
+three verified against real data, not just synthetic unit tests, and all
+three found something the synthetic tests alone would have missed:
+
+- **Warmup engine spam-rescue search** (`lib/outbound/shared/
+  gmail-client.ts`'s `searchGmailMessages()`): Gmail's `messages.list`
+  excludes Spam/Trash by default; the search never passed
+  `includeSpamTrash=true`, so a warmup exchange that had genuinely landed
+  in spam was invisible to the exact mechanism built to rescue it — it
+  silently looked "not found" and eventually got marked `failed`. Found by
+  running the warmup engine's manual tick against two real, already-pending
+  exchanges from an earlier live test; confirmed via a direct API call
+  (0 results without the param, 1 with it); fixed; re-verified against the
+  same real message (`rescued_from_spam: true` on retry).
+- **`detectPageType()`'s substring-collision bug**
+  (`lib/pipeline/evidence-extractor.ts`): every category regex required a
+  leading `/` but no trailing boundary, so a keyword could match as a bare
+  prefix of a longer unrelated segment — `/blog/company-news` misclassified
+  `about` via `/company`, `/products/irrigation-parts` misclassified
+  `investor` via `/ir`. This is the same bug class already fixed once for
+  `scraper.ts`'s `matchesKeyword()`, never applied here — flagged in a
+  2026-07-27 session, worked around with a non-colliding test URL rather
+  than fixed at the time. Fixed with a segment-boundary lookahead,
+  deliberately excluding `-`/`_` (a trailing hyphen is still the same
+  compound slug, not a real boundary) — a small, accepted recall trade-off
+  in favor of never risking a wrong classification.
+- **`assessScrapeQuality()`'s content-relevance gap**
+  (`lib/pipeline/scraper.ts`): page/char count alone couldn't distinguish
+  "the right content" from "the wrong content" scraped in equal volume —
+  flagged in the 2026-07-24 silent-zero-bug-class audit. Added a penalty
+  reusing existing signals (non-English-locale ratio via the already-built
+  `detectLocalizedUrlStructure()`, low-value/unclassified-page ratio via
+  `classifyUrl()`'s own category scoring) rather than new heuristics.
+  Live-verified against lechler.com's real cached scrape (this repo's own
+  multi-locale reference case): was scored 80/100 despite 5 of 6 pages
+  being German, now correctly 55/100 with the reason surfaced in the note.
+
+Also live-verified in the same session, no code change needed: the
+automatic follow-up engine's `isAutoFollowupEligible()` gating logic —
+confirmed against real Gmail sends that a due-and-unopened contact gets a
+real follow-up, and the same contact, once marked opened, gets withheld.
+
+All three fixes: `tsc --noEmit` clean, full suite passing, committed
+individually.
