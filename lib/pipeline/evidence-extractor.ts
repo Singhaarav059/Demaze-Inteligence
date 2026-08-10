@@ -539,15 +539,35 @@ const SIGNAL_PATTERNS: PatternDef[] = [
 
 // ── Page type detection ────────────────────────────────────────
 
-function detectPageType(url: string): PageType {
+// Segment-boundary lookahead — a keyword match must end at a real path/
+// query/extension separator (or end of string), not bleed into a longer
+// word. Same bug class this codebase already fixed once for scraper.ts's
+// matchesKeyword() ('ir' matching inside 'wire'), just never applied here:
+// without this, '/blog/company-news' matched pageType 'about' via the bare
+// substring '/company' inside '/company-news', and '/products/irrigation-
+// parts' matched 'investor' via '/ir' inside '/irrigation' (found while
+// writing tests/evidence-extractor-pagetype.test.ts, 2026-07-27 — worked
+// around there with a non-colliding test URL rather than fixed at the
+// time). Deliberately does NOT include '-' or '_' as valid boundary
+// characters, unlike matchesKeyword()'s own separator set — a trailing
+// hyphen/underscore is still "the same compound slug" (e.g. 'company-news'
+// is one slug, not 'company' + a separator), not a real path boundary, so
+// treating it as one would have let this exact bug back in through the
+// side door. This trades a little recall (e.g. '/careers-page' no longer
+// matches 'careers') for correctness — consistent with this codebase's
+// established "prefer under-confidence over a confidently wrong match"
+// philosophy (see website-discovery.ts).
+const SEG_END = '(?=[/.?]|$)'
+
+export function detectPageType(url: string): PageType {
   const path = (url || '').toLowerCase()
-  if (/\/(?:careers|jobs|hiring|vacancies|work-with-us|join-us|open-positions|opportunities)/.test(path)) return 'careers'
-  if (/\/(?:investor|ir|annual-report|shareholders|financial|earnings|results|reports)/.test(path)) return 'investor'
-  if (/\/(?:annual[_-]?report|ar20\d{2})/.test(path)) return 'annual_report'
-  if (/\/(?:press|news|newsroom|media|announcements|press-releases?|pressroom)/.test(path)) return 'press'
-  if (/\/(?:about|about-us|company|our-story|who-we-are|overview|corporate)/.test(path)) return 'about'
-  if (/\/(?:products?|solutions?|services?|capabilities|offerings|platforms?)/.test(path)) return 'products'
-  if (/\/(?:blog|insights?|perspectives?|thought-leadership|articles?)/.test(path)) return 'blog'
+  if (new RegExp(`/(?:careers|jobs|hiring|vacancies|work-with-us|join-us|open-positions|opportunities)${SEG_END}`).test(path)) return 'careers'
+  if (new RegExp(`/(?:investor|ir|annual-report|shareholders|financial|earnings|results|reports)${SEG_END}`).test(path)) return 'investor'
+  if (new RegExp(`/(?:annual[_-]?report|ar20\\d{2})${SEG_END}`).test(path)) return 'annual_report'
+  if (new RegExp(`/(?:press|news|newsroom|media|announcements|press-releases?|pressroom)${SEG_END}`).test(path)) return 'press'
+  if (new RegExp(`/(?:about|about-us|company|our-story|who-we-are|overview|corporate)${SEG_END}`).test(path)) return 'about'
+  if (new RegExp(`/(?:products?|solutions?|services?|capabilities|offerings|platforms?)${SEG_END}`).test(path)) return 'products'
+  if (new RegExp(`/(?:blog|insights?|perspectives?|thought-leadership|articles?)${SEG_END}`).test(path)) return 'blog'
   if (/^\/?(?:index\.html?)?$|\/home\/?$/.test(path) || path === '') return 'homepage'
   return 'other'
 }

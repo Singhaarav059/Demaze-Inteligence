@@ -15,7 +15,46 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest'
-import { extractSignals } from '../lib/pipeline/evidence-extractor'
+import { extractSignals, detectPageType } from '../lib/pipeline/evidence-extractor'
+
+// ============================================================
+// detectPageType() — segment-boundary collision fix (2026-08-10)
+// ============================================================
+// detectPageType()'s keyword regexes required a leading '/' but no trailing
+// boundary, so a keyword could match as a bare substring of a longer,
+// unrelated path segment — the same bug class this codebase already fixed
+// once for scraper.ts's matchesKeyword() ('ir' matching inside 'wire'),
+// just never applied here. Found while writing this file's own blog test
+// (2026-07-27, worked around with a non-colliding URL at the time, not
+// fixed) — confirmed the collision generalizes beyond 'about'/'company' to
+// 'investor'/'ir' too, and fixed both instances of the same missing
+// boundary rather than patching one case.
+describe('detectPageType — segment-boundary collisions', () => {
+  it('does not misclassify /blog/company-news as "about" via the "company" substring', () => {
+    expect(detectPageType('/blog/company-news')).toBe('blog')
+  })
+
+  it('does not misclassify /products/irrigation-parts as "investor" via the "ir" substring', () => {
+    expect(detectPageType('/products/irrigation-parts')).toBe('products')
+  })
+
+  it('still classifies a genuine /company page as "about"', () => {
+    expect(detectPageType('/company')).toBe('about')
+    expect(detectPageType('/company/')).toBe('about')
+    expect(detectPageType('/about-us/team')).toBe('about')
+  })
+
+  it('still classifies a genuine /ir page as "investor"', () => {
+    expect(detectPageType('/ir')).toBe('investor')
+    expect(detectPageType('/investors/ir/annual-report')).toBe('investor')
+  })
+
+  it('still classifies real careers/press/blog paths correctly (non-regression)', () => {
+    expect(detectPageType('/careers/jobs')).toBe('careers')
+    expect(detectPageType('/press/newsroom')).toBe('press')
+    expect(detectPageType('/blog/quarterly-update')).toBe('blog')
+  })
+})
 
 describe('extractSignals — homepage page-type detection', () => {
   it('labels the root-path page "homepage" (not "other") and still classifies third-person self-reference as company_strategy', () => {
