@@ -178,12 +178,19 @@ export function useAutoGtmFlow() {
 
   const resumeFromRun = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/admin/test-runs?limit=50`)
+      // Fetch this one run directly by id — NOT the `?limit=50` list route.
+      // FIXED (2026-08-10): this used to fetch the 50 most-recent runs and
+      // find() this id client-side, so resuming into any run older than the
+      // most recent 50 silently failed (the try/catch below swallowed it,
+      // leaving the flow stuck at step 1 with no error shown — "Resume is
+      // best-effort" was masking a real bug, not just genuine unavailability).
+      // The dedicated detail route already exists (used by run-history's own
+      // "View Report" action) and returns the exact same row shape this
+      // function needs, with no count cap at all.
+      const res = await fetch(`/api/admin/test-runs/${id}`)
       const data = await res.json()
       if (!data.success) return
-      const run = (data.runs as Array<{ id: string; domain: string; company_url: string; final_result?: Record<string, unknown> }>).find(
-        r => r.id === id
-      )
+      const run = data.run as { id: string; domain: string; company_url: string; final_result?: Record<string, unknown> }
       if (!run) return
       setRunId(run.id)
       setUrl(run.company_url)
