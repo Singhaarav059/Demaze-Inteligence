@@ -1487,6 +1487,47 @@ function combineAndTruncate(
 
 // ── Quality assessment ────────────────────────────────────────
 
+// ── Content-relevance penalty ─────────────────────────────────
+// Page/char count alone can't distinguish "15 pages of the right content"
+// from "15 pages of the wrong content" — flagged in CLAUDE.md's 2026-07-24
+// audit ("assessScrapeQuality() scores purely on page/char count with zero
+// content-relevance signal... 15 pages of the *wrong* content scores
+// identically to 15 right ones"). Reuses two signals already computed
+// elsewhere in this file for a different purpose (page SELECTION) to judge
+// what was actually scraped instead of re-deriving new heuristics:
+// non-English locale pages (evidence extraction is English-only, see the
+// lechler.com locale-scoring fix) and low-value/unclassified pages
+// (classifyUrl()'s own 'other'/article-leaf scoring).
+const NON_ENGLISH_CONTENT_RATIO_THRESHOLD = 0.5
+const LOW_VALUE_CONTENT_RATIO_THRESHOLD = 0.6
+const CONTENT_RELEVANCE_SCORE_FLOOR = 10
+
+export function assessContentRelevance(successfulUrls: string[]): { nonEnglishRatio: number; lowValueRatio: number } {
+  if (successfulUrls.length === 0) return { nonEnglishRatio: 0, lowValueRatio: 0 }
+
+  const localeSegments = detectLocalizedUrlStructure(successfulUrls)
+  let nonEnglishCount = 0
+  let lowValueCount = 0
+
+  for (const url of successfulUrls) {
+    let path: string
+    try { path = new URL(url).pathname } catch { continue }
+
+    const seg = firstPathSegment(path)
+    if (seg && localeSegments.has(seg) && !isEnglishLocaleSegment(seg)) {
+      nonEnglishCount++
+    }
+
+    const { score: categoryScore } = classifyUrl(path)
+    if (categoryScore <= 30) lowValueCount++
+  }
+
+  return {
+    nonEnglishRatio: nonEnglishCount / successfulUrls.length,
+    lowValueRatio: lowValueCount / successfulUrls.length,
+  }
+}
+
 export function assessScrapeQuality(result: ScrapeResult): { score: number; note: string } {
   const pageCount = result.successfulUrls.length
   const totalChars = result.totalCharCount
@@ -1510,11 +1551,28 @@ export function assessScrapeQuality(result: ScrapeResult): { score: number; note
     score = Math.min(100, score + 5)
   }
 
-  const note = pageCount === 0 ? 'No usable content scraped'
+  let note = pageCount === 0 ? 'No usable content scraped'
     : pageCount === 1 ? 'Homepage only -- limited depth'
     : pageCount <= 3 ? 'Light scrape -- key pages captured'
     : pageCount <= 6 ? 'Good scrape -- multiple sections covered'
     : 'Deep scrape -- comprehensive coverage'
+
+  if (pageCount > 0) {
+    const { nonEnglishRatio, lowValueRatio } = assessContentRelevance(result.successfulUrls)
+    const penalties: string[] = []
+
+    if (nonEnglishRatio >= NON_ENGLISH_CONTENT_RATIO_THRESHOLD) {
+      score = Math.max(CONTENT_RELEVANCE_SCORE_FLOOR, score - Math.round(nonEnglishRatio * 30))
+      penalties.push('mostly non-English content')
+    }
+    if (lowValueRatio >= LOW_VALUE_CONTENT_RATIO_THRESHOLD) {
+      score = Math.max(CONTENT_RELEVANCE_SCORE_FLOOR, score - Math.round(lowValueRatio * 25))
+      penalties.push('mostly low-value/unclassified pages')
+    }
+    if (penalties.length > 0) {
+      note += ` (${penalties.join(', ')})`
+    }
+  }
 
   return { score, note }
 }
