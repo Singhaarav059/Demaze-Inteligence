@@ -17,6 +17,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { exchangeCodeForTokens, fetchGmailAddress, encodeGmailCredential } from '@/lib/outbound/shared/gmail-client'
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
 import { STATE_COOKIE, resolveWarmupRedirectUri } from '../start/route'
+import { resolvePublicOrigin } from '@/lib/outbound/shared/oauth-origin'
 
 const OAUTH_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 
@@ -28,7 +29,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 }
 
 function backToWarmup(req: NextRequest, status: 'success' | 'error', message?: string) {
-  const url = new URL('/admin/outbound/warmup', req.nextUrl.origin)
+  const url = new URL('/admin/outbound/warmup', resolvePublicOrigin(req))
   url.searchParams.set('warmup_oauth', status)
   if (message) url.searchParams.set('warmup_oauth_message', message)
   const res = NextResponse.redirect(url)

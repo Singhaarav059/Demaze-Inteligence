@@ -17,11 +17,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { buildAuthUrl } from '@/lib/outbound/shared/gmail-client'
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { isPublicOriginHttps, resolveForwardedOrigin } from '@/lib/outbound/shared/oauth-origin'
 
 export const STATE_COOKIE = 'gmail_oauth_state'
 const OAUTH_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 
+// Forwarded-header origin takes priority so both public domains (custom +
+// *.up.railway.app) resolve to their own matching, already-registered
+// callback URL — see oauth-origin.ts's header comment. The env var is a
+// fallback only, for environments where X-Forwarded-Host isn't set.
 export function resolveRedirectUri(req: NextRequest): string {
+  const forwarded = resolveForwardedOrigin(req)
+  if (forwarded) return `${forwarded}/api/admin/outbound/integrations/gmail/oauth/callback`
   return process.env.GOOGLE_OAUTH_REDIRECT_URI
     || `${req.nextUrl.origin}/api/admin/outbound/integrations/gmail/oauth/callback`
 }
@@ -49,7 +56,7 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(authUrl)
   res.cookies.set(STATE_COOKIE, state, {
     httpOnly: true,
-    secure: req.nextUrl.protocol === 'https:',
+    secure: isPublicOriginHttps(req),
     sameSite: 'lax',
     maxAge: 600,
     path: '/',
