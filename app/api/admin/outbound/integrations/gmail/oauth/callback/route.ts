@@ -22,6 +22,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { exchangeCodeForTokens, fetchGmailAddress, encodeGmailCredential } from '@/lib/outbound/shared/gmail-client'
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
 import { STATE_COOKIE, resolveRedirectUri } from '../start/route'
+import { resolvePublicOrigin } from '@/lib/outbound/shared/oauth-origin'
 
 const OAUTH_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 
@@ -33,7 +34,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 }
 
 function backToIntegrations(req: NextRequest, status: 'success' | 'error', message?: string) {
-  const url = new URL('/admin/outbound/integrations', req.nextUrl.origin)
+  const url = new URL('/admin/outbound/integrations', resolvePublicOrigin(req))
   url.searchParams.set('gmail_oauth', status)
   if (message) url.searchParams.set('gmail_oauth_message', message)
   const res = NextResponse.redirect(url)
