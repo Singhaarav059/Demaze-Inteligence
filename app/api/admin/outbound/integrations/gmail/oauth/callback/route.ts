@@ -43,6 +43,22 @@ function backToIntegrations(req: NextRequest, status: 'success' | 'error', messa
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    return await handleCallback(req)
+  } catch (e) {
+    // Turns an otherwise-silent crash (raw HTTP 500, no diagnostic info)
+    // into a visible message on the Integrations page — same "make
+    // failures loud" discipline as every other error path in this route,
+    // which all already redirect back with a real reason instead of
+    // throwing. See the warmup callback route's identical fix for the
+    // real-world case this covers (an unset CREDENTIALS_ENCRYPTION_KEY
+    // throwing from inside encodeGmailCredential with no diagnostic).
+    const message = e instanceof Error ? e.message : 'Unknown server error during OAuth callback.'
+    return backToIntegrations(req, 'error', message)
+  }
+}
+
+async function handleCallback(req: NextRequest): Promise<NextResponse> {
   const rateLimit = checkRateLimit(`gmail-oauth:${getClientIp(req)}`, OAUTH_RATE_LIMIT)
   if (!rateLimit.allowed) {
     return backToIntegrations(req, 'error', 'Too many attempts — please wait a minute and try again.')
