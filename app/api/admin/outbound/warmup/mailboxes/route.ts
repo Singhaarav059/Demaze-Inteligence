@@ -2,13 +2,23 @@
 // Admin: Warm-Up Mailboxes — GET / POST /api/admin/outbound/warmup/mailboxes
 // ============================================================
 // GET attaches a `live_status` to each mailbox. For a manually-added
-// mailbox (no credential_encrypted) this is unchanged from before: computed
-// fresh from started_at via the mock provider on every read, no background
-// job needed. For an OAuth-connected mailbox (2026-08-04, real warmup
-// engine) it instead reads the latest REAL row lib/outbound/warmup/engine/
-// run-tick.ts wrote into outbound_warmup_metrics — this route never
-// computes or writes a fake snapshot for those, only reads what the engine
-// already recorded.
+// mailbox (no credential_encrypted, never connected) this is unchanged
+// from before: computed fresh from started_at via the mock provider on
+// every read, no background job needed. For an OAuth-connected mailbox
+// (2026-08-04, real warmup engine) it instead reads the latest REAL row
+// lib/outbound/warmup/engine/run-tick.ts wrote into
+// outbound_warmup_metrics — this route never computes or writes a fake
+// snapshot for those, only reads what the engine already recorded.
+//
+// A third state (2026-08-11, mailbox disconnect): credential_encrypted is
+// null (no live access) BUT oauth_connected_at is still set — this was
+// really connected once, then disconnected via .../[id]/disconnect, not a
+// plain manual mock entry. Reads the same real outbound_warmup_metrics
+// history as a connected mailbox (frozen at whatever the engine last
+// recorded, not recomputed) rather than falling through to the mock-
+// simulated path — collapsing this into "Manual (mock only)" would make a
+// disconnected mailbox's very real prior activity indistinguishable from
+// one that was never anything but a fake display entry.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -37,9 +47,10 @@ export async function GET(req: NextRequest) {
       // vendor credential in this app follows (never expose the ciphertext
       // to the client).
       const oauthConnected = Boolean(mailbox.credential_encrypted)
+      const disconnected = !oauthConnected && Boolean(mailbox.oauth_connected_at)
       const { credential_encrypted: _credential, ...publicMailbox } = mailbox
 
-      if (oauthConnected) {
+      if (oauthConnected || disconnected) {
         const { data: latestMetric } = await supabase
           .from('outbound_warmup_metrics')
           .select('emails_sent_total, inbox_rate, spam_rate, domain_health_score')
@@ -50,7 +61,7 @@ export async function GET(req: NextRequest) {
 
         const liveStatus = latestMetric
           ? {
-              status: mailbox.status === 'paused' ? ('paused' as const) : ('warming' as const),
+              status: oauthConnected ? (mailbox.status === 'paused' ? ('paused' as const) : ('warming' as const)) : ('paused' as const),
               emailsSentTotal: latestMetric.emails_sent_total,
               inboxRate: latestMetric.inbox_rate,
               spamRate: latestMetric.spam_rate,
@@ -58,16 +69,16 @@ export async function GET(req: NextRequest) {
             }
           : null // engine hasn't produced a real snapshot yet — honest "no data" rather than a fake one
 
-        return { ...publicMailbox, oauth_connected: true, live_status: liveStatus }
+        return { ...publicMailbox, oauth_connected: oauthConnected, disconnected, live_status: liveStatus }
       }
 
-      if (!mailbox.started_at) return { ...publicMailbox, oauth_connected: false, live_status: null }
+      if (!mailbox.started_at) return { ...publicMailbox, oauth_connected: false, disconnected: false, live_status: null }
       const liveStatus = await getWarmupStatus({
         mailboxAddress: mailbox.mailbox_address,
         startedAt: mailbox.started_at,
         isPaused: mailbox.status === 'paused',
       })
-      return { ...publicMailbox, oauth_connected: false, live_status: liveStatus }
+      return { ...publicMailbox, oauth_connected: false, disconnected: false, live_status: liveStatus }
     })
   )
 
