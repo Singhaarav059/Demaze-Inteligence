@@ -48,6 +48,9 @@ interface Mailbox {
   status: LiveStatus['status']
   started_at: string | null
   oauth_connected: boolean
+  // Was OAuth-connected once, then disconnected via the Disconnect button
+  // — distinct from a plain manual/mock-only entry that was never real.
+  disconnected: boolean
   live_status: LiveStatus | null
 }
 
@@ -162,8 +165,11 @@ function MailboxCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-medium text-foreground truncate">{mailbox.mailbox_address}</span>
-            <Badge variant={mailbox.oauth_connected ? 'default' : 'secondary'} className="shrink-0">
-              {mailbox.oauth_connected ? 'OAuth Connected' : 'Manual (mock only)'}
+            <Badge
+              variant={mailbox.oauth_connected ? 'default' : mailbox.disconnected ? 'outline' : 'secondary'}
+              className="shrink-0"
+            >
+              {mailbox.oauth_connected ? 'OAuth Connected' : mailbox.disconnected ? 'Disconnected' : 'Manual (mock only)'}
             </Badge>
             {mailbox.live_status && (
               <span className="text-xs text-muted-foreground/70 truncate hidden sm:inline">
@@ -208,9 +214,20 @@ function MailboxCard({
             Connected, no real activity recorded yet — run a tick (needs at least 2 connected mailboxes) or wait for the
             autonomous scheduler if it&apos;s enabled.
           </p>
+        ) : mailbox.disconnected ? (
+          <p className="text-xs text-muted-foreground/60 italic">
+            Disconnected before any real activity was recorded.
+          </p>
         ) : null}
 
-        {mailbox.oauth_connected && (
+        {mailbox.disconnected && (
+          <p className="text-xs text-muted-foreground/60">
+            Access revoked — this mailbox is no longer part of the warm-up pool. Use &quot;Connect a Gmail mailbox&quot;
+            above with the same address to reconnect and resume.
+          </p>
+        )}
+
+        {(mailbox.oauth_connected || mailbox.disconnected) && (
           <div className="border-t border-border pt-2">
             <button
               type="button"
