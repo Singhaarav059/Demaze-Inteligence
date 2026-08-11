@@ -28,6 +28,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { Progress } from '@/components/ui/progress'
 import { EmptyState } from '@/components/ui/empty-state'
 import { GuideNote } from '@/components/ui/guide-note'
+import { CollapsibleRow } from '@/components/ui/collapsible-row'
+import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 
@@ -102,14 +104,37 @@ function MailboxCard({
   mailbox,
   onTick,
   ticking,
+  onDisconnected,
 }: {
   mailbox: Mailbox
   onTick: () => void
   ticking: boolean
+  onDisconnected: () => void
 }) {
   const [activityOpen, setActivityOpen] = useState(false)
   const [activity, setActivity] = useState<ExchangeActivity[] | null>(null)
   const [loadingActivity, setLoadingActivity] = useState(false)
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  async function handleDisconnect() {
+    setDisconnecting(true)
+    try {
+      const res = await fetch(`/api/admin/outbound/warmup/mailboxes/${mailbox.id}/disconnect`, { method: 'POST' })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Failed to disconnect mailbox')
+        return
+      }
+      toast.success(`Disconnected ${mailbox.mailbox_address} — warm-up history kept, reconnect any time`)
+      setDisconnectOpen(false)
+      onDisconnected()
+    } catch {
+      toast.error('Could not reach the warm-up API')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   async function toggleActivity() {
     if (activityOpen) {
@@ -132,18 +157,25 @@ function MailboxCard({
   }
 
   return (
-    <Card className="border-border bg-card">
-      <CardContent className="px-5 py-4 space-y-3">
+    <CollapsibleRow
+      summary={
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-medium text-foreground truncate">{mailbox.mailbox_address}</span>
             <Badge variant={mailbox.oauth_connected ? 'default' : 'secondary'} className="shrink-0">
               {mailbox.oauth_connected ? 'OAuth Connected' : 'Manual (mock only)'}
             </Badge>
+            {mailbox.live_status && (
+              <span className="text-xs text-muted-foreground/70 truncate hidden sm:inline">
+                Inbox {Math.round(mailbox.live_status.inboxRate * 100)}% · Domain{' '}
+                {mailbox.live_status.domainHealthScore}/100
+              </span>
+            )}
           </div>
           <WarmupStatusBadge status={mailbox.live_status?.status ?? mailbox.status} />
         </div>
-
+      }
+    >
         {mailbox.live_status ? (
           <>
             <div className="grid grid-cols-2 gap-3 text-xs">
@@ -205,13 +237,28 @@ function MailboxCard({
         )}
 
         {mailbox.oauth_connected && (
-          <Button size="sm" variant="outline" disabled={ticking} onClick={onTick}>
-            {ticking ? <Spinner className="size-3.5" /> : null}
-            Run Tick Now
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={ticking} onClick={onTick}>
+              {ticking ? <Spinner className="size-3.5" /> : null}
+              Run Tick Now
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setDisconnectOpen(true)}>
+              Disconnect
+            </Button>
+          </div>
         )}
-      </CardContent>
-    </Card>
+
+        <ConfirmDialog
+          open={disconnectOpen}
+          onOpenChange={setDisconnectOpen}
+          title={`Disconnect ${mailbox.mailbox_address}?`}
+          description="Revokes this app's access to the mailbox and stops it from sending or receiving warm-up emails. Its warm-up ramp progress and history are kept — reconnecting later resumes where it left off."
+          confirmLabel="Disconnect"
+          destructive
+          loading={disconnecting}
+          onConfirm={handleDisconnect}
+        />
+    </CollapsibleRow>
   )
 }
 
@@ -374,7 +421,7 @@ function OutboundWarmupPageInner() {
           )}
           {mailboxes.map(mailbox => (
             <motion.div key={mailbox.id} variants={listItem}>
-              <MailboxCard mailbox={mailbox} onTick={handleTick} ticking={ticking} />
+              <MailboxCard mailbox={mailbox} onTick={handleTick} ticking={ticking} onDisconnected={loadMailboxes} />
             </motion.div>
           ))}
         </motion.div>
