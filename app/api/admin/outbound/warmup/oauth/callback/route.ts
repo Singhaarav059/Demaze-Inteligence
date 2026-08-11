@@ -38,6 +38,19 @@ function backToWarmup(req: NextRequest, status: 'success' | 'error', message?: s
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    return await handleCallback(req)
+  } catch (e) {
+    // Turns an otherwise-silent crash (raw HTTP 500, no diagnostic info)
+    // into a visible message on the warmup page — same "make failures
+    // loud" discipline as every other error path in this route, which all
+    // already redirect back with a real reason instead of throwing.
+    const message = e instanceof Error ? e.message : 'Unknown server error during OAuth callback.'
+    return backToWarmup(req, 'error', message)
+  }
+}
+
+async function handleCallback(req: NextRequest): Promise<NextResponse> {
   const rateLimit = checkRateLimit(`warmup-gmail-oauth:${getClientIp(req)}`, OAUTH_RATE_LIMIT)
   if (!rateLimit.allowed) {
     return backToWarmup(req, 'error', 'Too many attempts — please wait a minute and try again.')
