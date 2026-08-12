@@ -8,12 +8,21 @@
 // isn't configured" and "migration 016 hasn't been applied yet" (a missing
 // table produces a Postgres error here, not a thrown exception from the JS
 // client, so the broad catch handles it the same way either way).
+//
+// getFollowupIntervals(campaignId?) (migration 020, Campaign Settings):
+// when a campaignId is given, this first checks that campaign's own
+// interval_1/2/3_days override columns — ONLY when all three are set (a
+// partial override would be ambiguous: which step falls back to global and
+// which doesn't?) — before falling back to the global singleton below. This
+// keeps every existing call site (which passes no campaignId) byte-for-byte
+// unchanged, and keeps a campaign with no override behaving exactly as
+// before migration 020 shipped.
 // ============================================================
 
 import { createServerClient } from '@/lib/supabase/server'
 import { FOLLOWUP_INTERVALS_DAYS } from './followup-schedule'
 
-export async function getFollowupIntervals(): Promise<readonly [number, number, number]> {
+async function getGlobalFollowupIntervals(): Promise<readonly [number, number, number]> {
   try {
     const supabase = createServerClient()
     const { data } = await supabase
@@ -27,6 +36,27 @@ export async function getFollowupIntervals(): Promise<readonly [number, number, 
   } catch {
     return FOLLOWUP_INTERVALS_DAYS
   }
+}
+
+export async function getFollowupIntervals(campaignId?: string): Promise<readonly [number, number, number]> {
+  if (!campaignId) return getGlobalFollowupIntervals()
+
+  try {
+    const supabase = createServerClient()
+    const { data } = await supabase
+      .from('outbound_campaigns')
+      .select('interval_1_days, interval_2_days, interval_3_days')
+      .eq('id', campaignId)
+      .maybeSingle()
+
+    if (data && data.interval_1_days != null && data.interval_2_days != null && data.interval_3_days != null) {
+      return [data.interval_1_days, data.interval_2_days, data.interval_3_days]
+    }
+  } catch {
+    // Falls through to the global default below — same fail-open discipline
+    // as every other lookup in this file.
+  }
+  return getGlobalFollowupIntervals()
 }
 
 export async function updateFollowupIntervals(

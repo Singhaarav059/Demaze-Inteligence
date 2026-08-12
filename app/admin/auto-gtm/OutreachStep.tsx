@@ -1,23 +1,22 @@
 'use client'
 
 // ============================================================
-// OutreachStep — Auto Flow's merged "Outreach & Send" step
+// OutreachStep — Auto Flow step 4, "Campaign & Outreach"
 // ============================================================
 // Drafts each contact's outreach email automatically (subject lines -> pick
 // the first -> full email -> follow-up sequence), then lets you review,
-// edit, switch subject, regenerate, and send — all from one screen.
-// Previously this was two separate steps (Outreach: drafting only; Review &
-// Send: sending only) — merged into one per explicit user request
-// (2026-07-31): drafting and sending are one continuous action here, not
-// two different destinations to navigate between. Master-detail layout
-// (contact list left, full draft + send controls right) carried over from
-// the old Review & Send step; auto-drafting/regenerate/switch-subject logic
-// carried over from the old Outreach step. Both send paths (per-contact
-// "Send Email", multi-select "Send Selected") are built on useAutoGtmFlow's
-// sendOneContact/sendSelectedContacts, driving the existing sending
-// infrastructure under the hood — "campaign" is never a word used in this
-// UI. Freshly generated draft text types in word by word via
-// TypewriterText instead of popping in fully formed.
+// edit, switch subject, and regenerate — plus the campaign's own settings
+// (name, sending account, daily limit, send window, follow-up cadence
+// override) via CampaignSettingsPanel. Master-detail layout (contact list
+// left, full draft right) carried over unchanged from the prior merged
+// "Outreach & Send" step.
+//
+// RESTRUCTURED (2026-08-12, 5→6 step split): sending itself moved OUT of
+// this step entirely, into the new Review & Send step (ReviewSendStep.tsx)
+// — this step now only prepares content and settings, never sends. That's
+// why there's no ConfirmDialog, no campaignContactStatus, no Send button
+// here anymore; drafting/regenerate/switch-subject/edit logic is otherwise
+// unchanged from before the split.
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -27,12 +26,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import { TypewriterText } from '@/components/ui/typewriter-text'
 import { expandCollapse } from '@/lib/motion'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
-import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
+import { CampaignSettingsPanel } from './CampaignSettingsPanel'
 
 // Shown in place of the eventual email body while drafting is in flight —
 // gives the multi-stage ~30-90s wait a sense of progress instead of a
@@ -75,26 +73,11 @@ interface GeneratedContent {
   status?: 'draft' | 'approved' | 'sent'
 }
 
-interface SendOutcomeDetail {
-  status: 'sent' | 'skipped' | 'failed'
-  reason?: string
-}
-
 interface EditDraft {
   email: string
   subject: string
   body: string
 }
-
-// What's pending confirmation, if anything — a single piece of state covers
-// both "Send Selected" and a per-contact "Send Email" so only one
-// ConfirmDialog is ever rendered at a time (see CLAUDE.md's standing rule
-// that sending real email always requires per-batch confirmation once real
-// send infrastructure exists).
-type PendingSend =
-  | { kind: 'selected'; contactIds: string[]; count: number }
-  | { kind: 'one'; contactId: string; name: string }
-  | null
 
 type DraftStage = 'subjects' | 'email' | 'followups'
 
@@ -102,12 +85,6 @@ function urgencyBadgeVariant(urgency: FollowupDraft['urgency']) {
   if (urgency === 'high') return 'destructive' as const
   if (urgency === 'medium') return 'secondary' as const
   return 'outline' as const
-}
-
-function sendStatusBadgeVariant(status: SendOutcomeDetail['status']) {
-  if (status === 'sent') return 'default' as const
-  if (status === 'skipped') return 'secondary' as const
-  return 'destructive' as const
 }
 
 function initialsOf(name: string): string {
@@ -178,27 +155,33 @@ async function switchSubjectAndRegenerate(contactId: string, subject: string): P
 
 export function OutreachStep({
   contacts: allContacts,
-  campaignContactStatus,
-  sendingContactId,
-  sendingSelected,
-  sendOneContact,
-  sendSelectedContacts,
+  campaignId,
+  ensureCampaignId,
+  resuming,
+  defaultCampaignName,
   updateContactEmail,
+  initialActiveContactId,
 }: {
   contacts: OutboundContact[]
-  campaignContactStatus: Record<string, SendOutcomeDetail>
-  sendingContactId: string | null
-  sendingSelected: boolean
-  sendOneContact: (contactId: string) => Promise<void>
-  sendSelectedContacts: (contactIds: string[]) => Promise<void>
+  campaignId: string | null
+  ensureCampaignId: () => Promise<string | null>
+  // True while a resumed run is still being restored — see
+  // useAutoGtmFlow.ts's `resuming` state for the duplicate-campaign race
+  // this closes. Threaded straight through to CampaignSettingsPanel.
+  resuming: boolean
+  defaultCampaignName: string
   updateContactEmail: (contactId: string, email: string) => Promise<boolean>
+  // Set when arriving here via Review & Send's "Edit" action on a specific
+  // contact — preselects that contact's draft in the detail pane instead of
+  // defaulting to the first contact in the list.
+  initialActiveContactId?: string | null
 }) {
-  // Contacts with no email can't be sent to and can't be drafted for without
-  // burning AI credits on content that has nowhere to go — discard them
-  // before this step ever sees them, rather than showing them with a
-  // disabled/fallback state. Scoped to this step's own rendering only (the
-  // full contact list, including no-email ones, is still what earlier
-  // steps and the flow's own contact-count summary read from).
+  // Contacts with no email can't be drafted for without burning AI credits
+  // on content that has nowhere to go — discard them before this step ever
+  // sees them, rather than showing them with a disabled/fallback state.
+  // Scoped to this step's own rendering only (the full contact list,
+  // including no-email ones, is still what earlier steps and the flow's own
+  // contact-count summary read from).
   const contacts = useMemo(() => allContacts.filter(c => c.email), [allContacts])
   const [drafts, setDrafts] = useState<Record<string, GeneratedContent | null>>({})
   // Per-contact, not a single shared value — drafting now runs for several
@@ -212,15 +195,9 @@ export function OutreachStep({
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
-  const [pendingSend, setPendingSend] = useState<PendingSend>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  // Was hardcoded 'Demo mode' regardless of the actually-active sending
-  // provider — null while loading = treated as mock (safe default: don't
-  // imply "real" before we've confirmed it).
-  const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
   // Which contact's full draft is shown in the detail pane (right side of
   // the split view).
-  const [activeContactId, setActiveContactId] = useState<string | null>(null)
+  const [activeContactId, setActiveContactId] = useState<string | null>(initialActiveContactId ?? null)
 
   function beginDrafting(contactId: string) {
     setDraftingIds(prev => new Set(prev).add(contactId))
@@ -303,68 +280,22 @@ export function OutreachStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts.map(c => c.id).join(',')])
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void (async () => {
-      try {
-        const res = await fetch('/api/admin/outbound/integrations')
-        const data = await res.json()
-        if (!data.success) return
-        const sendingRow = (data.integrations as OutboundIntegrationRow[]).find(
-          row => row.capability === 'sending' && row.is_active
-        )
-        setSendingProviderName(sendingRow?.provider_name ?? 'mock')
-      } catch {
-        setSendingProviderName('mock')
-      }
-    })()
-  }, [])
-
-  const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
-
-  const readyToSend = useMemo(
-    () => contacts.filter(c => c.email && drafts[c.id]?.email_draft && campaignContactStatus[c.id]?.status !== 'sent'),
-    [contacts, drafts, campaignContactStatus]
-  )
-  const readyIds = useMemo(() => new Set(readyToSend.map(c => c.id)), [readyToSend])
-
-  // Selection never holds an id that's no longer ready to send (e.g. it
-  // just got marked 'sent' by a prior send) — pruned defensively rather
-  // than trusted to stay in sync with readyIds on its own.
-  useEffect(() => {
-    setSelectedIds(prev => {
-      const next = new Set([...prev].filter(id => readyIds.has(id)))
-      return next.size === prev.size ? prev : next
-    })
-  }, [readyIds])
-
   // Default the detail pane to the first contact, and fall back to another
   // one if the currently-active contact disappears from the list.
   useEffect(() => {
     setActiveContactId(prev => {
       if (prev && contacts.some(c => c.id === prev)) return prev
+      if (initialActiveContactId && contacts.some(c => c.id === initialActiveContactId)) return initialActiveContactId
       return contacts[0]?.id ?? null
     })
-  }, [contacts])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, initialActiveContactId])
 
   function selectContact(contactId: string) {
     if (contactId !== activeContactId) {
       cancelEditing()
     }
     setActiveContactId(contactId)
-  }
-
-  function toggleSelected(contactId: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(contactId)) next.delete(contactId)
-      else next.add(contactId)
-      return next
-    })
-  }
-
-  function toggleSelectAll() {
-    setSelectedIds(prev => (prev.size === readyToSend.length ? new Set() : new Set(readyIds)))
   }
 
   async function regenerate(contactId: string) {
@@ -492,42 +423,24 @@ export function OutreachStep({
 
   return (
     <div className="space-y-3">
+      <CampaignSettingsPanel campaignId={campaignId} ensureCampaignId={ensureCampaignId} resuming={resuming} defaultCampaignName={defaultCampaignName} />
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            Outreach &amp; Send
-            {isRealSendingProvider ? (
-              <Badge variant="destructive" className="text-[10px]">
-                Live: {sendingProviderName}
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="text-[10px]">Demo mode</Badge>
-            )}
+            Campaign & Outreach
             <InfoTooltip>
               Each draft is a real AI call and can take a minute or two per contact, this isn&apos;t stuck, it&apos;s
-              thinking.{' '}
-              {isRealSendingProvider
-                ? `A real sending provider (${sendingProviderName}) is connected. Send Email / Send Selected will send real emails to real recipients.`
-                : "No real email leaves the app yet, a real sending service hasn't been connected. Once one is, this same button sends for real."}
+              thinking. Nothing is sent from this screen — review and send happens on the next step.
             </InfoTooltip>
           </h2>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            Drafted automatically below. Edit, switch subject, regenerate, or send straight from here.
+            Drafted automatically below. Edit, switch subject, or regenerate — sending happens on the next step.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="outline">
-            {readyCount} of {contacts.length} drafted
-          </Badge>
-          <Button
-            size="lg"
-            disabled={sendingSelected || selectedIds.size === 0}
-            onClick={() => setPendingSend({ kind: 'selected', contactIds: [...selectedIds], count: selectedIds.size })}
-          >
-            {sendingSelected ? <Spinner className="size-3.5" /> : null}
-            Send Selected ({selectedIds.size})
-          </Button>
-        </div>
+        <Badge variant="outline" className="shrink-0">
+          {readyCount} of {contacts.length} drafted
+        </Badge>
       </div>
 
       {contacts.length === 0 ? (
@@ -536,22 +449,9 @@ export function OutreachStep({
         <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col md:flex-row">
           {/* Left: compact contact list — click a row to preview its draft on the right */}
           <div className="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-border">
-            {readyToSend.length > 0 && (
-              <label className="flex items-center gap-2 text-xs text-muted-foreground/70 px-3 py-2 border-b border-border">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.size === readyToSend.length}
-                  onChange={toggleSelectAll}
-                  aria-label="Select all ready contacts"
-                />
-                Select all ({readyToSend.length} ready)
-              </label>
-            )}
             <div className="max-h-[560px] overflow-y-auto divide-y divide-border">
               {contacts.map(contact => {
                 const generated = drafts[contact.id]
-                const outcome = campaignContactStatus[contact.id]
-                const isReady = readyIds.has(contact.id)
                 const isActive = activeContactId === contact.id
                 const isDraftingThis = draftingIds.has(contact.id) && !generated?.email_draft
 
@@ -560,14 +460,6 @@ export function OutreachStep({
                     key={contact.id}
                     className={`flex items-center gap-2 px-3 py-2 ${isActive ? 'bg-accent' : 'hover:bg-accent/40'}`}
                   >
-                    {isReady && (
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(contact.id)}
-                        onChange={() => toggleSelected(contact.id)}
-                        aria-label={`Select ${contact.person_name}`}
-                      />
-                    )}
                     <button
                       type="button"
                       onClick={() => selectContact(contact.id)}
@@ -580,10 +472,8 @@ export function OutreachStep({
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="text-xs font-medium text-foreground truncate">{contact.person_name}</span>
-                          {outcome && (
-                            <Badge variant={sendStatusBadgeVariant(outcome.status)} className="text-[9px] px-1 py-0">
-                              {outcome.status}
-                            </Badge>
+                          {generated?.email_draft && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0">drafted</Badge>
                           )}
                         </span>
                         <span className="block text-[11px] text-muted-foreground/70 truncate">
@@ -612,9 +502,6 @@ export function OutreachStep({
               if (!contact) return <p className="text-xs text-muted-foreground/60">Select a contact to preview.</p>
 
               const generated = drafts[contact.id]
-              const outcome = campaignContactStatus[contact.id]
-              const isSending = sendingContactId === contact.id
-              const canSend = Boolean(contact.email && generated?.email_draft) && outcome?.status !== 'sent'
               const isEditing = editingContactId === contact.id
               const isDrafting = draftingIds.has(contact.id)
               const draftingStage = draftingStages[contact.id] ?? null
@@ -631,9 +518,7 @@ export function OutreachStep({
                         {contact.title_hint && (
                           <span className="text-xs text-muted-foreground/70">{contact.title_hint}</span>
                         )}
-                        {outcome && <Badge variant={sendStatusBadgeVariant(outcome.status)}>{outcome.status}</Badge>}
                       </div>
-                      {outcome?.reason && <p className="text-xs text-muted-foreground/60 mt-0.5">{outcome.reason}</p>}
                     </div>
                     <div className="flex gap-2 shrink-0">
                       {generated?.email_draft && (
@@ -647,15 +532,6 @@ export function OutreachStep({
                           Regenerate
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={!canSend || isSending}
-                        onClick={() => setPendingSend({ kind: 'one', contactId: contact.id, name: contact.person_name })}
-                      >
-                        {isSending ? <Spinner className="size-3.5" /> : null}
-                        {outcome?.status === 'sent' ? 'Sent' : 'Send Email'}
-                      </Button>
                     </div>
                   </div>
 
@@ -817,37 +693,6 @@ export function OutreachStep({
           </div>
         </div>
       )}
-
-      <ConfirmDialog
-        open={pendingSend !== null}
-        onOpenChange={open => { if (!open) setPendingSend(null) }}
-        title={pendingSend?.kind === 'selected' ? `Send to ${pendingSend.count} contact${pendingSend.count === 1 ? '' : 's'}?` : 'Send this email?'}
-        description={
-          pendingSend?.kind === 'selected'
-            ? `Sends the drafted email to the ${pendingSend.count} selected contact${pendingSend.count === 1 ? '' : 's'}. ${
-                isRealSendingProvider
-                  ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
-                  : 'Mock sending only, no real email goes out yet.'
-              }`
-            : `Sends the drafted email to ${pendingSend?.kind === 'one' ? pendingSend.name : ''}. ${
-                isRealSendingProvider
-                  ? `This is a REAL send via ${sendingProviderName} — a real email will go out.`
-                  : 'Mock sending only, no real email goes out yet.'
-              }`
-        }
-        confirmLabel={pendingSend?.kind === 'selected' ? 'Send Selected' : 'Send'}
-        loading={pendingSend?.kind === 'selected' ? sendingSelected : sendingContactId === (pendingSend?.kind === 'one' ? pendingSend.contactId : null)}
-        onConfirm={() => {
-          if (pendingSend?.kind === 'selected') {
-            void sendSelectedContacts(pendingSend.contactIds).then(() => {
-              setSelectedIds(new Set())
-              setPendingSend(null)
-            })
-          } else if (pendingSend?.kind === 'one') {
-            void sendOneContact(pendingSend.contactId).then(() => setPendingSend(null))
-          }
-        }}
-      />
     </div>
   )
 }

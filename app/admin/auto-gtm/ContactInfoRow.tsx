@@ -85,6 +85,9 @@ export function ContactInfoRow({
             <Badge variant={emailConfidenceBadgeVariant(contact.email_confidence)} className="text-[10px]">
               {contact.email_confidence}
             </Badge>
+            {contact.email_confidence === 'low' && (
+              <span className="text-[10px] text-signal-medium">Needs verification — consider double-checking before sending.</span>
+            )}
           </div>
         ) : contact.email_finder_status === 'error' ? (
           <StatusLine found={false}>Email lookup failed</StatusLine>

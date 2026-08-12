@@ -32,13 +32,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getFollowupIntervals } from '@/lib/outbound/sending/followup-settings'
-import { nextFollowupDueAt } from '@/lib/outbound/sending/followup-schedule'
+import { nextFollowupDueAt, FOLLOWUP_INTERVALS_DAYS } from '@/lib/outbound/sending/followup-schedule'
 
 const FOLLOWUP_PENDING_STATUSES = ['sent', 'followup_1', 'followup_2']
 
 interface CampaignContactJoinRow {
   id: string
   contact_id: string
+  campaign_id: string
   status: string
   updated_at: string
   opened_at: string | null
@@ -61,11 +62,10 @@ export async function GET(req: NextRequest) {
   const domainFilter = req.nextUrl.searchParams.get('domain')?.trim().toLowerCase() || null
 
   const supabase = createServerClient()
-  const intervalsDays = await getFollowupIntervals()
 
   const { data: ccRows, error: ccError } = await supabase
     .from('outbound_campaign_contacts')
-    .select('id, contact_id, status, updated_at, opened_at, outbound_contacts(source_run_id, company_name)')
+    .select('id, contact_id, campaign_id, status, updated_at, opened_at, outbound_contacts(source_run_id, company_name)')
 
   if (ccError) {
     return NextResponse.json({ success: false, error: ccError.message }, { status: 500 })
@@ -97,6 +97,21 @@ export async function GET(req: NextRequest) {
   const runById = new Map((runs ?? []).map((r: RunRow) => [r.id, r]))
   const now = new Date()
 
+  // Per-campaign cadence override (migration 020) — resolved once per
+  // distinct campaign id present in this response, not per row, same
+  // batch-lookup discipline as runById above. Falls back to the global
+  // default per campaign when that campaign has no override (see
+  // getFollowupIntervals's own header comment).
+  const distinctCampaignIds = Array.from(new Set((ccRows ?? []).map(r => (r as unknown as CampaignContactJoinRow).campaign_id)))
+  const intervalsByCampaignId = new Map<string, readonly [number, number, number]>(
+    await Promise.all(
+      distinctCampaignIds.map(async (campaignId): Promise<[string, readonly [number, number, number]]> => [
+        campaignId,
+        await getFollowupIntervals(campaignId),
+      ])
+    )
+  )
+
   let companies = runIds
     .map(runId => {
       const rows = byRunId.get(runId)!
@@ -112,6 +127,7 @@ export async function GET(req: NextRequest) {
       let nextDue: Date | null = null
       for (const r of rows) {
         if (!FOLLOWUP_PENDING_STATUSES.includes(r.status)) continue
+        const intervalsDays = intervalsByCampaignId.get(r.campaign_id) ?? FOLLOWUP_INTERVALS_DAYS
         const due = nextFollowupDueAt(r.status, r.updated_at, intervalsDays)
         if (due && (!nextDue || due < nextDue)) nextDue = due
       }

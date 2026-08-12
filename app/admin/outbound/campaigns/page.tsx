@@ -200,42 +200,42 @@ function OutboundCampaignsPageInner() {
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">New Campaign</h2>
-          <div className="flex gap-2">
-            <Input
-              aria-label="Campaign name"
-              value={newCampaignName}
-              onChange={e => setNewCampaignName(e.target.value)}
-              placeholder="Q3 Manufacturing Outreach"
-            />
-            <Button size="sm" disabled={creating || !newCampaignName.trim()} onClick={handleCreate}>
-              {creating ? <Spinner className="size-3.5" /> : null}
-              Create
-            </Button>
+          <div className="space-y-1">
+            <Label htmlFor="campaign-picker">Campaign</Label>
+            <Select
+              items={campaigns.map(c => ({ value: c.id, label: `${c.name} (${c.status})` }))}
+              value={selectedCampaignId ?? ''}
+              onValueChange={value => setSelectedCampaignId((value as string) || null)}
+              disabled={loadingCampaigns}
+            >
+              <SelectTrigger id="campaign-picker">
+                <SelectValue placeholder={loadingCampaigns ? 'Loading…' : 'Select a campaign…'} />
+              </SelectTrigger>
+              <SelectContent>
+                {campaigns.map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name} ({c.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-1">
-          <Label htmlFor="campaign-picker">Campaign</Label>
-          <Select
-            items={campaigns.map(c => ({ value: c.id, label: `${c.name} (${c.status})` }))}
-            value={selectedCampaignId ?? ''}
-            onValueChange={value => setSelectedCampaignId((value as string) || null)}
-            disabled={loadingCampaigns}
-          >
-            <SelectTrigger id="campaign-picker">
-              <SelectValue placeholder={loadingCampaigns ? 'Loading…' : 'Select a campaign…'} />
-            </SelectTrigger>
-            <SelectContent>
-              {campaigns.map(c => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name} ({c.status})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-1 pt-1 border-t border-border">
+            <Label htmlFor="new-campaign-name">Or create a new one</Label>
+            <div className="flex gap-2">
+              <Input
+                id="new-campaign-name"
+                aria-label="Campaign name"
+                value={newCampaignName}
+                onChange={e => setNewCampaignName(e.target.value)}
+                placeholder="Q3 Manufacturing Outreach"
+              />
+              <Button size="sm" disabled={creating || !newCampaignName.trim()} onClick={handleCreate}>
+                {creating ? <Spinner className="size-3.5" /> : null}
+                Create
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

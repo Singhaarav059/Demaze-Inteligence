@@ -17,13 +17,13 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { GuideNote } from '@/components/ui/guide-note'
+import { CollapsibleRow } from '@/components/ui/collapsible-row'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { staggerList, listItem } from '@/lib/motion'
 import {
@@ -226,36 +226,37 @@ function OutboundIntegrationsPageInner() {
               ? (active.config as { email?: string } | undefined)?.email
               : undefined
 
+            const needsAttention = active?.last_test_status === 'failure'
+
             return (
               <motion.div key={capability} variants={listItem}>
-                <Card className="border-border bg-card">
-                  <CardContent className="px-5 py-4 space-y-3">
+                <CollapsibleRow
+                  defaultOpen={needsAttention}
+                  summary={
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="text-sm font-semibold text-foreground">
                             {CAPABILITY_LABELS[capability]}
                           </h2>
                           <Badge variant={active?.provider_name === 'mock' ? 'secondary' : 'default'}>
                             {active?.provider_name ?? 'mock'}
                           </Badge>
+                          {active?.last_test_status && active.last_test_status !== 'untested' && (
+                            <Badge variant={testBadgeVariant(active.last_test_status)}>
+                              {active.last_test_status}
+                            </Badge>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground/70 mt-0.5">
-                          {CAPABILITY_HINTS[capability]}
+                        <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">
+                          {connectedGmailEmail
+                            ? <>Connected as: <span className="text-foreground">{connectedGmailEmail}</span></>
+                            : CAPABILITY_HINTS[capability]}
                         </p>
-                        {connectedGmailEmail && (
-                          <p className="text-xs text-muted-foreground/70 mt-0.5">
-                            Connected as: <span className="text-foreground">{connectedGmailEmail}</span>
-                          </p>
-                        )}
                       </div>
-                      {active?.last_test_status && active.last_test_status !== 'untested' && (
-                        <Badge variant={testBadgeVariant(active.last_test_status)}>
-                          {active.last_test_status}
-                        </Badge>
-                      )}
                     </div>
-
+                  }
+                >
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label htmlFor={`${capability}-provider`}>Provider</Label>
@@ -339,8 +340,7 @@ function OutboundIntegrationsPageInner() {
                         )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                </CollapsibleRow>
               </motion.div>
             )
           })}

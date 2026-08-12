@@ -2,36 +2,31 @@
 // Admin: Gmail OAuth — GET /api/admin/outbound/integrations/gmail/oauth/start
 // ============================================================
 // Kicks off the one-time Google consent flow for the Email Sending
-// capability. This route (and its /callback counterpart) is reached by a
-// top-level browser navigation (an <a href> click, then Google's own
-// redirect back) — never a fetch() call — so it cannot use this app's
-// header-based verifyAdminRequest (x-admin-token is only ever attached by
-// this app's own fetch calls, never by a browser following a link/redirect,
-// same reason the callback below can't use it either). Instead: a random
-// nonce is set as a short-lived httpOnly cookie here and compared against
-// Google's returned `state` on callback — the standard OAuth CSRF-
-// protection pattern, independent of whether ADMIN_SECRET is configured.
+// capability. This route is reached by a top-level browser navigation (an
+// <a href> click, then Google's own redirect back) — never a fetch() call —
+// so it cannot use this app's header-based verifyAdminRequest (x-admin-token
+// is only ever attached by this app's own fetch calls, never by a browser
+// following a link/redirect). Instead: a random nonce is set as a
+// short-lived httpOnly cookie here and compared against Google's returned
+// `state` on callback — the standard OAuth CSRF-protection pattern,
+// independent of whether ADMIN_SECRET is configured.
+//
+// The callback landing page is shared with every other Google-connected
+// flow in this app (app/api/admin/outbound/oauth/gmail/callback) — see
+// lib/outbound/shared/gmail-oauth.ts and that route's own header comment for
+// why: only one redirect URI ever needs registering in Google Cloud
+// Console, no matter how many Google-connected flows this app grows to have.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { buildAuthUrl } from '@/lib/outbound/shared/gmail-client'
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
-import { isPublicOriginHttps, resolveForwardedOrigin } from '@/lib/outbound/shared/oauth-origin'
+import { isPublicOriginHttps } from '@/lib/outbound/shared/oauth-origin'
+import { resolveGmailOAuthRedirectUri } from '@/lib/outbound/shared/gmail-oauth'
 
 export const STATE_COOKIE = 'gmail_oauth_state'
 const OAUTH_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
-
-// Forwarded-header origin takes priority so both public domains (custom +
-// *.up.railway.app) resolve to their own matching, already-registered
-// callback URL — see oauth-origin.ts's header comment. The env var is a
-// fallback only, for environments where X-Forwarded-Host isn't set.
-export function resolveRedirectUri(req: NextRequest): string {
-  const forwarded = resolveForwardedOrigin(req)
-  if (forwarded) return `${forwarded}/api/admin/outbound/integrations/gmail/oauth/callback`
-  return process.env.GOOGLE_OAUTH_REDIRECT_URI
-    || `${req.nextUrl.origin}/api/admin/outbound/integrations/gmail/oauth/callback`
-}
 
 export async function GET(req: NextRequest) {
   const rateLimit = checkRateLimit(`gmail-oauth:${getClientIp(req)}`, OAUTH_RATE_LIMIT)
@@ -51,7 +46,7 @@ export async function GET(req: NextRequest) {
   }
 
   const state = randomBytes(16).toString('hex')
-  const authUrl = buildAuthUrl({ clientId, redirectUri: resolveRedirectUri(req), state })
+  const authUrl = buildAuthUrl({ clientId, redirectUri: resolveGmailOAuthRedirectUri(req), state })
 
   const res = NextResponse.redirect(authUrl)
   res.cookies.set(STATE_COOKIE, state, {

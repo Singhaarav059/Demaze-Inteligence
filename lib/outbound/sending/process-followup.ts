@@ -202,9 +202,21 @@ export async function processFollowupForContact(
   })
 
   if (result.status === 'failed') {
+    await supabase.from('outbound_campaign_events').insert({
+      campaign_id: campaignId,
+      campaign_contact_id: cc.id,
+      event_type: 'send_failed',
+      detail: { followupSequence: sequence, error: result.error, providerUsed: result.providerUsed },
+    })
     return { campaignContactId, status: 'failed', sequence, reason: result.error }
   }
   if (result.status === 'suppressed') {
+    await supabase.from('outbound_campaign_events').insert({
+      campaign_id: campaignId,
+      campaign_contact_id: cc.id,
+      event_type: 'suppressed',
+      detail: { followupSequence: sequence, reason: result.error },
+    })
     return { campaignContactId, status: 'skipped', sequence, reason: result.error }
   }
 

@@ -11,7 +11,7 @@
 // the caller via onContactAdded rather than depending on any shared hook.
 // ============================================================
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { StageProgress, type ProgressStage } from '@/components/ui/stage-progress'
 import { staggerList, listItem } from '@/lib/motion'
 import { DEFAULT_TARGET_TITLES } from '@/lib/outbound/decision-maker-discovery/types'
+import { recommendTitlesFromResearch } from '@/lib/outbound/decision-maker-discovery/role-recommendation'
 import type { DecisionMakerCandidate, LeadershipContactInput } from '@/lib/outbound/decision-maker-discovery/types'
 import type { OutboundContact } from './useOutboundContacts'
 
@@ -113,6 +114,13 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // omitted for a run saved before that field existed — those still show
   // candidates ungrounded rather than erroring.
   leadershipContacts?: LeadershipContactInput[]
+  // Full pipeline research output for this company, when available — used
+  // ONLY to recommend which titles to search for (operational pain -> VP
+  // Operations/COO, tech pain -> CTO/CIO, sales/marketing pain -> CRO/VP
+  // Sales), never to discover or rank WHO the contact is. Optional — omit
+  // to fall back to the generic DEFAULT_TARGET_TITLES with no recommendation
+  // section shown, same as before this existed.
+  analysisResult?: Record<string, unknown> | null
 }>(function DecisionMakerFinder({
   companyName,
   domain,
@@ -122,6 +130,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   compact = false,
   onSelectionChange,
   leadershipContacts,
+  analysisResult,
 }, ref) {
   const [discovering, setDiscovering] = useState(false)
   const [candidates, setCandidates] = useState<DecisionMakerCandidate[]>([])
@@ -145,6 +154,13 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // gates the "Adjust titles"/candidate-list UI from flashing empty before
   // a cached search has had a chance to populate it.
   const [checkingCache, setCheckingCache] = useState(true)
+
+  // Recommended title groups from this company's own research — pure,
+  // synchronous, no network call. Falls back to a single group holding
+  // DEFAULT_TARGET_TITLES with an honest "no specific signal" reason when
+  // analysisResult is absent or nothing matched (see role-recommendation.ts).
+  const recommendedGroups = useMemo(() => recommendTitlesFromResearch(analysisResult), [analysisResult])
+  const hasRealRecommendation = recommendedGroups.some(g => g.fromResearch)
 
   // Runs once on mount, regardless of autoStart: first checks for an
   // already-cached search for this run (migration 015) — a cache hit
@@ -319,6 +335,30 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           </div>
         ) : (
         <>
+        {hasRealRecommendation && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-2.5 space-y-1.5">
+            <p className="text-xs font-medium text-foreground">Recommended for this company</p>
+            {recommendedGroups.filter(g => g.fromResearch).map((group, i) => (
+              <div key={i} className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-foreground">{group.titles.join(', ')}</p>
+                  <p className="text-[11px] text-muted-foreground/70">{group.reason}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => {
+                    setTargetTitlesInput(group.titles.join(', '))
+                    setShowTitlesInput(true)
+                  }}
+                >
+                  Use these
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         {showTitlesInput ? (
           <div className="space-y-1">
             <Label htmlFor="target-titles">Target titles (comma-separated)</Label>

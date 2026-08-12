@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { ChevronRight, Clock, Mail } from 'lucide-react'
+import { Clock, Mail } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +32,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GuideNote } from '@/components/ui/guide-note'
-import { cn } from '@/lib/utils'
+import { CollapsibleRow } from '@/components/ui/collapsible-row'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import type { FollowupEngineTickSummary } from '@/lib/outbound/sending/followup-engine/run-tick'
 import { useFollowupPanel, type FollowupRow } from './useFollowupPanel'
@@ -186,71 +186,78 @@ export default function FollowupPanelPage() {
         </p>
       </GuideNote>
 
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Follow-up Cadence</h2>
-          <p className="text-xs text-muted-foreground/70">
-            Days since the previous send before each step is due. Applies to every campaign.
-          </p>
-          <div className="grid grid-cols-3 gap-3">
-            {(['Step 1', 'Step 2', 'Step 3'] as const).map((label, i) => (
-              <div key={label} className="space-y-1">
-                <Label htmlFor={`interval-${i}`}>{label} (days)</Label>
-                <Input
-                  id={`interval-${i}`}
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={intervalDraft[i]}
-                  onChange={e => {
-                    const next: [number, number, number] = [...intervalDraft]
-                    next[i] = Number(e.target.value) || 1
-                    setIntervalDraft(next)
-                  }}
-                />
-              </div>
-            ))}
+      <CollapsibleRow
+        summary={
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-foreground">Follow-up Settings</h2>
+            <span className="text-xs text-muted-foreground/70 shrink-0">
+              Cadence: {intervals.join(' / ')} days
+            </span>
           </div>
-          <Button
-            size="sm"
-            disabled={savingIntervals || intervalDraft.every((v, i) => v === intervals[i])}
-            onClick={() => saveIntervals(intervalDraft)}
-          >
-            {savingIntervals ? <Spinner className="size-3.5" /> : null}
-            Save Cadence
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Automatic Follow-Up Engine</h2>
-          <p className="text-xs text-muted-foreground/70">
-            When enabled, checks replies then auto-sends any follow-up that&apos;s past the cadence above{' '}
-            <strong>and</strong> confirmed unopened — no click needed. Run a tick manually here to verify it behaves
-            correctly before turning on the autonomous scheduler (<code>FOLLOWUP_ENGINE_ENABLED</code>).
-          </p>
-          <Button size="sm" variant="outline" disabled={runningEngineTick} onClick={handleRunEngineTick}>
-            {runningEngineTick ? <Spinner className="size-3.5" /> : null}
-            Run Follow-Up Engine Tick Now
-          </Button>
-          {engineTickSummary && (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1 sm:grid-cols-3">
-              <span>Campaigns checked: <span className="text-foreground">{engineTickSummary.campaignsChecked}</span></span>
-              <span>Eligible: <span className="text-foreground">{engineTickSummary.contactsEligible}</span></span>
-              <span>Sent: <span className="text-foreground">{engineTickSummary.sent}</span></span>
-              <span>Cancelled (reply): <span className="text-foreground">{engineTickSummary.cancelledByReply}</span></span>
-              <span>Cancelled (bounce): <span className="text-foreground">{engineTickSummary.cancelledByBounce}</span></span>
-              <span>Failed: <span className="text-foreground">{engineTickSummary.failed}</span></span>
-              {engineTickSummary.errors.length > 0 && (
-                <div className="col-span-full text-signal-medium mt-1">
-                  {engineTickSummary.errors.map((e, i) => <div key={i}>{e}</div>)}
+        }
+      >
+          <div className="space-y-3">
+            <h3 className="text-xs font-medium text-foreground">Follow-up Cadence</h3>
+            <p className="text-xs text-muted-foreground/70">
+              Days since the previous send before each step is due. Applies to every campaign.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {(['Step 1', 'Step 2', 'Step 3'] as const).map((label, i) => (
+                <div key={label} className="space-y-1">
+                  <Label htmlFor={`interval-${i}`}>{label} (days)</Label>
+                  <Input
+                    id={`interval-${i}`}
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={intervalDraft[i]}
+                    onChange={e => {
+                      const next: [number, number, number] = [...intervalDraft]
+                      next[i] = Number(e.target.value) || 1
+                      setIntervalDraft(next)
+                    }}
+                  />
                 </div>
-              )}
+              ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <Button
+              size="sm"
+              disabled={savingIntervals || intervalDraft.every((v, i) => v === intervals[i])}
+              onClick={() => saveIntervals(intervalDraft)}
+            >
+              {savingIntervals ? <Spinner className="size-3.5" /> : null}
+              Save Cadence
+            </Button>
+          </div>
+
+          <div className="space-y-3 pt-3 border-t border-border">
+            <h3 className="text-xs font-medium text-foreground">Automatic Follow-Up Engine</h3>
+            <p className="text-xs text-muted-foreground/70">
+              When enabled, checks replies then auto-sends any follow-up that&apos;s past the cadence above{' '}
+              <strong>and</strong> confirmed unopened — no click needed. Run a tick manually here to verify it behaves
+              correctly before turning on the autonomous scheduler (<code>FOLLOWUP_ENGINE_ENABLED</code>).
+            </p>
+            <Button size="sm" variant="outline" disabled={runningEngineTick} onClick={handleRunEngineTick}>
+              {runningEngineTick ? <Spinner className="size-3.5" /> : null}
+              Run Follow-Up Engine Tick Now
+            </Button>
+            {engineTickSummary && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1 sm:grid-cols-3">
+                <span>Campaigns checked: <span className="text-foreground">{engineTickSummary.campaignsChecked}</span></span>
+                <span>Eligible: <span className="text-foreground">{engineTickSummary.contactsEligible}</span></span>
+                <span>Sent: <span className="text-foreground">{engineTickSummary.sent}</span></span>
+                <span>Cancelled (reply): <span className="text-foreground">{engineTickSummary.cancelledByReply}</span></span>
+                <span>Cancelled (bounce): <span className="text-foreground">{engineTickSummary.cancelledByBounce}</span></span>
+                <span>Failed: <span className="text-foreground">{engineTickSummary.failed}</span></span>
+                {engineTickSummary.errors.length > 0 && (
+                  <div className="col-span-full text-signal-medium mt-1">
+                    {engineTickSummary.errors.map((e, i) => <div key={i}>{e}</div>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+      </CollapsibleRow>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
@@ -263,29 +270,27 @@ export default function FollowupPanelPage() {
           {companyGroups.map(group => {
             const isOpen = openCompanies.has(group.companyName)
             return (
-              <motion.div key={group.companyName} variants={listItem} className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => toggleCompany(group.companyName)}
-                  aria-expanded={isOpen}
-                  className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
+              <motion.div key={group.companyName} variants={listItem}>
+                <CollapsibleRow
+                  open={isOpen}
+                  onOpenChange={() => toggleCompany(group.companyName)}
+                  summary={
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground truncate">{group.companyName}</span>
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        {group.overdueCount > 0 && (
+                          <Badge className="text-[10px] bg-destructive/10 text-destructive border border-destructive/40">
+                            {group.overdueCount} overdue
+                          </Badge>
+                        )}
+                        <Badge variant="outline">
+                          {group.rows.length} follow-up{group.rows.length === 1 ? '' : 's'}
+                        </Badge>
+                      </span>
+                    </div>
+                  }
                 >
-                  <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
-                  <span className="text-sm font-medium text-foreground truncate">{group.companyName}</span>
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                    {group.overdueCount > 0 && (
-                      <Badge className="text-[10px] bg-destructive/10 text-destructive border border-destructive/40">
-                        {group.overdueCount} overdue
-                      </Badge>
-                    )}
-                    <Badge variant="outline">
-                      {group.rows.length} follow-up{group.rows.length === 1 ? '' : 's'}
-                    </Badge>
-                  </span>
-                </button>
-
-                {isOpen && (
-                  <div className="space-y-3 pl-4">
+                  <div className="space-y-3">
                   {group.rows.map(row => {
                     const dueLabel = formatDue(row.dueAt, row.overdue)
                     const bodyValue = editedBody[row.id] ?? row.draftBody ?? ''
@@ -380,7 +385,7 @@ export default function FollowupPanelPage() {
                     )
                   })}
                   </div>
-                )}
+                </CollapsibleRow>
               </motion.div>
             )
           })}

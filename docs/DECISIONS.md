@@ -382,8 +382,10 @@ remaining active `sending` row.
 configured the OAuth app (client id/secret) but has not yet completed the
 per-account consent click-through in this app — no `gmail` row exists yet
 in `outbound_integrations` (that row is only created by
-`app/api/admin/outbound/integrations/gmail/oauth/callback/route.ts` on a
-successful consent). The user needs to go to
+`app/api/admin/outbound/oauth/gmail/callback/route.ts` — the shared Gmail
+OAuth callback used by every Google-connected flow in this app, see
+`lib/outbound/shared/gmail-oauth.ts` — on a successful consent). The user
+needs to go to
 `/admin/outbound/integrations`, select Gmail for Email Sending, and click
 "Connect with Google" themselves — that click, and Google's own consent
 screen, cannot be completed on their behalf.

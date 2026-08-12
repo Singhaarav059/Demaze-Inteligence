@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
+import { InfoTooltip } from '@/components/ui/tooltip'
 import {
   ConfirmDialog,
   AlertDialog,
@@ -56,6 +57,9 @@ import { staggerList, listItem } from '@/lib/motion'
 import { nextFollowupSequence, buildFollowupSubject } from '@/lib/outbound/sending/followup-schedule'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
+import { CampaignDashboard, type DashboardRow } from './CampaignDashboard'
+import { ContactTimeline } from './ContactTimeline'
+import type { CampaignEvent } from './EventLabels'
 
 interface TrackedContact {
   id: string // outbound_campaign_contacts.id
@@ -64,6 +68,8 @@ interface TrackedContact {
   updated_at: string
   opened_at: string | null
   nextFollowupDueAt: string | null
+  provider_message_id: string | null
+  suppression: { reason: string; detail: string | null } | null
   outbound_contacts: { person_name: string; email: string | null; company_name: string } | null
 }
 
@@ -141,6 +147,8 @@ export function TrackFollowUpStep({
   contacts: OutboundContact[]
 }) {
   const [rows, setRows] = useState<TrackedContact[]>([])
+  const [events, setEvents] = useState<CampaignEvent[]>([])
+  const [expandedTimelineId, setExpandedTimelineId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyRowId, setBusyRowId] = useState<string | null>(null)
   const [checkingReplies, setCheckingReplies] = useState(false)
@@ -156,14 +164,19 @@ export function TrackFollowUpStep({
   const loadRows = useCallback(async () => {
     if (!campaignId) {
       setRows([])
+      setEvents([])
       setLoading(false)
       return
     }
     setLoading(true)
     try {
       const contactIds = new Set(contacts.map(c => c.id))
-      const res = await fetch(`/api/admin/outbound/campaigns/${campaignId}/contacts`)
-      const data = await res.json()
+      const [contactsRes, eventsRes] = await Promise.all([
+        fetch(`/api/admin/outbound/campaigns/${campaignId}/contacts`),
+        fetch(`/api/admin/outbound/campaigns/${campaignId}/events`),
+      ])
+      const data = await contactsRes.json()
+      const eventsData = await eventsRes.json()
       if (data.success) {
         setRows((data.contacts as TrackedContact[]).filter(cc => contactIds.has(cc.contact_id)))
         // Snapshotted alongside rows (not in a separate effect that would
@@ -174,6 +187,13 @@ export function TrackFollowUpStep({
       } else {
         toast.error(data.error ?? 'Failed to load tracking data')
       }
+      // A campaign shared with other companies (batch mode) has events for
+      // those other companies' contacts too — the dashboard/timeline below
+      // only ever look up events by THIS company's own campaign_contact_id
+      // values (present in `rows`), so unfiltered events are harmless here,
+      // same scoping discipline this file's own header already documents
+      // for the bulk "Send All Due" action.
+      if (eventsData.success) setEvents(eventsData.events as CampaignEvent[])
     } catch {
       toast.error('Could not reach the campaigns API')
     } finally {
@@ -206,6 +226,22 @@ export function TrackFollowUpStep({
   }, [])
 
   const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
+
+  const dashboardRows: DashboardRow[] = useMemo(
+    () =>
+      rows.map(r => ({
+        id: r.id,
+        contactId: r.contact_id,
+        personName: r.outbound_contacts?.person_name ?? 'Unknown contact',
+        email: r.outbound_contacts?.email ?? null,
+        status: r.status,
+        openedAt: r.opened_at,
+        nextFollowupDueAt: r.nextFollowupDueAt,
+        providerMessageId: r.provider_message_id,
+        suppression: r.suppression,
+      })),
+    [rows]
+  )
 
   // Contacts whose next follow-up is BOTH eligible and past the configured
   // cadence right now — the target set for "Send All Due". Deliberately
@@ -386,18 +422,38 @@ export function TrackFollowUpStep({
     }
   }
 
-  if (!campaignId) {
+  // Not campaignId nullity anymore (a campaign row now exists eagerly from
+  // the moment step 4's settings panel opens, see useAutoGtmFlow.ts's
+  // 2026-08-12 restructure note) — "nothing sent yet" is now a real
+  // question about whether any contact rows were ever enqueued, answered
+  // once loading finishes rather than assumed from campaignId alone.
+  if (!campaignId || (!loading && rows.length === 0)) {
     return (
       <EmptyState
         icon={Mail}
         title="Nothing sent yet"
-        description="Send at least one email in Outreach & Send to start tracking status here."
+        description="Send at least one email in Review & Send to start tracking status here."
       />
     )
   }
 
   return (
     <div className="space-y-4">
+      {!loading && (
+        <>
+          <CampaignDashboard
+            rows={dashboardRows}
+            events={events}
+            sendingProviderName={sendingProviderName}
+          />
+          <p className="text-xs text-muted-foreground/50">
+            Click any card above to see the contacts behind it. Some recipient-side actions — the recipient
+            blocking your address or marking the email as spam — aren&apos;t exposed by Gmail's API and aren&apos;t
+            shown here; only what this app can actually observe (sent, open detected, replied, bounced) is.
+          </p>
+        </>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {rows.length} contact{rows.length === 1 ? '' : 's'} in this send.
@@ -446,7 +502,14 @@ export function TrackFollowUpStep({
                       <StatusBadge status={row.status} />
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>{row.opened_at ? `Opened ${timeAgo(row.opened_at)}` : 'Not opened yet'}</span>
+                      <span className="flex items-center gap-1">
+                        {row.opened_at ? `Open detected ${timeAgo(row.opened_at)}` : 'No open detected yet'}
+                        <InfoTooltip>
+                          Open detected means the recipient's email client loaded a tracking image — it doesn't
+                          guarantee the message was read. Images may be blocked, or prefetched by the provider
+                          before a human opens it.
+                        </InfoTooltip>
+                      </span>
                       {eligible && (
                         <span className="flex items-center gap-1">
                           <Clock className="size-3" />
@@ -475,6 +538,12 @@ export function TrackFollowUpStep({
                         </Button>
                       </div>
                     )}
+                    <ContactTimeline
+                      personName={row.outbound_contacts?.person_name ?? 'Unknown contact'}
+                      events={events.filter(e => e.campaign_contact_id === row.id)}
+                      open={expandedTimelineId === row.id}
+                      onOpenChange={open => setExpandedTimelineId(open ? row.id : null)}
+                    />
                   </CardContent>
                 </Card>
               </motion.div>

@@ -23,6 +23,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { CollapsibleRow } from '@/components/ui/collapsible-row'
 import { staggerList, listItem } from '@/lib/motion'
 import { getLeadershipContacts } from '@/lib/pipeline/analysis-sections'
 import { useOutboundContacts, guessCompanyName } from './useOutboundContacts'
@@ -121,11 +122,10 @@ export default function OutboundContactsPage() {
             sourceRunId={selectedRun.id}
             onContactAdded={contact => setContacts(prev => [contact, ...prev])}
             leadershipContacts={toLeadershipContactInputs(selectedRun.final_result)}
+            analysisResult={selectedRun.final_result}
           />
 
-          <Card className="border-border bg-card">
-            <CardContent className="px-5 py-4 space-y-3">
-              <h2 className="text-sm font-semibold text-foreground">Add Contact</h2>
+          <CollapsibleRow summary={<h2 className="text-sm font-semibold text-foreground">Add Contact</h2>}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="person-name">Name *</Label>
@@ -144,8 +144,7 @@ export default function OutboundContactsPage() {
                 {adding ? <Spinner className="size-3.5" /> : null}
                 Add Contact
               </Button>
-            </CardContent>
-          </Card>
+          </CollapsibleRow>
 
           {loadingContacts ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
