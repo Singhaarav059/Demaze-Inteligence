@@ -37,17 +37,20 @@ export const CAPABILITY_HINTS: Record<OutboundCapability, string> = {
   warmup: 'Tracks domain/inbox health for sending mailboxes.',
 }
 
-// Known future vendors per capability, shown as selectable options in the
-// settings UI even before a real provider class exists for them. Selecting
-// one that has no real implementation yet simply has no effect other than
-// recording the choice — the factory always falls back to 'mock' behavior
-// until that vendor's provider class is added.
+// Providers with a real implementation per capability (one file per class
+// under lib/outbound/<capability>/providers/), shown as selectable options
+// in the settings UI. Deliberately does NOT list vendors with no provider
+// class yet (e.g. apollo/proxycurl/hunter/findymail/snov/smartlead/instantly)
+// — those were previously listed as "future" placeholders, but selecting one
+// silently did nothing (the factory always falls back to 'mock'), which read
+// as a real, working option in the UI. Add a vendor here only once its
+// provider class actually exists.
 export const CAPABILITY_KNOWN_PROVIDERS: Record<OutboundCapability, string[]> = {
-  decision_maker_discovery: ['mock', 'prospeo', 'apollo', 'proxycurl'],
-  email_finder: ['mock', 'prospeo', 'hunter', 'apollo', 'findymail', 'snov'],
-  enrichment: ['mock', 'prospeo', 'apollo', 'proxycurl'],
-  sending: ['mock', 'gmail', 'smartlead', 'instantly'],
-  warmup: ['mock', 'smartlead', 'instantly'],
+  decision_maker_discovery: ['mock', 'prospeo'],
+  email_finder: ['mock', 'prospeo'],
+  enrichment: ['mock', 'prospeo'],
+  sending: ['mock', 'gmail'],
+  warmup: ['mock'],
 }
 
 export type IntegrationTestStatus = 'success' | 'failure' | 'untested'
