@@ -18,7 +18,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { Flame, ChevronRight } from 'lucide-react'
+import { Flame, ChevronRight, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
@@ -85,20 +85,47 @@ function timeAgo(iso: string): string {
 }
 
 function ActivityRow({ activity }: { activity: ExchangeActivity }) {
-  const arrow = activity.direction === 'sent' ? '→' : '←'
-  const bits: string[] = [timeAgo(activity.sentAt)]
-  if (activity.status === 'sent') bits.push('pending')
-  if (activity.status === 'failed') bits.push('failed')
-  if (activity.rescuedFromSpam) bits.push('rescued from spam')
-  else if (activity.landedInSpam) bits.push('landed in spam')
-  if (activity.replied) bits.push('replied')
+  const isSent = activity.direction === 'sent'
+  const Icon = isSent ? ArrowUpRight : ArrowDownLeft
+  const verb = isSent ? 'Sent a warm-up email to' : 'Received a warm-up email from'
+
+  let detail: string
+  let tone: 'muted' | 'warning' | 'success' = 'muted'
+  if (activity.status === 'failed') {
+    detail = 'Failed to send'
+    tone = 'warning'
+  } else if (activity.status === 'sent') {
+    detail = "Sent — hasn't been checked yet"
+  } else if (activity.rescuedFromSpam) {
+    detail = 'Landed in spam, then rescued back to the inbox'
+    tone = 'success'
+  } else if (activity.landedInSpam) {
+    detail = 'Landed in spam'
+    tone = 'warning'
+  } else {
+    detail = 'Delivered straight to the inbox'
+    tone = 'success'
+  }
+  if (activity.replied) detail += ' · a reply was sent back'
+
+  const toneClass =
+    tone === 'warning' ? 'text-signal-medium' : tone === 'success' ? 'text-signal-strong' : 'text-muted-foreground/70'
 
   return (
-    <div className="flex items-center justify-between gap-2 text-xs">
-      <span className="text-muted-foreground truncate">
-        {arrow} {activity.otherAddress}
-      </span>
-      <span className="text-muted-foreground/70 shrink-0">{bits.join(' · ')}</span>
+    <div className="flex items-start gap-2 py-1 text-xs">
+      <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50" />
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-foreground">
+            {verb} <span className="text-muted-foreground">{activity.otherAddress}</span>
+          </span>
+          <span className="shrink-0 text-muted-foreground/60">{timeAgo(activity.sentAt)}</span>
+        </div>
+        <div className={toneClass}>{detail}</div>
+        {activity.subject && (
+          <div className="truncate text-muted-foreground/50 italic">&quot;{activity.subject}&quot;</div>
+        )}
+      </div>
     </div>
   )
 }
@@ -239,6 +266,12 @@ function MailboxCard({
             </button>
             {activityOpen && (
               <div className="mt-2 space-y-1.5">
+                {activity && activity.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground/60">
+                    Test emails your connected mailboxes send each other automatically to build sender trust — not
+                    sent to real prospects.
+                  </p>
+                )}
                 {loadingActivity ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Spinner className="size-3" /> Loading…
