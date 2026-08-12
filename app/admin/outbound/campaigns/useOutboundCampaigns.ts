@@ -14,6 +14,15 @@ export interface Campaign {
   status: 'draft' | 'active' | 'paused' | 'completed'
   sender_provider: string
   created_at: string
+  // Campaign Settings (migration 020) — all nullable/defaulted, see that
+  // migration's own header for the "unset = unrestricted/use global" contract.
+  daily_send_limit?: number | null
+  send_window_start?: number | null
+  send_window_end?: number | null
+  timezone?: string
+  interval_1_days?: number | null
+  interval_2_days?: number | null
+  interval_3_days?: number | null
 }
 
 export interface CampaignContact {

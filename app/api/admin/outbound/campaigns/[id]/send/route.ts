@@ -34,12 +34,26 @@
 // 'skipped', not 'failed' — same as "no generated email yet": nothing went
 // wrong, the send was correctly never attempted, and the contact stays
 // 'queued' rather than being marked done.
+//
+// Daily send limit + send window (migration 020, lib/outbound/sending/
+// campaign-limits.ts) are checked once up front (window) / once and then
+// decremented locally per successful send (daily capacity) — not re-queried
+// per contact, same "resolve shared context once" discipline as the Gmail
+// credential resolution in process-followup.ts. A contact skipped for
+// either reason is left 'queued' (retry-eligible later, once the window
+// reopens or the next day starts), same as "no email yet"/"no draft yet".
+//
+// 'send_failed'/'suppressed' campaign_events (migration 020) are now
+// inserted on those outcomes too — previously a failed or suppressed
+// attempt updated status/left it queued but wrote NO event row at all, so
+// the per-contact timeline had nothing to show for it.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/outbound/sending/provider-factory'
+import { isWithinSendWindow, remainingDailySendCapacity } from '@/lib/outbound/sending/campaign-limits'
 
 interface SendOutcome {
   campaignContactId: string
@@ -60,6 +74,17 @@ export async function POST(
 
   const supabase = createServerClient()
 
+  const { data: campaign } = await supabase
+    .from('outbound_campaigns')
+    .select('daily_send_limit, send_window_start, send_window_end, timezone')
+    .eq('id', campaignId)
+    .maybeSingle()
+
+  const withinWindow = campaign ? isWithinSendWindow(campaign) : true
+  let remainingToday = campaign
+    ? await remainingDailySendCapacity(supabase, campaignId, campaign.daily_send_limit, campaign.timezone)
+    : Infinity
+
   let queuedQuery = supabase
     .from('outbound_campaign_contacts')
     .select('id, contact_id')
@@ -79,6 +104,15 @@ export async function POST(
   const outcomes: SendOutcome[] = []
 
   for (const item of queued ?? []) {
+    if (!withinWindow) {
+      outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: 'Outside this campaign\'s configured sending window.' })
+      continue
+    }
+    if (remainingToday <= 0) {
+      outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: `Daily send limit reached (${campaign?.daily_send_limit}/day).` })
+      continue
+    }
+
     const { data: contact } = await supabase
       .from('outbound_contacts')
       .select('email')
@@ -112,12 +146,26 @@ export async function POST(
 
     if (result.status === 'failed') {
       outcomes.push({ campaignContactId: item.id, status: 'failed', reason: result.error })
+      await supabase.from('outbound_campaign_events').insert({
+        campaign_id: campaignId,
+        campaign_contact_id: item.id,
+        event_type: 'send_failed',
+        detail: { error: result.error, providerUsed: result.providerUsed },
+      })
       continue
     }
     if (result.status === 'suppressed') {
       outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: result.error })
+      await supabase.from('outbound_campaign_events').insert({
+        campaign_id: campaignId,
+        campaign_contact_id: item.id,
+        event_type: 'suppressed',
+        detail: { reason: result.error },
+      })
       continue
     }
+
+    remainingToday -= 1
 
     await supabase
       .from('outbound_campaign_contacts')

@@ -62,6 +62,7 @@ import { DecisionMakerFinder, type DecisionMakerFinderHandle } from '@/app/admin
 import { StepIndicator, STEPS } from './StepIndicator'
 import { ContactInfoStep } from './ContactInfoStep'
 import { OutreachStep } from './OutreachStep'
+import { ReviewSendStep } from './ReviewSendStep'
 import { TrackFollowUpStep } from './TrackFollowUpStep'
 import { CompanyPipelineList } from './CompanyPipelineList'
 import { useAutoGtmFlow, type BatchCompanyStatus } from './useAutoGtmFlow'
@@ -98,6 +99,13 @@ export default function AutoGtmFlowPage() {
   const [dmSelectedCount, setDmSelectedCount] = useState(0)
   const [committingDm, setCommittingDm] = useState(false)
   const [showStartNewConfirm, setShowStartNewConfirm] = useState(false)
+  // Set by Review & Send's "Edit" action on a specific contact — read once
+  // by OutreachStep (step 4) to preselect that contact's draft in the
+  // detail pane instead of always defaulting to the first contact in the
+  // list. Plain page-level state, not part of useAutoGtmFlow's URL-synced
+  // machinery — this is a one-shot UI handoff between two steps, not
+  // something that needs to survive a refresh.
+  const [focusContactId, setFocusContactId] = useState<string | null>(null)
 
   // Focus management (Phase B a11y pass): move keyboard/screen-reader focus
   // to the new step's content region on every real step change — same
@@ -171,12 +179,19 @@ export default function AutoGtmFlowPage() {
       loading: committingDm,
     }
   } else if (flow.step === 3) {
-    nextAction = { label: 'Continue to Outreach & Send', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
+    nextAction = { label: 'Continue to Campaign & Outreach', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
   } else if (flow.step === 4) {
-    // Gated on a campaign existing (i.e. at least one send/enqueue attempt
-    // has happened), not on send count — "0 sent" is still a valid,
-    // visitable state on the next step, same as this step's own empty states.
-    nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(5), disabled: !flow.campaignId }
+    // Same simple "contacts exist" gate step 3→4 already uses, not a
+    // draft-readiness count — Review & Send (the destination) is itself
+    // where "0 ready to send" is shown and handled honestly, same
+    // don't-hard-block-forward-navigation precedent as every other step
+    // transition in this flow.
+    nextAction = { label: 'Continue to Review & Send', onClick: () => flow.setStep(5), disabled: flow.contacts.length === 0 }
+  } else if (flow.step === 5) {
+    // Always enabled once reached — "0 sent" is still a valid, visitable
+    // state on Track & Follow Up (it shows its own honest empty state),
+    // same reasoning the old step-4 gate's comment already documented.
+    nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(6), disabled: false }
   }
 
   return (
@@ -217,7 +232,7 @@ export default function AutoGtmFlowPage() {
           <StepIndicator
             current={flow.step}
             maxReached={flow.maxStepReached}
-            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5)}
+            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6)}
             nextAction={nextAction}
           />
         </CardContent>
@@ -372,11 +387,11 @@ export default function AutoGtmFlowPage() {
         <CompanyPipelineList
           onResume={async runId => {
             await flow.resumeFromRun(runId)
-            // Step 5 (Track & Follow Up), not step 4 — resuming here means
+            // Step 6 (Track & Follow Up), not step 4/5 — resuming here means
             // "I already sent, let me check on it," not "let me draft/send
             // again." Every row in this list has, by construction, already
-            // reached step 4, so step 5 is always a valid landing spot.
-            flow.setStep(5)
+            // reached Review & Send, so step 6 is always a valid landing spot.
+            flow.setStep(6)
           }}
         />
       )}
@@ -528,6 +543,7 @@ export default function AutoGtmFlowPage() {
               onContactAdded={flow.addContactRow}
               onSelectionChange={setDmSelectedCount}
               leadershipContacts={flow.result?.extractorResult?.leadershipContacts}
+              analysisResult={flow.result?.analysisResult}
             />
           )}
 
@@ -579,18 +595,20 @@ export default function AutoGtmFlowPage() {
         </>
       )}
 
-      {/* Step 4: Outreach & Send (subject/email/follow-ups drafted automatically, send from the same screen) */}
+      {/* Step 4: Campaign & Outreach (subject/email/follow-ups drafted
+          automatically, plus campaign settings — no send action here, that
+          moved to Review & Send) */}
 
       {flow.step === 4 && (
         <>
           <OutreachStep
             contacts={sortedContacts}
-            campaignContactStatus={flow.campaignContactStatus}
-            sendingContactId={flow.sendingContactId}
-            sendingSelected={flow.sendingSelected}
-            sendOneContact={flow.sendOneContact}
-            sendSelectedContacts={flow.sendSelectedContacts}
+            campaignId={flow.campaignId}
+            ensureCampaignId={flow.ensureCampaignId}
+            resuming={flow.resuming}
+            defaultCampaignName={flow.inputMode === 'batch' ? `Batch (${flow.contacts.length} contacts) - Auto Flow` : `${flow.companyName} - Auto Flow`}
             updateContactEmail={flow.updateContactEmail}
+            initialActiveContactId={focusContactId}
           />
           <Button variant="outline" onClick={() => flow.setStep(3)}>
             ← Back
@@ -598,14 +616,39 @@ export default function AutoGtmFlowPage() {
         </>
       )}
 
-      {/* Step 5: Track & Follow Up (real send/open/reply status for this
-          company's contacts, continuing the flow past send instead of
-          leaving it as a dead end) */}
+      {/* Step 5: Review & Send (final counts, per-contact preview/remove,
+          the one "Confirm & Send" action) */}
 
       {flow.step === 5 && (
         <>
-          <TrackFollowUpStep campaignId={flow.campaignId} contacts={flow.contacts} />
+          <ReviewSendStep
+            contacts={sortedContacts}
+            campaignId={flow.campaignId}
+            ensureCampaignId={flow.ensureCampaignId}
+            campaignContactStatus={flow.campaignContactStatus}
+            sendingContactId={flow.sendingContactId}
+            sendingSelected={flow.sendingSelected}
+            sendOneContact={flow.sendOneContact}
+            sendSelectedContacts={flow.sendSelectedContacts}
+            onEditContact={contactId => {
+              if (contactId) setFocusContactId(contactId)
+              flow.setStep(4)
+            }}
+          />
           <Button variant="outline" onClick={() => flow.setStep(4)}>
+            ← Back
+          </Button>
+        </>
+      )}
+
+      {/* Step 6: Track & Follow Up (real send/open/reply status for this
+          company's contacts, continuing the flow past send instead of
+          leaving it as a dead end) */}
+
+      {flow.step === 6 && (
+        <>
+          <TrackFollowUpStep campaignId={flow.campaignId} contacts={flow.contacts} />
+          <Button variant="outline" onClick={() => flow.setStep(5)}>
             ← Back
           </Button>
         </>

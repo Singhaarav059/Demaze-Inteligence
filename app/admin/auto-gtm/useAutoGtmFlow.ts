@@ -44,7 +44,7 @@ import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { DecisionMakerCandidate } from '@/lib/outbound/decision-maker-discovery/types'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 
-export type FlowStep = 1 | 2 | 3 | 4 | 5
+export type FlowStep = 1 | 2 | 3 | 4 | 5 | 6
 export type InputMode = 'single' | 'batch'
 export type BatchCompanyStatus = 'pending' | 'researching' | 'discovering' | 'done' | 'failed'
 type ContactActionKind = 'find-email' | 'delete'
@@ -233,20 +233,33 @@ export function useAutoGtmFlow() {
         })()
       : null
     if (existingCampaign) {
-      // A campaign only ever gets created from Outreach & Send's own send
-      // actions (ensureCampaignId(), called lazily on first Send) — its
-      // existence means this run reached step 4 before, so every pill
-      // unlocks, INCLUDING step 5 (Track & Follow Up) — that step has no
-      // completion gate of its own beyond a campaign existing, same
-      // "widen maxStepReached, never touch step" discipline as the
-      // contacts check above.
-      setMaxStepReached(prev => (prev < 5 ? 5 : prev))
+      // FIXED (2026-08-12, 6-step restructure): a campaign row is now
+      // created EARLY — the moment step 4 (Campaign & Outreach) is opened,
+      // by CampaignSettingsPanel's ensureCampaignId() call, so settings have
+      // something real to save against before any send happens. That means
+      // the campaign existing no longer implies a send was ever attempted
+      // (it used to, back when ensureCampaignId() was only ever called
+      // lazily from the send action itself) — so this now checks whether
+      // any contact was actually ENQUEUED (a real signal Review & Send's
+      // "Confirm & Send" writes, campaign settings alone never do) before
+      // deciding how far to widen maxStepReached.
       setCampaignId(existingCampaign.id)
       const campaignContactsRes = await fetch(`/api/admin/outbound/campaigns/${existingCampaign.id}/contacts`)
       const campaignContactsData = await campaignContactsRes.json()
       if (campaignContactsData.success) {
+        const rows = campaignContactsData.contacts as Array<{ contact_id: string; status: string }>
+        if (rows.length > 0) {
+          // At least one contact was enqueued — Review & Send ran at least
+          // once, so Track & Follow Up (step 6) is a valid landing spot too.
+          setMaxStepReached(prev => (prev < 6 ? 6 : prev))
+        } else {
+          // Campaign settings were opened/saved but nothing was ever
+          // enqueued to send — only Review & Send (step 5) is reachable,
+          // not Track & Follow Up (it would just show "nothing sent yet").
+          setMaxStepReached(prev => (prev < 5 ? 5 : prev))
+        }
         const restored: Record<string, SendOutcomeDetail> = {}
-        for (const row of campaignContactsData.contacts as Array<{ contact_id: string; status: string }>) {
+        for (const row of rows) {
           // 'queued' means never sent (or skipped/failed and still
           // retry-eligible) — leave it absent so the contact still shows
           // as sendable. Anything past 'queued' means it went out.
@@ -257,7 +270,26 @@ export function useAutoGtmFlow() {
     }
   }, [])
 
+  // True for the full duration of any resumeFromRun() call, regardless of
+  // which caller triggered it (the URL-driven mount-time resume, AND
+  // CompanyPipelineList's "Resume" button — both call this same function).
+  // Exists to close a real race found live (2026-08-12): CampaignSettingsPanel
+  // eagerly calls ensureCampaignId() the moment it mounts (needed so campaign
+  // settings have something real to save against before any send happens) —
+  // but campaignId can still be null in local state well after a resumed
+  // run's REAL existing campaign has already been restored server-side,
+  // right up until restoreContactsAndCampaign's own fetches finish. Without
+  // this gate, ensureCampaignId() would create a genuinely duplicate,
+  // orphaned campaign (confirmed live TWICE while building this fix — first
+  // via the URL-mount path, then again via this exact button — both times
+  // two rows named " - Auto Flow" with no source_run_id). Set as the very
+  // first line of resumeFromRun (not just in whichever effect happens to
+  // call it) specifically so every call path is covered, not only the one
+  // this bug was first noticed on.
+  const [resuming, setResuming] = useState(false)
+
   const resumeFromRun = useCallback(async (id: string) => {
+    setResuming(true)
     try {
       // Fetch this one run directly by id — NOT the `?limit=50` list route.
       // FIXED (2026-08-10): this used to fetch the 50 most-recent runs and
@@ -286,6 +318,8 @@ export function useAutoGtmFlow() {
       await restoreContactsAndCampaign(run.id)
     } catch {
       // Resume is best-effort — a failed resume just leaves the flow at step 1.
+    } finally {
+      setResuming(false)
     }
   }, [restoreContactsAndCampaign])
 
@@ -312,13 +346,15 @@ export function useAutoGtmFlow() {
     const params = new URLSearchParams(window.location.search)
     const resumeRunId = params.get('runId')
     const resumeStep = Number(params.get('step'))
-    if (resumeStep >= 1 && resumeStep <= 5) {
+    if (resumeStep >= 1 && resumeStep <= 6) {
       // One-time client-only URL-sync on mount, not a derived-state anti-pattern.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStepState(resumeStep as FlowStep)
       setMaxStepReached(resumeStep as FlowStep)
     }
     setStepSynced(true)
+    // resumeFromRun sets `resuming` itself (as its first line, before any
+    // await) — no need to set it here too; see that function's own comment.
     if (resumeRunId) void resumeFromRun(resumeRunId)
   }, [resumeFromRun])
 
@@ -732,29 +768,76 @@ export function useAutoGtmFlow() {
   // — "campaign" is deliberately never surfaced as a concept in the guided
   // flow's UI/copy, it's just the existing sending infrastructure this hook
   // drives under the hood, same as before.
+  //
+  // FIXED (2026-08-12): found live, TWICE, two different root causes, both
+  // producing real duplicate orphaned campaigns:
+  //   1. A resumed run calling this before restoreContactsAndCampaign had
+  //      restored the run's REAL existing campaignId (closed by the
+  //      `resuming` gate in CampaignSettingsPanel, see that state's comment).
+  //   2. This function itself has no protection against being called TWICE
+  //      concurrently — confirmed live: on a genuinely fresh (non-resumed)
+  //      step 4 mount, React StrictMode's dev-mode double-effect-invocation
+  //      called this function twice in the same tick, both readings of
+  //      `campaignId` were still null (neither POST had resolved yet), and
+  //      two real campaigns got created for the same run, ~9ms apart.
+  // Two independent guards now, since they close different gaps:
+  //   (a) An in-flight-promise ref — a second concurrent call while a
+  //       create is already pending awaits the SAME promise instead of
+  //       firing a second POST. Closes the StrictMode double-invoke case.
+  //   (b) A server-side existing-campaign check (by source_run_id, single
+  //       mode only) before ever creating — closes any race where two calls
+  //       happen far enough apart that (a) doesn't help (its promise has
+  //       already resolved and cleared) but campaignId prop still hasn't
+  //       propagated back to this specific caller yet.
+  const ensureCampaignIdInFlight = useRef<Promise<string | null> | null>(null)
+
   const ensureCampaignId = useCallback(async (): Promise<string | null> => {
     if (campaignId) return campaignId
-    try {
-      const campaignName =
-        inputMode === 'batch'
-          ? `Batch (${batchCompanies.filter(c => c.status === 'done').length} companies) - Auto Flow`
-          : `${companyName} - Auto Flow`
-      const createRes = await fetch('/api/admin/outbound/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: campaignName, source_run_id: inputMode === 'batch' ? null : runId }),
-      })
-      const createData = await createRes.json()
-      if (!createData.success) {
-        toast.error(createData.error ?? 'Failed to prepare sending')
+    if (ensureCampaignIdInFlight.current) return ensureCampaignIdInFlight.current
+
+    const promise = (async (): Promise<string | null> => {
+      try {
+        if (inputMode === 'single' && runId) {
+          try {
+            const existingRes = await fetch(`/api/admin/outbound/campaigns?source_run_id=${runId}`)
+            const existingData = await existingRes.json()
+            const existing = existingData.success ? existingData.campaigns?.[0] : null
+            if (existing) {
+              setCampaignId(existing.id)
+              return existing.id
+            }
+          } catch {
+            // Falls through to create below — same fail-open discipline as
+            // every other best-effort lookup in this file.
+          }
+        }
+
+        const campaignName =
+          inputMode === 'batch'
+            ? `Batch (${batchCompanies.filter(c => c.status === 'done').length} companies) - Auto Flow`
+            : `${companyName} - Auto Flow`
+        const createRes = await fetch('/api/admin/outbound/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: campaignName, source_run_id: inputMode === 'batch' ? null : runId }),
+        })
+        const createData = await createRes.json()
+        if (!createData.success) {
+          toast.error(createData.error ?? 'Failed to prepare sending')
+          return null
+        }
+        setCampaignId(createData.campaign.id)
+        return createData.campaign.id
+      } catch {
+        toast.error('Could not reach the sending API')
         return null
+      } finally {
+        ensureCampaignIdInFlight.current = null
       }
-      setCampaignId(createData.campaign.id)
-      return createData.campaign.id
-    } catch {
-      toast.error('Could not reach the sending API')
-      return null
-    }
+    })()
+
+    ensureCampaignIdInFlight.current = promise
+    return promise
   }, [campaignId, inputMode, batchCompanies, companyName, runId])
 
   // Enqueues the given contact ids and sends whatever is queued — the send
@@ -901,6 +984,8 @@ export function useAutoGtmFlow() {
     deleteContact,
     updateContactEmail,
     campaignId,
+    ensureCampaignId,
+    resuming,
     campaignContactStatus,
     sendingContactId,
     sendingSelected,

@@ -33,6 +33,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { CollapsibleRow } from '@/components/ui/collapsible-row'
 import { useSuppressionList } from './useSuppressionList'
 
 function reasonBadgeVariant(reason: string) {
@@ -85,9 +86,7 @@ export default function SuppressionListPage() {
         </p>
       </GuideNote>
 
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Add an Address</h2>
+      <CollapsibleRow summary={<h2 className="text-sm font-semibold text-foreground">Add an Address</h2>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="suppress-email">Email</Label>
@@ -132,8 +131,7 @@ export default function SuppressionListPage() {
             {adding ? <Spinner className="size-3.5" /> : null}
             Add to Suppression List
           </Button>
-        </CardContent>
-      </Card>
+      </CollapsibleRow>
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-3">

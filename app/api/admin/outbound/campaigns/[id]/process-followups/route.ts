@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getFollowupIntervals } from '@/lib/outbound/sending/followup-settings'
+import { isWithinSendWindow, remainingDailySendCapacity } from '@/lib/outbound/sending/campaign-limits'
 import {
   processFollowupForContact,
   resolveGmailContext,
@@ -51,7 +52,7 @@ export async function POST(
 
   const { data: campaign, error: campaignError } = await supabase
     .from('outbound_campaigns')
-    .select('status')
+    .select('status, daily_send_limit, send_window_start, send_window_end, timezone')
     .eq('id', campaignId)
     .maybeSingle()
 
@@ -67,7 +68,9 @@ export async function POST(
 
   // Resolved once up front, same as check-replies/route.ts, not per contact.
   const gmail = await resolveGmailContext()
-  const intervalsDays = await getFollowupIntervals()
+  const intervalsDays = await getFollowupIntervals(campaignId)
+  const withinWindow = isWithinSendWindow(campaign)
+  let remainingToday = await remainingDailySendCapacity(supabase, campaignId, campaign.daily_send_limit, campaign.timezone)
 
   let contactsQuery = supabase
     .from('outbound_campaign_contacts')
@@ -87,7 +90,16 @@ export async function POST(
 
   const outcomes: FollowupOutcome[] = []
   for (const cc of contacts ?? []) {
+    if (!withinWindow) {
+      outcomes.push({ campaignContactId: cc.id, status: 'skipped', reason: 'Outside this campaign\'s configured sending window.' })
+      continue
+    }
+    if (remainingToday <= 0) {
+      outcomes.push({ campaignContactId: cc.id, status: 'skipped', reason: `Daily send limit reached (${campaign.daily_send_limit}/day).` })
+      continue
+    }
     const outcome = await processFollowupForContact(supabase, campaignId, cc.id, gmail, intervalsDays, false)
+    if (outcome.status === 'sent') remainingToday -= 1
     outcomes.push(outcome)
   }
 

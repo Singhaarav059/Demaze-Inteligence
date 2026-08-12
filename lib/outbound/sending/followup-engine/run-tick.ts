@@ -26,6 +26,7 @@ import {
   FOLLOWUP_ELIGIBLE_STATUSES,
 } from '../process-followup'
 import { getFollowupIntervals } from '../followup-settings'
+import { isWithinSendWindow, remainingDailySendCapacity } from '../campaign-limits'
 import { isAutoFollowupEligible } from './tick-logic'
 
 export interface FollowupEngineTickSummary {
@@ -66,7 +67,7 @@ export async function runFollowupEngineTick(
 
   const { data: campaigns, error: campaignError } = await supabase
     .from('outbound_campaigns')
-    .select('id')
+    .select('id, daily_send_limit, send_window_start, send_window_end, timezone')
     .neq('status', 'paused')
 
   if (campaignError) {
@@ -78,13 +79,17 @@ export async function runFollowupEngineTick(
   summary.campaignsChecked = activeCampaigns.length
   if (activeCampaigns.length === 0) return summary
 
-  // Resolved once for the whole tick, not per campaign — same discipline as
-  // process-followups/route.ts (one Gmail credential is shared by every
-  // campaign in this app; there's no per-campaign sending identity).
+  // Gmail credential resolution stays once-per-tick (one shared sending
+  // identity, no per-campaign account). Follow-up intervals (migration 020)
+  // are now resolved PER campaign inside the loop below, since a campaign
+  // may have its own cadence override — getFollowupIntervals() falls back
+  // to the global default per-campaign when it doesn't.
   const gmail = await resolveGmailContext()
-  const intervalsDays = await getFollowupIntervals()
 
   for (const campaign of activeCampaigns) {
+    const intervalsDays = await getFollowupIntervals(campaign.id)
+    const withinWindow = isWithinSendWindow(campaign)
+    let remainingToday = await remainingDailySendCapacity(supabase, campaign.id, campaign.daily_send_limit, campaign.timezone)
     if (gmail.accessToken) {
       const replySummary = await checkRepliesForCampaign(supabase, campaign.id, gmail.accessToken, gmail.connectedEmail)
       summary.errors.push(...replySummary.errors)
@@ -108,8 +113,12 @@ export async function runFollowupEngineTick(
     summary.contactsEligible += eligible.length
 
     for (const cc of eligible) {
+      if (!withinWindow || remainingToday <= 0) {
+        summary.skipped++
+        continue
+      }
       const outcome = await processFollowupForContact(supabase, campaign.id, cc.id, gmail, intervalsDays, false)
-      if (outcome.status === 'sent') summary.sent++
+      if (outcome.status === 'sent') { summary.sent++; remainingToday -= 1 }
       else if (outcome.status === 'cancelled_reply') summary.cancelledByReply++
       else if (outcome.status === 'cancelled_bounce') summary.cancelledByBounce++
       else if (outcome.status === 'failed') summary.failed++
