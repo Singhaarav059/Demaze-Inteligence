@@ -11,7 +11,7 @@ import {
   getOutreachIntelligence,
   getPainPointsStructured,
 } from '@/lib/pipeline/analysis-sections'
-import type { EmailGenerationInput } from './types'
+import type { EmailGenerationInput, EmailGenerationSalesIntelligence } from './types'
 
 interface ContactLike {
   person_name: string
@@ -37,7 +37,12 @@ function painPointText(item: Record<string, unknown>): string | null {
 
 export function buildEmailGenerationInput(
   contact: ContactLike,
-  finalResult: Record<string, unknown> | null | undefined
+  finalResult: Record<string, unknown> | null | undefined,
+  // Optional, already-resolved (active override applied, matched case study
+  // fetched) — see fetch-context.ts for how this gets built. Absent for any
+  // run with no Sales Strategy recommendation: every field below behaves
+  // byte-for-byte identically to before this parameter existed.
+  salesIntelligence?: EmailGenerationSalesIntelligence | null
 ): EmailGenerationInput {
   const data = finalResult ?? {}
 
@@ -68,8 +73,14 @@ export function buildEmailGenerationInput(
     painPoints: painPointsStructured.length > 0 ? painPointsStructured : fallbackPainPoints,
     opportunities,
     recentActivity,
-    openingAngle: outreachIntelligence?.conversation_angle,
-    whatToSell: executiveBrief?.what_to_sell,
+    // Sales Intelligence is more curated than the raw narrative fields when
+    // both exist — prefer its positioning/problem over conversation_angle/
+    // what_to_sell, but fall back to the pre-existing behavior when it
+    // doesn't (a run with no generated Sales Strategy, or one where neither
+    // field was matched).
+    openingAngle: salesIntelligence?.positioning ?? outreachIntelligence?.conversation_angle,
+    whatToSell: salesIntelligence?.problemLabel ?? executiveBrief?.what_to_sell,
     whyNow: outreachIntelligence?.why_now ?? executiveBrief?.why_now,
+    salesIntelligence: salesIntelligence ?? undefined,
   }
 }

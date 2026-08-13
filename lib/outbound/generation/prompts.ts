@@ -28,6 +28,23 @@ function renderInputBlock(input: EmailGenerationInput): string {
   if (input.openingAngle) lines.push(`Suggested opening angle: ${input.openingAngle}`)
   if (input.whatToSell) lines.push(`What to sell: ${input.whatToSell}`)
   if (input.whyNow) lines.push(`Why now: ${input.whyNow}`)
+
+  const si = input.salesIntelligence
+  if (si?.evidenceSentence) lines.push(`Why this may matter: ${si.evidenceSentence}`)
+  if (si?.positioning) lines.push(`Recommended positioning: ${si.positioning}`)
+  if (si?.matchedCaseStudy) {
+    const cs = si.matchedCaseStudy
+    const nameInstruction =
+      cs.provenance === 'named_client'
+        ? `you may name the client directly ("${cs.client}")`
+        : `do NOT name a real client — describe it generically ("${cs.client}")`
+    const outcomeText = cs.outcomes.map(o => `${o.metric}: ${o.value}${o.window ? ` (${o.window})` : ''}`).join('; ')
+    lines.push(
+      `Relevant proof point (${nameInstruction}): "${cs.title}" — ${cs.challenge}${outcomeText ? ` Results: ${outcomeText}.` : ''}`
+    )
+  }
+  if (si?.recommendedCta) lines.push(`Recommended call to action: ${si.recommendedCta}`)
+
   return lines.join('\n\n')
 }
 
@@ -38,6 +55,8 @@ Rules:
 - Address the person by first name only. Do not invent a greeting title (Mr./Ms./Dr.) unless it's given.
 - No corporate buzzwords ("synergy", "leverage", "circle back"). Write like a real person, not a template.
 - NEVER use em dashes (—) or en dashes (–), and never " -- " as a connector. Use a comma, a period, or rewrite as two shorter sentences.
+- If a "Recommended positioning" or "Recommended call to action" is given below, use it as the email's core angle and closing ask rather than inventing a new one.
+- Only reference a proof point, case study, client, or outcome metric if one is explicitly given below under "Relevant proof point" — if none is given, do not mention any client, case study, or result, invented or otherwise. Follow the naming instruction given exactly (name the client only if explicitly told you may).
 `.trim()
 
 export function buildSubjectLinePrompt(input: EmailGenerationInput): { systemPrompt: string; userPrompt: string } {

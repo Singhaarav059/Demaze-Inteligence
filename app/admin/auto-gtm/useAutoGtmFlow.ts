@@ -43,8 +43,9 @@ import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundC
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { DecisionMakerCandidate } from '@/lib/outbound/decision-maker-discovery/types'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
+import type { SalesIntelligenceRow } from '@/lib/sales-knowledge/types'
 
-export type FlowStep = 1 | 2 | 3 | 4 | 5 | 6
+export type FlowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7
 export type InputMode = 'single' | 'batch'
 export type BatchCompanyStatus = 'pending' | 'researching' | 'discovering' | 'done' | 'failed'
 type ContactActionKind = 'find-email' | 'delete'
@@ -106,6 +107,12 @@ export function useAutoGtmFlow() {
   // active sending provider — misleading once a real vendor (e.g. Gmail) is
   // connected. Same fetch-and-check pattern as OutreachStep's own badge.
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
+  const [salesIntelligence, setSalesIntelligence] = useState<SalesIntelligenceRow | null>(null)
+  const [salesIntelligenceLoading, setSalesIntelligenceLoading] = useState(false)
+  // null = not yet known (nothing generated this session yet); only set to
+  // a real boolean once /generate has actually run, since GET (on resume)
+  // doesn't report this — see SalesStrategyStep's "not configured yet" copy.
+  const [salesKnowledgeConfigured, setSalesKnowledgeConfigured] = useState<boolean | null>(null)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -166,6 +173,9 @@ export function useAutoGtmFlow() {
     setSendingContactId(null)
     setSendingSelected(false)
     setCampaignContactStatus({})
+    setSalesIntelligence(null)
+    setSalesIntelligenceLoading(false)
+    setSalesKnowledgeConfigured(null)
     setInputMode('single')
     setBatchCompanies([])
     setBatchUploadError(null)
@@ -183,6 +193,18 @@ export function useAutoGtmFlow() {
   // way a full resumeFromRun() would (runResearch already has fresher
   // versions of those from the analysis call that just completed).
   const restoreContactsAndCampaign = useCallback(async (id: string) => {
+    // Best-effort — a run from before this feature shipped, or one whose
+    // Sales Strategy step was never opened, has no row yet; GET returns
+    // { salesIntelligence: null } for both cases (degrade-gracefully
+    // contract, see app/api/admin/sales-intelligence/[sourceRunId]/route.ts).
+    try {
+      const siRes = await fetch(`/api/admin/sales-intelligence/${id}`)
+      const siData = await siRes.json()
+      setSalesIntelligence(siData.success ? (siData.salesIntelligence ?? null) : null)
+    } catch {
+      setSalesIntelligence(null)
+    }
+
     const contactsRes = await fetch(`/api/admin/outbound/contacts?source_run_id=${id}`)
     const contactsData = await contactsRes.json()
     let resumedContactIds: string[] = []
@@ -190,14 +212,14 @@ export function useAutoGtmFlow() {
       setContacts(contactsData.contacts)
       resumedContactIds = (contactsData.contacts as Array<{ id: string }>).map(c => c.id)
       // Contacts already exist for this run, so decision-maker selection
-      // (step 2) is already done — unlock at least step 3 regardless of
-      // which step the URL opened at (e.g. a Resume link from Run History
-      // always opens at step 2, since History has no cheap way to know how
-      // far a given run actually got without fetching this same data).
-      // This only ever widens which StepIndicator pills are clickable —
-      // it never changes which step's content is shown first.
+      // (step 3) is already done — unlock at least step 4 (Contact Info)
+      // regardless of which step the URL opened at (e.g. a Resume link from
+      // Run History always opens at step 3, since History has no cheap way
+      // to know how far a given run actually got without fetching this same
+      // data). This only ever widens which StepIndicator pills are
+      // clickable — it never changes which step's content is shown first.
       if (contactsData.contacts.length > 0) {
-        setMaxStepReached(prev => (prev < 3 ? 3 : prev))
+        setMaxStepReached(prev => (prev < 4 ? 4 : prev))
       }
     }
 
@@ -250,13 +272,13 @@ export function useAutoGtmFlow() {
         const rows = campaignContactsData.contacts as Array<{ contact_id: string; status: string }>
         if (rows.length > 0) {
           // At least one contact was enqueued — Review & Send ran at least
-          // once, so Track & Follow Up (step 6) is a valid landing spot too.
-          setMaxStepReached(prev => (prev < 6 ? 6 : prev))
+          // once, so Track & Follow Up (step 7) is a valid landing spot too.
+          setMaxStepReached(prev => (prev < 7 ? 7 : prev))
         } else {
           // Campaign settings were opened/saved but nothing was ever
-          // enqueued to send — only Review & Send (step 5) is reachable,
+          // enqueued to send — only Review & Send (step 6) is reachable,
           // not Track & Follow Up (it would just show "nothing sent yet").
-          setMaxStepReached(prev => (prev < 5 ? 5 : prev))
+          setMaxStepReached(prev => (prev < 6 ? 6 : prev))
         }
         const restored: Record<string, SendOutcomeDetail> = {}
         for (const row of rows) {
@@ -346,7 +368,7 @@ export function useAutoGtmFlow() {
     const params = new URLSearchParams(window.location.search)
     const resumeRunId = params.get('runId')
     const resumeStep = Number(params.get('step'))
-    if (resumeStep >= 1 && resumeStep <= 6) {
+    if (resumeStep >= 1 && resumeStep <= 7) {
       // One-time client-only URL-sync on mount, not a derived-state anti-pattern.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStepState(resumeStep as FlowStep)
@@ -764,6 +786,57 @@ export function useAutoGtmFlow() {
     }
   }, [])
 
+  // Sales Strategy (step 2) — generate always regenerates from scratch
+  // (discarding any prior override, a deliberate "start over" distinct from
+  // a field-level PATCH override below) via POST /generate. Explicit-button
+  // triggered from SalesStrategyStep, not auto-fired on mount, since this is
+  // a real reasoning pass over the run's research, not a cheap lookup.
+  const generateSalesIntelligence = useCallback(async () => {
+    if (!runId) return
+    setSalesIntelligenceLoading(true)
+    try {
+      const res = await fetch('/api/admin/sales-intelligence/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceRunId: runId }),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Failed to generate Sales Strategy')
+        return
+      }
+      setSalesIntelligence(data.salesIntelligence)
+      setSalesKnowledgeConfigured(Boolean(data.knowledgeConfigured))
+    } catch {
+      toast.error('Could not reach the Sales Intelligence API')
+    } finally {
+      setSalesIntelligenceLoading(false)
+    }
+  }, [runId])
+
+  // Per-field override — PATCHes only the active_* fields provided, server-
+  // side sets is_overridden=true. Never a full regenerate; AI recommendations
+  // (recommended_*) stay untouched so "AI recommended X, you changed it to Y"
+  // stays visible in the UI.
+  const updateSalesIntelligence = useCallback(async (patch: Record<string, unknown>) => {
+    if (!runId) return
+    try {
+      const res = await fetch(`/api/admin/sales-intelligence/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        toast.error(data.error ?? 'Failed to save Sales Strategy edit')
+        return
+      }
+      setSalesIntelligence(data.salesIntelligence)
+    } catch {
+      toast.error('Could not reach the Sales Intelligence API')
+    }
+  }, [runId])
+
   // Lazily creates the underlying campaign the first time anything is sent
   // — "campaign" is deliberately never surfaced as a concept in the guided
   // flow's UI/copy, it's just the existing sending infrastructure this hook
@@ -983,6 +1056,11 @@ export function useAutoGtmFlow() {
     findEmailForContact,
     deleteContact,
     updateContactEmail,
+    salesIntelligence,
+    salesIntelligenceLoading,
+    salesKnowledgeConfigured,
+    generateSalesIntelligence,
+    updateSalesIntelligence,
     campaignId,
     ensureCampaignId,
     resuming,

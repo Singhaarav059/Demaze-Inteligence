@@ -9,6 +9,25 @@
 // outbound_contacts row — never re-derived here.
 // ============================================================
 
+// Optional — sourced from outbound_sales_intelligence (lib/sales-knowledge)
+// when a Sales Strategy recommendation exists for this run. Absent for any
+// run predating this feature, or where Sales Knowledge was never
+// configured/generated — assemble-input.ts's degrade-gracefully contract
+// means EmailGenerationInput's other fields behave identically either way.
+export interface EmailGenerationSalesIntelligence {
+  problemLabel?: string
+  evidenceSentence?: string
+  positioning?: string
+  matchedCaseStudy?: {
+    title: string
+    client: string
+    provenance: 'named_client' | 'composite_illustrative'
+    challenge: string
+    outcomes: Array<{ metric: string; value: string; window?: string }>
+  }
+  recommendedCta?: string
+}
+
 export interface EmailGenerationInput {
   personName: string
   titleHint?: string
@@ -20,6 +39,7 @@ export interface EmailGenerationInput {
   openingAngle?: string
   whatToSell?: string
   whyNow?: string
+  salesIntelligence?: EmailGenerationSalesIntelligence
 }
 
 export type GenerationStatus = 'ok' | 'error'

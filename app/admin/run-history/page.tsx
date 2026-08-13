@@ -337,18 +337,20 @@ export default function RunHistoryPage() {
                           build contacts/outreach on top of (cardData is null
                           for scraper-only runs or a run that failed before
                           producing a result) — never for an incomplete run.
-                          Always opens at step 2 (Decision Makers); Auto
-                          Flow's own resumeFromRun() unlocks further pills
-                          (Contact Info / Outreach & Send) once it discovers
-                          contacts or a campaign already exist for this run,
-                          so this link never needs to guess how far a given
-                          run actually got. */}
+                          Always opens at step 3 (Decision Makers, was step 2
+                          before the 2026-08-13 Sales Strategy step insertion
+                          — see StepIndicator.tsx); Auto Flow's own
+                          resumeFromRun() unlocks further pills (Contact Info
+                          / Outreach & Send) once it discovers contacts or a
+                          campaign already exist for this run, so this link
+                          never needs to guess how far a given run actually
+                          got. */}
                       {cardData && run.status === 'completed' && (
                         <Button
                           size="sm"
                           variant="outline"
                           className="border-border bg-card text-foreground/90 hover:bg-accent"
-                          onClick={(e) => { e.stopPropagation(); router.push(`/admin/auto-gtm?runId=${run.id}&step=2`) }}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/admin/auto-gtm?runId=${run.id}&step=3`) }}
                         >
                           Resume in Auto Flow
                         </Button>

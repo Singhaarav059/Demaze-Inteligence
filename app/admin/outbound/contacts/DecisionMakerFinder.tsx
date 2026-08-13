@@ -22,9 +22,11 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StageProgress, type ProgressStage } from '@/components/ui/stage-progress'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { staggerList, listItem } from '@/lib/motion'
 import { DEFAULT_TARGET_TITLES } from '@/lib/outbound/decision-maker-discovery/types'
 import { recommendTitlesFromResearch } from '@/lib/outbound/decision-maker-discovery/role-recommendation'
+import { classifyRoleCategory, ROLE_CATEGORY_LABELS, type RoleCategory } from '@/lib/outbound/decision-maker-discovery/role-category'
 import type { DecisionMakerCandidate, LeadershipContactInput } from '@/lib/outbound/decision-maker-discovery/types'
 import type { OutboundContact } from './useOutboundContacts'
 
@@ -121,6 +123,12 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // to fall back to the generic DEFAULT_TARGET_TITLES with no recommendation
   // section shown, same as before this existed.
   analysisResult?: Record<string, unknown> | null
+  // Sales Intelligence's recommended_roles (active override, else the
+  // matcher's recommendation) — a second, additive source of "recommended"
+  // titles alongside role-recommendation.ts's own research-derived groups
+  // above. Purely a client-side "N found / M recommended" display/filter —
+  // never triggers a new search or affects who Prospeo returns.
+  recommendedRoles?: string[]
 }>(function DecisionMakerFinder({
   companyName,
   domain,
@@ -131,7 +139,10 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   onSelectionChange,
   leadershipContacts,
   analysisResult,
+  recommendedRoles,
 }, ref) {
+  const [roleCategoryFilter, setRoleCategoryFilter] = useState<'all' | RoleCategory>('all')
+  const [showAllCandidates, setShowAllCandidates] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [candidates, setCandidates] = useState<DecisionMakerCandidate[]>([])
   const [candidatesProvider, setCandidatesProvider] = useState<string | null>(null)
@@ -161,6 +172,23 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // analysisResult is absent or nothing matched (see role-recommendation.ts).
   const recommendedGroups = useMemo(() => recommendTitlesFromResearch(analysisResult), [analysisResult])
   const hasRealRecommendation = recommendedGroups.some(g => g.fromResearch)
+
+  // Merges role-recommendation.ts's research-derived titles with Sales
+  // Intelligence's own recommended_roles (when available) into one set used
+  // only to flag which already-returned candidates are "recommended" for
+  // this specific opportunity — union, not override, since both are
+  // legitimate independent signals and more data doesn't hurt here.
+  const recommendedTitleSet = useMemo(() => {
+    const fromGroups = recommendedGroups.filter(g => g.fromResearch).flatMap(g => g.titles)
+    const fromSalesIntelligence = recommendedRoles ?? []
+    return new Set([...fromGroups, ...fromSalesIntelligence].map(t => t.toLowerCase().trim()).filter(Boolean))
+  }, [recommendedGroups, recommendedRoles])
+
+  function isRecommendedCandidate(candidate: DecisionMakerCandidate): boolean {
+    if (recommendedTitleSet.size === 0) return false
+    const t = candidate.title.toLowerCase()
+    return Array.from(recommendedTitleSet).some(rt => t.includes(rt) || rt.includes(t))
+  }
 
   // Runs once on mount, regardless of autoStart: first checks for an
   // already-cached search for this run (migration 015) — a cache hit
@@ -213,6 +241,8 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
       .map(t => t.trim())
       .filter(Boolean)
     setSelectedCandidates(new Set())
+    setRoleCategoryFilter('all')
+    setShowAllCandidates(false)
     setDiscovering(true)
     try {
       const res = await fetch('/api/admin/outbound/decision-makers/discover', {
@@ -390,59 +420,102 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           </div>
         )}
 
-        {candidates.length > 0 && (
-          <div className="pt-2 border-t border-border space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground/70">
-                {candidates.length} candidate{candidates.length === 1 ? '' : 's'} found
-              </p>
-              <button
-                type="button"
-                onClick={toggleSelectAllCandidates}
-                className="text-xs text-muted-foreground/70 underline hover:text-foreground"
-              >
-                {selectedCandidates.size === candidates.length ? 'Deselect all' : 'Select all'}
-              </button>
-            </div>
-            <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
-              {candidates.map((candidate, i) => (
-                <motion.label
-                  key={`${candidate.title}-${i}`}
-                  variants={listItem}
-                  className="flex items-center gap-2.5 text-sm cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedCandidates.has(i)}
-                    onChange={() => toggleCandidate(i)}
-                    className="size-3.5"
-                  />
-                  <span className="text-foreground">{candidate.personName}</span>
-                  <span className="text-xs text-muted-foreground/70">{candidate.title}</span>
-                  <Badge variant={confidenceBadgeVariant(candidate.confidence)}>{candidate.confidence}</Badge>
-                  {candidate.grounding && (
-                    <Badge
-                      variant={groundingBadgeVariant(candidate.grounding.status)}
-                      title={candidate.grounding.reason}
+        {candidates.length > 0 && (() => {
+          const recommendedCount = candidates.filter(isRecommendedCandidate).length
+          const indexed = candidates.map((candidate, i) => ({ candidate, i }))
+          const roleFiltered =
+            roleCategoryFilter === 'all'
+              ? indexed
+              : indexed.filter(({ candidate }) => classifyRoleCategory(candidate.title) === roleCategoryFilter)
+          // Defaults to recommended-only when any exist and the user hasn't
+          // asked to see everything — today's behavior (show everything) is
+          // preserved whenever nothing is recommended.
+          const visible =
+            recommendedCount > 0 && !showAllCandidates
+              ? roleFiltered.filter(({ candidate }) => isRecommendedCandidate(candidate))
+              : roleFiltered
+          const categoriesPresent = Array.from(new Set(candidates.map(c => classifyRoleCategory(c.title))))
+
+          return (
+            <div className="pt-2 border-t border-border space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-xs text-muted-foreground/70">
+                  {candidates.length} candidate{candidates.length === 1 ? '' : 's'} found
+                  {recommendedCount > 0 && ` · ${recommendedCount} recommended`}
+                </p>
+                <div className="flex items-center gap-3">
+                  {recommendedCount > 0 && recommendedCount < candidates.length && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCandidates(v => !v)}
+                      className="text-xs text-muted-foreground/70 underline hover:text-foreground"
                     >
-                      {groundingLabel(candidate.grounding.status)}
-                    </Badge>
+                      {showAllCandidates ? 'Show recommended only' : `View all ${candidates.length}`}
+                    </button>
                   )}
-                </motion.label>
-              ))}
-            </motion.div>
-            {compact ? (
-              <p className="text-xs text-muted-foreground/70">
-                {selectedCandidates.size} selected. Hit Continue above to add {selectedCandidates.size === 1 ? 'them' : 'them all'} and move on.
-              </p>
-            ) : (
-              <Button size="sm" disabled={adding || selectedCandidates.size === 0} onClick={handleAddSelected}>
-                {adding ? <Spinner className="size-3.5" /> : null}
-                Add Selected as Contacts ({selectedCandidates.size})
-              </Button>
-            )}
-          </div>
-        )}
+                  <button
+                    type="button"
+                    onClick={toggleSelectAllCandidates}
+                    className="text-xs text-muted-foreground/70 underline hover:text-foreground"
+                  >
+                    {selectedCandidates.size === candidates.length ? 'Deselect all' : 'Select all'}
+                  </button>
+                </div>
+              </div>
+
+              {candidates.length > 6 && categoriesPresent.length > 1 && (
+                <Select value={roleCategoryFilter} onValueChange={v => setRoleCategoryFilter(v as 'all' | RoleCategory)}>
+                  <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    {categoriesPresent.map(cat => (
+                      <SelectItem key={cat} value={cat}>{ROLE_CATEGORY_LABELS[cat]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
+                {visible.map(({ candidate, i }) => (
+                  <motion.label
+                    key={`${candidate.title}-${i}`}
+                    variants={listItem}
+                    className="flex items-center gap-2.5 text-sm cursor-pointer flex-wrap"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCandidates.has(i)}
+                      onChange={() => toggleCandidate(i)}
+                      className="size-3.5"
+                    />
+                    <span className="text-foreground">{candidate.personName}</span>
+                    <span className="text-xs text-muted-foreground/70">{candidate.title}</span>
+                    <Badge variant={confidenceBadgeVariant(candidate.confidence)}>{candidate.confidence}</Badge>
+                    {isRecommendedCandidate(candidate) && <Badge variant="default">Recommended</Badge>}
+                    {candidate.grounding && (
+                      <Badge
+                        variant={groundingBadgeVariant(candidate.grounding.status)}
+                        title={candidate.grounding.reason}
+                      >
+                        {groundingLabel(candidate.grounding.status)}
+                      </Badge>
+                    )}
+                  </motion.label>
+                ))}
+              </motion.div>
+              {compact ? (
+                <p className="text-xs text-muted-foreground/70">
+                  {selectedCandidates.size} selected. Hit Continue above to add {selectedCandidates.size === 1 ? 'them' : 'them all'} and move on.
+                </p>
+              ) : (
+                <Button size="sm" disabled={adding || selectedCandidates.size === 0} onClick={handleAddSelected}>
+                  {adding ? <Spinner className="size-3.5" /> : null}
+                  Add Selected as Contacts ({selectedCandidates.size})
+                </Button>
+              )}
+            </div>
+          )
+        })()}
         </>
         )}
       </CardContent>

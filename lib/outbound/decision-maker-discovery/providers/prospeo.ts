@@ -21,7 +21,14 @@ import type {
   DecisionMakerConfidence,
 } from '../types'
 
-const MAX_CANDIDATES = 10
+// Raised from 10 (2026-08-13) — the old cap silently discarded real,
+// valid candidates once a search legitimately returned more (e.g. a large
+// company with several regional VP/Director titles). 50 is a deliberate
+// backstop, not "uncapped": Prospeo bills per successful lookup, so a
+// genuinely unbounded cap risks a single large-company search burning an
+// unpredictable number of paid lookups. No realistic target-title search
+// against a real company returns more genuine matches than this.
+const MAX_CANDIDATES = 50
 
 // Common C-level/VP acronyms expanded so e.g. "CEO" and "Chief Executive
 // Officer" are recognized as the same title — without this, an acronym-

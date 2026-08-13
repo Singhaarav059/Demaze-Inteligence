@@ -3,11 +3,13 @@
 // ============================================================
 // StepIndicator — clickable progress header for the Auto Flow page
 // ============================================================
-// Presentational only. Purpose-built for this 6-step flow (restructured
+// Presentational only. Purpose-built for this 7-step flow (restructured
 // 2026-08-12 from 5 steps — the old merged "Outreach & Send" step split
 // into "Campaign & Outreach" (drafting + campaign settings, no send) and
 // "Review & Send" (final counts/preview, the one send action) — see
-// OutreachStep.tsx and ReviewSendStep.tsx's own headers), not a generic
+// OutreachStep.tsx and ReviewSendStep.tsx's own headers; then "Sales
+// Strategy" was inserted as step 2, pushing everything after Research down
+// one — see SalesStrategyStep.tsx's own header), not a generic
 // components/ui/ Stepper, since this is currently the only consumer. Pills
 // for any step already reached are clickable, so clicking one jumps the
 // flow back (or forward) to that step so its full content re-expands.
@@ -26,6 +28,7 @@ import { Spinner } from '@/components/ui/spinner'
 // screen-reader announcement instead of duplicating this list.
 export const STEPS = [
   'Research',
+  'Sales Strategy',
   'Decision Makers',
   'Contact Info',
   'Campaign & Outreach',

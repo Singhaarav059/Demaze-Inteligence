@@ -3,7 +3,7 @@
 // mobile drawer so the two never drift out of sync.
 // ============================================================
 
-import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban } from 'lucide-react'
+import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban, Library } from 'lucide-react'
 import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIcon } from './nav-icons'
 
 // Contacts / Campaigns / Warm-Up / Integrations were removed from nav
@@ -42,6 +42,7 @@ export const SECONDARY_NAV = [
   { href: '/admin/outbound/contacts', label: 'Contacts', icon: Users, hint: 'Manually-entered or discovered contacts, grouped by researched company' },
   { href: '/admin/outbound/campaigns', label: 'Campaigns', icon: Send, hint: 'Outreach campaign queues and send history' },
   { href: '/admin/outbound/followups', label: 'Follow-ups', icon: Clock, hint: 'What follow-up is due for whom, send now / stop, and the follow-up cadence' },
+  { href: '/admin/outbound/sales-knowledge', label: 'Sales Knowledge', icon: Library, hint: 'Industries, problems, capabilities, and case studies used to generate sales positioning' },
   { href: '/admin/outbound/suppression', label: 'Suppression', icon: Ban, hint: 'Bounced, unsubscribed, and manually excluded addresses — never sent to again' },
   { href: '/admin/outbound/warmup', label: 'Warm-Up', icon: Flame, hint: 'Mailbox warm-up status and metrics' },
   { href: '/admin/outbound/integrations', label: 'Integrations', icon: Plug, hint: 'Vendor providers for each outbound capability' },

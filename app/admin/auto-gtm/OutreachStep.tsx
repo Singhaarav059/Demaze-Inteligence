@@ -30,7 +30,28 @@ import { InfoTooltip } from '@/components/ui/tooltip'
 import { TypewriterText } from '@/components/ui/typewriter-text'
 import { expandCollapse } from '@/lib/motion'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
+import type { SalesIntelligenceRow } from '@/lib/sales-knowledge/types'
 import { CampaignSettingsPanel } from './CampaignSettingsPanel'
+
+// Read-only summary of the Sales Strategy step's recommendation (spec
+// item 16: "Sales Strategy" section showing angle/problem/capability/
+// proof/CTA above the drafted outreach) — editing happens on step 2, not
+// here. Renders nothing when no Sales Intelligence exists for this run
+// (never generated, or Sales Knowledge unconfigured) — purely additive,
+// generation itself works identically either way (see assemble-input.ts's
+// degrade-gracefully contract).
+function SalesStrategySummary({ salesIntelligence }: { salesIntelligence: SalesIntelligenceRow | null | undefined }) {
+  if (!salesIntelligence?.recommended_problem_slug && !salesIntelligence?.active_problem_slug) return null
+  const positioning = salesIntelligence.active_positioning_text ?? salesIntelligence.positioning_text
+  const cta = salesIntelligence.active_cta ?? salesIntelligence.recommended_cta
+  return (
+    <div className="rounded-lg border border-border bg-accent/20 px-3 py-2.5 space-y-1">
+      <p className="text-xs font-medium text-foreground">Sales Strategy</p>
+      {positioning && <p className="text-xs text-muted-foreground">{positioning}</p>}
+      {cta && <p className="text-xs text-muted-foreground/80">CTA: {cta}</p>}
+    </div>
+  )
+}
 
 // Shown in place of the eventual email body while drafting is in flight —
 // gives the multi-stage ~30-90s wait a sense of progress instead of a
@@ -161,6 +182,7 @@ export function OutreachStep({
   defaultCampaignName,
   updateContactEmail,
   initialActiveContactId,
+  salesIntelligence,
 }: {
   contacts: OutboundContact[]
   campaignId: string | null
@@ -175,6 +197,10 @@ export function OutreachStep({
   // contact — preselects that contact's draft in the detail pane instead of
   // defaulting to the first contact in the list.
   initialActiveContactId?: string | null
+  // Read-only display only (see SalesStrategySummary above) — generation
+  // itself reads this from the server side (fetch-context.ts), not from
+  // this prop, so it stays correct even if this prop is stale/absent.
+  salesIntelligence?: SalesIntelligenceRow | null
 }) {
   // Contacts with no email can't be drafted for without burning AI credits
   // on content that has nowhere to go — discard them before this step ever
@@ -424,6 +450,8 @@ export function OutreachStep({
   return (
     <div className="space-y-3">
       <CampaignSettingsPanel campaignId={campaignId} ensureCampaignId={ensureCampaignId} resuming={resuming} defaultCampaignName={defaultCampaignName} />
+
+      <SalesStrategySummary salesIntelligence={salesIntelligence} />
 
       <div className="flex items-start justify-between gap-3">
         <div>

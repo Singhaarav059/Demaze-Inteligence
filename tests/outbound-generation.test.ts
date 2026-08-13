@@ -54,6 +54,31 @@ describe('buildEmailGenerationInput', () => {
     expect(input.recentActivity).toEqual([])
     expect(input.openingAngle).toBeUndefined()
   })
+
+  it('produces byte-identical output whether salesIntelligence is omitted or explicitly null (degrade-gracefully contract)', () => {
+    const finalResult = { outreach_intelligence: { conversation_angle: 'angle', why_now: 'now' }, executive_brief: { what_to_sell: 'X' } }
+    const withoutArg = buildEmailGenerationInput(contact, finalResult)
+    const withNull = buildEmailGenerationInput(contact, finalResult, null)
+    const withUndefined = buildEmailGenerationInput(contact, finalResult, undefined)
+    expect(withoutArg).toEqual(withNull)
+    expect(withoutArg).toEqual(withUndefined)
+  })
+
+  it('prefers Sales Intelligence positioning/problemLabel over the raw narrative fields when both exist', () => {
+    const finalResult = { outreach_intelligence: { conversation_angle: 'raw angle', why_now: 'now' }, executive_brief: { what_to_sell: 'raw sell' } }
+    const salesIntelligence = { positioning: 'curated positioning', problemLabel: 'curated problem' }
+    const input = buildEmailGenerationInput(contact, finalResult, salesIntelligence)
+    expect(input.openingAngle).toBe('curated positioning')
+    expect(input.whatToSell).toBe('curated problem')
+    expect(input.salesIntelligence).toEqual(salesIntelligence)
+  })
+
+  it('falls back to the raw narrative fields when Sales Intelligence has no positioning/problemLabel', () => {
+    const finalResult = { outreach_intelligence: { conversation_angle: 'raw angle' }, executive_brief: { what_to_sell: 'raw sell' } }
+    const input = buildEmailGenerationInput(contact, finalResult, { evidenceSentence: 'just evidence' })
+    expect(input.openingAngle).toBe('raw angle')
+    expect(input.whatToSell).toBe('raw sell')
+  })
 })
 
 describe('extractJsonFromResponse', () => {
@@ -100,5 +125,57 @@ describe('prompt builders', () => {
     const { userPrompt } = buildFollowupPrompt(input, originalEmail)
     expect(userPrompt).toContain('Hi Jane, ...')
     expect(userPrompt).toContain('low -> medium -> high')
+  })
+
+  it('renders no Sales Intelligence block when the field is absent (backward compatible)', () => {
+    const { userPrompt } = buildEmailPrompt(input, 'subject')
+    // The rules text itself references these phrases in quotes as
+    // instructions ("If a 'Recommended positioning'... is given below") —
+    // check for the colon-suffixed rendered-line form specifically, not the
+    // rule's own mention of the phrase.
+    expect(userPrompt).not.toContain('Recommended positioning:')
+    expect(userPrompt).not.toContain('Relevant proof point (')
+  })
+
+  it('renders the Sales Intelligence block, including the case study naming instruction, when present', () => {
+    const inputWithSI = {
+      ...input,
+      salesIntelligence: {
+        evidenceSentence: 'Acme shows this directly.',
+        positioning: 'Lead with operational visibility.',
+        recommendedCta: 'Happy to share examples?',
+        matchedCaseStudy: {
+          title: 'Factory AI Command Center',
+          client: 'Composite: a manufacturer',
+          provenance: 'composite_illustrative' as const,
+          challenge: 'No cross-plant visibility.',
+          outcomes: [{ metric: 'OEE', value: '+9%' }],
+        },
+      },
+    }
+    const { userPrompt } = buildEmailPrompt(inputWithSI, 'subject')
+    expect(userPrompt).toContain('Recommended positioning: Lead with operational visibility.')
+    expect(userPrompt).toContain('Why this may matter: Acme shows this directly.')
+    expect(userPrompt).toContain('Recommended call to action: Happy to share examples?')
+    expect(userPrompt).toContain('do NOT name a real client')
+    expect(userPrompt).toContain('Factory AI Command Center')
+    expect(userPrompt).toContain('do not mention any client, case study, or result')
+  })
+
+  it('names the client directly for a named_client case study', () => {
+    const inputWithSI = {
+      ...input,
+      salesIntelligence: {
+        matchedCaseStudy: {
+          title: 'Executive Intelligence Platform',
+          client: 'Volvo Cars India',
+          provenance: 'named_client' as const,
+          challenge: 'Manual MIS reports.',
+          outcomes: [],
+        },
+      },
+    }
+    const { userPrompt } = buildEmailPrompt(inputWithSI, 'subject')
+    expect(userPrompt).toContain('you may name the client directly ("Volvo Cars India")')
   })
 })

@@ -60,6 +60,7 @@ import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import { ResearchCard } from '@/app/admin/intelligence-lab/ResearchCard'
 import { DecisionMakerFinder, type DecisionMakerFinderHandle } from '@/app/admin/outbound/contacts/DecisionMakerFinder'
 import { StepIndicator, STEPS } from './StepIndicator'
+import { SalesStrategyStep } from './SalesStrategyStep'
 import { ContactInfoStep } from './ContactInfoStep'
 import { OutreachStep } from './OutreachStep'
 import { ReviewSendStep } from './ReviewSendStep'
@@ -146,17 +147,24 @@ export default function AutoGtmFlowPage() {
   let nextAction: { label: string; onClick: () => void; disabled: boolean; loading?: boolean } | null = null
   if (flow.step === 1 && flow.inputMode === 'single') {
     nextAction = {
-      label: 'Continue to Decision Makers',
+      label: 'Continue to Sales Strategy',
       onClick: () => flow.setStep(2),
       disabled: !hasResearch || flow.researching,
     }
   } else if (flow.step === 1 && flow.inputMode === 'batch') {
+    // Batch mode skips Sales Strategy entirely — it's a per-run recommendation
+    // (lib/sales-knowledge, keyed by one source_run_id), and batch mode has no
+    // single "the" run to generate one for. Straight to Decision Makers.
     nextAction = {
       label: `Review contacts (${flow.contacts.length})`,
-      onClick: () => flow.setStep(2),
+      onClick: () => flow.setStep(3),
       disabled: !batchHasProgress || flow.batchRunning || flow.contacts.length === 0,
     }
   } else if (flow.step === 2) {
+    // Always enabled — Sales Strategy is always skippable (AI recommends,
+    // the user decides whether to review/edit it at all). Never a hard gate.
+    nextAction = { label: 'Continue to Decision Makers', onClick: () => flow.setStep(3), disabled: false }
+  } else if (flow.step === 3) {
     nextAction = {
       label: `Continue to Contact Info (${flow.contacts.length + (flow.inputMode === 'single' ? dmSelectedCount : 0)})`,
       onClick: async () => {
@@ -173,25 +181,25 @@ export default function AutoGtmFlowPage() {
             setCommittingDm(false)
           }
         }
-        flow.setStep(3)
+        flow.setStep(4)
       },
       disabled: flow.contacts.length === 0 && dmSelectedCount === 0,
       loading: committingDm,
     }
-  } else if (flow.step === 3) {
-    nextAction = { label: 'Continue to Campaign & Outreach', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
   } else if (flow.step === 4) {
-    // Same simple "contacts exist" gate step 3→4 already uses, not a
+    nextAction = { label: 'Continue to Campaign & Outreach', onClick: () => flow.setStep(5), disabled: flow.contacts.length === 0 }
+  } else if (flow.step === 5) {
+    // Same simple "contacts exist" gate step 4→5 already uses, not a
     // draft-readiness count — Review & Send (the destination) is itself
     // where "0 ready to send" is shown and handled honestly, same
     // don't-hard-block-forward-navigation precedent as every other step
     // transition in this flow.
-    nextAction = { label: 'Continue to Review & Send', onClick: () => flow.setStep(5), disabled: flow.contacts.length === 0 }
-  } else if (flow.step === 5) {
+    nextAction = { label: 'Continue to Review & Send', onClick: () => flow.setStep(6), disabled: flow.contacts.length === 0 }
+  } else if (flow.step === 6) {
     // Always enabled once reached — "0 sent" is still a valid, visitable
     // state on Track & Follow Up (it shows its own honest empty state),
-    // same reasoning the old step-4 gate's comment already documented.
-    nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(6), disabled: false }
+    // same reasoning the old step gate's comment already documented.
+    nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(7), disabled: false }
   }
 
   return (
@@ -232,7 +240,7 @@ export default function AutoGtmFlowPage() {
           <StepIndicator
             current={flow.step}
             maxReached={flow.maxStepReached}
-            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6)}
+            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6 | 7)}
             nextAction={nextAction}
           />
         </CardContent>
@@ -387,11 +395,11 @@ export default function AutoGtmFlowPage() {
         <CompanyPipelineList
           onResume={async runId => {
             await flow.resumeFromRun(runId)
-            // Step 6 (Track & Follow Up), not step 4/5 — resuming here means
+            // Step 7 (Track & Follow Up), not step 5/6 — resuming here means
             // "I already sent, let me check on it," not "let me draft/send
             // again." Every row in this list has, by construction, already
-            // reached Review & Send, so step 6 is always a valid landing spot.
-            flow.setStep(6)
+            // reached Review & Send, so step 7 is always a valid landing spot.
+            flow.setStep(7)
           }}
         />
       )}
@@ -514,9 +522,37 @@ export default function AutoGtmFlowPage() {
 
       {flow.step === 1 && flow.inputMode === 'single' && hasResearch && flow.result && <ResearchCard result={flow.result} />}
 
-      {/* Step 2: Decision Makers (found automatically, user just selects who to keep) */}
+      {/* Step 2: Sales Strategy (recommended industry/problem/positioning/
+          case study/roles/CTA — reviewable and editable, always skippable) */}
 
       {flow.step === 2 && (
+        <>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Sales Strategy</h2>
+            <p className="text-xs text-muted-foreground/70 mt-0.5">
+              How Demaze should position itself for this company, based on research and the Sales Knowledge
+              playbook. Review, edit, or skip.
+            </p>
+          </div>
+
+          <SalesStrategyStep
+            companyName={flow.companyName}
+            salesIntelligence={flow.salesIntelligence}
+            loading={flow.salesIntelligenceLoading}
+            knowledgeConfigured={flow.salesKnowledgeConfigured}
+            onGenerate={flow.generateSalesIntelligence}
+            onUpdate={flow.updateSalesIntelligence}
+          />
+
+          <Button variant="outline" onClick={() => flow.setStep(1)}>
+            ← Back
+          </Button>
+        </>
+      )}
+
+      {/* Step 3: Decision Makers (found automatically, user just selects who to keep) */}
+
+      {flow.step === 3 && (
         <>
           <div>
             <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -544,6 +580,7 @@ export default function AutoGtmFlowPage() {
               onSelectionChange={setDmSelectedCount}
               leadershipContacts={flow.result?.extractorResult?.leadershipContacts}
               analysisResult={flow.result?.analysisResult}
+              recommendedRoles={flow.salesIntelligence?.active_roles ?? flow.salesIntelligence?.recommended_roles}
             />
           )}
 
@@ -564,15 +601,15 @@ export default function AutoGtmFlowPage() {
             </Card>
           )}
 
-          <Button variant="outline" onClick={() => flow.setStep(1)}>
+          <Button variant="outline" onClick={() => flow.setStep(2)}>
             ← Back
           </Button>
         </>
       )}
 
-      {/* Step 3: Contact Information (email/phone/LinkedIn looked up automatically) */}
+      {/* Step 4: Contact Information (email/phone/LinkedIn looked up automatically) */}
 
-      {flow.step === 3 && (
+      {flow.step === 4 && (
         <>
           <div>
             <h2 className="text-sm font-semibold text-foreground">Contact Information</h2>
@@ -589,17 +626,17 @@ export default function AutoGtmFlowPage() {
             groupByCompany={flow.inputMode === 'batch'}
           />
 
-          <Button variant="outline" onClick={() => flow.setStep(2)}>
+          <Button variant="outline" onClick={() => flow.setStep(3)}>
             ← Back
           </Button>
         </>
       )}
 
-      {/* Step 4: Campaign & Outreach (subject/email/follow-ups drafted
+      {/* Step 5: Campaign & Outreach (subject/email/follow-ups drafted
           automatically, plus campaign settings — no send action here, that
           moved to Review & Send) */}
 
-      {flow.step === 4 && (
+      {flow.step === 5 && (
         <>
           <OutreachStep
             contacts={sortedContacts}
@@ -609,17 +646,18 @@ export default function AutoGtmFlowPage() {
             defaultCampaignName={flow.inputMode === 'batch' ? `Batch (${flow.contacts.length} contacts) - Auto Flow` : `${flow.companyName} - Auto Flow`}
             updateContactEmail={flow.updateContactEmail}
             initialActiveContactId={focusContactId}
+            salesIntelligence={flow.salesIntelligence}
           />
-          <Button variant="outline" onClick={() => flow.setStep(3)}>
+          <Button variant="outline" onClick={() => flow.setStep(4)}>
             ← Back
           </Button>
         </>
       )}
 
-      {/* Step 5: Review & Send (final counts, per-contact preview/remove,
+      {/* Step 6: Review & Send (final counts, per-contact preview/remove,
           the one "Confirm & Send" action) */}
 
-      {flow.step === 5 && (
+      {flow.step === 6 && (
         <>
           <ReviewSendStep
             contacts={sortedContacts}
@@ -632,23 +670,23 @@ export default function AutoGtmFlowPage() {
             sendSelectedContacts={flow.sendSelectedContacts}
             onEditContact={contactId => {
               if (contactId) setFocusContactId(contactId)
-              flow.setStep(4)
+              flow.setStep(5)
             }}
           />
-          <Button variant="outline" onClick={() => flow.setStep(4)}>
+          <Button variant="outline" onClick={() => flow.setStep(5)}>
             ← Back
           </Button>
         </>
       )}
 
-      {/* Step 6: Track & Follow Up (real send/open/reply status for this
+      {/* Step 7: Track & Follow Up (real send/open/reply status for this
           company's contacts, continuing the flow past send instead of
           leaving it as a dead end) */}
 
-      {flow.step === 6 && (
+      {flow.step === 7 && (
         <>
           <TrackFollowUpStep campaignId={flow.campaignId} contacts={flow.contacts} />
-          <Button variant="outline" onClick={() => flow.setStep(5)}>
+          <Button variant="outline" onClick={() => flow.setStep(6)}>
             ← Back
           </Button>
         </>
