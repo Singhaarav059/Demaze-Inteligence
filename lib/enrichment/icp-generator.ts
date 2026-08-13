@@ -36,6 +36,7 @@ import { searchTavily, searchSerper } from './discovery-engine'
 import { isSelfName } from './competitor-discovery'
 import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
+import { getCompletion } from '@/lib/ai/provider-factory'
 
 export type ICPConfidence = 'high' | 'medium' | 'low'
 export type ICPSufficiency = 'sufficient' | 'insufficient'
@@ -75,6 +76,10 @@ export interface ICPSegment {
   priority?: 'high' | 'medium' | 'low'
   confidence: ICPConfidence
   source_urls: string[]
+  // AI direct-knowledge rebuild (2026-08-13) — same field/rationale as
+  // CompetitorProfile.source in competitor-discovery.ts. 'ai_knowledge'
+  // entries have no search snippet to cite (source_urls always []).
+  source?: 'search' | 'ai_knowledge'
 }
 
 // Top-level result of discoverICPSegments(). Mirrors CompetitorDiscoveryResult's
@@ -502,6 +507,7 @@ async function runICPDiscovery(
     signals: candidate.snippets,
     confidence,
     source_urls: candidate.source_urls,
+    source: 'search',
   }))
 
   return {
@@ -589,5 +595,214 @@ export function mergeICPResults(
     reason: `${base.reason} | supplementary pass added ${newSegments.length} more`,
     candidates_considered: base.candidates_considered + supplement.candidates_considered,
     rejected_candidates: [...(base.rejected_candidates ?? []), ...(supplement.rejected_candidates ?? [])],
+  }
+}
+
+// ============================================================
+// AI direct-knowledge ICP discovery (2026-08-13)
+// ============================================================
+// Same rebuild, same rationale, as competitor-discovery.ts's
+// discoverCompetitorsFromKnowledge (see that function's header comment for
+// the full history) — applied here after the same live L&T run that
+// surfaced the competitor contamination bug also showed a suspicious
+// Target Customer Segments list (Education / Financial Services / Law
+// Firms / Not-for-Profits / Performing Arts — a textbook AV-integrator
+// vertical list, not plausible for a construction conglomerate). The
+// self-referential "we serve X" base pass (discoverICPSegments,
+// requireCompanyMention=true) is just as exposed to this failure mode as
+// competitor discovery's old name-based pass was: mentioning the researched
+// company's name somewhere in a result doesn't guarantee the "who we
+// serve" language on that page is actually describing THIS company (a
+// same-named different company, or a loosely-relevant page that happened
+// to pass the mention filter).
+//
+// Ask the LLM directly instead: real, specific customer segments it has
+// confident knowledge this company serves, with an explicit instruction to
+// decline (has_knowledge: false) rather than guess.
+//
+// Wired as the PRIMARY path in route.ts — the existing search pipeline
+// (self-referential base pass + business-profile/offering supplement) is
+// now the FALLBACK, used only when this function declines. Unlike
+// competitor discovery's old architecture, the pre-2026-08-13 ICP pipeline
+// always merged two search sources together rather than having one
+// "wrong" primary to replace — this function replaces BOTH when it
+// succeeds, not just one of them, same as how the competitor rebuild fully
+// bypasses its search pipeline on success.
+//
+// No search snippet exists for this path, so `signals`/`source_urls` are
+// always [] and `candidates` is always [] — same reasoning as
+// discoverCompetitorsFromKnowledge (the [ICP CANDIDATES] narrative-prompt
+// block renders "None found" for these and never re-narrates them;
+// normalize.ts's merge falls through to this function's own reason/
+// use_cases/market_attractiveness/priority for any LLM-narration-unmatched
+// skeleton).
+
+const KNOWLEDGE_SEGMENT_SYSTEM_PROMPT = `You are a market-research assistant with broad knowledge of companies and industries. You only state a target-customer segment you have specific, confident knowledge of — a real, specific type of customer this company is known to sell to, not a generic guess based on its industry alone. When you do not have specific, confident knowledge of a company, you say so honestly instead of guessing.`
+
+function buildKnowledgeSegmentUserPrompt(companyName: string, domain: string): string {
+  return `
+Company: ${companyName}${domain ? `\nWebsite: ${domain}` : ''}
+
+List the real target customer segments THIS company sells to — who actually buys from them (e.g. "automotive OEMs", "mid-market financial institutions", "hospitals and health systems"). Describe WHO buys, not what the company itself does.
+
+Only include a segment if you have specific, confident knowledge that this company genuinely serves that type of customer — not a generic guess based on its industry alone (e.g. do not guess "small businesses" just because it is a B2B company).
+
+If you do not have specific, confident knowledge of THIS company's actual customer base, respond with "has_knowledge": false and an empty segments array. Do not guess or invent plausible-sounding segments in that case.
+
+Return ONLY this JSON object, no other text:
+{
+  "has_knowledge": true or false,
+  "segments": [
+    {
+      "name": "Short segment name, e.g. 'Automotive OEMs' or 'Mid-market manufacturers'",
+      "reason": "1-2 sentences explaining why this is a real segment this company serves",
+      "use_case": "short description of how this segment specifically uses the company's product/service",
+      "criteria": "short qualifying description of this segment, e.g. '$10M+ capex projects' or 'government/PSU only' — empty string if you don't have a specific criterion",
+      "example_companies": ["Real Named Client 1", "Real Named Client 2"] — ONLY real, specific, publicly-known clients/customers of THIS company that you are confident actually exist; empty array if you don't have specific named examples — never invent a plausible-sounding company name here,
+      "priority": "high" or "medium" or "low" — how significant this segment is to the company's business,
+      "confident": true or false
+    }
+  ]
+}
+
+Rules:
+- Maximum ${MAX_SEGMENTS} segments, ordered most-significant first.
+- Never describe the company's own products/services here — only WHO buys from them.
+- "confident": true only when you have specific knowledge of this exact relationship; false for a real but less certain inference.
+- "example_companies" is the highest-risk field to get wrong — a named client is a specific, checkable claim. Leave it an empty array unless you are certain, even if "confident" is otherwise true for the segment as a whole.
+`.trim()
+}
+
+interface KnowledgeSegmentRaw {
+  name?: unknown
+  reason?: unknown
+  use_case?: unknown
+  criteria?: unknown
+  example_companies?: unknown
+  priority?: unknown
+  confident?: unknown
+}
+
+/**
+ * Asks the LLM directly for target-customer segments it has specific,
+ * confident knowledge of — the primary ICP-discovery path as of 2026-08-13
+ * (see the header comment above this function for why). Never throws;
+ * returns sufficiency: 'insufficient' on any failure, decline, or
+ * all-filtered result — route.ts falls back to the search pipeline in that
+ * case.
+ */
+export async function discoverICPSegmentsFromKnowledge(
+  companyName: string,
+  domain: string,
+): Promise<ICPDiscoveryResult> {
+  if (!companyName || companyName.trim().length === 0) {
+    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: 'no company name available to ask about', candidates_considered: 0 }
+  }
+
+  let response
+  try {
+    response = await getCompletion({
+      systemPrompt: KNOWLEDGE_SEGMENT_SYSTEM_PROMPT,
+      userPrompt: buildKnowledgeSegmentUserPrompt(companyName, domain),
+      maxTokens: 2048,
+      temperature: 0.2,
+      jsonMode: true,
+    })
+  } catch (e) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `AI direct-knowledge call failed: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  let parsed: { has_knowledge?: unknown; segments?: unknown }
+  try {
+    const trimmed = response.content.trim()
+    const stripped = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    parsed = JSON.parse(start !== -1 && end > start ? stripped.slice(start, end + 1) : stripped)
+  } catch (e) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `AI direct-knowledge response unparseable: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  if (parsed.has_knowledge !== true || !Array.isArray(parsed.segments) || parsed.segments.length === 0) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: 'LLM declined (has_knowledge=false or empty list) — no confident direct knowledge of this company\'s customer segments',
+      candidates_considered: Array.isArray(parsed.segments) ? parsed.segments.length : 0,
+    }
+  }
+
+  const raw = parsed.segments as KnowledgeSegmentRaw[]
+  const rejected: Array<{ name: string; reason: string }> = []
+  const survivors: ICPSegment[] = []
+  const validPriority = (v: unknown): 'high' | 'medium' | 'low' | undefined =>
+    (v === 'high' || v === 'medium' || v === 'low') ? v : undefined
+
+  for (const item of raw) {
+    const name = typeof item.name === 'string' ? item.name.trim() : ''
+    if (!name) continue
+    // Same safety net every search-extracted segment already goes through
+    // (self-name/generic-term) — a real LLM-named segment must never
+    // literally be the researched company's own name.
+    const rejectReason = classifySegmentRejection(name, companyName)
+    if (rejectReason) {
+      rejected.push({ name, reason: rejectReason })
+      continue
+    }
+    const reason = typeof item.reason === 'string' ? item.reason.trim() : ''
+    const useCase = typeof item.use_case === 'string' ? item.use_case.trim() : ''
+    const criteria = typeof item.criteria === 'string' ? item.criteria.trim() : ''
+    const priority = validPriority(item.priority)
+    const isConfident = item.confident === true
+    // example_companies is gated on isConfident IN CODE, not just the
+    // prompt instruction — a named client is a specific, checkable claim
+    // (the riskiest field this function emits), so it gets an extra guard
+    // beyond "the model was told to be careful." Applies even if the model
+    // returns names alongside confident: false; criteria (a qualifying
+    // description, not a named entity) doesn't carry the same fabrication
+    // risk and isn't gated the same way.
+    const exampleCompanies = isConfident && Array.isArray(item.example_companies)
+      ? item.example_companies.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map(v => v.trim()).slice(0, 5)
+      : []
+    survivors.push({
+      name,
+      reason: reason || `AI-assessed target segment${useCase ? ` (${useCase})` : ''}.`,
+      signals: [],
+      criteria: criteria || undefined,
+      example_companies: exampleCompanies.length > 0 ? exampleCompanies : undefined,
+      use_cases: useCase || undefined,
+      market_attractiveness: priority,
+      priority,
+      confidence: isConfident ? 'high' : 'medium',
+      source_urls: [],
+      source: 'ai_knowledge',
+    })
+  }
+
+  const capped = survivors.slice(0, MAX_SEGMENTS)
+
+  if (capped.length === 0) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `LLM returned ${raw.length} candidate(s) but all were rejected (self-name/generic)`,
+      candidates_considered: raw.length,
+      rejected_candidates: rejected,
+    }
+  }
+
+  return {
+    segments: capped,
+    candidates: [],
+    sufficiency: 'sufficient',
+    reason: `AI direct-knowledge: ${capped.length} of ${raw.length} confidently-known segment(s) survived filtering`,
+    candidates_considered: raw.length,
+    rejected_candidates: rejected.length > 0 ? rejected : undefined,
   }
 }

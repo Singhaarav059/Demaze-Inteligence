@@ -128,6 +128,10 @@ export interface CompetitorProfile {
   relative_size?: string
   confidence?: string
   source_urls?: string[]
+  // AI direct-knowledge rebuild (2026-08-13, see competitor-discovery.ts's
+  // discoverCompetitorsFromKnowledge header) — 'ai_knowledge' entries have
+  // no source_urls to cite, ResearchCard.tsx labels them accordingly.
+  source?: string
 }
 
 // ICP Generator output (Phase 2 item 2, schema formalized in
@@ -146,6 +150,10 @@ export interface ICPSegment {
   priority?: string
   confidence?: string
   source_urls?: string[]
+  // AI direct-knowledge rebuild (2026-08-13, see icp-generator.ts's
+  // discoverICPSegmentsFromKnowledge header) — same field/rationale as
+  // CompetitorProfile.source above.
+  source?: string
 }
 
 // Business Profile (2026-07-16 rebuild, schema in

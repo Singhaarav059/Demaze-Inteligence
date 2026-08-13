@@ -2489,6 +2489,234 @@ Follow Up" present and enabled. Zero console errors throughout.
    database yet to prove the filter-to-this-company's-contacts logic
    against actual shared-campaign data.
 
+## RESOLVED 2026-08-13 — Competitor Discovery Engine: AI direct-knowledge is
+## now the PRIMARY path, search-extraction demoted to fallback
+User reported a live L&T (Larsen & Toubro) run surfacing "United States
+Department" and "Johnson" as competitors — fragments extracted from an
+unrelated government/audio-equipment search snippet. Confirmed via direct
+code read: `classifyRejection()` in `competitor-discovery.ts` (self-name,
+known-directory-name, stopword, relationship-framing checks) doesn't catch
+this shape at all — it's not a directory name or a customer/supplier
+mention, just noise that happened to regex-match as a proper noun. This is
+the same root-cause class CLAUDE.md already documents for ATE Group's
+"Top Data Analytics Companies" listicle contamination, just via a different
+extraction path.
+
+Considered and tested an alternative before building anything: ask the LLM
+(Gemini, already the default first-tried provider in `provider-factory.ts`'s
+chain) directly for competitors, instead of search-then-extract. Live-tested
+by hand (real chat calls, not this codebase) against both Larsen & Toubro
+(a large, famous conglomerate) and Ador Welding (a real benchmark company,
+far less famous) — both came back clean, correctly-named, well-categorized
+real competitors, no hallucinated junk in either case. This was a genuine
+update to a real concern: the original 2026-07-14 architecture decision
+("search-grounded, not LLM-narrated") was built specifically to avoid an
+LLM inventing plausible-sounding competitors from parametric knowledge —
+still a real risk for a company the model has no specific knowledge of, but
+the two hand-tests suggested the risk was smaller than assumed, PROVIDED the
+model is explicitly instructed to decline rather than guess.
+
+**Built**: new `discoverCompetitorsFromKnowledge(companyName, domain)` in
+`lib/enrichment/competitor-discovery.ts` — a single direct `getCompletion()`
+call (same call pattern as `business-profile.ts`'s `extractBusinessProfile`)
+asking for real, confidently-known competitors, with an explicit
+`"has_knowledge": false` escape hatch the model is instructed to use instead
+of guessing when it doesn't know the company. Each returned name still runs
+through the SAME `classifyRejection()` safety net every search-extracted
+candidate already goes through (self-name/known-directory/stopword) — this
+is deliberate defense-in-depth, not redundant, since the model could still
+name the researched company itself or cite a directory site by mistake.
+`well_known: true/false` per competitor (asked of the model) maps to
+`confidence: 'high'/'medium'` — never `'high'` uniformly, keeping this
+codebase's "prefer under-confidence" discipline even for a confident-sounding
+LLM answer. No `source_urls` (nothing to cite) — new `source?: 'search' |
+'ai_knowledge'` field on `CompetitorProfile` lets `ResearchCard.tsx` label
+these "AI-assessed" instead of implying a clickable citation.
+
+**Wired into `route.ts`** as the new PRIMARY path (kicked off early,
+parallel with `businessProfilePromise`, since it needs only the company
+name — no scraped content or business profile dependency): Step 4b now
+tries `discoverCompetitorsFromKnowledge()` first (20s bound); only when it
+returns `sufficiency: 'insufficient'` (declined, timed out, or every
+candidate got filtered) does the pipeline fall through to the EXISTING
+2026-07-16 business-profile-driven search pipeline
+(`discoverCompetitorsFromBusinessProfile` + offering-grounded fallback +
+merge) — unchanged code, just now gated behind the knowledge pass declining
+instead of running unconditionally. `candidates: []` on the knowledge path
+means the `[COMPETITOR CANDIDATES]` narrative-prompt block in
+`analyze-v2.ts` correctly renders "None found" for these entries and never
+re-narrates them — `normalize.ts`'s name-match merge already falls through
+to the code-derived `why_they_compete`/`market_position` for any
+LLM-narration-unmatched skeleton, so no changes were needed there beyond
+threading the new `source` field through.
+
+New `tests/competitor-discovery-knowledge.test.ts` (10 assertions, mocking
+`getCompletion` — same pattern as `tests/business-profile.test.ts`): clean
+parse with `source: 'ai_knowledge'` tagging, confidence mapping from
+`well_known`, the 8-competitor cap, `has_knowledge: false` decline,
+self-name and known-directory-name rejection (reusing `classifyRejection`),
+all-rejected → insufficient, fence-stripped JSON, LLM-call failure, and
+unparseable-response — all non-fatal, never throws. **Caught a real
+pre-existing quirk while writing the cap test**, not a bug in the new
+code: an initial fixture used company name "Some Company" against generated
+candidates "Company 0".."Company 9" — `isSelfName()`'s word-overlap ratio
+filters out single-character words (the digit) before comparing, so each
+candidate collapsed to just the shared word "company" and hit the 100%
+overlap self-name threshold. Fixed by using non-colliding fixture names
+(`"Acme Corp"` / `"Rival Industries N"`), not by touching the shared
+`isSelfName()` logic — this is pre-existing, reused-elsewhere behavior, not
+something this session's code introduced.
+
+**Verified**: `tsc --noEmit` clean, full suite 689/689 (679 pre-existing +
+10 new). **Live-verified with one real Gemini Vertex call** (explicit user
+confirmation given first, throwaway script deleted after): ran
+`discoverCompetitorsFromKnowledge('Ador Welding', 'adorwelding.com')`
+directly — `gemini-3.6-flash`, 2983ms, real JSON response, correctly
+resolved to 1 competitor (ESAB India Limited, `confidence: 'high'`,
+`source: 'ai_knowledge'`, `market_position: 'Direct domestic and global
+competitor in welding consumables and equipment'`).
+
+**Known limitation, not fixed**: this one live run returned only 1
+competitor for Ador Welding, versus 9 (across multiple sector categories)
+from an earlier informal chat-based test outside this codebase against the
+same company. The stricter prompt wording used here ("only include if you
+have specific, confident knowledge... not a guess based on the sector
+alone") appears to make the model meaningfully more conservative than a
+plain "list competitors" ask — the intended precision-over-volume
+trade-off, but it means this path may under-deliver relative to what the
+model is actually capable of naming. Not tuned further this session; worth
+revisiting if live runs show this pattern repeating across other companies
+— loosening the prompt slightly (e.g. explicitly allowing well-known
+sector-standard competitors, not just ones tied to a specific stated fact)
+is the likely fix, not more search-side filtering.
+
+**Not tested live**: the genuinely obscure benchmark companies (Ace
+Pipeline, AS Agri & Aqua) — these are the actual stress test for the
+`has_knowledge: false` decline path (does it honestly decline, or
+hallucinate?). Untested in this session; the search-based fallback exists
+specifically to catch this case if the decline path doesn't fire reliably,
+but that fallback behavior itself hasn't been re-verified live since this
+session's change (though it's unmodified code, only newly gated).
+
+## RESOLVED 2026-08-13 (same day) — same AI direct-knowledge rebuild applied
+## to ICP Generator (Target Customer Segments)
+Follow-up to the Competitor Discovery rebuild directly above — user
+approved extending the same pattern to `icp-generator.ts`, which the L&T
+run's suspicious segment list (Education/Law Firms/Performing Arts — a
+textbook AV-integrator vertical list, not plausible for a construction
+conglomerate) had already flagged as likely exposed to the same
+search-noise contamination class. Confirmed via code read: the
+self-referential "we serve X" base pass (`discoverICPSegments`,
+`requireCompanyMention=true`) has the identical exposure competitor
+discovery's old name-based pass had — a result mentioning the researched
+company's name somewhere doesn't guarantee the "who we serve" language on
+that page actually describes THIS company.
+
+**Built**: new `discoverICPSegmentsFromKnowledge(companyName, domain)` in
+`lib/enrichment/icp-generator.ts` — same call pattern, same
+`has_knowledge: false` decline instruction, same `classifySegmentRejection()`
+defense-in-depth reuse as the competitor version. Asks for WHO buys (e.g.
+"automotive OEMs"), not what the company does — the prompt explicitly warns
+against describing the company's own offerings. Model self-rates
+`confident: true/false` per segment → `confidence: 'high'/'medium'`, same
+"prefer under-confidence" mapping as competitors' `well_known`. New
+`source?: 'search' | 'ai_knowledge'` field on `ICPSegment`.
+
+**One extra fix needed here that competitors didn't**: `normalize.ts`'s ICP
+merge unconditionally set `use_cases`/`market_attractiveness`/`priority`
+from the LLM-narration match only (`llmMatch?.use_cases ? ... :
+undefined`, no fallback to the code-derived skeleton) — harmless before
+this session since the search-based skeleton never populated those three
+fields itself (only LLM narration ever did), but the new knowledge-path
+skeleton DOES set them directly, and `candidates: []` on that path means no
+narration match will ever exist to carry them through. Fixed by adding the
+same `|| s.<field>` fallback the competitors merge already used for
+`why_they_compete`.
+
+**Wired into `route.ts`** the same way as competitors: `icpKnowledgePromise`
+kicked off early alongside `competitorKnowledgePromise` (needs only company
+name). Step 4c tries it first (20s bound); on decline, falls through to the
+EXISTING, unmodified base-pass + business-profile/offering-supplement merge
+(unlike competitors, this fallback was already a two-source merge before
+this session — that internal shape is untouched, only the decision of
+whether to run it at all moved behind the knowledge pass declining).
+
+New `tests/icp-generator-knowledge.test.ts` (10 assertions, same
+`getCompletion`-mocking pattern): clean parse with `source: 'ai_knowledge'`
+and `use_cases`/`priority`/`market_attractiveness` populated, confidence
+mapping from `confident`, the 5-segment cap (`MAX_SEGMENTS`), decline,
+self-name and generic-term rejection, all-rejected, fence-stripped JSON,
+call failure, unparseable response.
+
+**Verified**: `tsc --noEmit` clean, full suite 699/699 (689 pre-existing +
+10 new). **Live-verified with one real Gemini Vertex call** (explicit user
+confirmation given first, throwaway script deleted after):
+`discoverICPSegmentsFromKnowledge('Ador Welding', 'adorwelding.com')` —
+`gemini-3.6-flash`, 4975ms, 5 real segments (Heavy Engineering/
+Infrastructure Contractors, Oil & Gas/Petrochemical Refineries, Power
+Generation, Shipbuilding/Marine Engineering, Automotive/Transport
+Component Manufacturers), all correctly framed as WHO buys rather than
+what Ador does, all `confidence: 'high'`, all `source: 'ai_knowledge'` —
+materially more specific and plausible than the search pipeline's own
+historical output for this exact company, and clearly not the AV-integrator-
+shaped contamination pattern that triggered this whole fix.
+
+**Not tested live**: same gap as the competitor version — the genuinely
+obscure benchmark companies (Ace Pipeline, AS Agri & Aqua) weren't tested,
+so the `has_knowledge: false` decline path is unverified against a company
+the model genuinely doesn't know. The search-based fallback (unmodified)
+is the safety net if it doesn't fire reliably.
+
+## RESOLVED 2026-08-13 (same day) — ICP knowledge schema extended with
+## `criteria` + `example_companies`
+User separately ran L&T's target-customer segments through a manual chat
+test (outside this codebase) and got a materially richer result than this
+session's own live-verified output — named example clients (DMRC, NHAI,
+Saudi Aramco, ADNOC, Tata, Vedanta, LTIMindtree, LTTS, L&T Finance/Realty)
+and qualifying criteria per segment, organized by business division. Both
+`ICPSegment.criteria` and `.example_companies` already existed as fields
+(the search path could theoretically populate them, though in practice
+never did) but `discoverICPSegmentsFromKnowledge`'s prompt didn't ask for
+either. User approved extending the schema, with the same confidence
+discipline as the rest of the prompt.
+
+**Built**: `buildKnowledgeSegmentUserPrompt` now also requests `criteria`
+(a qualifying description, e.g. "$10M+ capex projects") and
+`example_companies` (real named clients, explicitly instructed to leave
+empty rather than invent a plausible-sounding name). `example_companies`
+gets an EXTRA guard beyond the prompt instruction: gated on `item.confident
+=== true` in code, not just trusted from the model's own response — a
+named client is the single most specific, checkable claim this function
+can emit, so it's held to a stricter bar than the rest of the segment (an
+otherwise-`confident: false` segment still keeps its `criteria`, just never
+its named examples). Capped at 5 names, non-string/empty entries filtered.
+
+**Found and fixed the same silent-drop bug class as before, in the same
+place**: `normalize.ts`'s ICP merge had the identical no-fallback issue for
+`criteria`/`example_companies` that this session's earlier `use_cases`/
+`market_attractiveness`/`priority` fix already addressed — extended the
+same `|| s.<field>` fallback to cover all five fields now, not just three.
+
+**`example_companies` was never rendered in `ResearchCard.tsx`'s
+`TargetSegmentsSection`** — a pre-existing gap (the field existed on the
+type, nothing populated or displayed it before this session). Added an
+"Example clients:" line to the same criteria/buying-signal/use-case row.
+
+New tests in `tests/icp-generator-knowledge.test.ts` (+3, 13 total):
+`criteria`/`example_companies` populated when confident, `example_companies`
+withheld (but `criteria` kept) when the LLM marks a segment `confident:
+false` even if it returned names anyway, and the 5-name cap + non-string
+filtering.
+
+**Verified**: `tsc --noEmit` clean, full suite 702/702 (699 pre-existing +
+3 new). **Live-verified with one real Gemini Vertex call** against
+`Larsen & Toubro` (explicit user confirmation given first, throwaway
+script deleted after) — real named clients (National Highways Authority of
+India, Delhi Metro Rail Corporation, NTPC Limited, Power Grid Corporation
+of India, Saudi Aramco, Indian Navy, Ministry of Defence) with real
+criteria per segment, closely matching the richness of the user's own
+manual chat test that prompted this extension.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above

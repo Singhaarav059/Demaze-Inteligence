@@ -1079,6 +1079,10 @@ export function normalizeAnalysisResult(
       relative_size:    llmMatch?.relative_size ? str(llmMatch.relative_size) : undefined,
       confidence: c.confidence,
       source_urls: c.source_urls,
+      // AI direct-knowledge rebuild (2026-08-13) — passed through as-is,
+      // never touched by the narrative-LLM merge above (that's a separate
+      // enrichment pass, unrelated to which discovery path found the name).
+      source: c.source,
     }
   })
   const competitor_sufficiency: CompetitorSufficiency = competitorDiscovery?.sufficiency ?? 'insufficient'
@@ -1107,15 +1111,26 @@ export function normalizeAnalysisResult(
     return {
       name: s.name,
       reason: (llmMatch && str(llmMatch.reason)) || s.reason,
-      criteria: llmMatch?.criteria ? str(llmMatch.criteria) : undefined,
       signals: s.signals,
       buying_indicators: llmMatch?.buying_indicators ? str(llmMatch.buying_indicators) : undefined,
-      example_companies: Array.isArray(llmMatch?.example_companies) ? arr<string>(llmMatch.example_companies) : undefined,
-      use_cases: llmMatch?.use_cases ? str(llmMatch.use_cases) : undefined,
-      market_attractiveness: validTier(llmMatch?.market_attractiveness),
-      priority: validTier(llmMatch?.priority),
+      // AI direct-knowledge rebuild (2026-08-13) — all five of these now
+      // fall back to the code-derived skeleton's own value when there's no
+      // LLM narration match, same "LLM narrative, code text as fallback"
+      // shape the competitors merge already used for why_they_compete.
+      // Before this session, the skeleton never set any of these fields
+      // itself (only the search-based path existed, which left them
+      // undefined), so the old unconditional-undefined behavior was
+      // harmless; discoverICPSegmentsFromKnowledge now sets real values
+      // here that must survive when candidates=[] means no narration match
+      // will ever be found for them.
+      criteria: (llmMatch?.criteria ? str(llmMatch.criteria) : undefined) || s.criteria,
+      example_companies: (Array.isArray(llmMatch?.example_companies) ? arr<string>(llmMatch.example_companies) : undefined) || s.example_companies,
+      use_cases: (llmMatch?.use_cases ? str(llmMatch.use_cases) : undefined) || s.use_cases,
+      market_attractiveness: validTier(llmMatch?.market_attractiveness) || s.market_attractiveness,
+      priority: validTier(llmMatch?.priority) || s.priority,
       confidence: s.confidence,
       source_urls: s.source_urls,
+      source: s.source,
     }
   })
   const icp_sufficiency: ICPSufficiency = icpDiscovery?.sufficiency ?? 'insufficient'

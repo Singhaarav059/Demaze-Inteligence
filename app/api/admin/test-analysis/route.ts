@@ -34,8 +34,8 @@ import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enric
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
-import { discoverCompetitorsFromOfferings, discoverCompetitorsFromBusinessProfile, mergeCompetitorResults, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
-import { discoverICPSegments, discoverICPSegmentsFromOfferings, discoverICPSegmentsFromBusinessProfile, mergeICPResults, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
+import { discoverCompetitorsFromOfferings, discoverCompetitorsFromBusinessProfile, discoverCompetitorsFromKnowledge, mergeCompetitorResults, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
+import { discoverICPSegments, discoverICPSegmentsFromOfferings, discoverICPSegmentsFromBusinessProfile, discoverICPSegmentsFromKnowledge, mergeICPResults, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
 import { discoverMarketIntelligence, type MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
 import { extractBusinessProfile, emptyBusinessProfile, isEmptyBusinessProfile, type CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 import { matchProofPoints } from '@/lib/knowledge/proof-point-matcher'
@@ -518,6 +518,28 @@ export async function POST(req: NextRequest) {
             return null
           })
         : Promise.resolve(null)
+    // AI direct-knowledge competitor discovery (2026-08-13, now the PRIMARY
+    // competitor path — see competitor-discovery.ts's header comment on
+    // discoverCompetitorsFromKnowledge for why). Needs only companyName, not
+    // scraped/business-profile content, so it's kicked off here alongside
+    // businessProfilePromise rather than waiting for that to resolve —
+    // overlaps with the ENRICHMENT soft-wait race below like everything else
+    // kicked off at this point.
+    const competitorKnowledgePromise: Promise<CompetitorDiscoveryResult> =
+      discoverCompetitorsFromKnowledge(companyNameFromScrape, domain).catch(e => ({
+        competitors: [], candidates: [], sufficiency: 'insufficient' as const,
+        reason: `discoverCompetitorsFromKnowledge threw: ${e instanceof Error ? e.message : String(e)}`,
+        candidates_considered: 0,
+      }))
+    // AI direct-knowledge ICP discovery (2026-08-13) — same rebuild/reasoning
+    // as competitorKnowledgePromise above, see icp-generator.ts's
+    // discoverICPSegmentsFromKnowledge header comment.
+    const icpKnowledgePromise: Promise<ICPDiscoveryResult> =
+      discoverICPSegmentsFromKnowledge(companyNameFromScrape, domain).catch(e => ({
+        segments: [], candidates: [], sufficiency: 'insufficient' as const,
+        reason: `discoverICPSegmentsFromKnowledge threw: ${e instanceof Error ? e.message : String(e)}`,
+        candidates_considered: 0,
+      }))
 
     // Gate S2: CompanyProfile viability
     const profileUnknown = extractorResult.companyProfile.primary_type === 'unknown'
@@ -652,48 +674,81 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Step 4b: Competitor Discovery ────────────────────────────────
-    // Business-understanding rebuild (2026-07-16): the business-profile-
-    // driven pass (services + market positioning) is now the sole PRIMARY
-    // source — never the company name. When the business profile came back
-    // empty (LLM call failed/timed out/found nothing), fall back to the
-    // narrower offering-grounded pass instead of returning no competitors
-    // at all.
+    // AI direct-knowledge rebuild (2026-08-13): discoverCompetitorsFromKnowledge
+    // (kicked off earlier, alongside businessProfilePromise) is now the
+    // PRIMARY path — a direct LLM ask, explicitly instructed to decline
+    // rather than guess when it doesn't have confident knowledge of this
+    // company. See that function's header comment in competitor-discovery.ts
+    // for why (search-extraction was pulling unrelated snippet noise — e.g.
+    // "United States Department" — into the competitors list; the LLM
+    // narration step downstream only enriches already-found candidates, it
+    // never filters bad ones out).
+    //
+    // The business-profile-driven search pass (2026-07-16 rebuild) below is
+    // now the FALLBACK, used only when the knowledge pass declines
+    // (has_knowledge=false, a timeout, or every returned name got filtered) —
+    // unchanged otherwise from how it worked before this session.
+    const COMPETITOR_KNOWLEDGE_TIMEOUT_MS = 20_000
     const COMPETITOR_DISCOVERY_TIMEOUT_MS = 12_000
     const OFFERING_DISCOVERY_TIMEOUT_MS = 8_000
     const competitorDiscoveryStart = Date.now()
-    let competitorDiscoveryResult: CompetitorDiscoveryResult
-    if (!isEmptyBusinessProfile(businessProfile)) {
-      competitorDiscoveryResult = await Promise.race([
-        discoverCompetitorsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => ({
-          competitors: [], candidates: [], sufficiency: 'insufficient' as const,
-          reason: `discoverCompetitorsFromBusinessProfile threw: ${e instanceof Error ? e.message : String(e)}`,
-          candidates_considered: 0,
-        })),
-        new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
-          competitors: [], candidates: [], sufficiency: 'insufficient',
-          reason: `timed out after ${COMPETITOR_DISCOVERY_TIMEOUT_MS}ms`,
-          candidates_considered: 0,
-        }), COMPETITOR_DISCOVERY_TIMEOUT_MS)),
-      ])
-    } else {
-      competitorDiscoveryResult = {
-        competitors: [], candidates: [], sufficiency: 'insufficient',
-        reason: 'no business profile available, falling back to offering-grounded pass',
-        candidates_considered: 0,
-      }
-    }
 
-    // Fold in the offering-grounded pass — the real fallback base when the
-    // business-profile pass above was empty/insufficient, or an additional
-    // supplement (still merged, base wins on duplicates) when it wasn't.
-    const offeringCompetitors = await Promise.race([
-      offeringCompetitorPromise,
-      new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+    let competitorDiscoveryResult: CompetitorDiscoveryResult = await Promise.race([
+      competitorKnowledgePromise,
+      new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
+        competitors: [], candidates: [], sufficiency: 'insufficient',
+        reason: `AI direct-knowledge pass timed out after ${COMPETITOR_KNOWLEDGE_TIMEOUT_MS}ms`,
+        candidates_considered: 0,
+      }), COMPETITOR_KNOWLEDGE_TIMEOUT_MS)),
     ])
-    if (offeringCompetitors) {
-      competitorDiscoveryResult = competitorDiscoveryResult.sufficiency === 'sufficient'
-        ? mergeCompetitorResults(competitorDiscoveryResult, offeringCompetitors)
-        : offeringCompetitors
+
+    if (competitorDiscoveryResult.sufficiency !== 'sufficient') {
+      const knowledgeDeclineReason = competitorDiscoveryResult.reason
+      // Business-understanding rebuild (2026-07-16): the business-profile-
+      // driven pass (services + market positioning) is the search-based
+      // primary — never the company name. When the business profile came
+      // back empty (LLM call failed/timed out/found nothing), fall back to
+      // the narrower offering-grounded pass instead of returning no
+      // competitors at all.
+      if (!isEmptyBusinessProfile(businessProfile)) {
+        competitorDiscoveryResult = await Promise.race([
+          discoverCompetitorsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => ({
+            competitors: [], candidates: [], sufficiency: 'insufficient' as const,
+            reason: `discoverCompetitorsFromBusinessProfile threw: ${e instanceof Error ? e.message : String(e)}`,
+            candidates_considered: 0,
+          })),
+          new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
+            competitors: [], candidates: [], sufficiency: 'insufficient',
+            reason: `timed out after ${COMPETITOR_DISCOVERY_TIMEOUT_MS}ms`,
+            candidates_considered: 0,
+          }), COMPETITOR_DISCOVERY_TIMEOUT_MS)),
+        ])
+      } else {
+        competitorDiscoveryResult = {
+          competitors: [], candidates: [], sufficiency: 'insufficient',
+          reason: 'no business profile available, falling back to offering-grounded pass',
+          candidates_considered: 0,
+        }
+      }
+
+      // Fold in the offering-grounded pass — the real fallback base when the
+      // business-profile pass above was empty/insufficient, or an additional
+      // supplement (still merged, base wins on duplicates) when it wasn't.
+      const offeringCompetitors = await Promise.race([
+        offeringCompetitorPromise,
+        new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+      ])
+      if (offeringCompetitors) {
+        competitorDiscoveryResult = competitorDiscoveryResult.sufficiency === 'sufficient'
+          ? mergeCompetitorResults(competitorDiscoveryResult, offeringCompetitors)
+          : offeringCompetitors
+      }
+      // Prefix the reason last, after every fallback sub-step has had a
+      // chance to set its own — this must survive both the business-profile
+      // branch's own reason AND a possible mergeCompetitorResults/replace in
+      // the offering fold above, so it's applied once, at the end, rather
+      // than in the middle where a later reassignment could drop it.
+      competitorDiscoveryResult.reason = `AI direct-knowledge pass declined (${knowledgeDeclineReason}) — fell back to search: ${competitorDiscoveryResult.reason}`
     }
 
     // Resolve a website per surfaced competitor (reuses website-discovery.ts's
@@ -735,41 +790,64 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Step 4c: Await ICP discovery (bounded) ──────────────────────
-    // Base pass (self-referential "we serve X") kicked off pre-scrape, same
-    // as before the business-understanding rebuild — unchanged.
+    // AI direct-knowledge rebuild (2026-08-13): discoverICPSegmentsFromKnowledge
+    // (kicked off earlier, alongside businessProfilePromise) is now the
+    // PRIMARY path — see that function's header comment in icp-generator.ts.
+    // The self-referential "we serve X" base pass + business-profile/
+    // offering supplement (2026-07-16 rebuild) below is now the FALLBACK,
+    // used only when the knowledge pass declines — unchanged otherwise from
+    // how it worked before this session.
+    const ICP_KNOWLEDGE_TIMEOUT_MS = 20_000
     const ICP_DISCOVERY_TIMEOUT_MS = 12_000
     const icpDiscoveryStart = Date.now()
+
     let icpDiscoveryResult: ICPDiscoveryResult = await Promise.race([
-      icpDiscoveryPromise,
+      icpKnowledgePromise,
       new Promise<ICPDiscoveryResult>(resolve => setTimeout(() => resolve({
         segments: [], candidates: [], sufficiency: 'insufficient',
-        reason: `timed out after ${ICP_DISCOVERY_TIMEOUT_MS}ms, kicked off in parallel with scrape, still not resolved by prompt-build time`,
+        reason: `AI direct-knowledge pass timed out after ${ICP_KNOWLEDGE_TIMEOUT_MS}ms`,
         candidates_considered: 0,
-      }), ICP_DISCOVERY_TIMEOUT_MS)),
+      }), ICP_KNOWLEDGE_TIMEOUT_MS)),
     ])
-    timing.icpDiscovery = Date.now() - icpDiscoveryStart
 
-    // ── Step 4c-2: fold in a supplementary pass, business-profile-driven
-    // when available, offering-grounded otherwise ─────────────────────
-    // Merged alongside the self-referential base above, never replacing it —
-    // Target Segments genuinely includes industries the company states it
-    // serves, so unlike competitors there's no "wrong primary pass" to fix
-    // here, just a richer second source to add.
-    const icpSupplementResult = !isEmptyBusinessProfile(businessProfile)
-      ? await Promise.race([
-          discoverICPSegmentsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => {
-            logger.warn('ICPGenerator', 'Business-profile pass non-fatal', e instanceof Error ? e.message : String(e))
-            return null
-          }),
-          new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
-        ])
-      : await Promise.race([
-          offeringIcpPromise,
-          new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
-        ])
-    if (icpSupplementResult) {
-      icpDiscoveryResult = mergeICPResults(icpDiscoveryResult, icpSupplementResult)
+    if (icpDiscoveryResult.sufficiency !== 'sufficient') {
+      const icpKnowledgeDeclineReason = icpDiscoveryResult.reason
+      // Base pass (self-referential "we serve X") kicked off pre-scrape,
+      // same as before the business-understanding rebuild — unchanged.
+      icpDiscoveryResult = await Promise.race([
+        icpDiscoveryPromise,
+        new Promise<ICPDiscoveryResult>(resolve => setTimeout(() => resolve({
+          segments: [], candidates: [], sufficiency: 'insufficient',
+          reason: `timed out after ${ICP_DISCOVERY_TIMEOUT_MS}ms, kicked off in parallel with scrape, still not resolved by prompt-build time`,
+          candidates_considered: 0,
+        }), ICP_DISCOVERY_TIMEOUT_MS)),
+      ])
+
+      // Fold in a supplementary pass, business-profile-driven when
+      // available, offering-grounded otherwise — merged alongside the
+      // self-referential base above, never replacing it. Target Segments
+      // genuinely includes industries the company states it serves, so
+      // unlike competitors there's no "wrong primary pass" within the
+      // search fallback itself to fix, just a richer second source to add.
+      const icpSupplementResult = !isEmptyBusinessProfile(businessProfile)
+        ? await Promise.race([
+            discoverICPSegmentsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => {
+              logger.warn('ICPGenerator', 'Business-profile pass non-fatal', e instanceof Error ? e.message : String(e))
+              return null
+            }),
+            new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+          ])
+        : await Promise.race([
+            offeringIcpPromise,
+            new Promise<null>(resolve => setTimeout(() => resolve(null), OFFERING_DISCOVERY_TIMEOUT_MS)),
+          ])
+      if (icpSupplementResult) {
+        icpDiscoveryResult = mergeICPResults(icpDiscoveryResult, icpSupplementResult)
+      }
+      icpDiscoveryResult.reason = `AI direct-knowledge pass declined (${icpKnowledgeDeclineReason}) — fell back to search: ${icpDiscoveryResult.reason}`
     }
+
+    timing.icpDiscovery = Date.now() - icpDiscoveryStart
     logger.info('Timing', `ICP Discovery: ${t(timing.icpDiscovery)} | sufficiency=${icpDiscoveryResult.sufficiency} | ${icpDiscoveryResult.segments.length} segment(s)`)
 
     // Gate: ICP (non-critical — WARN only, same tier as COMPETITOR/ENRICHMENT)

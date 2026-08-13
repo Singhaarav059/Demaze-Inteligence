@@ -409,6 +409,14 @@ export function CompetitorsSection({ competitors }: { competitors: CompetitorPro
                   {CATEGORY_LABEL[c.category]}
                 </span>
               )}
+              {c.source === 'ai_knowledge' && (
+                <span
+                  className="ml-2 rounded-md border border-border bg-accent/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  title="Identified from the AI's general knowledge, not a cited web source"
+                >
+                  AI-assessed
+                </span>
+              )}
               {c.website && (
                 <a
                   href={c.website.startsWith('http') ? c.website : `https://${c.website}`}
@@ -473,6 +481,14 @@ export function TargetSegmentsSection({
           <li key={i} className="flex items-start justify-between gap-3 text-sm">
             <div className="min-w-0">
               <span className="font-medium text-foreground">{s.name}</span>
+              {s.source === 'ai_knowledge' && (
+                <span
+                  className="ml-2 rounded-md border border-border bg-accent/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  title="Identified from the AI's general knowledge, not a cited web source"
+                >
+                  AI-assessed
+                </span>
+              )}
               {(s.market_attractiveness || s.priority) && (
                 <span className="ml-2 space-x-1">
                   {s.market_attractiveness && (
@@ -492,12 +508,13 @@ export function TargetSegmentsSection({
                   {humanizeText(s.reason)}
                 </p>
               )}
-              {(s.criteria || s.buying_indicators || s.use_cases) && (
+              {(s.criteria || s.buying_indicators || s.use_cases || (s.example_companies && s.example_companies.length > 0)) && (
                 <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
                   {joinWithDot([
                     s.criteria && <>Criteria: <span className="normal-case text-muted-foreground/80">{s.criteria}</span></>,
                     s.buying_indicators && <>Buying signal: <span className="normal-case text-muted-foreground/80">{s.buying_indicators}</span></>,
                     s.use_cases && <>Use case: <span className="normal-case text-muted-foreground/80">{s.use_cases}</span></>,
+                    s.example_companies && s.example_companies.length > 0 && <>Example clients: <span className="normal-case text-muted-foreground/80">{s.example_companies.join(', ')}</span></>,
                   ])}
                 </p>
               )}

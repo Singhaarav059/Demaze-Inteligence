@@ -64,6 +64,14 @@ export interface CompetitorProfile {
   relative_size?: string          // only set if evidence states it, never guessed
   confidence: CompetitorConfidence
   source_urls: string[]
+  // AI direct-knowledge rebuild (2026-08-13) — which path produced this
+  // entry. 'search' = the existing search-extraction pipeline below
+  // (source_urls populated, snippet-derived). 'ai_knowledge' =
+  // discoverCompetitorsFromKnowledge()'s direct LLM ask (source_urls always
+  // [], no snippet to cite — see that function's header for why this is an
+  // honest tradeoff, not a regression). Undefined for any pre-existing
+  // caller/test that doesn't care which path ran.
+  source?: 'search' | 'ai_knowledge'
 }
 
 // Top-level result of the (not-yet-implemented) discoverCompetitors() call.
@@ -113,6 +121,7 @@ export interface CompetitorDiscoveryResult {
 import { searchTavily, searchSerper } from './discovery-engine'
 import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
+import { getCompletion } from '@/lib/ai/provider-factory'
 
 // ── Company-name word-boundary matching ─────────────────────────
 // Same LEGAL_SUFFIXES list as website-discovery.ts, deliberately NOT
@@ -593,6 +602,7 @@ async function runCompetitorDiscovery(
     why_they_compete: fallbackWhyTheyCompete(candidate),
     confidence,
     source_urls: candidate.source_urls,
+    source: 'search',
   }))
 
   return {
@@ -689,5 +699,211 @@ export function mergeCompetitorResults(
     reason: `${base.reason} | supplementary pass added ${newCompetitors.length} more`,
     candidates_considered: base.candidates_considered + supplement.candidates_considered,
     rejected_candidates: [...(base.rejected_candidates ?? []), ...(supplement.rejected_candidates ?? [])],
+  }
+}
+
+// ============================================================
+// AI direct-knowledge competitor discovery (2026-08-13)
+// ============================================================
+// The search-extraction pipeline above (discoverCompetitorsFromBusinessProfile
+// et al) is robust against hallucination but fragile against SEARCH NOISE —
+// a live run against Larsen & Toubro surfaced "United States Department" and
+// "Johnson" as competitors, extracted from an unrelated government/audio-
+// equipment snippet that had nothing to do with L&T. classifyRejection()'s
+// filters (self-name, known directories, stopwords, relationship framing)
+// don't catch this shape at all — it's not a directory name or a customer/
+// supplier mention, it's just noise that happened to look like a proper
+// noun.
+//
+// This function is a DIFFERENT strategy, not a replacement: ask the LLM
+// directly for competitors it has specific, confident knowledge of, with an
+// explicit instruction to decline (has_knowledge: false) rather than guess
+// when it doesn't know the company. Verified live before building this
+// (2026-08-13 session): direct-ask against both Larsen & Toubro (a large,
+// famous conglomerate) and Ador Welding (a real benchmark company, mid-size,
+// far less famous) returned clean, correctly-named, well-categorized real
+// competitors for both — no hallucinated junk in either test. The genuinely
+// obscure benchmark companies (Ace Pipeline, AS Agri & Aqua) were NOT tested
+// live before shipping this — the decline path (has_knowledge: false) is
+// designed for exactly that case, but hasn't been observed firing on a real
+// company yet. If it turns out to hallucinate for genuinely obscure
+// companies instead of declining, that's the thing to look for first.
+//
+// Wired as the PRIMARY path in route.ts — the search pipeline above is now
+// the FALLBACK, used only when this function returns sufficiency:
+// 'insufficient' (LLM declined, failed, or every returned name got filtered
+// by the same classifyRejection() safety net reused below). This is a
+// reversal of the pre-2026-08-13 architecture (search was primary, LLM only
+// narrated already-found candidates) — see this file's own 2026-07-14
+// header comment ("search-grounded, not LLM-narrated") for the ORIGINAL
+// reasoning that pattern was built on: LLMs asked to name competitors from
+// their own training knowledge, with no instruction to admit uncertainty,
+// tend to hallucinate. The fix here isn't abandoning that concern, it's
+// addressing it directly (explicit decline instruction + well_known-based
+// confidence tiering + the same self-name/directory/stopword filter every
+// search candidate already goes through) rather than avoiding LLM knowledge
+// entirely.
+//
+// No search snippet exists for this path, so `source_urls` is always [] and
+// `candidates` is always [] (the [COMPETITOR CANDIDATES] narrative-prompt
+// block in analyze-v2.ts renders "None found" for these and never tries to
+// re-narrate them — normalize.ts's name-match merge then falls through to
+// this function's own `why_they_compete` text, same as any other
+// LLM-unmatched code-derived skeleton). ResearchCard.tsx labels these
+// entries "AI-assessed" rather than showing a source link, so a sales rep
+// never mistakes a `market_position`-only entry for a cited claim.
+
+const KNOWLEDGE_MAX_COMPETITORS = 8
+
+function extractJsonFromLLMResponse(raw: string): string {
+  const trimmed = raw.trim()
+  const stripped = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim()
+  const start = stripped.indexOf('{')
+  const end = stripped.lastIndexOf('}')
+  if (start !== -1 && end > start) return stripped.slice(start, end + 1)
+  return stripped
+}
+
+const KNOWLEDGE_SYSTEM_PROMPT = `You are a market-research assistant with broad knowledge of companies and industries. You only state a competitor relationship you have specific, confident knowledge of — a real, correctly-named company you can identify with confidence, not a generic industry example or a plausible-sounding guess. When you do not have specific, confident knowledge of a company, you say so honestly instead of guessing.`
+
+function buildKnowledgeUserPrompt(companyName: string, domain: string): string {
+  return `
+Company: ${companyName}${domain ? `\nWebsite: ${domain}` : ''}
+
+List this company's real, actual competitors — companies that genuinely compete with it in its market(s). Group by category/sector if it operates in multiple markets (e.g. domestic vs. global, or by product line).
+
+Only include a competitor if you have specific, confident knowledge that it is a real company and a real competitor of this specific company — not a generic industry example, not a guess based on the sector alone.
+
+If you do not have specific, confident knowledge of THIS company (e.g. it's too small or obscure for you to know its actual market position and real competitors), respond with "has_knowledge": false and an empty competitors array. Do not guess or invent plausible-sounding competitors in that case.
+
+Return ONLY this JSON object, no other text:
+{
+  "has_knowledge": true or false,
+  "competitors": [
+    {
+      "name": "Real Company Name",
+      "market_segment": "short label describing HOW this competitor relates to the company, e.g. 'Direct domestic competitor' or 'Global player active in this market' — not a generic industry tag",
+      "why_they_compete": "1 sentence explaining the specific overlap",
+      "well_known": true or false
+    }
+  ]
+}
+
+Rules:
+- Maximum ${KNOWLEDGE_MAX_COMPETITORS} competitors, ordered most-relevant first.
+- Never include the company itself.
+- Never include a generic industry term, a directory/listicle site, or a news outlet as a "competitor" — only real, named companies.
+- "well_known": true only for a company you are highly confident is real and correctly named (e.g. a widely known brand); false for a real but more niche/regional company you're less certain of the exact name of.
+`.trim()
+}
+
+interface KnowledgeCompetitorRaw {
+  name?: unknown
+  market_segment?: unknown
+  why_they_compete?: unknown
+  well_known?: unknown
+}
+
+/**
+ * Asks the LLM directly for competitors it has specific, confident knowledge
+ * of — the primary competitor-discovery path as of 2026-08-13 (see the
+ * header comment above this function for why). Never throws; returns
+ * sufficiency: 'insufficient' on any failure, decline, or all-filtered
+ * result, same non-fatal discipline as every other discovery module here —
+ * route.ts falls back to the search pipeline in that case.
+ */
+export async function discoverCompetitorsFromKnowledge(
+  companyName: string,
+  domain: string,
+): Promise<CompetitorDiscoveryResult> {
+  if (!companyName || companyName.trim().length === 0) {
+    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'no company name available to ask about', candidates_considered: 0 }
+  }
+
+  let response
+  try {
+    response = await getCompletion({
+      systemPrompt: KNOWLEDGE_SYSTEM_PROMPT,
+      userPrompt: buildKnowledgeUserPrompt(companyName, domain),
+      maxTokens: 2048,
+      temperature: 0.2,
+      jsonMode: true,
+    })
+  } catch (e) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `AI direct-knowledge call failed: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  let parsed: { has_knowledge?: unknown; competitors?: unknown }
+  try {
+    parsed = JSON.parse(extractJsonFromLLMResponse(response.content))
+  } catch (e) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `AI direct-knowledge response unparseable: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  if (parsed.has_knowledge !== true || !Array.isArray(parsed.competitors) || parsed.competitors.length === 0) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: 'LLM declined (has_knowledge=false or empty list) — no confident direct knowledge of this company\'s competitors',
+      candidates_considered: Array.isArray(parsed.competitors) ? parsed.competitors.length : 0,
+    }
+  }
+
+  const raw = parsed.competitors as KnowledgeCompetitorRaw[]
+  const rejected: Array<{ name: string; reason: string }> = []
+  const survivors: CompetitorProfile[] = []
+
+  for (const item of raw) {
+    const name = typeof item.name === 'string' ? item.name.trim() : ''
+    if (!name) continue
+    // Same safety net every search-extracted candidate already goes
+    // through (self-name/known-directory/stopword) — an empty snippets
+    // array just means the relationship-framing checks can't fire, which is
+    // fine here since there's no snippet to have been mis-framed in.
+    const rejectReason = classifyRejection(name, companyName, [])
+    if (rejectReason) {
+      rejected.push({ name, reason: rejectReason })
+      continue
+    }
+    const marketSegment = typeof item.market_segment === 'string' ? item.market_segment.trim() : ''
+    const why = typeof item.why_they_compete === 'string' ? item.why_they_compete.trim() : ''
+    survivors.push({
+      name,
+      why_they_compete: why || `AI-assessed competitor${marketSegment ? ` (${marketSegment})` : ''}.`,
+      market_position: marketSegment || undefined,
+      confidence: item.well_known === true ? 'high' : 'medium',
+      source_urls: [],
+      source: 'ai_knowledge',
+    })
+  }
+
+  const capped = survivors.slice(0, KNOWLEDGE_MAX_COMPETITORS)
+
+  if (capped.length === 0) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `LLM returned ${raw.length} candidate(s) but all were rejected (self-name/directory/generic)`,
+      candidates_considered: raw.length,
+      rejected_candidates: rejected,
+    }
+  }
+
+  return {
+    competitors: capped,
+    candidates: [],
+    sufficiency: 'sufficient',
+    reason: `AI direct-knowledge: ${capped.length} of ${raw.length} confidently-known competitor(s) survived filtering`,
+    candidates_considered: raw.length,
+    rejected_candidates: rejected.length > 0 ? rejected : undefined,
   }
 }
