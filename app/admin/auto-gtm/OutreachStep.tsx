@@ -183,6 +183,7 @@ export function OutreachStep({
   updateContactEmail,
   initialActiveContactId,
   salesIntelligence,
+  onDraftingSettled,
 }: {
   contacts: OutboundContact[]
   campaignId: string | null
@@ -201,6 +202,14 @@ export function OutreachStep({
   // itself reads this from the server side (fetch-context.ts), not from
   // this prop, so it stays correct even if this prop is stale/absent.
   salesIntelligence?: SalesIntelligenceRow | null
+  // Fires every time the automatic drafting pass over the current contact
+  // set finishes (whether it drafted 0 or many, and regardless of any
+  // per-contact failures) — Auto Flow uses this as the trigger to
+  // auto-advance past this step with no manual "Continue" click
+  // (2026-08-13 automation). Not fired on a manual per-contact
+  // Regenerate/Draft Email/switch-subject action, only the on-mount
+  // automatic pass.
+  onDraftingSettled?: () => void
 }) {
   // Contacts with no email can't be drafted for without burning AI credits
   // on content that has nowhere to go — discard them before this step ever
@@ -258,7 +267,10 @@ export function OutreachStep({
 
   const draftMissing = useCallback(async () => {
     const missing = contacts.filter(c => !(c.id in drafts))
-    if (missing.length === 0) return
+    if (missing.length === 0) {
+      onDraftingSettled?.()
+      return
+    }
 
     let cursor = 0
     async function worker() {
@@ -282,7 +294,8 @@ export function OutreachStep({
     }
 
     await Promise.all(Array.from({ length: Math.min(DRAFT_CONCURRENCY, missing.length) }, worker))
-  }, [contacts, drafts])
+    onDraftingSettled?.()
+  }, [contacts, drafts, onDraftingSettled])
 
   const draftForContact = useCallback(async (contact: OutboundContact) => {
     beginDrafting(contact.id)

@@ -479,10 +479,11 @@ export function useAutoGtmFlow() {
       const saveData = await saveRes.json()
       if (saveData.success) {
         const resolvedRunId = existingRunId ?? saveData.id
-        // Stay on step 1 — the user reviews the research result and clicks
-        // Continue explicitly (see the Continue button rendered below the
-        // ResearchCard, and the top-of-page continue control). Auto-
-        // advancing here used to skip that review entirely.
+        // Land on step 1 with the result visible — page.tsx's auto-pilot
+        // effect (2026-08-13) watches `hasResearch` and advances to step 2
+        // itself once this result lands, so this no longer needs to wait
+        // for a manual Continue click; the ResearchCard is still briefly on
+        // screen and reachable again afterward via the step 1 pill.
         setRunId(resolvedRunId)
         const params = new URLSearchParams()
         params.set('step', '1')
@@ -788,9 +789,12 @@ export function useAutoGtmFlow() {
 
   // Sales Strategy (step 2) — generate always regenerates from scratch
   // (discarding any prior override, a deliberate "start over" distinct from
-  // a field-level PATCH override below) via POST /generate. Explicit-button
-  // triggered from SalesStrategyStep, not auto-fired on mount, since this is
-  // a real reasoning pass over the run's research, not a cheap lookup.
+  // a field-level PATCH override below) via POST /generate. Can be
+  // triggered by SalesStrategyStep's own button, or automatically by
+  // page.tsx's auto-pilot effect (2026-08-13) the first time step 2 is
+  // reached with no existing salesIntelligence for this run — either way
+  // this is the same real reasoning pass over the run's research, not a
+  // cheap lookup, so callers should still avoid firing it more than once.
   const generateSalesIntelligence = useCallback(async () => {
     if (!runId) return
     setSalesIntelligenceLoading(true)

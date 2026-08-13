@@ -104,6 +104,11 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // parent (Auto Flow) can enable/disable its own Continue button without
   // duplicating selection state here.
   onSelectionChange?: (count: number) => void
+  // Fires once a discovery attempt has settled — either a cache restore, or
+  // a live search's success/failure — regardless of outcome. Auto Flow uses
+  // this as the trigger to auto-commit and auto-advance past this step with
+  // no manual "Continue" click (2026-08-13 automation).
+  onDiscoveryComplete?: () => void
   // Named leadership individuals already extracted from the company's own
   // scraped site (lib/pipeline/evidence-extractor.ts's leadershipContacts).
   // Optional — when provided, every returned candidate is cross-checked
@@ -137,6 +142,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   autoStart = false,
   compact = false,
   onSelectionChange,
+  onDiscoveryComplete,
   leadershipContacts,
   analysisResult,
   recommendedRoles,
@@ -220,6 +226,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           setCandidatesProvider(cached.providerUsed)
           setSelectedCandidates(new Set(cached.candidates.map((_, i) => i)))
           if (cached.targetTitles?.length) setTargetTitlesInput(cached.targetTitles.join(', '))
+          onDiscoveryComplete?.()
           return // cache hit — restored, nothing to search
         }
       } catch {
@@ -229,7 +236,10 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
         setCheckingCache(false)
       }
 
-      if (!autoStart) return
+      if (!autoStart) {
+        onDiscoveryComplete?.()
+        return
+      }
       void handleDiscover()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -282,6 +292,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
       toast.error('Could not reach the decision-maker discovery API')
     } finally {
       setDiscovering(false)
+      onDiscoveryComplete?.()
     }
   }
 

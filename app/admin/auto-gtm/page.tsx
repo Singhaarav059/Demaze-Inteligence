@@ -40,11 +40,20 @@
 // summary of what was found (no per-candidate selection UI) — the review
 // checkpoint for batch is Contact Information onward, same as single-
 // company mode from there.
+//
+// AUTO-PILOT (2026-08-13): the whole chain from Research through Campaign &
+// Outreach now also advances itself with zero manual "Continue" clicks —
+// see the "Auto-pilot" block further down (declared near the top of the
+// component, wired up right after `emailsFoundCount`). Review & Send
+// (step 6) is the one deliberate stop: sending a real email always needs an
+// explicit click, so auto-pilot lands there and waits. The manual Continue
+// buttons (`nextAction`) are kept as a fallback/override, not removed.
 // ============================================================
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
@@ -108,6 +117,21 @@ export default function AutoGtmFlowPage() {
   // something that needs to survive a refresh.
   const [focusContactId, setFocusContactId] = useState<string | null>(null)
 
+  // Auto-pilot state (see the block below `emailsFoundCount` for the full
+  // explanation) — declared up here alongside this file's other per-run
+  // refs/state, since the effects that use them live further down (after
+  // hasResearch/batchHasProgress are computed).
+  const autoAdvancedRef = useRef<Set<number>>(new Set())
+  const salesGenAttemptedRef = useRef(false)
+  const [dmDiscoveryDone, setDmDiscoveryDone] = useState(false)
+  const [draftingSettled, setDraftingSettled] = useState(false)
+
+  function advanceOnce(fromStep: number, toStep: 1 | 2 | 3 | 4 | 5 | 6 | 7) {
+    if (autoAdvancedRef.current.has(fromStep)) return
+    autoAdvancedRef.current.add(fromStep)
+    flow.setStep(toStep)
+  }
+
   // Focus management (Phase B a11y pass): move keyboard/screen-reader focus
   // to the new step's content region on every real step change — same
   // "land somewhere sensible" discipline as MobileNav.tsx's drawer-open
@@ -140,10 +164,137 @@ export default function AutoGtmFlowPage() {
 
   const emailsFoundCount = flow.contacts.filter(c => c.email).length
 
+  // ── Auto-pilot (2026-08-13) ──────────────────────────────────
+  // User request: the flow should not need manual "Continue" clicks between
+  // Research and Review & Send — once research completes, Sales Strategy
+  // generates itself, Decision Makers discovers + commits itself, Contact
+  // Information looks itself up, and Campaign & Outreach drafts itself,
+  // landing on Review & Send with everything ready. Review & Send (step 6)
+  // is the one deliberate stop: the actual "Confirm & Send" action always
+  // needs an explicit click — sending a real email to a real prospect
+  // requires per-batch confirmation every time, a standing rule (see
+  // CLAUDE.md's SCOPE PIVOT section and ReviewSendStep.tsx), not something
+  // this automation pass touches.
+  //
+  // Each step below already exposes (or was given, this session) a
+  // "this step's work has settled" signal — hasResearch, salesIntelligence/
+  // salesIntelligenceLoading, DecisionMakerFinder's new onDiscoveryComplete,
+  // per-contact email_finder_status, OutreachStep's new onDraftingSettled —
+  // and an effect watches that signal to advance once it fires. The manual
+  // "Continue" buttons (nextAction below) are left in place as a fallback,
+  // not removed — if something is slow or a step needs manual finishing.
+  //
+  // autoAdvancedRef guards each step-transition to fire AT MOST ONCE per
+  // run, so this never fights deliberate manual back-navigation: if you
+  // click back to an earlier step's pill to review or redo something,
+  // auto-pilot won't immediately yank you forward again — you'd need to
+  // use the manual Continue button (or edit and it re-settles) to move on
+  // from there. Reset whenever a new run starts (runId changes).
+  useEffect(() => {
+    autoAdvancedRef.current = new Set()
+    salesGenAttemptedRef.current = false
+    setDmDiscoveryDone(false)
+    setDraftingSettled(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.runId])
+
+  // Re-arm the per-step "settled" signals every time that step is (re)entered
+  // — DecisionMakerFinder/OutreachStep are only mounted while their step is
+  // active, so their own completion callbacks only fire while these are
+  // freshly false anyway; this just guarantees that even on a fast re-visit.
+  useEffect(() => {
+    if (flow.step === 3) setDmDiscoveryDone(false)
+    if (flow.step === 5) setDraftingSettled(false)
+  }, [flow.step])
+
+  // Step 1 -> 2 (single) / 1 -> 3 (batch, skips Sales Strategy — see the
+  // existing nextAction comment below for why): research/batch completing
+  // is the trigger.
+  useEffect(() => {
+    if (!flow.stepSynced || flow.step !== 1) return
+    if (flow.inputMode === 'single' && hasResearch) advanceOnce(1, 2)
+    if (flow.inputMode === 'batch' && batchHasProgress && !flow.batchRunning && flow.contacts.length > 0) {
+      advanceOnce(1, 3)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.step, flow.stepSynced, flow.inputMode, hasResearch, batchHasProgress, flow.batchRunning, flow.contacts.length])
+
+  // Step 2 -> 3: auto-fires Sales Strategy generation once (if not already
+  // present, e.g. from a resumed/re-researched run), then advances once it
+  // settles — success or failure, since this step is always skippable.
+  useEffect(() => {
+    if (!flow.stepSynced || flow.step !== 2 || flow.inputMode !== 'single') return
+    if (!flow.runId || autoAdvancedRef.current.has(2)) return
+    if (!salesGenAttemptedRef.current && !flow.salesIntelligence && !flow.salesIntelligenceLoading) {
+      salesGenAttemptedRef.current = true
+      void flow.generateSalesIntelligence()
+      return
+    }
+    if (flow.salesIntelligenceLoading) return
+    if (salesGenAttemptedRef.current || flow.salesIntelligence) advanceOnce(2, 3)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.step, flow.stepSynced, flow.inputMode, flow.runId, flow.salesIntelligence, flow.salesIntelligenceLoading])
+
+  // Step 3 -> 4: single mode waits for DecisionMakerFinder's
+  // onDiscoveryComplete, then commits whatever's selected — but ONLY when
+  // no contacts exist yet for this run (a resumed run that already has
+  // committed contacts must not re-add them; outbound_contacts has no
+  // uniqueness constraint, so a duplicate commit would create real dupes).
+  // Batch mode already committed every candidate during its own research
+  // loop (see runBatchThroughDecisionMakers), so it only needs to wait for
+  // that loop to finish, never a discovery-complete signal from this step.
+  useEffect(() => {
+    if (!flow.stepSynced || flow.step !== 3 || autoAdvancedRef.current.has(3)) return
+
+    if (flow.inputMode === 'single') {
+      if (!dmDiscoveryDone) return
+      autoAdvancedRef.current.add(3)
+      void (async () => {
+        if (flow.contacts.length === 0) {
+          setCommittingDm(true)
+          try {
+            await decisionMakerRef.current?.commitSelected()
+          } finally {
+            setCommittingDm(false)
+          }
+        }
+        flow.setStep(4)
+      })()
+      return
+    }
+
+    if (flow.inputMode === 'batch' && !flow.batchRunning) advanceOnce(3, 4)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.step, flow.stepSynced, flow.inputMode, dmDiscoveryDone, flow.contacts.length, flow.batchRunning])
+
+  // Step 4 -> 5: waits for every contact's email lookup to settle out of
+  // 'pending' (ContactInfoStep already runs these automatically on mount —
+  // see that file). Zero contacts is vacuously "settled" too.
+  useEffect(() => {
+    if (!flow.stepSynced || flow.step !== 4) return
+    if (flow.contacts.length > 0 && flow.contacts.some(c => c.email_finder_status === 'pending')) return
+    advanceOnce(4, 5)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.step, flow.stepSynced, flow.contacts])
+
+  // Step 5 -> 6: waits for OutreachStep's onDraftingSettled, then lands on
+  // Review & Send — the deliberate stop, see this block's header comment.
+  useEffect(() => {
+    if (!flow.stepSynced || flow.step !== 5 || !draftingSettled) return
+    if (autoAdvancedRef.current.has(5)) return
+    autoAdvancedRef.current.add(5)
+    toast.success('Everything is drafted — review and send whenever you’re ready.')
+    flow.setStep(6)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.step, flow.stepSynced, draftingSettled])
+
   // The flow's one "move forward" control, rendered once at the top next to
   // the step pills (see StepIndicator) so it's always visible without
-  // scrolling. Nothing advances automatically — this is the only way past
-  // step 1. Left null on step 5, which has nothing further to continue to.
+  // scrolling. Everything through Review & Send now also advances on its
+  // own (see the auto-pilot block above) — these buttons stay as a manual
+  // fallback/override, and remain the only way to move past step 6 (the
+  // real send always needs an explicit click). Left null on step 5, which
+  // has nothing further to continue to.
   let nextAction: { label: string; onClick: () => void; disabled: boolean; loading?: boolean } | null = null
   if (flow.step === 1 && flow.inputMode === 'single') {
     nextAction = {
@@ -578,6 +729,7 @@ export default function AutoGtmFlowPage() {
               sourceRunId={flow.runId}
               onContactAdded={flow.addContactRow}
               onSelectionChange={setDmSelectedCount}
+              onDiscoveryComplete={() => setDmDiscoveryDone(true)}
               leadershipContacts={flow.result?.extractorResult?.leadershipContacts}
               analysisResult={flow.result?.analysisResult}
               recommendedRoles={flow.salesIntelligence?.active_roles ?? flow.salesIntelligence?.recommended_roles}
@@ -647,6 +799,7 @@ export default function AutoGtmFlowPage() {
             updateContactEmail={flow.updateContactEmail}
             initialActiveContactId={focusContactId}
             salesIntelligence={flow.salesIntelligence}
+            onDraftingSettled={() => setDraftingSettled(true)}
           />
           <Button variant="outline" onClick={() => flow.setStep(4)}>
             ← Back
