@@ -28,6 +28,7 @@ import {
   fetchGmailAddress,
   getGmailThread,
   findReplyInThread,
+  findReplyInThreadByLabel,
   getLastMessageIdHeader,
   looksLikeBounce,
   GMAIL_SCOPES,
@@ -312,12 +313,12 @@ describe('getGmailThread', () => {
     vi.restoreAllMocks()
   })
 
-  it('extracts id + From + Message-Id + Subject header for every message in the thread', async () => {
+  it('extracts id + From + Message-Id + Subject header + labelIds for every message in the thread', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         messages: [
-          { id: 'm1', payload: { headers: [{ name: 'From', value: 'me@example.com' }, { name: 'Message-Id', value: '<m1@mail.gmail.com>' }] } },
+          { id: 'm1', labelIds: ['SENT'], payload: { headers: [{ name: 'From', value: 'me@example.com' }, { name: 'Message-Id', value: '<m1@mail.gmail.com>' }] } },
           { id: 'm2', payload: { headers: [{ name: 'Subject', value: 'Re: Hi' }, { name: 'From', value: 'Prospect <p@corp.com>' }, { name: 'Message-Id', value: '<m2@mail.gmail.com>' }] } },
         ],
       }),
@@ -327,8 +328,9 @@ describe('getGmailThread', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.messages).toEqual([
-        { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>', subject: null },
-        { id: 'm2', from: 'Prospect <p@corp.com>', messageIdHeader: '<m2@mail.gmail.com>', subject: 'Re: Hi' },
+        { id: 'm1', from: 'me@example.com', messageIdHeader: '<m1@mail.gmail.com>', subject: null, labelIds: ['SENT'] },
+        // No labelIds on the raw API response for m2 — falls back to [], not undefined/throwing.
+        { id: 'm2', from: 'Prospect <p@corp.com>', messageIdHeader: '<m2@mail.gmail.com>', subject: 'Re: Hi', labelIds: [] },
       ])
     }
   })
@@ -417,6 +419,58 @@ describe('findReplyInThread', () => {
     const result = findReplyInThread([{ id: 'm1', from: null }, { id: 'm2', from: 'Prospect <p@corp.com>' }], CONNECTED)
     expect(result.hasReply).toBe(true)
     expect(result.replyMessageId).toBe('m2')
+  })
+})
+
+describe('findReplyInThreadByLabel', () => {
+  // The connectedEmail-less fallback used by reply-check.ts when
+  // cred.email is unavailable (fetchGmailAddress can fail/be denied at
+  // OAuth-connect time) — uses Gmail's own 'SENT' label instead of a
+  // From-header string match.
+
+  it('reports no reply when the thread only has our own sent message', () => {
+    const result = findReplyInThreadByLabel([{ id: 'm1', from: 'Me <me@example.com>', labelIds: ['SENT'] }])
+    expect(result.hasReply).toBe(false)
+  })
+
+  it('reports a reply from a message not labeled SENT', () => {
+    const result = findReplyInThreadByLabel([
+      { id: 'm1', from: 'Me <me@example.com>', labelIds: ['SENT'] },
+      { id: 'm2', from: 'Prospect <p@corp.com>', labelIds: ['INBOX'] },
+    ])
+    expect(result.hasReply).toBe(true)
+    expect(result.replyMessageId).toBe('m2')
+    expect(result.fromHeader).toBe('Prospect <p@corp.com>')
+  })
+
+  it('does not mistake a manual reply/forward sent from Gmail\'s own UI for a prospect reply', () => {
+    // The exact scenario this fix targets: connectedEmail is unknown, so
+    // the old fallback (thread.messages.length > 1) would have misfiled
+    // this as a reply purely by position. The SENT label still correctly
+    // identifies it as something we sent, regardless of where it was sent
+    // from.
+    const result = findReplyInThreadByLabel([
+      { id: 'm1', from: 'Me <me@example.com>', labelIds: ['SENT'] },
+      { id: 'm2', from: 'me@example.com', labelIds: ['SENT'] },
+    ])
+    expect(result.hasReply).toBe(false)
+  })
+
+  it('picks the most recent non-SENT message when there are multiple replies', () => {
+    const result = findReplyInThreadByLabel([
+      { id: 'm1', from: 'Me <me@example.com>', labelIds: ['SENT'] },
+      { id: 'm2', from: 'Prospect <p@corp.com>', labelIds: ['INBOX'] },
+      { id: 'm3', from: 'Me <me@example.com>', labelIds: ['SENT'] },
+      { id: 'm4', from: 'Prospect <p@corp.com>', labelIds: ['INBOX'] },
+    ])
+    expect(result.hasReply).toBe(true)
+    expect(result.replyMessageId).toBe('m4')
+  })
+
+  it('treats a message with no labelIds at all as not sent by us (conservative default)', () => {
+    const result = findReplyInThreadByLabel([{ id: 'm1', from: 'Prospect <p@corp.com>' }])
+    expect(result.hasReply).toBe(true)
+    expect(result.replyMessageId).toBe('m1')
   })
 })
 

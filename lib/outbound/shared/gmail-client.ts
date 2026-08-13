@@ -398,6 +398,13 @@ interface GmailThreadMessage {
   // looksLikeBounce() below to tell a real prospect reply apart from an
   // automated delivery-failure notification landing in the same thread.
   subject?: string | null
+  // Gmail's own label set for this message (e.g. 'SENT', 'INBOX') — always
+  // present on the message resource regardless of `format`, so this costs
+  // nothing extra to read; previously fetched but discarded. Used by
+  // reply-check.ts's connectedEmail-less fallback to identify genuinely
+  // non-sent messages via Gmail's own authoritative labeling instead of
+  // blindly assuming the thread's last message is a reply.
+  labelIds?: string[]
 }
 
 export type GmailThreadResult =
@@ -436,7 +443,7 @@ export async function getGmailThread(
       return { ok: false, error: `Gmail thread fetch failed: ${detail}` }
     }
 
-    const messages: GmailThreadMessage[] = json.messages.map((m: { id: string; payload?: { headers?: Array<{ name: string; value: string }> } }) => {
+    const messages: GmailThreadMessage[] = json.messages.map((m: { id: string; labelIds?: string[]; payload?: { headers?: Array<{ name: string; value: string }> } }) => {
       const fromHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'from')
       const messageIdHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'message-id')
       const subjectHeader = m.payload?.headers?.find(h => h.name.toLowerCase() === 'subject')
@@ -445,6 +452,7 @@ export async function getGmailThread(
         from: fromHeader?.value ?? null,
         messageIdHeader: messageIdHeader?.value ?? null,
         subject: subjectHeader?.value ?? null,
+        labelIds: Array.isArray(m.labelIds) ? m.labelIds : [],
       }
     })
 
@@ -472,6 +480,22 @@ export interface ReplyCheckResult {
 export function findReplyInThread(messages: GmailThreadMessage[], connectedEmail: string): ReplyCheckResult {
   const lowerConnected = connectedEmail.toLowerCase()
   const replies = messages.filter(m => m.from && !m.from.toLowerCase().includes(lowerConnected))
+  const last = replies[replies.length - 1]
+  if (!last) return { hasReply: false }
+  return { hasReply: true, replyMessageId: last.id, fromHeader: last.from ?? undefined }
+}
+
+// Same contract as findReplyInThread(), for the (real, reachable — see
+// reply-check.ts's own comment) case where the connected account's email
+// address isn't known. Uses Gmail's own 'SENT' label — applied
+// authoritatively by Gmail to every message the connected account actually
+// sent, including ones sent from within Gmail's own UI, not just this
+// app's own sends — instead of guessing from message position in the
+// thread. A message with no labelIds at all (an older/unlikely response
+// shape) is conservatively treated as NOT sent by us, same "don't assume
+// no reply" direction as the rest of this file's bounce-detection comment.
+export function findReplyInThreadByLabel(messages: GmailThreadMessage[]): ReplyCheckResult {
+  const replies = messages.filter(m => !(m.labelIds ?? []).includes('SENT'))
   const last = replies[replies.length - 1]
   if (!last) return { hasReply: false }
   return { hasReply: true, replyMessageId: last.id, fromHeader: last.from ?? undefined }

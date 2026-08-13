@@ -10,18 +10,33 @@
 // this function — same credential/token resolution, same response shape,
 // zero behavior change for the existing manual "Check for Replies" button.
 //
-// Preserves the original route's exact fallback logic when cred.email is
-// unset (thread.messages.length > 1 => treat the last message as a reply) —
-// this deliberately differs from process-followup.ts's own inline reply
-// check, which has no such fallback. Do not simplify/unify the two; they
-// were written for slightly different situations and this extraction is not
-// the place to reconcile that.
+// Preserves the original route's fallback branch for when cred.email is
+// unset — this deliberately differs from process-followup.ts's own inline
+// reply check, which has no such fallback (it just reports no reply at all
+// in that case). Do not simplify/unify the two; they were written for
+// slightly different situations and this extraction is not the place to
+// reconcile that.
+//
+// FIXED (audit follow-up): the fallback itself used to be
+// `thread.messages.length > 1 => treat the LAST message as a reply` — a
+// pure position-based guess, with no check of who actually sent it. A
+// manual reply/forward sent from the connected account's own Gmail UI into
+// the same thread (a real, reachable scenario — cred.email comes from a
+// userinfo API call at OAuth-connect time that can itself fail/be denied,
+// see gmail-client.ts's GmailCredential.email being optional) would have
+// been misfiled as a prospect reply, incorrectly stopping that contact's
+// follow-ups. Now uses Gmail's own authoritative 'SENT' label
+// (getGmailThread always populates labelIds — see that function's own
+// comment) to find genuinely non-sent messages even without a known
+// connectedEmail to string-match against — strictly more accurate than the
+// old position-based guess, not a redesign of the fallback's existence.
 // ============================================================
 
 import { createServerClient } from '@/lib/supabase/server'
 import {
   getGmailThread,
   findReplyInThread,
+  findReplyInThreadByLabel,
   looksLikeBounce,
 } from '@/lib/outbound/shared/gmail-client'
 import { addToSuppressionList } from '@/lib/outbound/sending/suppression'
@@ -63,9 +78,7 @@ export async function checkRepliesForCampaign(
 
     const reply = connectedEmail
       ? findReplyInThread(thread.messages, connectedEmail)
-      : thread.messages.length > 1
-        ? { hasReply: true, replyMessageId: thread.messages[thread.messages.length - 1].id }
-        : { hasReply: false }
+      : findReplyInThreadByLabel(thread.messages)
 
     if (!reply.hasReply) continue
 

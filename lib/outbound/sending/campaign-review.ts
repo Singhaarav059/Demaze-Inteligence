@@ -27,6 +27,15 @@ export interface ContactReviewRow {
   suppressionReason?: 'bounced' | 'unsubscribed' | 'manual'
   campaignContactId?: string // present only when already enqueued (already_sent, or a stray queued row from a prior partial send)
   campaignContactStatus?: string
+  // Additive, informational only (audit follow-up) — never a gate. A
+  // 'low'-confidence email already passes every check above (it's a real,
+  // non-null email address on the contact), so it still becomes 'ready';
+  // this just carries the finder's own confidence through so Review & Send
+  // — the last checkpoint before a real send — can show the same "needs
+  // verification" signal the Contact Info step (ContactInfoRow.tsx)
+  // already shows earlier in the flow, instead of that signal disappearing
+  // once a contact reaches this screen.
+  emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
 }
 
 export interface CampaignReviewSummary {
@@ -49,7 +58,7 @@ export async function classifyCampaignContacts(
   }
 
   const [{ data: contacts }, { data: generatedRows }, { data: campaignContactRows }] = await Promise.all([
-    supabase.from('outbound_contacts').select('id, person_name, email').in('id', contactIds),
+    supabase.from('outbound_contacts').select('id, person_name, email, email_confidence').in('id', contactIds),
     supabase.from('outbound_generated_content').select('contact_id, selected_subject_line, email_draft').in('contact_id', contactIds),
     supabase.from('outbound_campaign_contacts').select('id, contact_id, status').eq('campaign_id', campaignId).in('contact_id', contactIds),
   ])
@@ -96,7 +105,10 @@ export async function classifyCampaignContacts(
       continue
     }
 
-    rows.push({ contactId, personName, email, status: 'ready', campaignContactId: existingCc?.id })
+    rows.push({
+      contactId, personName, email, status: 'ready', campaignContactId: existingCc?.id,
+      emailConfidence: contact?.email_confidence ?? null,
+    })
   }
 
   return {

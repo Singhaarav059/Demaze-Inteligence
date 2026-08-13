@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { discoverDecisionMakers } from '@/lib/outbound/decision-maker-discovery/provider-factory'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -44,8 +45,22 @@ export async function GET(req: NextRequest) {
   // exist yet on a DB that hasn't run migration 015, and a missing cache
   // must never block the caller's fallback (a fresh search), same
   // "graceful degradation" discipline this repo uses for every other
-  // optional/secondary data source.
-  if (error || !data) {
+  // optional/secondary data source. But a real error (as opposed to the
+  // ordinary "nothing cached yet" case, which is `error: null, data: null`)
+  // is worth knowing about — a silently-broken cache means every resumed
+  // Decision Makers visit re-runs a real, paid provider search instead of
+  // reusing the last one. Found live (2026-08-13 audit): migration 015 had
+  // never actually been applied, so every read/write here was silently
+  // no-op'ing — logged now so that class of problem shows up in server
+  // logs instead of only being discoverable by a manual DB probe.
+  if (error) {
+    logger.warn('decision-maker-search-cache', 'Cache read failed, falling back to no-cache', {
+      sourceRunId,
+      error: error.message,
+    })
+    return NextResponse.json({ success: true, cached: null })
+  }
+  if (!data) {
     return NextResponse.json({ success: true, cached: null })
   }
 
@@ -109,10 +124,20 @@ export async function POST(req: NextRequest) {
   // failure (migration 015 not yet applied, transient DB error) must not
   // turn that into an error response. Silently no-ops when the caller
   // didn't send a sourceRunId (batch mode, see useAutoGtmFlow.ts).
+  //
+  // The upsert's own returned `error` IS checked and logged now (it wasn't
+  // before) — a PostgREST-level failure (e.g. the table not existing)
+  // resolves normally rather than throwing, so the try/catch below alone
+  // never caught it; this cache was silently no-op'ing on every call as a
+  // result. Found live (2026-08-13 audit): migration 015 had never been
+  // applied to the database, so `outbound_decision_maker_searches` didn't
+  // exist and every write here failed with PGRST205, invisibly, forever.
+  // Non-fatal either way — logging, not throwing, keeps the "never fails
+  // the response" contract intact.
   if (typeof sourceRunId === 'string' && sourceRunId.trim()) {
     try {
       const supabase = createServerClient()
-      await supabase.from('outbound_decision_maker_searches').upsert(
+      const { error: cacheWriteError } = await supabase.from('outbound_decision_maker_searches').upsert(
         {
           source_run_id: sourceRunId,
           company_domain: domain,
@@ -126,8 +151,17 @@ export async function POST(req: NextRequest) {
         },
         { onConflict: 'source_run_id' }
       )
-    } catch {
-      // Non-fatal, see comment above.
+      if (cacheWriteError) {
+        logger.warn('decision-maker-search-cache', 'Cache write failed, result was not cached', {
+          sourceRunId,
+          error: cacheWriteError.message,
+        })
+      }
+    } catch (err) {
+      logger.warn('decision-maker-search-cache', 'Cache write threw, result was not cached', {
+        sourceRunId,
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 

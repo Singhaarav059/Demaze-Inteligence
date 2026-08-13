@@ -302,15 +302,28 @@ export default function AutoGtmFlowPage() {
       disabled: !batchHasProgress || flow.batchRunning || flow.contacts.length === 0,
     }
   } else if (flow.step === 2) {
+    // FIXED (audit follow-up): this used to commit whenever dmSelectedCount
+    // > 0, with no check of whether contacts already exist for this run —
+    // unlike the auto-pilot effect above (step 2's own useEffect), which
+    // has always guarded commitSelected() behind `flow.contacts.length ===
+    // 0`. On a resumed run with a cached decision-maker search,
+    // DecisionMakerFinder pre-selects every cached candidate regardless of
+    // which ones were already committed as contacts, so clicking this
+    // manual button (rather than letting auto-pilot handle it) could
+    // re-add them as duplicates — outbound_contacts has no uniqueness
+    // constraint. Now mirrors the auto-pilot guard exactly, so the manual
+    // fallback button can never diverge from what auto-pilot would have
+    // done.
+    const willCommit = flow.inputMode === 'single' && flow.contacts.length === 0 && dmSelectedCount > 0
     nextAction = {
-      label: `Continue to Contact Info (${flow.contacts.length + (flow.inputMode === 'single' ? dmSelectedCount : 0)})`,
+      label: `Continue to Contact Info (${willCommit ? flow.contacts.length + dmSelectedCount : flow.contacts.length})`,
       onClick: async () => {
         // Single-company mode: whoever's currently checked in the Decision
         // Makers list gets added as a contact right here, as part of moving
         // forward — no separate "Add Selected as Contacts" click needed.
         // Batch mode already added every candidate during its own research
         // loop, so there's nothing to commit here.
-        if (flow.inputMode === 'single' && dmSelectedCount > 0) {
+        if (willCommit) {
           setCommittingDm(true)
           try {
             await decisionMakerRef.current?.commitSelected()

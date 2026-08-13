@@ -60,6 +60,10 @@ interface ReviewRow {
   suppressionReason?: 'bounced' | 'unsubscribed' | 'manual'
   campaignContactId?: string
   campaignContactStatus?: string
+  // Informational only — see campaign-review.ts's own comment on this
+  // field. A 'low' value never changes `status`, it's shown as an
+  // additional badge on an otherwise-'ready' row.
+  emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
 }
 
 interface ReviewSummary {
@@ -280,6 +284,15 @@ export function ReviewSendStep({
                   <Badge className={`text-[10px] gap-1 ${meta.className}`}>
                     <Icon className="size-3" /> {meta.label}
                   </Badge>
+                  {row.status === 'ready' && row.emailConfidence === 'low' && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px]"
+                      title="This email was found with low confidence — consider double-checking it before sending."
+                    >
+                      Unverified email
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground/70 truncate">{row.email ?? row.reason ?? '—'}</p>
                 {row.status !== 'ready' && row.reason && row.email && (
