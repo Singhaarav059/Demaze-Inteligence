@@ -14,9 +14,10 @@
 // (GlassCard header, framer-motion stagger, semantic-colored status
 // badges) already applied to the Warm-Up/Follow-ups/Campaigns pages.
 //
-// Resume always lands on step 4 (Outreach & Send) — every row here has, by
-// construction, already reached that step at least once (a campaign only
-// ever gets created from there), so this is never a guess.
+// Resume always lands on step 6 (Track & Follow Up, set by page.tsx's own
+// onResume callback) — every row here has, by construction, already reached
+// Review & Send at least once (a campaign only ever gets created from
+// there), so this is never a guess.
 // ============================================================
 
 import { useEffect, useState } from 'react'

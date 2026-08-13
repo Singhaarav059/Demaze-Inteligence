@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// TrackFollowUpStep — Auto Flow's "Track & Follow Up" step (step 5)
+// TrackFollowUpStep — Auto Flow's "Track & Follow Up" step (step 6)
 // ============================================================
 // Shows THIS company's contacts (the ones just sent to in step 4) with
 // their real send/open/reply status and manual follow-up actions —
