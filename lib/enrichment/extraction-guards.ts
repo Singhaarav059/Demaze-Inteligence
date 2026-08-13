@@ -153,6 +153,47 @@ export function extractQueryTopic(query: string): string {
   return m ? m[1] : query
 }
 
+// ── Adversarial-content guard (2026-08-13) ────────────────────────
+// A third, independent gap from the two documented at the top of this
+// file — mentionsCompany() correctly lets a result through when it's
+// genuinely about the researched company, but "genuinely about the
+// company" isn't the same as "legitimate business evidence." Found live:
+// discoverICPSegmentsViaSearchSynthesis (competitor-discovery.ts's sibling
+// module in icp-generator.ts) fed a Facebook page titled "As Agri and Aqua
+// LLP (ASAA) SCAM" to the LLM, which quoted a real, genuine sentence from
+// it ("...has scammed thousands of people... in the name of helping
+// investors...") and — despite the quote being real and correctly
+// verified — misread a fraud allegation as evidence that the company has
+// an "Investors" customer segment. Quote-verification (lib/pipeline/
+// quote-verification.ts) proves a claimed quote is REAL TEXT from a REAL
+// SOURCE; it says nothing about whether the LLM's INTERPRETATION of that
+// text is sound. This is the fix for that gap: exclude scam/fraud/
+// complaint-shaped sources from the candidate pool entirely, before either
+// the regex extractors or an LLM synthesis call ever sees them — the same
+// "never let contaminated content reach extraction" principle
+// mentionsCompany() already applies, just for a different contamination
+// shape. Kept intentionally narrow (strong, unambiguous fraud/scam
+// language) rather than a broad "negative sentiment" filter — a company
+// facing a real supply-chain problem or product recall is still
+// legitimate business content elsewhere in this pipeline; this guard only
+// targets content where the company itself is accused of defrauding
+// people, which can never legitimately support a "competitor" or "customer
+// segment" claim.
+const ADVERSARIAL_CONTENT_PATTERN =
+  /\b(?:scam(?:med|ming)?|fraud(?:ulent|ster)?|ripoff|rip-off|ponzi|duped|swindle[d]?|cheat(?:ed|ing)\b|fled\s+(?:away\s+)?with|absconded|defraud(?:ed|ing)?|consumer\s+complaint|FIR\s+filed|blacklisted|fake\s+company|money\s+laundering)\b/i
+
+export function looksLikeAdversarialContent(text: string): boolean {
+  return ADVERSARIAL_CONTENT_PATTERN.test(text)
+}
+
+// Applied AFTER filterRelevantResults/filterTopicallyRelevantResults (the
+// existing relevance gates), not instead of — a result must first be
+// genuinely relevant, then also not be scam/fraud-shaped, to reach
+// extraction or synthesis.
+export function filterAdversarialContent<T extends { title: string; content: string }>(results: T[]): T[] {
+  return results.filter(r => !looksLikeAdversarialContent(`${r.title} ${r.content}`))
+}
+
 // True if `text` shares real topical overlap with `topic` (the offering/
 // positioning phrase a search query was built from), on word boundaries —
 // same word-boundary discipline as mentionsCompany(), not substring

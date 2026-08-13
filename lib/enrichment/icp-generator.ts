@@ -34,9 +34,10 @@
 
 import { searchTavily, searchSerper } from './discovery-engine'
 import { isSelfName } from './competitor-discovery'
-import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
+import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase, filterAdversarialContent } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 import { getCompletion } from '@/lib/ai/provider-factory'
+import { verifyQuoteInContent, type QuoteMatchTier } from '@/lib/pipeline/quote-verification'
 
 export type ICPConfidence = 'high' | 'medium' | 'low'
 export type ICPSufficiency = 'sufficient' | 'insufficient'
@@ -79,7 +80,10 @@ export interface ICPSegment {
   // AI direct-knowledge rebuild (2026-08-13) — same field/rationale as
   // CompetitorProfile.source in competitor-discovery.ts. 'ai_knowledge'
   // entries have no search snippet to cite (source_urls always []).
-  source?: 'search' | 'ai_knowledge'
+  // 'search_synthesis' (added same day) = discoverICPSegmentsViaSearchSynthesis's
+  // LLM-reads-real-search-results pass — source_urls populated from
+  // wherever the quote-verified evidence actually came from.
+  source?: 'search' | 'ai_knowledge' | 'search_synthesis'
 }
 
 // Top-level result of discoverICPSegments(). Mirrors CompetitorDiscoveryResult's
@@ -359,29 +363,28 @@ const MAX_SNIPPETS_PER_CANDIDATE = 2
 // appear discards every legitimate result by construction. Found live
 // 2026-07-16 running demazetech.com: the offering pass returned 15 real
 // results, 100% filtered out by this gate before extraction ran.
-async function runICPDiscovery(
+// Extracted 2026-08-13 from runICPDiscovery's own body (unchanged
+// behavior/messages) — same reasoning as competitor-discovery.ts's
+// identical extraction, so discoverICPSegmentsViaSearchSynthesis below can
+// reuse this fetch+relevance-filter step instead of duplicating it a third
+// time.
+async function fetchRelevantICPSearchResults(
   queries: string[],
   companyName: string,
-  domain: string,
   emptyQueriesReason: string,
-  requireCompanyMention: boolean = true,
-): Promise<ICPDiscoveryResult> {
+  requireCompanyMention: boolean,
+): Promise<
+  | { results: Array<{ title: string; url: string; content: string }>; rawResultCount: number }
+  | { insufficientReason: string }
+> {
   const tavilyKey = process.env.TAVILY_API_KEY
   const serperKey = process.env.SERPER_API_KEY
 
-  if (!tavilyKey && !serperKey) {
-    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
-  }
+  if (!tavilyKey && !serperKey) return { insufficientReason: 'no search API configured' }
   if (!companyName || companyName.trim().length === 0) {
-    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: 'no company name available to search for customer segments', candidates_considered: 0 }
+    return { insufficientReason: 'no company name available to search for customer segments' }
   }
-  if (queries.length === 0) {
-    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: emptyQueriesReason, candidates_considered: 0 }
-  }
-
-  // domain unused for extraction itself (segments are names, not URLs) but
-  // kept as a parameter for parity with discoverCompetitors/discoverAndFetchExternalSources.
-  void domain
+  if (queries.length === 0) return { insufficientReason: emptyQueriesReason }
 
   let resultsPerQuery: Array<Array<{ title: string; url: string; content: string }>>
   let allResults: Array<{ title: string; url: string; content: string }>
@@ -389,15 +392,11 @@ async function runICPDiscovery(
     resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
     allResults = resultsPerQuery.flat()
   } catch (e) {
-    return {
-      segments: [], candidates: [], sufficiency: 'insufficient',
-      reason: `search failed: ${e instanceof Error ? e.message : String(e)}`,
-      candidates_considered: 0,
-    }
+    return { insufficientReason: `search failed: ${e instanceof Error ? e.message : String(e)}` }
   }
 
   if (allResults.length === 0) {
-    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: 'search returned no results for any ICP query', candidates_considered: 0 }
+    return { insufficientReason: 'search returned no results for any ICP query' }
   }
 
   // Relevance gate. Two different shapes depending on which pass this is:
@@ -420,20 +419,49 @@ async function runICPDiscovery(
   //    pass (an unrelated "Top Data Analytics Companies" listicle for an
   //    industrial-IoT company).
   const rawResultCount = allResults.length
-  if (requireCompanyMention) {
-    allResults = filterRelevantResults(allResults, companyName)
-  } else {
-    allResults = resultsPerQuery.flatMap((results, i) => filterTopicallyRelevantResults(results, [extractQueryTopic(queries[i])]))
-  }
-  if (allResults.length === 0) {
+  const filtered = requireCompanyMention
+    ? filterRelevantResults(allResults, companyName)
+    : resultsPerQuery.flatMap((results, i) => filterTopicallyRelevantResults(results, [extractQueryTopic(queries[i])]))
+
+  if (filtered.length === 0) {
     return {
-      segments: [], candidates: [], sufficiency: 'insufficient',
-      reason: requireCompanyMention
+      insufficientReason: requireCompanyMention
         ? `${rawResultCount} result(s) found but none mention "${companyName}" by name`
         : `${rawResultCount} result(s) found but none were topically relevant to the searched offering(s)`,
-      candidates_considered: 0,
     }
   }
+
+  // Adversarial-content gate (2026-08-13) — same fix, same reasoning, as
+  // competitor-discovery.ts's identical addition. This is literally the
+  // module that surfaced the bug live: a Facebook "SCAM" page's real,
+  // genuinely-relevant, genuinely-quotable content about a fraud
+  // allegation was misread as evidence of an "Investors" customer segment
+  // — see extraction-guards.ts's looksLikeAdversarialContent header.
+  const relevantCount = filtered.length
+  const clean = filterAdversarialContent(filtered)
+  if (clean.length === 0) {
+    return { insufficientReason: `${relevantCount} relevant result(s) found but all were excluded as scam/fraud/complaint content, not legitimate customer-segment evidence` }
+  }
+
+  return { results: clean, rawResultCount }
+}
+
+async function runICPDiscovery(
+  queries: string[],
+  companyName: string,
+  domain: string,
+  emptyQueriesReason: string,
+  requireCompanyMention: boolean = true,
+): Promise<ICPDiscoveryResult> {
+  // domain unused for extraction itself (segments are names, not URLs) but
+  // kept as a parameter for parity with discoverCompetitors/discoverAndFetchExternalSources.
+  void domain
+
+  const fetchResult = await fetchRelevantICPSearchResults(queries, companyName, emptyQueriesReason, requireCompanyMention)
+  if ('insufficientReason' in fetchResult) {
+    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: fetchResult.insufficientReason, candidates_considered: 0 }
+  }
+  const allResults = fetchResult.results
 
   // ── Extract + group raw candidates by normalized name ─────────────
   const grouped = new Map<string, { displayName: string; mention_count: number; source_urls: Set<string>; snippets: string[]; explicit_serve_framing: boolean }>()
@@ -802,6 +830,208 @@ export async function discoverICPSegmentsFromKnowledge(
     candidates: [],
     sufficiency: 'sufficient',
     reason: `AI direct-knowledge: ${capped.length} of ${raw.length} confidently-known segment(s) survived filtering`,
+    candidates_considered: raw.length,
+    rejected_candidates: rejected.length > 0 ? rejected : undefined,
+  }
+}
+
+// ============================================================
+// Search-grounded LLM synthesis (2026-08-13)
+// ============================================================
+// Same rebuild, same motivation, as competitor-discovery.ts's
+// discoverCompetitorsViaSearchSynthesis — see that function's header
+// comment for the full history (the AS Agri and Aqua / Gemini-app-search-
+// grounding investigation). Fetches real search results (reusing
+// fetchRelevantICPSearchResults, the exact fetch+relevance-filter step
+// runICPDiscovery's base pass already uses) and asks an LLM to synthesize
+// target-customer segments STRICTLY from that content, with every claim
+// mechanically quote-verified via verifyQuoteInContent() before being
+// trusted — a claim whose quote doesn't verify is discarded, not flagged.
+//
+// Wired as the MIDDLE tier in route.ts: knowledge declines -> this ->
+// still insufficient -> falls through to the existing base-pass +
+// business-profile/offering-supplement pipeline (unchanged) as the final
+// safety net.
+
+const ICP_SYNTHESIS_MAX_RESULTS = 8
+const ICP_SYNTHESIS_MAX_CONTENT_PER_RESULT = 900
+
+function buildICPSearchContentBlock(results: Array<{ title: string; url: string; content: string }>): string {
+  return results
+    .slice(0, ICP_SYNTHESIS_MAX_RESULTS)
+    .map(r => `[SOURCE: ${r.url}]\n${r.title}\n${r.content.slice(0, ICP_SYNTHESIS_MAX_CONTENT_PER_RESULT)}`)
+    .join('\n\n')
+}
+
+const ICP_SYNTHESIS_SYSTEM_PROMPT = `You identify a company's real target-customer segments STRICTLY from search-result content you are given — you never use your own general knowledge, only what the provided content actually states. Every segment you name must be backed by a real, verbatim quote copied exactly from the provided content.`
+
+function buildICPSynthesisUserPrompt(companyName: string, contentBlock: string): string {
+  return `
+Company: ${companyName}
+
+Below are real web search results about this company. Identify real target-customer segments THIS company sells to — who actually buys from them — based only on what this specific content states.
+
+Only include a segment if you can quote the EXACT text, copied verbatim, from the search results below that supports it. Do not paraphrase — copy the exact wording as it appears. Do not include a segment based on your own general industry knowledge; only what this specific content states.
+
+[SEARCH RESULTS]
+${contentBlock}
+[END SEARCH RESULTS]
+
+Return ONLY this JSON object, no other text:
+{
+  "segments": [
+    {
+      "name": "Short segment name, e.g. 'Automotive OEMs'",
+      "reason": "1-2 sentences explaining why this is a real segment, based only on the content above",
+      "evidence_quote": "exact verbatim text copied from the search results above that supports this"
+    }
+  ]
+}
+
+Rules:
+- Maximum ${MAX_SEGMENTS} segments.
+- Describe WHO buys, not what the company itself does.
+- If nothing in the provided content names a real customer segment, return an empty array — do not guess.
+- "evidence_quote" must be an exact substring of the search results above, not a paraphrase or summary — a fabricated or paraphrased quote will be discarded.
+- Ignore any content describing scams, fraud, complaints, lawsuits, or accusations of wrongdoing against ${companyName} — never classify a victim, accuser, or subject of such content as a "customer segment." A person the company allegedly defrauded is not a customer.
+`.trim()
+}
+
+interface SynthesisSegmentRaw {
+  name?: unknown
+  reason?: unknown
+  evidence_quote?: unknown
+}
+
+function findSupportingICPSources(
+  quote: string,
+  results: Array<{ title: string; url: string; content: string }>,
+): { tier: QuoteMatchTier; urls: string[] } {
+  let bestTier: QuoteMatchTier = 'none'
+  // Set, not a plain array push — same dedupe fix as competitor-discovery.ts's
+  // findSupportingSources (a real bug caught by that file's own test suite):
+  // the same URL can legitimately appear more than once in `results`.
+  const urls = new Set<string>()
+  for (const r of results) {
+    const { tier } = verifyQuoteInContent(quote, `${r.title} ${r.content}`)
+    if (tier === 'none') continue
+    urls.add(r.url)
+    if (tier === 'exact') bestTier = 'exact'
+    else if (bestTier !== 'exact') bestTier = 'close'
+  }
+  return { tier: bestTier, urls: Array.from(urls) }
+}
+
+/**
+ * Fetches real search results (same fetch+relevance-filter step
+ * runICPDiscovery's base pass uses) and asks an LLM to synthesize
+ * target-customer segments STRICTLY from that content, with every claim
+ * mechanically quote-verified against the actual fetched text before being
+ * trusted. Never throws; returns sufficiency: 'insufficient' on any
+ * failure, empty search results, or all-quotes-unverified outcome —
+ * route.ts falls back to the base+supplement search pipeline in that case.
+ */
+export async function discoverICPSegmentsViaSearchSynthesis(
+  companyName: string,
+  domain: string,
+): Promise<ICPDiscoveryResult> {
+  const fetchResult = await fetchRelevantICPSearchResults(
+    buildICPQueries(companyName),
+    companyName,
+    'no company name available to search for customer segments',
+    true,
+  )
+  if ('insufficientReason' in fetchResult) {
+    return { segments: [], candidates: [], sufficiency: 'insufficient', reason: fetchResult.insufficientReason, candidates_considered: 0 }
+  }
+  const { results } = fetchResult
+  void domain
+
+  let response
+  try {
+    response = await getCompletion({
+      systemPrompt: ICP_SYNTHESIS_SYSTEM_PROMPT,
+      userPrompt: buildICPSynthesisUserPrompt(companyName, buildICPSearchContentBlock(results)),
+      maxTokens: 2048,
+      temperature: 0.1,
+      jsonMode: true,
+    })
+  } catch (e) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `search-synthesis call failed: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  let parsed: { segments?: unknown }
+  try {
+    const trimmed = response.content.trim()
+    const stripped = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    parsed = JSON.parse(start !== -1 && end > start ? stripped.slice(start, end + 1) : stripped)
+  } catch (e) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `search-synthesis response unparseable: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  if (!Array.isArray(parsed.segments) || parsed.segments.length === 0) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: 'search-synthesis found no customer segment named in the fetched search content',
+      candidates_considered: 0,
+    }
+  }
+
+  const raw = parsed.segments as SynthesisSegmentRaw[]
+  const rejected: Array<{ name: string; reason: string }> = []
+  const survivors: ICPSegment[] = []
+
+  for (const item of raw) {
+    const name = typeof item.name === 'string' ? item.name.trim() : ''
+    if (!name) continue
+    const rejectReason = classifySegmentRejection(name, companyName)
+    if (rejectReason) {
+      rejected.push({ name, reason: rejectReason })
+      continue
+    }
+    const quote = typeof item.evidence_quote === 'string' ? item.evidence_quote.trim() : ''
+    const { tier, urls } = quote ? findSupportingICPSources(quote, results) : { tier: 'none' as QuoteMatchTier, urls: [] }
+    if (tier === 'none') {
+      rejected.push({ name, reason: 'evidence quote could not be verified against the search content it was shown' })
+      continue
+    }
+    const reason = typeof item.reason === 'string' ? item.reason.trim() : ''
+    survivors.push({
+      name,
+      reason: reason || `Found via search-grounded synthesis: "${quote.slice(0, 150)}"`,
+      signals: [quote.slice(0, 300)],
+      confidence: tier === 'exact' ? 'high' : 'medium',
+      source_urls: urls,
+      source: 'search_synthesis',
+    })
+  }
+
+  const capped = survivors.slice(0, MAX_SEGMENTS)
+
+  if (capped.length === 0) {
+    return {
+      segments: [], candidates: [], sufficiency: 'insufficient',
+      reason: `LLM returned ${raw.length} candidate(s) but all were rejected (self-name/generic/unverified quote)`,
+      candidates_considered: raw.length,
+      rejected_candidates: rejected,
+    }
+  }
+
+  return {
+    segments: capped,
+    candidates: [],
+    sufficiency: 'sufficient',
+    reason: `search-synthesis: ${capped.length} of ${raw.length} candidate(s) survived quote verification`,
     candidates_considered: raw.length,
     rejected_candidates: rejected.length > 0 ? rejected : undefined,
   }

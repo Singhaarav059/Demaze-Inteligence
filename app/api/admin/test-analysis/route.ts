@@ -34,8 +34,8 @@ import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enric
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
-import { discoverCompetitorsFromOfferings, discoverCompetitorsFromBusinessProfile, discoverCompetitorsFromKnowledge, mergeCompetitorResults, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
-import { discoverICPSegments, discoverICPSegmentsFromOfferings, discoverICPSegmentsFromBusinessProfile, discoverICPSegmentsFromKnowledge, mergeICPResults, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
+import { discoverCompetitorsFromOfferings, discoverCompetitorsFromBusinessProfile, discoverCompetitorsFromKnowledge, discoverCompetitorsViaSearchSynthesis, mergeCompetitorResults, type CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
+import { discoverICPSegments, discoverICPSegmentsFromOfferings, discoverICPSegmentsFromBusinessProfile, discoverICPSegmentsFromKnowledge, discoverICPSegmentsViaSearchSynthesis, mergeICPResults, type ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
 import { discoverMarketIntelligence, type MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
 import { extractBusinessProfile, emptyBusinessProfile, isEmptyBusinessProfile, type CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 import { matchProofPoints } from '@/lib/knowledge/proof-point-matcher'
@@ -684,11 +684,22 @@ export async function POST(req: NextRequest) {
     // narration step downstream only enriches already-found candidates, it
     // never filters bad ones out).
     //
-    // The business-profile-driven search pass (2026-07-16 rebuild) below is
-    // now the FALLBACK, used only when the knowledge pass declines
-    // (has_knowledge=false, a timeout, or every returned name got filtered) —
-    // unchanged otherwise from how it worked before this session.
+    // Search-synthesis rebuild (same day, later): a live test against a
+    // genuinely obscure benchmark company (Ace Pipeline vs AS Agri and
+    // Aqua) showed the knowledge pass's decline mechanism is honest for a
+    // company with near-zero web footprint (correctly declined) but not
+    // reliable for a smaller real company operating in a well-documented
+    // industry (confidently answered with plausible-but-unverifiable
+    // names). discoverCompetitorsViaSearchSynthesis is now a SECOND
+    // fallback tier — real fetched search content, LLM synthesis, every
+    // claim quote-verified against that real content (see its header
+    // comment in competitor-discovery.ts). The business-profile-driven
+    // regex-extraction search pass (2026-07-16 rebuild) below is now the
+    // THIRD and final tier, used only when BOTH the knowledge pass and the
+    // search-synthesis pass decline — unchanged otherwise from how it
+    // worked before this session.
     const COMPETITOR_KNOWLEDGE_TIMEOUT_MS = 20_000
+    const COMPETITOR_SYNTHESIS_TIMEOUT_MS = 20_000
     const COMPETITOR_DISCOVERY_TIMEOUT_MS = 12_000
     const OFFERING_DISCOVERY_TIMEOUT_MS = 8_000
     const competitorDiscoveryStart = Date.now()
@@ -702,14 +713,41 @@ export async function POST(req: NextRequest) {
       }), COMPETITOR_KNOWLEDGE_TIMEOUT_MS)),
     ])
 
+    // Hoisted out of the two cascading `if` blocks below so the final
+    // reason-prefix line (after both tiers) can still reference whichever
+    // ones actually ran — a tier that never ran (knowledge already
+    // succeeded) leaves its variable null, filtered out of the prefix.
+    let knowledgeDeclineReason: string | null = null
+    let synthesisDeclineReason: string | null = null
+
     if (competitorDiscoveryResult.sufficiency !== 'sufficient') {
-      const knowledgeDeclineReason = competitorDiscoveryResult.reason
+      knowledgeDeclineReason = competitorDiscoveryResult.reason
+      // Middle tier: search-grounded LLM synthesis. Called lazily here
+      // (not kicked off eagerly alongside competitorKnowledgePromise) so a
+      // company the knowledge pass already succeeds for never pays for a
+      // search+LLM call it doesn't need.
+      competitorDiscoveryResult = await Promise.race([
+        discoverCompetitorsViaSearchSynthesis(companyNameFromScrape, domain).catch(e => ({
+          competitors: [], candidates: [], sufficiency: 'insufficient' as const,
+          reason: `discoverCompetitorsViaSearchSynthesis threw: ${e instanceof Error ? e.message : String(e)}`,
+          candidates_considered: 0,
+        })),
+        new Promise<CompetitorDiscoveryResult>(resolve => setTimeout(() => resolve({
+          competitors: [], candidates: [], sufficiency: 'insufficient',
+          reason: `search-synthesis pass timed out after ${COMPETITOR_SYNTHESIS_TIMEOUT_MS}ms`,
+          candidates_considered: 0,
+        }), COMPETITOR_SYNTHESIS_TIMEOUT_MS)),
+      ])
+    }
+
+    if (competitorDiscoveryResult.sufficiency !== 'sufficient') {
+      synthesisDeclineReason = competitorDiscoveryResult.reason
       // Business-understanding rebuild (2026-07-16): the business-profile-
       // driven pass (services + market positioning) is the search-based
-      // primary — never the company name. When the business profile came
-      // back empty (LLM call failed/timed out/found nothing), fall back to
-      // the narrower offering-grounded pass instead of returning no
-      // competitors at all.
+      // primary of this final tier — never the company name. When the
+      // business profile came back empty (LLM call failed/timed out/found
+      // nothing), fall back to the narrower offering-grounded pass instead
+      // of returning no competitors at all.
       if (!isEmptyBusinessProfile(businessProfile)) {
         competitorDiscoveryResult = await Promise.race([
           discoverCompetitorsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => ({
@@ -748,7 +786,7 @@ export async function POST(req: NextRequest) {
       // branch's own reason AND a possible mergeCompetitorResults/replace in
       // the offering fold above, so it's applied once, at the end, rather
       // than in the middle where a later reassignment could drop it.
-      competitorDiscoveryResult.reason = `AI direct-knowledge pass declined (${knowledgeDeclineReason}) — fell back to search: ${competitorDiscoveryResult.reason}`
+      competitorDiscoveryResult.reason = `AI direct-knowledge declined (${knowledgeDeclineReason}) — search-synthesis declined (${synthesisDeclineReason}) — fell back to regex search: ${competitorDiscoveryResult.reason}`
     }
 
     // Resolve a website per surfaced competitor (reuses website-discovery.ts's
@@ -793,11 +831,16 @@ export async function POST(req: NextRequest) {
     // AI direct-knowledge rebuild (2026-08-13): discoverICPSegmentsFromKnowledge
     // (kicked off earlier, alongside businessProfilePromise) is now the
     // PRIMARY path — see that function's header comment in icp-generator.ts.
-    // The self-referential "we serve X" base pass + business-profile/
-    // offering supplement (2026-07-16 rebuild) below is now the FALLBACK,
-    // used only when the knowledge pass declines — unchanged otherwise from
-    // how it worked before this session.
+    //
+    // Search-synthesis rebuild (same day, later): same rationale as the
+    // competitor version above — discoverICPSegmentsViaSearchSynthesis is
+    // now a SECOND fallback tier (real fetched search content, LLM
+    // synthesis, every claim quote-verified). The self-referential "we
+    // serve X" base pass + business-profile/offering supplement
+    // (2026-07-16 rebuild) below is now the THIRD and final tier, used only
+    // when BOTH the knowledge pass and the search-synthesis pass decline.
     const ICP_KNOWLEDGE_TIMEOUT_MS = 20_000
+    const ICP_SYNTHESIS_TIMEOUT_MS = 20_000
     const ICP_DISCOVERY_TIMEOUT_MS = 12_000
     const icpDiscoveryStart = Date.now()
 
@@ -810,8 +853,31 @@ export async function POST(req: NextRequest) {
       }), ICP_KNOWLEDGE_TIMEOUT_MS)),
     ])
 
+    // Hoisted out of the two cascading `if` blocks below, same reasoning as
+    // the competitor version above.
+    let icpKnowledgeDeclineReason: string | null = null
+    let icpSynthesisDeclineReason: string | null = null
+
     if (icpDiscoveryResult.sufficiency !== 'sufficient') {
-      const icpKnowledgeDeclineReason = icpDiscoveryResult.reason
+      icpKnowledgeDeclineReason = icpDiscoveryResult.reason
+      // Middle tier: search-grounded LLM synthesis. Called lazily here, same
+      // reasoning as discoverCompetitorsViaSearchSynthesis's call site.
+      icpDiscoveryResult = await Promise.race([
+        discoverICPSegmentsViaSearchSynthesis(companyNameFromScrape, domain).catch(e => ({
+          segments: [], candidates: [], sufficiency: 'insufficient' as const,
+          reason: `discoverICPSegmentsViaSearchSynthesis threw: ${e instanceof Error ? e.message : String(e)}`,
+          candidates_considered: 0,
+        })),
+        new Promise<ICPDiscoveryResult>(resolve => setTimeout(() => resolve({
+          segments: [], candidates: [], sufficiency: 'insufficient',
+          reason: `search-synthesis pass timed out after ${ICP_SYNTHESIS_TIMEOUT_MS}ms`,
+          candidates_considered: 0,
+        }), ICP_SYNTHESIS_TIMEOUT_MS)),
+      ])
+    }
+
+    if (icpDiscoveryResult.sufficiency !== 'sufficient') {
+      icpSynthesisDeclineReason = icpDiscoveryResult.reason
       // Base pass (self-referential "we serve X") kicked off pre-scrape,
       // same as before the business-understanding rebuild — unchanged.
       icpDiscoveryResult = await Promise.race([
@@ -827,8 +893,8 @@ export async function POST(req: NextRequest) {
       // available, offering-grounded otherwise — merged alongside the
       // self-referential base above, never replacing it. Target Segments
       // genuinely includes industries the company states it serves, so
-      // unlike competitors there's no "wrong primary pass" within the
-      // search fallback itself to fix, just a richer second source to add.
+      // unlike competitors there's no "wrong primary pass" within this
+      // final tier itself to fix, just a richer second source to add.
       const icpSupplementResult = !isEmptyBusinessProfile(businessProfile)
         ? await Promise.race([
             discoverICPSegmentsFromBusinessProfile(companyNameFromScrape, domain, businessProfile).catch(e => {
@@ -844,7 +910,7 @@ export async function POST(req: NextRequest) {
       if (icpSupplementResult) {
         icpDiscoveryResult = mergeICPResults(icpDiscoveryResult, icpSupplementResult)
       }
-      icpDiscoveryResult.reason = `AI direct-knowledge pass declined (${icpKnowledgeDeclineReason}) — fell back to search: ${icpDiscoveryResult.reason}`
+      icpDiscoveryResult.reason = `AI direct-knowledge declined (${icpKnowledgeDeclineReason}) — search-synthesis declined (${icpSynthesisDeclineReason}) — fell back to regex search: ${icpDiscoveryResult.reason}`
     }
 
     timing.icpDiscovery = Date.now() - icpDiscoveryStart

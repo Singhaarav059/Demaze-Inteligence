@@ -2717,6 +2717,164 @@ of India, Saudi Aramco, Indian Navy, Ministry of Defence) with real
 criteria per segment, closely matching the richness of the user's own
 manual chat test that prompted this extension.
 
+## RESOLVED 2026-08-13 (same day) — third discovery tier: search-grounded
+## LLM synthesis, for both Competitors and ICP segments
+Triggered by a live-testing session against genuinely obscure benchmark
+companies (Ace Pipeline, AS Agri and Aqua — the two companies this file's
+own "not tested live" gaps had flagged across the two entries above).
+Found a real, mixed result: the direct-knowledge path's decline mechanism
+worked correctly for AS Agri and Aqua (near-zero web footprint, honestly
+declined `has_knowledge: false`) but NOT reliably for Ace Pipeline (a real
+but smaller company operating in a well-documented industry — the model
+confidently named plausible-sounding, unverifiable competitors instead of
+declining). Separately, the user got a materially richer answer for AS
+Agri and Aqua by asking Google's Gemini consumer app directly — traced
+this to the app having live Google Search grounding on by default, which
+is a fundamentally different capability from `discoverCompetitorsFromKnowledge()`'s
+raw completion call (no search tool attached). That distinction — "what do
+you remember" vs. "what can you find and summarize" — is what this session
+built as a genuine third tier, not a replacement for either existing one.
+
+**Built**: `discoverCompetitorsViaSearchSynthesis()` (competitor-discovery.ts)
+and `discoverICPSegmentsViaSearchSynthesis()` (icp-generator.ts) — fetch
+real search results (reusing the exact same fetch+relevance-filter step the
+regex-extraction pipeline already used; extracted into
+`fetchRelevantSearchResults()`/`fetchRelevantICPSearchResults()` so both the
+old regex path and the new synthesis path share one fetch implementation,
+not two divergent copies), then ask an LLM to synthesize a competitor/
+segment list STRICTLY from that real content — instead of the brittle regex
+extractors (`extractVsPair`/`extractListAfterTrigger`/etc). The
+anti-hallucination discipline the old regex-grounded design relied on is
+preserved through a DIFFERENT mechanism: every claimed name must come with
+an `evidence_quote`, mechanically verified via `verifyQuoteInContent()`
+(`lib/pipeline/quote-verification.ts`, already built for exactly this
+"LLM claims a quote, verify it's real" pattern in normalize.ts's
+opportunities/pain-points paths) — a claim whose quote doesn't verify is
+DISCARDED, not flagged. This also restores real `source_urls` (something
+`discoverCompetitorsFromKnowledge()` structurally can't have), determined
+by checking which fetched result(s) the verified quote actually came from.
+New `source: 'search_synthesis'` value on both `CompetitorProfile.source`
+and `ICPSegment.source`.
+
+**Wired as the MIDDLE tier** in `route.ts`: knowledge declines → this tier
+(called lazily, not kicked off eagerly, so a company the knowledge pass
+already succeeds for never pays for the extra search+LLM call) → still
+insufficient → falls through to the existing regex-extraction pipeline
+(business-profile/offering pass for competitors; base "we serve X" +
+supplement for ICP) as the third and final safety net, unchanged. Decline-
+reason strings now chain across all three tiers for gate diagnostics
+(`"AI direct-knowledge declined (...) — search-synthesis declined (...) —
+fell back to regex search: ..."`).
+
+**Real bug found and fixed during testing, not just documented**: the
+first test run against Ace Pipeline surfaced duplicate URLs in
+`source_urls` (the same URL 4x) — root cause: `buildCompetitorQueries`
+produces 4 queries, and the same real page can legitimately rank for more
+than one of them, so the same URL appears more than once in the fetched
+`results` array; `findSupportingSources()`/`findSupportingICPSources()`
+were pushing to a plain array with no dedupe. Fixed by switching both to a
+`Set`. Caught by the new test suite itself (a mocked search returning one
+result reused across all 4 mocked queries reproduces this exactly), not by
+guessing.
+
+New test files `tests/competitor-discovery-synthesis.test.ts` (9
+assertions) and `tests/icp-generator-synthesis.test.ts` (8 assertions,
+including the adversarial-content regression below), mocking
+`getCompletion` and `discovery-engine`'s `searchTavily`/`searchSerper`
+(same pattern as `tests/website-discovery.test.ts`).
+
+**Verified**: `tsc --noEmit` clean, full suite 717/717 (702 pre-existing +
+15 new) BEFORE the adversarial-content fix below; see that entry for the
+final 724/724 count. **Live-verified with real Tavily/Gemini quota**
+against `AS Agri and Aqua` (explicit user confirmation given first,
+throwaway script deleted after): the competitor synthesis tier surfaced 5
+real, correctly-sourced competitors (Budmore Agro Industries, Dindor Farm
+Private Limited, E-fasal, Inevitable Tech, FutureFarms) from real
+startup-directory sites (ynos.in, tracxn.com) that the knowledge-only path
+had nothing on — exactly the improvement this tier was built for.
+
+## RESOLVED 2026-08-13 (same day) — adversarial-content bug found via the
+## same live test: quote-verification proves a quote is REAL, not that its
+## INTERPRETATION is sound
+The SAME live-verification run above surfaced a second, more serious
+finding on the ICP side: `discoverICPSegmentsViaSearchSynthesis` returned
+exactly one segment — `"Investors"`, `confidence: 'high'` — sourced from a
+Facebook page literally titled **"As Agri and Aqua LLP (ASAA) SCAM"**, with
+the quoted evidence being a real, genuine sentence from that page: *"AS
+Agri and Aqua LLP (ASAA) has scammed thousands of people and this advocate
+has fooled people in the name of helping investors and have fled away with
+lakhs."* The quote-verification check worked exactly as designed — the
+quote genuinely is real text from a real source — but the LLM completely
+misread what the quote MEANS: a fraud allegation naming victims got
+classified as evidence of a legitimate "Investors" customer segment. This
+is a fundamentally different failure mode than anything the quote-
+verification discipline (built for opportunities/pain-points, reused here)
+was ever designed to catch: it proves REALNESS, not CORRECTNESS of
+interpretation. Had this reached a real saved run, it would have rendered
+as "Target segment: Investors, confidence: high" for a company with public
+fraud accusations — actively wrong and reputationally risky, not merely a
+weak/generic signal.
+
+**Fixed, two layers, same principle as `mentionsCompany()`'s existing
+"never let contaminated content reach extraction" discipline, just for a
+new contamination shape**:
+1. **Source-level filter (primary defense)** — new
+   `looksLikeAdversarialContent()` / `filterAdversarialContent()` in
+   `lib/enrichment/extraction-guards.ts` (shared by both competitor-
+   discovery.ts and icp-generator.ts, same file/pattern as `mentionsCompany`).
+   A regex over strong, unambiguous fraud/scam vocabulary (scammed, fraud,
+   ripoff, ponzi, duped, cheated, fled with, absconded, defrauded, consumer
+   complaint, FIR filed, blacklisted, fake company, money laundering) —
+   deliberately narrow, not a broad negative-sentiment filter: a company
+   facing a real supply-chain problem or product recall is still legitimate
+   business content elsewhere in this pipeline; this guard only targets
+   content where the company itself is accused of defrauding people, which
+   can never legitimately support a competitor or customer-segment claim.
+   Wired into `fetchRelevantSearchResults()`/`fetchRelevantICPSearchResults()`
+   (the shared fetch step from the session above) — applied AFTER the
+   existing relevance gate, not instead of, so this benefits ALL FOUR
+   consumers automatically (both regex-extraction passes AND both new
+   synthesis passes), not just the module that happened to surface the bug.
+2. **Prompt-level instruction (defense in depth)** — both synthesis
+   prompts gained an explicit rule: ignore scam/fraud/complaint/lawsuit
+   content, and never classify a victim or accuser as a competitor or
+   customer segment. Catches any case that slips past the keyword filter
+   (euphemistic language, a gap in the vocabulary list) — the source filter
+   is the primary defense, this is the backstop, not the reverse.
+
+New regression tests: `tests/extraction-guards.test.ts` gained 5 assertions
+for the new guards directly (the exact live bug content, common fraud/
+complaint vocabulary variants, two non-regression cases — ordinary
+legitimate content, and legitimate-but-negative content like a product
+recall, both correctly NOT flagged — and the filter function itself).
+Both `tests/competitor-discovery-synthesis.test.ts` and
+`tests/icp-generator-synthesis.test.ts` gained a dedicated regression test
+reproducing the exact live-found content shape, asserting `getCompletion`
+is never even called when every relevant result is scam-shaped.
+
+**Verified**: `tsc --noEmit` clean, full suite 724/724 (717 pre-existing +
+7 new — 5 in extraction-guards.test.ts, 1 each in the two synthesis test
+files). **Re-verified live against the exact real case that surfaced the
+bug** (same AS Agri and Aqua call, explicit confirmation given first,
+throwaway script deleted after): the scam Facebook page no longer reaches
+the LLM at all; the ICP synthesis pass now correctly surfaces a legitimate
+segment instead — **"Farmers and Land Owners"**, sourced from a real
+business article (primeview.co), quoting the company's own stated
+profit-sharing farming model ("We help the poor farmer and land owners
+implement farming using our technics and technology and we share the
+profits") — no scam content, no misclassification. The competitor
+synthesis pass on the same re-run was unaffected (its own sources were
+never scam-shaped), still correctly surfacing the same 5 real competitors
+as the first run.
+
+**Not done**: the adversarial-content vocabulary list is a first pass, not
+exhaustive — a future live run surfacing a different euphemism or fraud-
+adjacent framing that slips past both the keyword filter and the prompt
+instruction should be treated as a vocabulary gap to extend, same
+discipline as every other keyword-list guard in this codebase (matchesKeyword,
+NON_COMPETITOR_NAMES, etc.), not evidence the two-layer approach itself is
+wrong.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above

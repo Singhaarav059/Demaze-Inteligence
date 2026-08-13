@@ -65,13 +65,18 @@ export interface CompetitorProfile {
   confidence: CompetitorConfidence
   source_urls: string[]
   // AI direct-knowledge rebuild (2026-08-13) — which path produced this
-  // entry. 'search' = the existing search-extraction pipeline below
+  // entry. 'search' = the existing regex-extraction pipeline below
   // (source_urls populated, snippet-derived). 'ai_knowledge' =
   // discoverCompetitorsFromKnowledge()'s direct LLM ask (source_urls always
   // [], no snippet to cite — see that function's header for why this is an
-  // honest tradeoff, not a regression). Undefined for any pre-existing
-  // caller/test that doesn't care which path ran.
-  source?: 'search' | 'ai_knowledge'
+  // honest tradeoff, not a regression). 'search_synthesis' =
+  // discoverCompetitorsViaSearchSynthesis()'s LLM-reads-real-search-results
+  // pass (source_urls populated — the URLs of whichever fetched results the
+  // LLM's evidence_quote was independently verified against, same
+  // verification-then-cite pattern as source_urls always meant for the
+  // search path). Undefined for any pre-existing caller/test that doesn't
+  // care which path ran.
+  source?: 'search' | 'ai_knowledge' | 'search_synthesis'
 }
 
 // Top-level result of the (not-yet-implemented) discoverCompetitors() call.
@@ -119,9 +124,10 @@ export interface CompetitorDiscoveryResult {
 // ============================================================
 
 import { searchTavily, searchSerper } from './discovery-engine'
-import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase } from './extraction-guards'
+import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase, filterAdversarialContent } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 import { getCompletion } from '@/lib/ai/provider-factory'
+import { verifyQuoteInContent, type QuoteMatchTier } from '@/lib/pipeline/quote-verification'
 
 // ── Company-name word-boundary matching ─────────────────────────
 // Same LEGAL_SUFFIXES list as website-discovery.ts, deliberately NOT
@@ -445,25 +451,29 @@ const MAX_SNIPPETS_PER_CANDIDATE = 2
 // this gate before extraction ever ran. Self-name/directory/disqualifier
 // rejection (classifyRejection, below) still applies either way — that's
 // the correct place to exclude the researched company itself.
-async function runCompetitorDiscovery(
+// Extracted 2026-08-13 from runCompetitorDiscovery's own body (unchanged
+// behavior/messages) so discoverCompetitorsViaSearchSynthesis below can
+// reuse the identical fetch+relevance-filter step instead of duplicating
+// the Tavily→Serper fallback and requireCompanyMention branching a third
+// time. Returns either the filtered results, or a reason string for every
+// early-exit case runCompetitorDiscovery already handled inline.
+async function fetchRelevantSearchResults(
   queries: string[],
   companyName: string,
-  domain: string,
   emptyQueriesReason: string,
-  requireCompanyMention: boolean = true,
-): Promise<CompetitorDiscoveryResult> {
+  requireCompanyMention: boolean,
+): Promise<
+  | { results: Array<{ title: string; url: string; content: string }>; rawResultCount: number }
+  | { insufficientReason: string }
+> {
   const tavilyKey = process.env.TAVILY_API_KEY
   const serperKey = process.env.SERPER_API_KEY
 
-  if (!tavilyKey && !serperKey) {
-    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
-  }
+  if (!tavilyKey && !serperKey) return { insufficientReason: 'no search API configured' }
   if (!companyName || companyName.trim().length === 0) {
-    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'no company name available to search for competitors', candidates_considered: 0 }
+    return { insufficientReason: 'no company name available to search for competitors' }
   }
-  if (queries.length === 0) {
-    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: emptyQueriesReason, candidates_considered: 0 }
-  }
+  if (queries.length === 0) return { insufficientReason: emptyQueriesReason }
 
   let resultsPerQuery: Array<Array<{ title: string; url: string; content: string }>>
   let allResults: Array<{ title: string; url: string; content: string }>
@@ -471,15 +481,11 @@ async function runCompetitorDiscovery(
     resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
     allResults = resultsPerQuery.flat()
   } catch (e) {
-    return {
-      competitors: [], candidates: [], sufficiency: 'insufficient',
-      reason: `search failed: ${e instanceof Error ? e.message : String(e)}`,
-      candidates_considered: 0,
-    }
+    return { insufficientReason: `search failed: ${e instanceof Error ? e.message : String(e)}` }
   }
 
   if (allResults.length === 0) {
-    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: 'search returned no results for any competitor query', candidates_considered: 0 }
+    return { insufficientReason: 'search returned no results for any competitor query' }
   }
 
   // Relevance gate. Two different shapes depending on which pass this is:
@@ -501,20 +507,44 @@ async function runCompetitorDiscovery(
   //    IBM/Capgemini/PwC/Teradata) was extracted as if it named ATE Group's
   //    real competitors.
   const rawResultCount = allResults.length
-  if (requireCompanyMention) {
-    allResults = filterRelevantResults(allResults, companyName)
-  } else {
-    allResults = resultsPerQuery.flatMap((results, i) => filterTopicallyRelevantResults(results, [extractQueryTopic(queries[i])]))
-  }
-  if (allResults.length === 0) {
+  const filtered = requireCompanyMention
+    ? filterRelevantResults(allResults, companyName)
+    : resultsPerQuery.flatMap((results, i) => filterTopicallyRelevantResults(results, [extractQueryTopic(queries[i])]))
+
+  if (filtered.length === 0) {
     return {
-      competitors: [], candidates: [], sufficiency: 'insufficient',
-      reason: requireCompanyMention
+      insufficientReason: requireCompanyMention
         ? `${rawResultCount} result(s) found but none mention "${companyName}" by name`
         : `${rawResultCount} result(s) found but none were topically relevant to the searched offering(s)`,
-      candidates_considered: 0,
     }
   }
+
+  // Adversarial-content gate (2026-08-13) — applied AFTER relevance, not
+  // instead of. A result can genuinely mention the company and still be
+  // scam/fraud/complaint content that must never be treated as competitor
+  // evidence — see extraction-guards.ts's looksLikeAdversarialContent
+  // header for the live incident this fixes.
+  const relevantCount = filtered.length
+  const clean = filterAdversarialContent(filtered)
+  if (clean.length === 0) {
+    return { insufficientReason: `${relevantCount} relevant result(s) found but all were excluded as scam/fraud/complaint content, not legitimate competitor evidence` }
+  }
+
+  return { results: clean, rawResultCount }
+}
+
+async function runCompetitorDiscovery(
+  queries: string[],
+  companyName: string,
+  domain: string,
+  emptyQueriesReason: string,
+  requireCompanyMention: boolean = true,
+): Promise<CompetitorDiscoveryResult> {
+  const fetchResult = await fetchRelevantSearchResults(queries, companyName, emptyQueriesReason, requireCompanyMention)
+  if ('insufficientReason' in fetchResult) {
+    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: fetchResult.insufficientReason, candidates_considered: 0 }
+  }
+  const allResults = fetchResult.results
 
   // ── Extract + group raw candidates by normalized name ─────────────
   // domain is unused for extraction itself (candidates are names, not
@@ -903,6 +933,235 @@ export async function discoverCompetitorsFromKnowledge(
     candidates: [],
     sufficiency: 'sufficient',
     reason: `AI direct-knowledge: ${capped.length} of ${raw.length} confidently-known competitor(s) survived filtering`,
+    candidates_considered: raw.length,
+    rejected_candidates: rejected.length > 0 ? rejected : undefined,
+  }
+}
+
+// ============================================================
+// Search-grounded LLM synthesis (2026-08-13)
+// ============================================================
+// A THIRD path, sitting between the two above. Motivating case: the user
+// tested discoverCompetitorsFromKnowledge() live against "AS Agri and
+// Aqua" (a real benchmark company, near-zero web footprint) and it
+// correctly declined (has_knowledge: false) — the honest, intended
+// behavior for a company the model has no training-data recall of. The
+// user then asked the SAME question via Google's Gemini consumer app and
+// got a rich, accurate, well-organized answer. Investigated rather than
+// assumed: confirmed the user was using gemini.google.com, which has live
+// Google Search grounding on by default — that app wasn't testing model
+// recall at all, it was doing real-time search-then-synthesize, which is
+// architecturally closer to THIS codebase's own search pipeline than to
+// discoverCompetitorsFromKnowledge()'s raw completion call.
+//
+// This function is that missing capability: fetch real search results
+// (reusing fetchRelevantSearchResults, the exact same fetch+relevance-
+// filter step runCompetitorDiscovery already uses), then let an LLM READ
+// and SYNTHESIZE from that real content — instead of regex-extracting
+// candidate names via extractVsPair/extractListAfterTrigger/etc, which is
+// far more brittle than an LLM's own reading comprehension. The
+// anti-hallucination guardrail search-grounded regex extraction relied on
+// (never let an LLM introduce a name that isn't in the fetched content) is
+// preserved through a DIFFERENT mechanism here: every claimed competitor
+// must come with an `evidence_quote`, and that quote is mechanically
+// verified against the actual fetched result content via
+// verifyQuoteInContent() (lib/pipeline/quote-verification.ts, already
+// built and proven for exactly this "LLM claims a quote, verify it's real"
+// pattern in normalize.ts's opportunities/pain-points paths) — a claim
+// whose quote doesn't verify is DISCARDED, not just flagged. This also
+// restores something discoverCompetitorsFromKnowledge() structurally can't
+// have: real `source_urls`, since we can determine exactly which fetched
+// result(s) the verified quote came from.
+//
+// Wired as the MIDDLE tier in route.ts: knowledge declines -> this ->
+// still insufficient -> falls through to the existing regex-extraction
+// pipeline (runCompetitorDiscovery via discoverCompetitorsFromBusinessProfile
+// / discoverCompetitorsFromOfferings, unchanged) as the final safety net —
+// e.g. if the search API is down, or the LLM call itself fails.
+
+const SYNTHESIS_MAX_RESULTS = 8
+const SYNTHESIS_MAX_CONTENT_PER_RESULT = 900
+
+function buildSearchContentBlock(results: Array<{ title: string; url: string; content: string }>): string {
+  return results
+    .slice(0, SYNTHESIS_MAX_RESULTS)
+    .map(r => `[SOURCE: ${r.url}]\n${r.title}\n${r.content.slice(0, SYNTHESIS_MAX_CONTENT_PER_RESULT)}`)
+    .join('\n\n')
+}
+
+const SYNTHESIS_SYSTEM_PROMPT = `You identify real competitors of a company STRICTLY from search-result content you are given — you never use your own general knowledge, only what the provided content actually states. Every competitor you name must be backed by a real, verbatim quote copied exactly from the provided content.`
+
+function buildSynthesisUserPrompt(companyName: string, contentBlock: string): string {
+  return `
+Company: ${companyName}
+
+Below are real web search results about this company. Identify companies that this content explicitly names as competitors, rivals, or alternatives to ${companyName} — or directly compares against it (e.g. "X vs Y", "alternatives to X").
+
+Only include a competitor if you can quote the EXACT text, copied verbatim, from the search results below that supports it. Do not paraphrase — copy the exact wording as it appears. Do not include a company based on your own general industry knowledge; only what this specific content states.
+
+[SEARCH RESULTS]
+${contentBlock}
+[END SEARCH RESULTS]
+
+Return ONLY this JSON object, no other text:
+{
+  "competitors": [
+    {
+      "name": "Real Company Name",
+      "why_they_compete": "1 sentence explaining the competitive relationship, based only on the content above",
+      "evidence_quote": "exact verbatim text copied from the search results above that supports this"
+    }
+  ]
+}
+
+Rules:
+- Maximum ${MAX_COMPETITORS} competitors.
+- Never include ${companyName} itself.
+- If nothing in the provided content names a real competitor, return an empty array — do not guess.
+- "evidence_quote" must be an exact substring of the search results above, not a paraphrase or summary — a fabricated or paraphrased quote will be discarded.
+- Ignore any content describing scams, fraud, complaints, lawsuits, or accusations of wrongdoing against ${companyName} — never name a company mentioned in that context as a "competitor," and never name a victim, accuser, or subject of such content as one either.
+`.trim()
+}
+
+interface SynthesisCompetitorRaw {
+  name?: unknown
+  why_they_compete?: unknown
+  evidence_quote?: unknown
+}
+
+// For a verified quote, determines which of the fetched results it actually
+// came from (for source_urls) and the strongest match tier across them
+// (for confidence) — a quote could in principle appear near-identically in
+// more than one result.
+function findSupportingSources(
+  quote: string,
+  results: Array<{ title: string; url: string; content: string }>,
+): { tier: QuoteMatchTier; urls: string[] } {
+  let bestTier: QuoteMatchTier = 'none'
+  // Set, not a plain array push — the same URL can legitimately appear more
+  // than once in `results` (a page surfacing across more than one of the 4
+  // search queries), which would otherwise duplicate it in source_urls once
+  // per matching query. Caught by a real test case, not a hypothetical.
+  const urls = new Set<string>()
+  for (const r of results) {
+    const { tier } = verifyQuoteInContent(quote, `${r.title} ${r.content}`)
+    if (tier === 'none') continue
+    urls.add(r.url)
+    if (tier === 'exact') bestTier = 'exact'
+    else if (bestTier !== 'exact') bestTier = 'close'
+  }
+  return { tier: bestTier, urls: Array.from(urls) }
+}
+
+/**
+ * Fetches real search results (same fetch+relevance-filter step
+ * runCompetitorDiscovery uses) and asks an LLM to synthesize a competitor
+ * list STRICTLY from that content, with every claim mechanically
+ * quote-verified against the actual fetched text before being trusted.
+ * Never throws; returns sufficiency: 'insufficient' on any failure, empty
+ * search results, or all-quotes-unverified outcome — route.ts falls back
+ * to the regex-extraction pipeline in that case.
+ */
+export async function discoverCompetitorsViaSearchSynthesis(
+  companyName: string,
+  domain: string,
+): Promise<CompetitorDiscoveryResult> {
+  const fetchResult = await fetchRelevantSearchResults(
+    buildCompetitorQueries(companyName),
+    companyName,
+    'no company name available to search for competitors',
+    true,
+  )
+  if ('insufficientReason' in fetchResult) {
+    return { competitors: [], candidates: [], sufficiency: 'insufficient', reason: fetchResult.insufficientReason, candidates_considered: 0 }
+  }
+  const { results } = fetchResult
+  void domain
+
+  let response
+  try {
+    response = await getCompletion({
+      systemPrompt: SYNTHESIS_SYSTEM_PROMPT,
+      userPrompt: buildSynthesisUserPrompt(companyName, buildSearchContentBlock(results)),
+      maxTokens: 2048,
+      temperature: 0.1,
+      jsonMode: true,
+    })
+  } catch (e) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `search-synthesis call failed: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  let parsed: { competitors?: unknown }
+  try {
+    const trimmed = response.content.trim()
+    const stripped = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    parsed = JSON.parse(start !== -1 && end > start ? stripped.slice(start, end + 1) : stripped)
+  } catch (e) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `search-synthesis response unparseable: ${e instanceof Error ? e.message : String(e)}`,
+      candidates_considered: 0,
+    }
+  }
+
+  if (!Array.isArray(parsed.competitors) || parsed.competitors.length === 0) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: 'search-synthesis found no competitor named in the fetched search content',
+      candidates_considered: 0,
+    }
+  }
+
+  const raw = parsed.competitors as SynthesisCompetitorRaw[]
+  const rejected: Array<{ name: string; reason: string }> = []
+  const survivors: CompetitorProfile[] = []
+
+  for (const item of raw) {
+    const name = typeof item.name === 'string' ? item.name.trim() : ''
+    if (!name) continue
+    const rejectReason = classifyRejection(name, companyName, [])
+    if (rejectReason) {
+      rejected.push({ name, reason: rejectReason })
+      continue
+    }
+    const quote = typeof item.evidence_quote === 'string' ? item.evidence_quote.trim() : ''
+    const { tier, urls } = quote ? findSupportingSources(quote, results) : { tier: 'none' as QuoteMatchTier, urls: [] }
+    if (tier === 'none') {
+      rejected.push({ name, reason: 'evidence quote could not be verified against the search content it was shown' })
+      continue
+    }
+    const why = typeof item.why_they_compete === 'string' ? item.why_they_compete.trim() : ''
+    survivors.push({
+      name,
+      why_they_compete: why || `Found via search-grounded synthesis: "${quote.slice(0, 150)}"`,
+      confidence: tier === 'exact' ? 'high' : 'medium',
+      source_urls: urls,
+      source: 'search_synthesis',
+    })
+  }
+
+  const capped = survivors.slice(0, MAX_COMPETITORS)
+
+  if (capped.length === 0) {
+    return {
+      competitors: [], candidates: [], sufficiency: 'insufficient',
+      reason: `LLM returned ${raw.length} candidate(s) but all were rejected (self-name/directory/unverified quote)`,
+      candidates_considered: raw.length,
+      rejected_candidates: rejected,
+    }
+  }
+
+  return {
+    competitors: capped,
+    candidates: [],
+    sufficiency: 'sufficient',
+    reason: `search-synthesis: ${capped.length} of ${raw.length} candidate(s) survived quote verification`,
     candidates_considered: raw.length,
     rejected_candidates: rejected.length > 0 ? rejected : undefined,
   }

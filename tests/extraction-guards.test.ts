@@ -7,6 +7,8 @@ import {
   extractQueryTopic,
   mentionsTopic,
   filterTopicallyRelevantResults,
+  looksLikeAdversarialContent,
+  filterAdversarialContent,
 } from '../lib/enrichment/extraction-guards'
 
 describe('mentionsCompany — source-relevance gate', () => {
@@ -195,5 +197,39 @@ describe('filterTopicallyRelevantResults', () => {
   it('returns all results unchanged when there are no topics to check against', () => {
     const results = [{ title: 'Anything', content: 'Anything at all.' }]
     expect(filterTopicallyRelevantResults(results, [])).toEqual(results)
+  })
+})
+
+describe('looksLikeAdversarialContent / filterAdversarialContent', () => {
+  it('flags the exact live-found bug content (a Facebook "SCAM" page)', () => {
+    const text = 'As Agri and Aqua LLP (ASAA) SCAM. AS Agri and Aqua LLP (ASAA) has scammed thousands of people and this advocate has fooled people in the name of helping investors and have fled away with lakhs.'
+    expect(looksLikeAdversarialContent(text)).toBe(true)
+  })
+
+  it('flags common fraud/complaint vocabulary variants', () => {
+    expect(looksLikeAdversarialContent('This company is a fraud, customers report being cheated.')).toBe(true)
+    expect(looksLikeAdversarialContent('Multiple consumer complaint filings allege a ripoff scheme.')).toBe(true)
+    expect(looksLikeAdversarialContent('Investigators say it was a classic Ponzi scheme.')).toBe(true)
+    expect(looksLikeAdversarialContent('The founder absconded after the FIR filed by investors.')).toBe(true)
+  })
+
+  it('does not flag ordinary, legitimate business content', () => {
+    const text = 'Ador Welding produces world-class products across six manufacturing facilities nationwide, serving automotive OEMs and shipbuilders.'
+    expect(looksLikeAdversarialContent(text)).toBe(false)
+  })
+
+  it('does not flag legitimate negative-but-not-fraud content (a real operational challenge)', () => {
+    const text = 'The company faced supply chain disruptions and a product recall after a quality control issue was identified.'
+    expect(looksLikeAdversarialContent(text)).toBe(false)
+  })
+
+  it('filterAdversarialContent drops only the scam-shaped result, keeps a legitimate one', () => {
+    const results = [
+      { title: 'As Agri and Aqua LLP (ASAA) SCAM', content: 'has scammed thousands of people and fled with lakhs' },
+      { title: 'AS Agri and Aqua — startup profile', content: 'Operates in vertical farming and aquaculture, competitors include Budmore Agro Industries.' },
+    ]
+    const survivors = filterAdversarialContent(results)
+    expect(survivors).toHaveLength(1)
+    expect(survivors[0].title).toBe('AS Agri and Aqua — startup profile')
   })
 })
