@@ -10,9 +10,12 @@
 // follow-ups drafted automatically, edit or switch subject, then send from
 // the same screen — drafting and sending used to be two separate steps,
 // merged into one per 2026-07-31 user request). Every step reuses an
-// already-built, already-tested component/route — ResearchCard
-// (intelligence-lab), DecisionMakerFinder (outbound/contacts),
-// ContactInfoStep/OutreachStep (this folder), lib/batch/*
+// already-built, already-tested component/route — step 1's
+// AutoFlowResearchSummary (this folder) is a deliberately narrower reuse of
+// ResearchCard's own exported building blocks (intelligence-lab), not the
+// full research report — see that file's own header for why. Also reused:
+// DecisionMakerFinder (outbound/contacts), ContactInfoStep/OutreachStep
+// (this folder), lib/batch/*
 // (file-parser/company-dedup/quota-pause, same as Wizard's batch mode),
 // the campaigns API (used under the hood by Outreach & Send's buttons —
 // framed to the user as "send emails," never "campaign", that language
@@ -76,7 +79,7 @@ import { StageProgress, type ProgressStage } from '@/components/ui/stage-progres
 import { useSlashFocus } from '@/lib/hooks/useSlashFocus'
 import { cn } from '@/lib/utils'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
-import { ResearchCard } from '@/app/admin/intelligence-lab/ResearchCard'
+import { AutoFlowResearchSummary } from './AutoFlowResearchSummary'
 import { DecisionMakerFinder, type DecisionMakerFinderHandle } from '@/app/admin/outbound/contacts/DecisionMakerFinder'
 import { StepIndicator, STEPS } from './StepIndicator'
 import { ContactInfoStep } from './ContactInfoStep'
@@ -654,7 +657,7 @@ export default function AutoGtmFlowPage() {
         </div>
       )}
 
-      {flow.step === 1 && flow.inputMode === 'single' && hasResearch && flow.result && <ResearchCard result={flow.result} />}
+      {flow.step === 1 && flow.inputMode === 'single' && hasResearch && flow.result && <AutoFlowResearchSummary result={flow.result} />}
 
       {/* Step 2: Decision Makers (found automatically, user just selects who to keep) */}
 
