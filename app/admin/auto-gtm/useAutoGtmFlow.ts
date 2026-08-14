@@ -270,22 +270,40 @@ export function useAutoGtmFlow() {
     }
   }, [])
 
-  // True for the full duration of any resumeFromRun() call, regardless of
-  // which caller triggered it (the URL-driven mount-time resume, AND
-  // CompanyPipelineList's "Resume" button — both call this same function).
-  // Exists to close a real race found live (2026-08-12): CampaignSettingsPanel
-  // eagerly calls ensureCampaignId() the moment it mounts (needed so campaign
-  // settings have something real to save against before any send happens) —
-  // but campaignId can still be null in local state well after a resumed
-  // run's REAL existing campaign has already been restored server-side,
-  // right up until restoreContactsAndCampaign's own fetches finish. Without
-  // this gate, ensureCampaignId() would create a genuinely duplicate,
-  // orphaned campaign (confirmed live TWICE while building this fix — first
-  // via the URL-mount path, then again via this exact button — both times
-  // two rows named " - Auto Flow" with no source_run_id). Set as the very
-  // first line of resumeFromRun (not just in whichever effect happens to
-  // call it) specifically so every call path is covered, not only the one
-  // this bug was first noticed on.
+  // True while any of restoreContactsAndCampaign()'s callers are still
+  // mid-flight — resumeFromRun() (regardless of which caller triggered it:
+  // the URL-driven mount-time resume, or CompanyPipelineList's "Resume"
+  // button), AND runResearch()'s own re-research-an-existing-run branch
+  // (added later, same race). Exists to close a real race found live
+  // (2026-08-12): CampaignSettingsPanel eagerly calls ensureCampaignId() the
+  // moment it mounts (needed so campaign settings have something real to
+  // save against before any send happens) — but campaignId can still be
+  // null in local state well after a resumed run's REAL existing campaign
+  // has already been restored server-side, right up until
+  // restoreContactsAndCampaign's own fetches finish. Without this gate,
+  // ensureCampaignId() would create a genuinely duplicate, orphaned campaign
+  // (confirmed live TWICE while building this fix — first via the URL-mount
+  // path, then again via this exact button — both times two rows named
+  // " - Auto Flow" with no source_run_id).
+  //
+  // SAME RACE, SECOND VICTIM, found live again later (audit follow-up): the
+  // Decision Makers auto-pilot commit effect in page.tsx (step 2 -> 3) has
+  // its own `flow.contacts.length === 0` check gating whether to
+  // auto-commit found candidates as contacts — reading that BEFORE
+  // restoreContactsAndCampaign's contacts fetch resolves gives a false
+  // "nothing exists yet" and auto-commits real duplicates. Confirmed live:
+  // created 25 duplicate/unreviewed contacts for a real run once the
+  // decision-maker search cache started actually working (P1 fix) made
+  // DecisionMakerFinder's own cache-restore resolve fast enough to win this
+  // race consistently — previously a real several-second Prospeo search
+  // gave this fetch enough of a head start that the race rarely fired.
+  // page.tsx's effect now also gates on `!resuming`, same flag, same fix
+  // shape as the ensureCampaignId case above.
+  //
+  // Set as the very first line of resumeFromRun (not just in whichever
+  // effect happens to call it) and around runResearch's re-research branch
+  // specifically so every call path is covered, not only the one a given
+  // bug was first noticed on.
   const [resuming, setResuming] = useState(false)
 
   const resumeFromRun = useCallback(async (id: string) => {
@@ -472,7 +490,27 @@ export function useAutoGtmFlow() {
           // existing contacts/campaign state so decision-maker discovery
           // (step 2) doesn't re-run from scratch and create duplicate
           // outbound_contacts rows for people already found under this run.
-          await restoreContactsAndCampaign(existingRunId)
+          //
+          // FIXED (audit follow-up, live-caught): setRunId() above already
+          // fired, so page.tsx's auto-pilot can advance to step 2 and mount
+          // DecisionMakerFinder while flow.contacts is still stale/empty —
+          // if its own cache-restore resolves fast (a real risk once the
+          // decision-maker search cache actually works — see the P1 fix
+          // this follows), the step2->3 effect's `flow.contacts.length ===
+          // 0` check reads that stale emptiness as "nothing exists yet" and
+          // auto-commits every cached candidate as a genuine duplicate.
+          // Confirmed live: this exact race created 25 duplicate/unreviewed
+          // contacts for a real run during verification. `resuming` (see
+          // resumeFromRun below, the flag this same class of race was
+          // already fixed with once for ensureCampaignId) now also gates
+          // that effect — set here too so this second call site gets the
+          // same protection, not just the URL/Resume-button path.
+          setResuming(true)
+          try {
+            await restoreContactsAndCampaign(existingRunId)
+          } finally {
+            setResuming(false)
+          }
         }
       } else {
         // Every later step needs a saved runId to attach contacts/decision-

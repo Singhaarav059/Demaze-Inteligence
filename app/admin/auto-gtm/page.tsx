@@ -236,8 +236,22 @@ export default function AutoGtmFlowPage() {
   // Batch mode already committed every candidate during its own research
   // loop (see runBatchThroughDecisionMakers), so it only needs to wait for
   // that loop to finish, never a discovery-complete signal from this step.
+  //
+  // FIXED (audit follow-up, live-caught): also gated on `!flow.resuming`
+  // now. dmDiscoveryDone can become true (a fast cache-restore, especially
+  // once the decision-maker search cache actually persists — see the P1
+  // fix this follows) BEFORE flow.contacts has been repopulated by
+  // restoreContactsAndCampaign, which runs concurrently, not before, a
+  // resumed/re-researched run's DecisionMakerFinder mount. Reading
+  // flow.contacts.length === 0 during that window is reading STALE
+  // emptiness, not real emptiness — confirmed live: this raced and
+  // auto-committed 25 duplicate/unreviewed contacts for a real run.
+  // useAutoGtmFlow.ts's `resuming` flag is already true for exactly that
+  // window (both call sites: resumeFromRun and runResearch's re-research
+  // branch), so gating on it here closes this the same way it already
+  // closes the analogous ensureCampaignId race in CampaignSettingsPanel.
   useEffect(() => {
-    if (!flow.stepSynced || flow.step !== 2 || autoAdvancedRef.current.has(2)) return
+    if (!flow.stepSynced || flow.step !== 2 || autoAdvancedRef.current.has(2) || flow.resuming) return
 
     if (flow.inputMode === 'single') {
       if (!dmDiscoveryDone) return
@@ -258,7 +272,7 @@ export default function AutoGtmFlowPage() {
 
     if (flow.inputMode === 'batch' && !flow.batchRunning) advanceOnce(2, 3)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow.step, flow.stepSynced, flow.inputMode, dmDiscoveryDone, flow.contacts.length, flow.batchRunning])
+  }, [flow.step, flow.stepSynced, flow.inputMode, dmDiscoveryDone, flow.contacts.length, flow.batchRunning, flow.resuming])
 
   // Step 3 -> 4: waits for every contact's email lookup to settle out of
   // 'pending' (ContactInfoStep already runs these automatically on mount —
@@ -313,8 +327,11 @@ export default function AutoGtmFlowPage() {
     // re-add them as duplicates — outbound_contacts has no uniqueness
     // constraint. Now mirrors the auto-pilot guard exactly, so the manual
     // fallback button can never diverge from what auto-pilot would have
-    // done.
-    const willCommit = flow.inputMode === 'single' && flow.contacts.length === 0 && dmSelectedCount > 0
+    // done. Also checks !flow.resuming for the same reason the auto-pilot
+    // effect does (see that effect's own comment) — flow.contacts.length
+    // can still be stale/not-yet-restored while resuming is true, so this
+    // treats "still resuming" the same as "don't know yet, don't commit".
+    const willCommit = flow.inputMode === 'single' && !flow.resuming && flow.contacts.length === 0 && dmSelectedCount > 0
     nextAction = {
       label: `Continue to Contact Info (${willCommit ? flow.contacts.length + dmSelectedCount : flow.contacts.length})`,
       onClick: async () => {
