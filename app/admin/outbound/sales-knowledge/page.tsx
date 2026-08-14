@@ -9,8 +9,12 @@
 // requirement and this repo's single-page-multi-tab precedent
 // (/admin/outbound/integrations is the closest analog). Feeds
 // lib/sales-knowledge/matcher.ts, which turns a completed research run
-// into a Sales Intelligence recommendation on Auto Flow's "Sales
-// Strategy" step — see CLAUDE.md's Sales Intelligence Layer entry.
+// into a Sales Intelligence recommendation — this used to be surfaced on
+// a "Sales Strategy" step in Auto Flow, removed 2026-08-13 because Auto
+// Flow shouldn't encode unapproved sales positioning before the official
+// sector playbook arrives (see CLAUDE.md's Sales Intelligence section).
+// This page and lib/sales-knowledge/* are left fully intact and editable
+// for that future work; nothing here is currently wired into Auto Flow.
 //
 // Cross-reference fields (a Problem's industry_tags, a Capability's
 // slug referenced by a Problem) are plain comma-separated tag inputs,
@@ -648,9 +652,9 @@ export default function SalesKnowledgePage() {
       <GuideNote>
         <p>
           This is Demaze's own sales playbook — what we sell, who we sell it to, and the proof we have.
-          Auto Flow's <strong>Sales Strategy</strong> step matches each researched company against this
-          content to recommend a positioning. Editing anything here changes future recommendations, not
-          past ones — nothing is regenerated automatically.
+          It&apos;s not currently used by Auto Flow — that wiring was removed until an official,
+          approved sector playbook is ready. Editing anything here is safe to do ahead of that: it has
+          no effect on Auto Flow today.
         </p>
       </GuideNote>
 
