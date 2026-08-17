@@ -131,6 +131,39 @@ async function autoDraft(contactId: string, onStage: (stage: DraftStage) => void
   return followData.success ? followData.generated : emailData.generated
 }
 
+// Retries a contact's automatic draft when it comes back without an
+// email_draft — the AI provider chain (lib/ai/provider-factory.ts) has its
+// own documented history of transient 429/timeout failures under concurrent
+// load (see that file's comments), and DRAFT_CONCURRENCY below means several
+// contacts' worth of calls can genuinely overlap. A contact that fails here
+// used to be marked "no draft" permanently (drafts[id] = null pins it out of
+// the missing[] retry set for the rest of this pass) even though clicking
+// "Draft Email" on it manually moments later — with the concurrent load
+// gone — reliably succeeds. Retrying automatically closes that gap instead
+// of silently leaving a fraction of the batch undrafted. Backoff is
+// deliberately short relative to the ~30-90s a single attempt already takes
+// — this is about outlasting a momentary rate-limit window, not a long
+// exponential-backoff scheme.
+const AUTO_DRAFT_RETRY_DELAYS_MS = [4000, 10000]
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function autoDraftWithRetry(contactId: string, onStage: (stage: DraftStage) => void): Promise<GeneratedContent | null> {
+  let last: GeneratedContent | null = null
+  for (let attempt = 0; attempt <= AUTO_DRAFT_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      last = await autoDraft(contactId, onStage)
+    } catch {
+      last = null
+    }
+    if (last?.email_draft) return last
+    if (attempt < AUTO_DRAFT_RETRY_DELAYS_MS.length) await sleep(AUTO_DRAFT_RETRY_DELAYS_MS[attempt])
+  }
+  return last
+}
+
 // Switching the selected subject line regenerates the email + follow-up
 // sequence from it, so what's shown always stays internally consistent.
 async function switchSubjectAndRegenerate(contactId: string, subject: string): Promise<GeneratedContent | null> {
@@ -256,7 +289,7 @@ export function OutreachStep({
           const existing = await fetchGenerated(contact.id)
           const generated = existing?.email_draft
             ? existing
-            : await autoDraft(contact.id, stage => setContactDraftingStage(contact.id, stage))
+            : await autoDraftWithRetry(contact.id, stage => setContactDraftingStage(contact.id, stage))
           setDrafts(prev => ({ ...prev, [contact.id]: generated }))
         } catch {
           toast.error(`Could not draft an email for ${contact.person_name}`)
@@ -274,7 +307,7 @@ export function OutreachStep({
   const draftForContact = useCallback(async (contact: OutboundContact) => {
     beginDrafting(contact.id)
     try {
-      const generated = await autoDraft(contact.id, stage => setContactDraftingStage(contact.id, stage))
+      const generated = await autoDraftWithRetry(contact.id, stage => setContactDraftingStage(contact.id, stage))
       setDrafts(prev => ({ ...prev, [contact.id]: generated }))
     } catch {
       toast.error(`Could not draft an email for ${contact.person_name}`)
@@ -314,7 +347,7 @@ export function OutreachStep({
   async function regenerate(contactId: string) {
     beginDrafting(contactId)
     try {
-      const generated = await autoDraft(contactId, stage => setContactDraftingStage(contactId, stage))
+      const generated = await autoDraftWithRetry(contactId, stage => setContactDraftingStage(contactId, stage))
       setDrafts(prev => ({ ...prev, [contactId]: generated }))
     } catch {
       toast.error('Could not regenerate this email')

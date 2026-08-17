@@ -3262,6 +3262,54 @@ confirmed this specific test fails without it, not just added and assumed
 correct), plus non-regression coverage for the domain/exact/partial/none
 tiers. `tsc --noEmit` clean, full suite 770/770 (765 pre-existing + 5 new).
 
+## RESOLVED 2026-08-17 — Campaign & Outreach silently leaving a large
+## fraction of a batch undrafted, no automatic retry
+User reported (real production run against Flipkart, 25 contacts): the
+automatic drafting pass on `OutreachStep.tsx` (Auto Flow step 4) only
+drafted 11 of 24 email-having contacts, leaving 13 stuck on "Needs a
+draft" — but manually clicking "Draft Email" on each stuck contact
+afterward succeeded every time.
+
+Root-caused via code read, not guessed: `draftMissing()` runs
+`DRAFT_CONCURRENCY = 3` contacts at once, each firing 3 sequential AI
+calls (subject lines → email → follow-ups) through
+`lib/ai/provider-factory.ts` — a chain with its own documented history
+(see that file's comments) of real 429/timeout failures under concurrent
+load. When a contact's `autoDraft()` call came back without an
+`email_draft` (a graceful `{success:false}` API response, not necessarily
+a thrown exception), the worker set `drafts[contact.id] = null` and moved
+on — no retry. Once set, `missing = contacts.filter(c => !(c.id in
+drafts))` treats that contact as "already handled" for the rest of the
+automatic pass, so it's permanently skipped until a manual click
+(`draftForContact`) retries it in isolation, without the concurrent-load
+pressure — which is exactly why "click it manually and it works" was the
+reported workaround.
+
+**Fixed**: new `autoDraftWithRetry()` wraps `autoDraft()` with up to 2
+retries (4s then 10s backoff — short relative to the ~30-90s a single
+attempt already takes, since this is about outlasting a momentary
+rate-limit window, not a long exponential-backoff scheme) whenever the
+result comes back without an `email_draft`, catching thrown exceptions
+too. Applied uniformly at all 3 call sites (`draftMissing`'s worker,
+`draftForContact`, `regenerate`) — the manual paths get the same
+resilience, not just the automatic batch pass. Deliberately did NOT
+reduce `DRAFT_CONCURRENCY` in the same pass — no measured evidence of
+which lever (concurrency vs. no-retry) is the dominant cause, and retry
+is the standard, lower-risk fix for "transient failure under load,
+succeeds when retried alone" regardless of which it is; revisit
+concurrency only if retries alone don't resolve it in practice.
+
+`tsc --noEmit` clean, full suite 770/770 (no new test — this is a
+client-side retry wrapper around already-existing fetch calls with no new
+business logic to unit-test without mocking the AI chain, which none of
+this module's existing code does either). Dev-server compile/render
+verified, zero console errors. **Not live-verified against the actual
+concurrent-load failure** — that needs a real batch of 20+ contacts
+drafting simultaneously against the live rate-limited provider chain to
+reproduce, not reliably forceable on demand; the fix targets the
+confirmed root cause (no retry on a confirmed-real failure class) rather
+than a hypothesis.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
