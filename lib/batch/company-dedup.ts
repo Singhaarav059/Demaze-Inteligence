@@ -51,7 +51,15 @@ function normalizeCompanyName(name: string): string {
   return name
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
-    .replace(/[^\w\s-]/g, ' ')
+    // \p{L}/\p{N} (Unicode letter/number), not \w — \w is ASCII-only in JS,
+    // so an accented name ("Möller Group") would otherwise get mangled
+    // ("m ller group") before any matching runs. Same 2026-07-24 fix as
+    // website-discovery.ts/evidence-extractor.ts/competitor-discovery.ts/
+    // icp-generator.ts/company-discovery.ts (see CLAUDE.md) — this file was
+    // missed in that pass. wordOverlapRatio() below compares word arrays via
+    // Set.has(), not a `\b`-anchored regex, so unlike those files' matching
+    // logic this one doesn't also need a wordBoundaryRegex() helper.
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }

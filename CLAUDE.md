@@ -3180,6 +3180,37 @@ were investigated and confirmed already correct per this file's own
 extensive prior history — untouched, no changes needed. Sales Knowledge DB
 tables (021/022) untouched, left available for future use.
 
+## RESOLVED 2026-08-17 — company-dedup.ts missed the 2026-07-24 \w-ASCII
+## name-normalization fix
+Found during a repo-wide over-engineering audit (unrelated task, correctness
+bugs noticed in passing): `lib/batch/company-dedup.ts`'s
+`normalizeCompanyName()` still used `[^\w\s-]` (ASCII-only `\w`), the exact
+bug class the 2026-07-24 session fixed across 5 other files (website-
+discovery.ts, evidence-extractor.ts, competitor-discovery.ts, icp-
+generator.ts, company-discovery.ts) but never touched this one — it was
+simply missed, not a deliberate exclusion.
+
+Confirmed the concrete failure mode with real code before fixing (not
+assumed): with the bug, "Möller" (one word) normalizes to "m ller" and
+fragments into two words (`["m", "ller"]`) once split — this inflates
+`wordOverlapRatio()`'s numerator/denominator enough to push two otherwise-
+UNRELATED companies ("Möller" vs "Möller International Group", sharing only
+the accented fragment and a generic "group") over the 0.5 'partial' match
+threshold (buggy ratio: 0.5, correctly flagged as possible duplicates only
+by accident of fragmentation; fixed ratio: 0.33, correctly not flagged).
+Verified `wordOverlapRatio()` doesn't need the `wordBoundaryRegex()` half of
+the original fix (unlike website-discovery.ts/evidence-extractor.ts) since
+it compares word arrays via `Set.has()`, not a `\b`-anchored regex — same
+reasoning as `competitor-discovery.ts`'s `isSelfName()` in the original fix.
+
+**Fixed**: `[^\w\s-]` → `[^\p{L}\p{N}\s-]` with the `u` flag, one line.
+
+New `tests/company-dedup.test.ts` (this file's first test coverage, 5
+assertions) — the accented-name case above (manually reverted the fix and
+confirmed this specific test fails without it, not just added and assumed
+correct), plus non-regression coverage for the domain/exact/partial/none
+tiers. `tsc --noEmit` clean, full suite 770/770 (765 pre-existing + 5 new).
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
