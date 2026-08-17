@@ -121,7 +121,14 @@ export async function runFollowupEngineTick(
       if (outcome.status === 'sent') { summary.sent++; remainingToday -= 1 }
       else if (outcome.status === 'cancelled_reply') summary.cancelledByReply++
       else if (outcome.status === 'cancelled_bounce') summary.cancelledByBounce++
-      else if (outcome.status === 'failed') summary.failed++
+      else if (outcome.status === 'failed') {
+        summary.failed++
+        // Previously only visible in outbound_campaign_events, not in the
+        // summary the "Run Tick Now" button actually shows — confirmed live
+        // (2026-08-17) that a real failure ("Provider gmail is not
+        // available") surfaced as failed: 1 with an empty errors array.
+        summary.errors.push(`Follow-up failed for campaign ${campaign.id} contact ${cc.id}: ${outcome.reason ?? 'unknown error'}`)
+      }
       else summary.skipped++ // 'not_due'/'skipped' — not_due shouldn't occur here since isAutoFollowupEligible already checked isFollowupDue, but kept as a safe bucket
     }
   }

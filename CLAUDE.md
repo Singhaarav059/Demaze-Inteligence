@@ -2400,6 +2400,57 @@ the exact account this app's warmup engine is meant to be improving.
    batch-originated company (see the "Checked but NOT resolved" note
    above) — deferred at the user's own request, not forgotten.
 
+## RESOLVED 2026-08-17 — automatic follow-up engine's gating logic
+## live-verified end-to-end (item 1 directly above, closed)
+Ran `isAutoFollowupEligible()` (`lib/outbound/sending/followup-engine/
+tick-logic.ts`) against real production data before touching anything —
+found a genuine currently-eligible contact (Devendra Awadhiya, L&T:
+`status: 'sent'`, `opened_at: null`, overdue since 2026-08-15) via the
+real `GET .../campaigns/[id]/contacts` route, then computed the exact pure
+function against real timestamps for all 4 branches: unopened+overdue →
+`true`; the same contact with a real `opened_at` (borrowed from another
+live contact's genuine timestamp) → `false`; tracking not configured →
+`false` (fails closed); not yet due → `false`. All 4 correct.
+
+**Then ran the real tick** (explicit user confirmation given first, since
+this is a send-capable action — same standing rule as any other real send
+in this app). It correctly selected exactly the 1 eligible contact,
+correctly ran the reply-check first, correctly found his generated
+follow-up draft, and attempted a real Gmail send — which failed with
+`"Provider \"gmail\" is not available."`, almost certainly the OAuth
+app's Testing-mode 7-day refresh-token expiry (last successful send to
+this contact was 2026-08-12, 5 days prior). The engine handled this
+correctly: logged a `send_failed` event with the real error, did NOT
+advance the contact's status or corrupt any state, left him eligible for
+retry. No real email went out. This needs the user to re-authorize Gmail
+through the app's own OAuth connect flow before a real automatic send can
+succeed — not something this assistant can do (never handles OAuth
+consent screens).
+
+**Real gap found and fixed in the same session**: the tick's own summary
+returned `errors: []` even when `failed: 1` — the failure reason only
+existed in `outbound_campaign_events`, not in what the "Run Follow-Up
+Engine Tick Now" button actually displays. Fixed in
+`run-tick.ts`: the `'failed'` branch now pushes
+`` `Follow-up failed for campaign ${campaign.id} contact ${cc.id}:
+${outcome.reason}` `` into `summary.errors` (the `reason` field already
+existed on `FollowupOutcome`, just was never read here). Confirmed the
+UI (`app/admin/outbound/followups/page.tsx`) already renders
+`summary.errors` and toasts on non-empty — the display side needed no
+change, only the data was missing. Re-ran the real tick after the fix
+(explicit confirmation given again) and confirmed live: `errors` now
+contains `'Follow-up failed for campaign
+0af6b9aa-0d82-4c7c-b007-d035c4964efa contact
+93e007a6-8036-4358-8429-6c5494767658: Provider "gmail" is not
+available.'` — same safe outcome as before (no send, no state corruption),
+now with a visible reason. `tsc --noEmit` clean, full suite 770/770.
+
+**Conclusion**: `FOLLOWUP_ENGINE_ENABLED` remains safe to leave unset until
+Gmail is re-authorized — the code path itself (selection, reply-check,
+draft lookup, resilient failure handling, now visible error reporting) is
+proven correct against real data; only the Gmail connection is currently
+blocking an actual successful automatic send.
+
 ## BUILT 2026-08-05 (same day) — Auto Flow step 5: "Track & Follow Up"
 After shipping open tracking, the automatic follow-up engine, and the
 persistent "Sent Companies" list, the user pointed out that Auto Flow
