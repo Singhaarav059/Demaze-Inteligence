@@ -36,6 +36,11 @@ function painPointText(item: Record<string, unknown>): string | null {
   return text ?? null
 }
 
+function claimTypeOf(item: Record<string, unknown>): 'observed' | 'inferred' | undefined {
+  const raw = item.claim_type
+  return raw === 'observed' || raw === 'inferred' ? raw : undefined
+}
+
 export function buildEmailGenerationInput(
   contact: ContactLike,
   finalResult: Record<string, unknown> | null | undefined,
@@ -47,16 +52,21 @@ export function buildEmailGenerationInput(
 ): EmailGenerationInput {
   const data = finalResult ?? {}
 
-  const painPointsStructured = getPainPointsStructured(data)
+  const structuredPainPointItems = getPainPointsStructured(data)
+  const painPointsStructured = structuredPainPointItems
     .map(painPointText)
     .filter((p): p is string => p !== null)
+  const painPointsDetailed = structuredPainPointItems.flatMap(item => {
+    const text = painPointText(item)
+    return text ? [{ text, claimType: claimTypeOf(item) }] : []
+  })
   const fallbackPainPoints = Array.isArray(data.pain_points)
     ? (data.pain_points as unknown[]).filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
     : []
 
-  const opportunities: Array<{ title: string; description?: string }> = getOpportunities(data).flatMap(o => {
+  const opportunities: Array<{ title: string; description?: string; claimType?: 'observed' | 'inferred' }> = getOpportunities(data).flatMap(o => {
     const title = toStr(o.title)
-    return title ? [{ title, description: toStr(o.description) }] : []
+    return title ? [{ title, description: toStr(o.description), claimType: claimTypeOf(o) }] : []
   })
 
   const recentActivity = Array.isArray(data.recent_activity)
@@ -86,6 +96,11 @@ export function buildEmailGenerationInput(
     companyName: contact.company_name,
     companySummary: toStr(data.company_summary),
     painPoints: painPointsStructured.length > 0 ? painPointsStructured : fallbackPainPoints,
+    // Only when the structured (claim_type-carrying) path actually produced
+    // pain points — the fallback flat-string path has no claim_type to
+    // carry, so prompts.ts's renderInputBlock() falls back to the plain
+    // `painPoints` list above when this is absent.
+    painPointsDetailed: painPointsStructured.length > 0 ? painPointsDetailed : undefined,
     opportunities,
     recentActivity,
     // Sales Intelligence is more curated than the raw narrative fields when

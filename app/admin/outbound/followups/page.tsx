@@ -249,6 +249,7 @@ export default function FollowupPanelPage() {
                 <span>Cancelled (reply): <span className="text-foreground">{engineTickSummary.cancelledByReply}</span></span>
                 <span>Cancelled (bounce): <span className="text-foreground">{engineTickSummary.cancelledByBounce}</span></span>
                 <span>Failed: <span className="text-foreground">{engineTickSummary.failed}</span></span>
+                <span>Ambiguous: <span className="text-foreground">{engineTickSummary.ambiguous}</span></span>
                 {engineTickSummary.errors.length > 0 && (
                   <div className="col-span-full text-signal-medium mt-1">
                     {engineTickSummary.errors.map((e, i) => <div key={i}>{e}</div>)}

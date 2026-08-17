@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   // --- Stats (unfiltered, always across every campaign) ---
   const { data: allContacts, error: statsError } = await supabase
     .from('outbound_campaign_contacts')
-    .select('status, updated_at')
+    .select('status, updated_at, opened_at')
 
   if (statsError) {
     return NextResponse.json({ success: false, error: statsError.message }, { status: 500 })
@@ -51,9 +51,11 @@ export async function GET(req: NextRequest) {
   const intervalsDays = await getFollowupIntervals()
   const byStatus: Record<string, number> = {}
   let followupDueNow = 0
+  let opened = 0
   const now = new Date()
   for (const row of allContacts ?? []) {
     byStatus[row.status] = (byStatus[row.status] ?? 0) + 1
+    if (row.opened_at) opened += 1
     if (FOLLOWUP_ELIGIBLE_STATUSES.includes(row.status) && isFollowupDue(row.status, row.updated_at, now, intervalsDays)) {
       followupDueNow += 1
     }
@@ -62,11 +64,24 @@ export async function GET(req: NextRequest) {
   const replied = byStatus['replied'] ?? 0
 
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
-  const { count: sentLast24h } = await supabase
-    .from('outbound_campaign_events')
-    .select('id', { count: 'exact', head: true })
-    .eq('event_type', 'sent')
-    .gte('occurred_at', dayAgo)
+  const [{ count: sentLast24h }, { count: unsubscribed }] = await Promise.all([
+    supabase
+      .from('outbound_campaign_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_type', 'sent')
+      .gte('occurred_at', dayAgo),
+    // Phase D4 (Pilot Readiness Plan) — "unsubscribe" tracking. Sourced from
+    // the suppression list, not a campaign_contacts status, since a manual
+    // unsubscribe entry isn't tied to one campaign/contact row the same way
+    // a bounce/reply is. "Delivered" (distinct from sent), "spam", and a
+    // positive/negative reply classification have no equivalent signal
+    // anywhere in this app today — not added here, see the Phase D
+    // end-of-phase report for why.
+    supabase
+      .from('outbound_suppression_list')
+      .select('id', { count: 'exact', head: true })
+      .eq('reason', 'unsubscribed'),
+  ])
 
   const stats = {
     byStatus,
@@ -74,6 +89,8 @@ export async function GET(req: NextRequest) {
     totalContacted,
     replied,
     bounced: byStatus['bounced'] ?? 0,
+    opened,
+    unsubscribed: unsubscribed ?? 0,
     followupPending: (byStatus['followup_1'] ?? 0) + (byStatus['followup_2'] ?? 0) + (byStatus['followup_3'] ?? 0),
     followupDueNow,
     replyRate: totalContacted > 0 ? replied / totalContacted : 0,

@@ -670,6 +670,11 @@ export default function AutoGtmFlowPage() {
                     />
                     <div className="min-w-0 flex-1">
                       <span className="text-foreground text-sm truncate">{company.companyName}</span>
+                      {(company.icpSegment || company.sourceListId) && (
+                        <p className="text-muted-foreground/70 text-xs truncate">
+                          {[company.icpSegment, company.sourceListId].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
                       {errorMessage && <p className="text-destructive text-xs mt-0.5">{errorMessage}</p>}
                     </div>
                     {status === 'done' && contactsFound > 0 && (

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__supabase__*",
+      "Skill(supabase)",
+      "Skill(supabase-postgres-best-practices)"
+    ]
+  }
+}

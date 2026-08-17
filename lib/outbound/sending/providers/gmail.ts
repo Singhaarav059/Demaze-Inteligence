@@ -104,7 +104,7 @@ export const GmailSendingProvider: EmailSenderProvider = {
     })
 
     if (!sent.ok) {
-      return { status: 'failed', providerUsed: 'gmail', error: sent.error }
+      return { status: 'failed', providerUsed: 'gmail', error: sent.error, ambiguous: sent.ambiguous }
     }
 
     return { status: 'sent', providerMessageId: sent.threadId, providerUsed: 'gmail' }

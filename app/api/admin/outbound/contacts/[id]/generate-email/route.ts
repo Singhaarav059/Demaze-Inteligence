@@ -11,6 +11,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { loadGenerationContext } from '@/lib/outbound/generation/fetch-context'
 import { generateEmail } from '@/lib/outbound/generation/generate-email'
 import { checkPersonalization } from '@/lib/outbound/generation/personalization-check'
+import { checkUnsupportedClaims } from '@/lib/outbound/generation/claim-grounding'
 
 export async function POST(
   req: NextRequest,
@@ -41,9 +42,15 @@ export async function POST(
   // 5.2) — no new LLM call, computed against the exact evidence this draft
   // was generated from. Advisory only, stored alongside the draft for the
   // review UI to surface.
+  //
+  // Unsupported-claim audit (Phase B, safety policy B5) — also computed
+  // once here, against the same input, and stored the same way, but this
+  // one is BLOCKING at send time (see send-eligibility usage in
+  // campaign-review.ts / send/route.ts / process-followup.ts).
   const draftWithCheck = {
     ...result.draft,
     personalizationCheck: checkPersonalization(result.draft.fullText, loaded.context.input),
+    claimGroundingCheck: checkUnsupportedClaims(result.draft.fullText, loaded.context.input),
   }
 
   const supabase = createServerClient()

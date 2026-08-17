@@ -47,6 +47,37 @@ describe('buildEmailGenerationInput', () => {
     expect(input.painPoints).toEqual(['structured pain point'])
   })
 
+  // Phase B, safety policy B3 — claim_type must survive into the input the
+  // prompt actually renders, so the model can hedge an inference instead of
+  // stating it as fact.
+  it('carries claim_type through into painPointsDetailed and opportunities.claimType', () => {
+    const finalResult = {
+      pain_points_structured: [
+        { title: 'Confirmed pain point', claim_type: 'observed' },
+        { title: 'Guessed pain point', claim_type: 'inferred' },
+      ],
+      opportunities: [
+        { title: 'Confirmed opportunity', claim_type: 'observed' },
+        { title: 'Guessed opportunity', claim_type: 'inferred' },
+      ],
+    }
+    const input = buildEmailGenerationInput(contact, finalResult)
+    expect(input.painPointsDetailed).toEqual([
+      { text: 'Confirmed pain point', claimType: 'observed' },
+      { text: 'Guessed pain point', claimType: 'inferred' },
+    ])
+    expect(input.opportunities).toEqual([
+      { title: 'Confirmed opportunity', description: undefined, claimType: 'observed' },
+      { title: 'Guessed opportunity', description: undefined, claimType: 'inferred' },
+    ])
+  })
+
+  it('leaves painPointsDetailed undefined when only the flat fallback path produced pain points', () => {
+    const finalResult = { pain_points: ['flat fallback'], pain_points_structured: [] }
+    const input = buildEmailGenerationInput(contact, finalResult)
+    expect(input.painPointsDetailed).toBeUndefined()
+  })
+
   it('degrades gracefully to empty arrays / undefined fields when final_result is null', () => {
     const input = buildEmailGenerationInput(contact, null)
     expect(input.painPoints).toEqual([])
@@ -160,6 +191,45 @@ describe('prompt builders', () => {
     expect(userPrompt).toContain('do NOT name a real client')
     expect(userPrompt).toContain('Factory AI Command Center')
     expect(userPrompt).toContain('do not mention any client, case study, or result')
+  })
+
+  // Phase B, safety policy B3.
+  it('annotates an inferred pain point as "(unconfirmed inference)", not a confirmed one, and includes the hedging rule', () => {
+    const inputWithDetail = {
+      ...input,
+      painPointsDetailed: [
+        { text: 'Confirmed pain point', claimType: 'observed' as const },
+        { text: 'Guessed pain point', claimType: 'inferred' as const },
+      ],
+    }
+    const { userPrompt } = buildEmailPrompt(inputWithDetail, 'subject')
+    expect(userPrompt).toContain('- Confirmed pain point\n')
+    expect(userPrompt).toContain('- Guessed pain point (unconfirmed inference)')
+    expect(userPrompt).toContain('unconfirmed inference)" is a reasoned guess')
+  })
+
+  it('does not annotate observed opportunities, only inferred ones', () => {
+    const inputWithDetail = {
+      ...input,
+      opportunities: [
+        { title: 'Confirmed opportunity', claimType: 'observed' as const },
+        { title: 'Guessed opportunity', claimType: 'inferred' as const },
+      ],
+    }
+    const { userPrompt } = buildEmailPrompt(inputWithDetail, 'subject')
+    expect(userPrompt).toContain('- Confirmed opportunity\n')
+    expect(userPrompt).toContain('- Guessed opportunity (unconfirmed inference)')
+    expect(userPrompt).toContain('unconfirmed inference)" is a reasoned guess')
+  })
+
+  it('falls back to the flat painPoints list (no annotation) when painPointsDetailed is absent', () => {
+    const { userPrompt } = buildEmailPrompt(input, 'subject')
+    // Exact line match — the RULES text itself mentions the literal phrase
+    // "(unconfirmed inference)" as an instruction, so a whole-prompt
+    // `not.toContain` would be a false failure; check the rendered pain
+    // point line specifically has no annotation appended.
+    expect(userPrompt).toContain('- Manual reporting across 6 plants\n')
+    expect(userPrompt).not.toContain('- Manual reporting across 6 plants (unconfirmed inference)')
   })
 
   it('names the client directly for a named_client case study', () => {

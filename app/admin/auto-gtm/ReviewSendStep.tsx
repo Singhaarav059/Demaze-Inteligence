@@ -49,7 +49,7 @@ import type { QualificationResult } from '@/lib/sector-playbook/qualify'
 import { CompactSectorBadge } from './SectorQualificationCard'
 
 interface SendOutcomeDetail {
-  status: 'sent' | 'skipped' | 'failed'
+  status: 'sent' | 'skipped' | 'failed' | 'ambiguous' | 'blocked'
   reason?: string
 }
 
@@ -72,6 +72,9 @@ interface ReviewRow {
   // warning (Master Plan Phase 5, Step 5.4).
   discoveryGroundingStatus?: 'confirmed' | 'conflict' | 'not_found' | null
   discoveryGroundingReason?: string | null
+  // Only set when status === 'blocked' (Phase B safety policy, non-
+  // overridable — see campaign-review.ts).
+  blockReason?: 'invalid_email_format' | 'company_identity_mismatch' | 'unsupported_claim'
 }
 
 interface ReviewSummary {
@@ -81,6 +84,7 @@ interface ReviewSummary {
   suppressed: number
   alreadySent: number
   notReady: number
+  blocked: number
   rows: ReviewRow[]
 }
 
@@ -95,6 +99,7 @@ const STATUS_META: Record<ContactReviewStatus, { label: string; icon: typeof Che
   suppressed: { label: 'Suppressed', icon: Ban, className: 'bg-destructive/10 text-destructive border border-destructive/40' },
   already_sent: { label: 'Already sent', icon: CheckCircle2, className: 'bg-accent text-muted-foreground border border-border' },
   not_ready: { label: 'Needs a draft', icon: AlertTriangle, className: 'bg-signal-medium/10 text-signal-medium border border-signal-medium/30' },
+  blocked: { label: 'Blocked', icon: Ban, className: 'bg-destructive/10 text-destructive border border-destructive/40' },
 }
 
 export function ReviewSendStep({
@@ -212,6 +217,7 @@ export function ReviewSendStep({
   const suppressedRows = rowsWithLiveStatus.filter(r => r.status === 'suppressed')
   const alreadySentRows = rowsWithLiveStatus.filter(r => r.status === 'already_sent')
   const notReadyRows = rowsWithLiveStatus.filter(r => r.status === 'not_ready')
+  const blockedRows = rowsWithLiveStatus.filter(r => r.status === 'blocked')
 
   async function handleRemove(row: ReviewRow) {
     setRemovingId(row.contactId)
@@ -289,11 +295,12 @@ export function ReviewSendStep({
         <div><span className="block text-muted-foreground/60">Suppressed</span><span className="text-destructive font-medium">{suppressedRows.length}</span></div>
         <div><span className="block text-muted-foreground/60">Already sent</span><span className="text-foreground font-medium">{alreadySentRows.length}</span></div>
         <div><span className="block text-muted-foreground/60">Needs a draft</span><span className="text-foreground font-medium">{notReadyRows.length}</span></div>
+        <div><span className="block text-muted-foreground/60">Blocked</span><span className="text-destructive font-medium">{blockedRows.length}</span></div>
         <div><span className="block text-muted-foreground/60">Sequence</span><span className="text-foreground font-medium">1 initial + up to 3 follow-ups</span></div>
       </div>
 
       <div className="space-y-1.5">
-        {[...readyRows, ...notReadyRows, ...missingEmailRows, ...suppressedRows, ...alreadySentRows].map(row => {
+        {[...readyRows, ...notReadyRows, ...blockedRows, ...missingEmailRows, ...suppressedRows, ...alreadySentRows].map(row => {
           const meta = STATUS_META[row.status]
           const Icon = meta.icon
           const isSendingThis = sendingContactId === row.contactId
@@ -345,7 +352,7 @@ export function ReviewSendStep({
                     </Button>
                   </>
                 )}
-                {(row.status === 'ready' || row.status === 'not_ready') && (
+                {(row.status === 'ready' || row.status === 'not_ready' || row.status === 'blocked') && (
                   <Button
                     size="sm"
                     variant="ghost"

@@ -37,6 +37,10 @@ export interface DedupedCompany {
   companyLinkedIn?: string
   industry?: string
   country?: string
+  /** Pilot Readiness Plan Phase E — optional, carried through from the
+   * source file for traceability, never used for dedup identity. */
+  icpSegment?: string
+  sourceListId?: string
   contacts: Contact[]
   /** Other company names in this batch that share a weak/partial name match
    * but weren't confident enough to auto-merge — surfaced for manual review. */
@@ -153,6 +157,8 @@ export function dedupeCompanies(rows: LeadRow[]): DedupedCompany[] {
       g.company.companyLinkedIn ??= row.companyLinkedIn
       g.company.industry ??= row.industry
       g.company.country ??= row.country
+      g.company.icpSegment ??= row.icpSegment
+      g.company.sourceListId ??= row.sourceListId
       continue
     }
 
@@ -166,6 +172,8 @@ export function dedupeCompanies(rows: LeadRow[]): DedupedCompany[] {
       companyLinkedIn: row.companyLinkedIn,
       industry: row.industry,
       country: row.country,
+      icpSegment: row.icpSegment,
+      sourceListId: row.sourceListId,
       contacts: [contact],
       possibleDuplicateOf: [],
     }

@@ -323,7 +323,14 @@ export function buildMimeMessage(params: {
 
 export type GmailSendResult =
   | { ok: true; messageId: string; threadId: string }
-  | { ok: false; error: string }
+  // ambiguous: true means the request may have reached Gmail's servers
+  // before we lost the ability to observe the outcome (timeout/network
+  // error thrown by fetch itself) — as opposed to a clean HTTP response
+  // that explicitly rejected the send (ambiguous omitted/false), which is
+  // safe to treat as "definitely not sent." See Production Hardening Master
+  // Plan Phase A, Step A4 — callers must not blindly retry an ambiguous
+  // failure, since that risks a real duplicate send.
+  | { ok: false; error: string; ambiguous?: boolean }
 
 // threadId/inReplyTo/references (added 2026-07-29 for follow-up scheduling,
 // see lib/outbound/sending/followup-schedule.ts) let a follow-up land in the
@@ -378,7 +385,15 @@ export async function sendGmailMessage(
     return { ok: true, messageId: json.id, threadId: json.threadId ?? json.id }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Network error calling Gmail send API'
-    return { ok: false, error: controller.signal.aborted ? `Gmail send request timed out after ${timeoutMs}ms` : message }
+    // Both branches here mean we never got a response back from Gmail, not
+    // that Gmail rejected the request — the send may have gone through.
+    // Always ambiguous, unlike the !res.ok branch above (a real HTTP
+    // response IS a definite "Gmail said no").
+    return {
+      ok: false,
+      ambiguous: true,
+      error: controller.signal.aborted ? `Gmail send request timed out after ${timeoutMs}ms` : message,
+    }
   } finally {
     clearTimeout(timeout)
   }

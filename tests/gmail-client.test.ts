@@ -263,7 +263,7 @@ describe('sendGmailMessage', () => {
     if (result.ok) expect(result.threadId).toBe('msg-123')
   })
 
-  it('returns ok:false with Gmail\'s error message on failure', async () => {
+  it('returns ok:false with Gmail\'s error message on failure — a real HTTP response is a definite rejection, not ambiguous', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
@@ -272,7 +272,41 @@ describe('sendGmailMessage', () => {
 
     const result = await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Hi', bodyText: 'Body' })
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toContain('Insufficient Permission')
+    if (!result.ok) {
+      expect(result.error).toContain('Insufficient Permission')
+      expect(result.ambiguous).toBeFalsy()
+    }
+  })
+
+  // Post-Hardening Pilot Readiness Plan, Phase A, Step A4 — a timeout means
+  // we never got Gmail's response, so we can't tell whether it actually
+  // sent. Callers must treat this differently from a definite rejection.
+  it('marks a timeout as ambiguous:true', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url, opts: any) => new Promise((_resolve, reject) => {
+      opts.signal.addEventListener('abort', () => {
+        const err = new Error('The operation was aborted')
+        err.name = 'AbortError'
+        reject(err)
+      })
+    })))
+
+    const result = await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Hi', bodyText: 'Body' }, 5)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.ambiguous).toBe(true)
+      expect(result.error).toContain('timed out')
+    }
+  })
+
+  it('marks a generic thrown network error as ambiguous:true too — we still don\'t know if Gmail got the request', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNRESET')))
+
+    const result = await sendGmailMessage({ accessToken: 'AT', to: 'a@b.com', subject: 'Hi', bodyText: 'Body' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.ambiguous).toBe(true)
+      expect(result.error).toBe('ECONNRESET')
+    }
   })
 
   it('includes threadId in the request body when provided (follow-up threading), omits it otherwise', async () => {

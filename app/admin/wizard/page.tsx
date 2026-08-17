@@ -514,7 +514,9 @@ export default function WizardPage() {
                           )}
                         </div>
                         <p className="text-muted-foreground/70 text-xs truncate">
-                          {[company.companyWebsite, company.industry, company.country].filter(Boolean).join(' · ') || 'no website/industry/country given'}
+                          {[company.companyWebsite, company.industry, company.country, company.icpSegment, company.sourceListId]
+                            .filter(Boolean)
+                            .join(' · ') || 'no website/industry/country given'}
                         </p>
                         {company.contacts.some(c => c.personName) && (
                           <p className="text-muted-foreground/70 text-xs mt-0.5">

@@ -14,12 +14,18 @@ function renderInputBlock(input: EmailGenerationInput): string {
   lines.push(`Person: ${input.personName}${input.titleHint ? ` (${input.titleHint})` : ''}`)
   lines.push(`Company: ${input.companyName}`)
   if (input.companySummary) lines.push(`Company summary: ${input.companySummary}`)
-  if (input.painPoints.length > 0) {
+  if (input.painPointsDetailed && input.painPointsDetailed.length > 0) {
+    lines.push(
+      `Pain points:\n${input.painPointsDetailed.map(p => `- ${p.text}${p.claimType === 'inferred' ? ' (unconfirmed inference)' : ''}`).join('\n')}`
+    )
+  } else if (input.painPoints.length > 0) {
     lines.push(`Pain points:\n${input.painPoints.map(p => `- ${p}`).join('\n')}`)
   }
   if (input.opportunities.length > 0) {
     lines.push(
-      `Opportunities:\n${input.opportunities.map(o => `- ${o.title}${o.description ? `: ${o.description}` : ''}`).join('\n')}`
+      `Opportunities:\n${input.opportunities
+        .map(o => `- ${o.title}${o.description ? `: ${o.description}` : ''}${o.claimType === 'inferred' ? ' (unconfirmed inference)' : ''}`)
+        .join('\n')}`
     )
   }
   if (input.recentActivity.length > 0) {
@@ -51,6 +57,7 @@ function renderInputBlock(input: EmailGenerationInput): string {
 const COMMON_RULES = `
 Rules:
 - Only reference facts, pain points, opportunities, and activity already present in the research below. Never invent a fact, metric, or claim about the company.
+- Any pain point or opportunity marked "(unconfirmed inference)" is a reasoned guess, not a confirmed fact — phrase it with hedging language ("may be", "likely", "could be", "sounds like") rather than stating it as certain. Never present an unconfirmed inference as something you know for sure about the company.
 - If the research below is thin, write shorter and more general copy rather than fabricating specifics to fill space.
 - Address the person by first name only. Do not invent a greeting title (Mr./Ms./Dr.) unless it's given.
 - No corporate buzzwords ("synergy", "leverage", "circle back"). Write like a real person, not a template.

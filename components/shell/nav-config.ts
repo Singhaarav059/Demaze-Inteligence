@@ -3,7 +3,7 @@
 // mobile drawer so the two never drift out of sync.
 // ============================================================
 
-import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban, Library } from 'lucide-react'
+import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban, Library, ClipboardCheck } from 'lucide-react'
 import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIcon } from './nav-icons'
 
 // Contacts / Campaigns / Warm-Up / Integrations were removed from nav
@@ -39,6 +39,7 @@ export const NAV = [
 // same reasoning as NAV above.
 export const SECONDARY_NAV = [
   { href: '/admin/outbound/overview', label: 'Overview', icon: LayoutDashboard, hint: 'Cross-campaign stats and every email queued or sent, in one table' },
+  { href: '/admin/outbound/pilot-review', label: 'Pilot Review', icon: ClipboardCheck, hint: 'Human quality review of a researched pilot batch — approve, reject, or flag before outreach is generated' },
   { href: '/admin/outbound/contacts', label: 'Contacts', icon: Users, hint: 'Manually-entered or discovered contacts, grouped by researched company' },
   { href: '/admin/outbound/campaigns', label: 'Campaigns', icon: Send, hint: 'Outreach campaign queues and send history' },
   { href: '/admin/outbound/followups', label: 'Follow-ups', icon: Clock, hint: 'What follow-up is due for whom, send now / stop, and the follow-up cadence' },

@@ -82,7 +82,10 @@ export async function sendEmail(request: SendEmailRequest): Promise<SendEmailRes
   try {
     return await provider.sendEmail(request)
   } catch (e) {
-    return { status: 'failed', providerUsed: provider.name, error: e instanceof Error ? e.message : 'Unknown send error' }
+    // Thrown instead of returned — we have no idea what the provider did
+    // before throwing, so treat this the same as a Gmail-timeout: ambiguous,
+    // never auto-retried as if nothing happened.
+    return { status: 'failed', providerUsed: provider.name, error: e instanceof Error ? e.message : 'Unknown send error', ambiguous: true }
   }
 }
 

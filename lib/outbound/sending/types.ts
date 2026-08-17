@@ -42,6 +42,12 @@ export interface SendEmailResult {
   providerMessageId?: string
   providerUsed: string
   error?: string
+  // true only on a 'failed' result where we couldn't observe whether the
+  // provider actually sent it (e.g. a Gmail timeout) — never set on a
+  // definite rejection. Callers must not silently roll a claimed contact
+  // back to retry-eligible on an ambiguous failure; see gmail-client.ts's
+  // GmailSendResult for the underlying distinction.
+  ambiguous?: boolean
 }
 
 export interface FollowupToSchedule {

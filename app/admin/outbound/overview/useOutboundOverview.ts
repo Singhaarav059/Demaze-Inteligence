@@ -13,6 +13,8 @@ export interface OverviewStats {
   totalContacted: number
   replied: number
   bounced: number
+  opened: number
+  unsubscribed: number
   followupPending: number
   followupDueNow: number
   replyRate: number

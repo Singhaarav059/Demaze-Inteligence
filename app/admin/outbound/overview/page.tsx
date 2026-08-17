@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Search, Mail, Inbox, Reply, Ban, Clock, Send } from 'lucide-react'
+import { Search, Mail, Inbox, Reply, Ban, Clock, Send, Eye, UserX } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { useOutboundOverview } from './useOutboundOverview'
+import { PilotFunnelPanel } from './PilotFunnelPanel'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -162,8 +163,13 @@ export default function OutboundOverviewPage() {
           <StatCard icon={Ban} label="Bounced" value={stats.bounced} />
           <StatCard icon={Clock} label="Follow-ups Pending" value={stats.followupPending} sub={`${stats.followupDueNow} due now`} />
           <StatCard icon={Mail} label="All Contacted Statuses" value={Object.keys(stats.byStatus).length} sub="distinct statuses in use" />
+          {/* Secondary signals — not the primary business metric (Pilot Readiness Plan D4) */}
+          <StatCard icon={Eye} label="Opened" value={stats.opened} />
+          <StatCard icon={UserX} label="Unsubscribed" value={stats.unsubscribed} />
         </div>
       )}
+
+      <PilotFunnelPanel />
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-3">

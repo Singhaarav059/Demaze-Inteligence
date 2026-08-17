@@ -36,6 +36,14 @@ export interface LeadRow {
   industry?: string
   country?: string
   companyWebsite?: string
+  // Both optional (Pilot Readiness Plan Phase E — "do not require
+  // unnecessary fields"). icpSegment is free text describing which target
+  // segment this row was sourced for; sourceListId is a name/id the
+  // business already uses for this list (e.g. "Q3 Manufacturing Pilot"),
+  // carried through for traceability — neither is required for a row to
+  // parse, and neither feeds dedup identity.
+  icpSegment?: string
+  sourceListId?: string
 }
 
 export interface ParseResult {
@@ -70,6 +78,8 @@ const HEADER_ALIASES: Record<keyof LeadRow, string[]> = {
   // with no other qualifier is a real but rarer case we accept missing —
   // better than silently populating it with the wrong URL.
   companyWebsite:  ['company website', 'website', 'domain'],
+  icpSegment:      ['icp segment', 'target segment', 'icp/segment', 'segment', 'icp'],
+  sourceListId:    ['source list', 'list identifier', 'list id', 'list name', 'source/list', 'source', 'list'],
 }
 
 /** Maps a raw header row to { fieldName -> columnIndex }. Each field claims
@@ -89,7 +99,15 @@ function buildColumnMap(headers: string[]): Partial<Record<keyof LeadRow, number
 
   const priorityOrder: Array<keyof LeadRow> = [
     'companyLinkedIn', 'companyWebsite', 'companyName',
-    'personLinkedIn', 'personName', 'jobTitle', 'industry', 'country',
+    'personLinkedIn',
+    // icpSegment/sourceListId run before personName/jobTitle deliberately —
+    // personName's bare 'name' fallback alias is greedy enough to swallow a
+    // "List Name" column before sourceListId ever gets a turn (found via a
+    // real test case: "List Name" -> incorrectly matched personName, not
+    // sourceListId). Neither new field's own aliases risk colliding with a
+    // genuine person-name/job-title column, so moving them earlier is safe.
+    'icpSegment', 'sourceListId',
+    'personName', 'jobTitle', 'industry', 'country',
   ]
 
   for (const field of priorityOrder) {
@@ -142,6 +160,8 @@ function rowsFromTable(headerRow: string[], dataRows: string[][]): { rows: LeadR
       industry: get('industry'),
       country: get('country'),
       companyWebsite: get('companyWebsite'),
+      icpSegment: get('icpSegment'),
+      sourceListId: get('sourceListId'),
     })
   })
 

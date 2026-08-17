@@ -51,7 +51,10 @@ export type InputMode = 'single' | 'batch'
 export type BatchCompanyStatus = 'pending' | 'researching' | 'discovering' | 'done' | 'failed'
 type ContactActionKind = 'find-email' | 'delete'
 interface SendOutcomeDetail {
-  status: 'sent' | 'skipped' | 'failed'
+  // 'ambiguous' (Phase A) / 'blocked' (Phase B) match the real outcome
+  // statuses send/route.ts can now return — both fall through to the
+  // generic toast.warning(reason) branch below, same as 'failed'/'skipped'.
+  status: 'sent' | 'skipped' | 'failed' | 'ambiguous' | 'blocked'
   reason?: string
 }
 

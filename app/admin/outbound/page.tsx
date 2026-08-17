@@ -15,6 +15,7 @@ import { SECONDARY_NAV } from '@/components/shell/nav-config'
 
 const WHEN_TO_USE: Record<string, string> = {
   '/admin/outbound/overview': 'You want cross-campaign stats and a single searchable table of every email ever queued or sent, rather than digging through one campaign at a time.',
+  '/admin/outbound/pilot-review': 'You just ran research on a batch of pilot companies and need to manually confirm each one’s company/evidence/opportunity/stakeholder is right before outreach gets generated.',
   '/admin/outbound/contacts': 'You want to add a contact by hand, run Decision-Maker Discovery for a researched company outside Auto Flow, or check what’s already on file for a company.',
   '/admin/outbound/campaigns': 'You want to inspect a campaign’s send queue and event timeline, manually pause/resume one, or trigger a send/follow-up check without going through Auto Flow.',
   '/admin/outbound/followups': 'You want to see exactly what follow-up is due for whom, send one early, stop a contact’s remaining sequence, or change the follow-up cadence.',

@@ -37,11 +37,15 @@ export interface FollowupEngineTickSummary {
   cancelledByBounce: number
   skipped: number
   failed: number
+  // A Gmail timeout/unknown error where we can't confirm whether the send
+  // actually happened — never auto-retried, needs human review. See
+  // claim.ts / process-followup.ts's ambiguous handling.
+  ambiguous: number
   errors: string[]
 }
 
 function newSummary(): FollowupEngineTickSummary {
-  return { campaignsChecked: 0, contactsEligible: 0, sent: 0, cancelledByReply: 0, cancelledByBounce: 0, skipped: 0, failed: 0, errors: [] }
+  return { campaignsChecked: 0, contactsEligible: 0, sent: 0, cancelledByReply: 0, cancelledByBounce: 0, skipped: 0, failed: 0, ambiguous: 0, errors: [] }
 }
 
 interface ContactRow {
@@ -128,6 +132,10 @@ export async function runFollowupEngineTick(
         // (2026-08-17) that a real failure ("Provider gmail is not
         // available") surfaced as failed: 1 with an empty errors array.
         summary.errors.push(`Follow-up failed for campaign ${campaign.id} contact ${cc.id}: ${outcome.reason ?? 'unknown error'}`)
+      }
+      else if (outcome.status === 'ambiguous') {
+        summary.ambiguous++
+        summary.errors.push(`Follow-up ambiguous for campaign ${campaign.id} contact ${cc.id} — could not confirm whether it sent: ${outcome.reason ?? 'unknown error'}`)
       }
       else summary.skipped++ // 'not_due'/'skipped' — not_due shouldn't occur here since isAutoFollowupEligible already checked isFollowupDue, but kept as a safe bucket
     }

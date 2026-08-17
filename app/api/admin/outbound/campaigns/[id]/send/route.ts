@@ -54,10 +54,20 @@ import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/outbound/sending/provider-factory'
 import { isWithinSendWindow, remainingDailySendCapacity } from '@/lib/outbound/sending/campaign-limits'
+import { claimCampaignContact } from '@/lib/outbound/sending/claim'
+import { checkEmailFormat, checkCompanyIdentity } from '@/lib/outbound/sending/send-eligibility'
 
 interface SendOutcome {
   campaignContactId: string
-  status: 'sent' | 'skipped' | 'failed'
+  // 'ambiguous' = a Gmail timeout/unknown error after the claim succeeded —
+  // we can't tell if it actually sent, so this is deliberately left claimed
+  // (not retry-eligible) instead of rolled back to 'queued'. See claim.ts.
+  // 'blocked' = a non-overridable Phase B safety check refused this send
+  // (invalid email format, company-identity conflict, or an unsupported
+  // claim in the draft) — same checks campaign-review.ts uses to keep a
+  // contact out of "ready", enforced again here as the real gate, since
+  // this route can be called directly without going through Review & Send.
+  status: 'sent' | 'skipped' | 'failed' | 'ambiguous' | 'blocked'
   reason?: string
 }
 
@@ -76,9 +86,21 @@ export async function POST(
 
   const { data: campaign } = await supabase
     .from('outbound_campaigns')
-    .select('daily_send_limit, send_window_start, send_window_end, timezone')
+    .select('status, daily_send_limit, send_window_start, send_window_end, timezone')
     .eq('id', campaignId)
     .maybeSingle()
+
+  // Same entry-gate process-followups/route.ts already has — "Send All" had
+  // no pause check at all before this fix (Production Hardening Master
+  // Plan Phase A, Step A7), so pausing a campaign didn't actually stop a
+  // fresh send request against it. A pause mid-batch (after this check
+  // passes) still lets an already-fetched batch finish — same documented
+  // behavior as process-followups and the follow-up engine tick, not
+  // per-contact re-checked; the final status update below never re-activates
+  // a campaign someone paused during the batch.
+  if (campaign?.status === 'paused') {
+    return NextResponse.json({ success: true, sent: 0, skipped: 0, failed: 0, total: 0, outcomes: [], message: 'Campaign is paused — no emails sent.' })
+  }
 
   const withinWindow = campaign ? isWithinSendWindow(campaign) : true
   let remainingToday = campaign
@@ -115,12 +137,26 @@ export async function POST(
 
     const { data: contact } = await supabase
       .from('outbound_contacts')
-      .select('email')
+      .select('email, discovery_grounding_status')
       .eq('id', item.contact_id)
       .maybeSingle()
 
     if (!contact?.email) {
       outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: 'Contact has no email yet.' })
+      continue
+    }
+
+    // B6 / B4 (Phase B, safety policy — no override). Real enforcement, not
+    // just a UI hint: this route can be called directly, bypassing Review &
+    // Send's own classification in campaign-review.ts.
+    const emailFormatCheck = checkEmailFormat(contact.email)
+    if (emailFormatCheck.blocked) {
+      outcomes.push({ campaignContactId: item.id, status: 'blocked', reason: emailFormatCheck.reason })
+      continue
+    }
+    const identityCheck = checkCompanyIdentity(contact.discovery_grounding_status)
+    if (identityCheck.blocked) {
+      outcomes.push({ campaignContactId: item.id, status: 'blocked', reason: identityCheck.reason })
       continue
     }
 
@@ -130,9 +166,18 @@ export async function POST(
       .eq('contact_id', item.contact_id)
       .maybeSingle()
 
-    const emailDraft = generated?.email_draft as { fullText?: string } | null
+    const emailDraft = generated?.email_draft as { fullText?: string; claimGroundingCheck?: { hasUnsupportedClaim?: boolean; reason?: string } } | null
     if (!generated || !generated.selected_subject_line || !emailDraft?.fullText) {
       outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: 'No generated email for this contact yet.' })
+      continue
+    }
+
+    // B5 (Phase B, safety policy — no override).
+    if (emailDraft.claimGroundingCheck?.hasUnsupportedClaim) {
+      outcomes.push({
+        campaignContactId: item.id, status: 'blocked',
+        reason: emailDraft.claimGroundingCheck.reason ?? 'This draft contains an unsupported factual claim.',
+      })
       continue
     }
 
@@ -149,14 +194,9 @@ export async function POST(
     // it here rather than sending again. Rolled back to 'queued' below if
     // the send itself then fails, preserving the existing "left queued for
     // retry" behavior.
-    const { data: claimed } = await supabase
-      .from('outbound_campaign_contacts')
-      .update({ status: 'sent', updated_at: new Date().toISOString() })
-      .eq('id', item.id)
-      .eq('status', 'queued')
-      .select('id')
+    const claimed = await claimCampaignContact(supabase, item.id, 'queued', 'sent')
 
-    if (!claimed || claimed.length === 0) {
+    if (!claimed) {
       outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: 'Already claimed by a concurrent send request.' })
       continue
     }
@@ -170,6 +210,21 @@ export async function POST(
     })
 
     if (result.status === 'failed') {
+      if (result.ambiguous) {
+        // Do NOT roll back to 'queued' — we can't tell whether Gmail
+        // actually sent this (e.g. a timeout waiting for the response).
+        // Leaving the row claimed 'sent' means no later retry can double-send
+        // it; this needs a human to check the Gmail sent folder.
+        remainingToday -= 1
+        outcomes.push({ campaignContactId: item.id, status: 'ambiguous', reason: result.error })
+        await supabase.from('outbound_campaign_events').insert({
+          campaign_id: campaignId,
+          campaign_contact_id: item.id,
+          event_type: 'send_ambiguous',
+          detail: { error: result.error, providerUsed: result.providerUsed },
+        })
+        continue
+      }
       await supabase
         .from('outbound_campaign_contacts')
         .update({ status: 'queued', updated_at: new Date().toISOString() })
@@ -224,16 +279,22 @@ export async function POST(
     outcomes.push({ campaignContactId: item.id, status: 'sent' })
   }
 
+  // Never re-activates a campaign someone paused while this batch was
+  // running (Phase A, Step A7) — the entry-gate above only catches a pause
+  // that happened before this request started.
   await supabase
     .from('outbound_campaigns')
     .update({ status: 'active', updated_at: new Date().toISOString() })
     .eq('id', campaignId)
+    .neq('status', 'paused')
 
   return NextResponse.json({
     success: true,
     sent: outcomes.filter(o => o.status === 'sent').length,
     skipped: outcomes.filter(o => o.status === 'skipped').length,
     failed: outcomes.filter(o => o.status === 'failed').length,
+    ambiguous: outcomes.filter(o => o.status === 'ambiguous').length,
+    blocked: outcomes.filter(o => o.status === 'blocked').length,
     total: outcomes.length,
     outcomes,
   })

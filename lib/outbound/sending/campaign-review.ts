@@ -15,8 +15,15 @@
 
 import type { createServerClient } from '@/lib/supabase/server'
 import { isSuppressed } from './suppression'
+import { checkEmailFormat, checkCompanyIdentity } from './send-eligibility'
 
-export type ContactReviewStatus = 'ready' | 'missing_email' | 'suppressed' | 'already_sent' | 'not_ready'
+// 'blocked' (Phase B, safety policy) is distinct from 'missing_email'/
+// 'not_ready' — there IS a real email and a real drafted email, but a
+// non-overridable safety check refused it (invalid email syntax, a company-
+// identity conflict, or an unsupported factual claim in the draft). See
+// docs/outbound-safety-policy.md.
+export type ContactReviewStatus = 'ready' | 'missing_email' | 'suppressed' | 'already_sent' | 'not_ready' | 'blocked'
+export type BlockReason = 'invalid_email_format' | 'company_identity_mismatch' | 'unsupported_claim'
 
 export interface ContactReviewRow {
   contactId: string
@@ -45,6 +52,8 @@ export interface ContactReviewRow {
   // human reviewer instead of that signal disappearing after discovery.
   discoveryGroundingStatus?: 'confirmed' | 'conflict' | 'not_found' | null
   discoveryGroundingReason?: string | null
+  // Only set when status === 'blocked' — which of the B4/B5/B6 checks fired.
+  blockReason?: BlockReason
 }
 
 export interface CampaignReviewSummary {
@@ -54,6 +63,7 @@ export interface CampaignReviewSummary {
   suppressed: number
   alreadySent: number
   notReady: number
+  blocked: number
   rows: ContactReviewRow[]
 }
 
@@ -63,7 +73,7 @@ export async function classifyCampaignContacts(
   contactIds: string[]
 ): Promise<CampaignReviewSummary> {
   if (contactIds.length === 0) {
-    return { total: 0, ready: 0, missingEmail: 0, suppressed: 0, alreadySent: 0, notReady: 0, rows: [] }
+    return { total: 0, ready: 0, missingEmail: 0, suppressed: 0, alreadySent: 0, notReady: 0, blocked: 0, rows: [] }
   }
 
   const [{ data: contacts }, { data: generatedRows }, { data: campaignContactRows }] = await Promise.all([
@@ -96,6 +106,30 @@ export async function classifyCampaignContacts(
       continue
     }
 
+    // B6 — invalid email format. A missing email was already caught above;
+    // this catches a PRESENT but syntactically malformed one, never checked
+    // before Phase B. No override (docs/outbound-safety-policy.md).
+    const emailFormatCheck = checkEmailFormat(email)
+    if (emailFormatCheck.blocked) {
+      rows.push({
+        contactId, personName, email, status: 'blocked', reason: emailFormatCheck.reason,
+        blockReason: 'invalid_email_format', campaignContactId: existingCc?.id,
+      })
+      continue
+    }
+
+    // B4 — decision-maker company identity mismatch. Only 'conflict' blocks
+    // — see send-eligibility.ts's own comment for why 'not_found' stays
+    // advisory. No override.
+    const identityCheck = checkCompanyIdentity(contact?.discovery_grounding_status ?? null)
+    if (identityCheck.blocked) {
+      rows.push({
+        contactId, personName, email, status: 'blocked', reason: identityCheck.reason,
+        blockReason: 'company_identity_mismatch', campaignContactId: existingCc?.id,
+      })
+      continue
+    }
+
     const suppression = await isSuppressed(email)
     if (suppression.suppressed) {
       rows.push({
@@ -108,9 +142,23 @@ export async function classifyCampaignContacts(
     }
 
     const generated = generatedByContact.get(contactId)
-    const emailDraft = generated?.email_draft as { fullText?: string } | null
+    const emailDraft = generated?.email_draft as { fullText?: string; claimGroundingCheck?: { hasUnsupportedClaim?: boolean; reason?: string } } | null
     if (!generated?.selected_subject_line || !emailDraft?.fullText) {
       rows.push({ contactId, personName, email, status: 'not_ready', reason: 'No generated email drafted yet.', campaignContactId: existingCc?.id })
+      continue
+    }
+
+    // B5 — unsupported factual claim. Computed once at generation time
+    // (generate-email route) and stored on the draft; absent (drafts
+    // generated before this field existed) is treated as passing, same
+    // graceful-degradation contract as every other optional field here. No
+    // override.
+    if (emailDraft.claimGroundingCheck?.hasUnsupportedClaim) {
+      rows.push({
+        contactId, personName, email, status: 'blocked',
+        reason: emailDraft.claimGroundingCheck.reason ?? 'This draft contains an unsupported factual claim.',
+        blockReason: 'unsupported_claim', campaignContactId: existingCc?.id,
+      })
       continue
     }
 
@@ -129,6 +177,7 @@ export async function classifyCampaignContacts(
     suppressed: rows.filter(r => r.status === 'suppressed').length,
     alreadySent: rows.filter(r => r.status === 'already_sent').length,
     notReady: rows.filter(r => r.status === 'not_ready').length,
+    blocked: rows.filter(r => r.status === 'blocked').length,
     rows,
   }
 }

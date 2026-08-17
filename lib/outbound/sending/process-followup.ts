@@ -27,6 +27,8 @@ import {
 import { sendEmail } from './provider-factory'
 import { addToSuppressionList } from './suppression'
 import { nextFollowupSequence, isFollowupDue, buildFollowupSubject } from './followup-schedule'
+import { claimCampaignContact } from './claim'
+import { checkEmailFormat, checkCompanyIdentity } from './send-eligibility'
 
 // Contact statuses that still have a follow-up left to send — 'followup_3'
 // is deliberately excluded (no followup_4 exists, see followup-schedule.ts's
@@ -39,7 +41,13 @@ export const FOLLOWUP_ELIGIBLE_STATUSES = ['sent', 'followup_1', 'followup_2']
 
 export interface FollowupOutcome {
   campaignContactId: string
-  status: 'sent' | 'not_due' | 'cancelled_reply' | 'cancelled_bounce' | 'skipped' | 'failed'
+  // 'ambiguous' = the send may have gone through but we couldn't confirm it
+  // (e.g. a Gmail timeout) — deliberately NOT rolled back to retry-eligible,
+  // to avoid risking a real duplicate send. Needs manual review.
+  // 'blocked' = a non-overridable Phase B safety check refused this send
+  // (invalid email format or a company-identity conflict) — see
+  // send-eligibility.ts / docs/outbound-safety-policy.md.
+  status: 'sent' | 'not_due' | 'cancelled_reply' | 'cancelled_bounce' | 'skipped' | 'failed' | 'ambiguous' | 'blocked'
   sequence?: number
   reason?: string
 }
@@ -170,12 +178,25 @@ export async function processFollowupForContact(
 
   const { data: contact } = await supabase
     .from('outbound_contacts')
-    .select('email')
+    .select('email, discovery_grounding_status')
     .eq('id', cc.contact_id)
     .maybeSingle()
 
   if (!contact?.email) {
     return { campaignContactId, status: 'skipped', sequence, reason: 'Contact has no email.' }
+  }
+
+  // B6 / B4 (Phase B, safety policy — no override). A follow-up to a
+  // contact whose original send already passed these checks should still
+  // never bypass them here — this is the same shared choke point manual
+  // "Send Now," "Process Follow-ups," and the automatic engine all use.
+  const emailFormatCheck = checkEmailFormat(contact.email)
+  if (emailFormatCheck.blocked) {
+    return { campaignContactId, status: 'blocked', sequence, reason: emailFormatCheck.reason }
+  }
+  const identityCheck = checkCompanyIdentity(contact.discovery_grounding_status)
+  if (identityCheck.blocked) {
+    return { campaignContactId, status: 'blocked', sequence, reason: identityCheck.reason }
   }
 
   const { data: generated } = await supabase
@@ -205,14 +226,9 @@ export async function processFollowupForContact(
   // currently in TO followup_${sequence}. Rolled back to cc.status below if
   // the send itself then fails, preserving retry-eligibility exactly as
   // before this fix.
-  const { data: claimed } = await supabase
-    .from('outbound_campaign_contacts')
-    .update({ status: `followup_${sequence}`, updated_at: new Date().toISOString() })
-    .eq('id', cc.id)
-    .eq('status', cc.status)
-    .select('id')
+  const claimed = await claimCampaignContact(supabase, cc.id, cc.status, `followup_${sequence}`)
 
-  if (!claimed || claimed.length === 0) {
+  if (!claimed) {
     return { campaignContactId, status: 'skipped', sequence, reason: 'Already claimed by a concurrent follow-up request.' }
   }
 
@@ -227,6 +243,18 @@ export async function processFollowupForContact(
   })
 
   if (result.status === 'failed') {
+    if (result.ambiguous) {
+      // Do NOT roll back — we can't tell whether Gmail already sent this.
+      // Leaving the row claimed (followup_${sequence}) makes it un-claimable
+      // again, so no later retry can double-send it.
+      await supabase.from('outbound_campaign_events').insert({
+        campaign_id: campaignId,
+        campaign_contact_id: cc.id,
+        event_type: 'send_ambiguous',
+        detail: { followupSequence: sequence, error: result.error, providerUsed: result.providerUsed },
+      })
+      return { campaignContactId, status: 'ambiguous', sequence, reason: result.error }
+    }
     await supabase
       .from('outbound_campaign_contacts')
       .update({ status: cc.status, updated_at: new Date().toISOString() })
