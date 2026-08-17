@@ -18,6 +18,7 @@
 // ============================================================
 
 import { extractCompanyOfferings } from './service-offerings'
+import { escapeRegex } from '../utils/regex'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -149,27 +150,12 @@ export interface DetectedFactors {
   recent_news_or_event: boolean
 }
 
-/**
- * @deprecated Will be removed once OPP_TEMPLATES seeding is replaced by OPPORTUNITY_CATALOG injection.
- * Consumers: analyze-v2.ts (LLM hint block), route.ts (response payload — informational only).
- */
-export interface OpportunityDraft {
-  service: string
-  trigger_signals: SignalType[]
-  confidence: 'very_high' | 'high' | 'medium' | 'exploratory'
-  demaze_fit: 'high' | 'medium' | 'low'
-  evidence_anchor: string   // best quote supporting this opportunity
-  category: string
-}
-
 export interface ExtractorResult {
   signals: DetectedSignal[]
   detectedFactors: DetectedFactors
   /** Maps each active factor to the signal types that triggered it — for score traceability */
   factorSourceMap: Partial<Record<keyof DetectedFactors, string[]>>
   companyProfile: CompanyProfile
-  /** @deprecated LLM prompt seeding only — not used in the final opportunities output pipeline. */
-  opportunityDrafts: OpportunityDraft[]
   contentFlags: string[]
   signalSummary: string       // compact, LLM-injectable summary
   companySubjectCount: number
@@ -636,10 +622,6 @@ function firstSignificantWord(name: string): string | null {
   const words = cleaned.split(' ').filter(w => w.length > 0)
   if (words.length <= 1) return null
   return words[0]
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 // JavaScript's \b is always defined in terms of the ASCII \w class, even
@@ -1541,9 +1523,6 @@ export function extractSignals(
     }
   }
 
-  // ── Opportunity drafts ────────────────────────────────────────────
-  const opportunityDrafts = buildOpportunityDrafts(signals, companyProfile)
-
   // ── Content flags ────────────────────────────────────────────────────
   const contentFlags: string[] = []
   if (companySubjectCount === 0) contentFlags.push('no_company_operations_content')
@@ -1571,7 +1550,7 @@ export function extractSignals(
   const companyOfferings = extractCompanyOfferings(websiteContent)
 
   // ── Signal summary for LLM prompt ────────────────────────────────────────────
-  const signalSummary = buildSignalSummary(signals, detectedFactors, companyProfile, opportunityDrafts)
+  const signalSummary = buildSignalSummary(signals, detectedFactors, companyProfile)
 
   // ── Website preview — the LLM's actual raw-content window ──────────────
   // RESOLVED 2026-07-22: was 3,000 chars of scraped content ONLY — meaning
@@ -1599,7 +1578,6 @@ export function extractSignals(
     factorSourceMap,
     companyProfile,
     companyProfileEvidence,
-    opportunityDrafts,
     contentFlags,
     signalSummary,
     companySubjectCount,
@@ -1609,91 +1587,12 @@ export function extractSignals(
   }
 }
 
-// ── Opportunity mapper ──────────────────────────────────────────────────────
-// Deterministic signal → opportunity service mapping.
-
-interface OppTemplate {
-  service: string
-  category: string
-  demaze_fit: 'high' | 'medium' | 'low'
-  trigger: SignalType[]
-  base_confidence: 'very_high' | 'high' | 'medium' | 'exploratory'
-}
-
-/**
- * @deprecated Parallel catalog to OPPORTUNITY_CATALOG in opportunity-engine.ts.
- * Used only for seeding the LLM prompt via buildOpportunityDrafts → opportunityDrafts → analyze-v2.ts hint block.
- * Do NOT add entries here — add to OPPORTUNITY_CATALOG instead.
- */
-const OPP_TEMPLATES: OppTemplate[] = [
-  // Tier 1 signals → highest priority opportunities
-  { service: 'Manufacturing Analytics Platform', category: 'data_visibility',   demaze_fit: 'high',   trigger: ['industry40_initiative', 'iot_investment'],            base_confidence: 'high' },
-  { service: 'AI Agents / Operations Copilot',   category: 'process_automation', demaze_fit: 'high',   trigger: ['ai_mention', 'digital_transformation_hiring'],        base_confidence: 'high' },
-  { service: 'Cross-Plant Intelligence',          category: 'data_visibility',   demaze_fit: 'high',   trigger: ['multi_location_operations'],                           base_confidence: 'high' },
-  { service: 'Predictive Maintenance AI',         category: 'maintenance',       demaze_fit: 'high',   trigger: ['capacity_expansion', 'new_facility'],                  base_confidence: 'medium' },
-  { service: 'Process Automation AI',             category: 'process_automation', demaze_fit: 'high',  trigger: ['automation_investment', 'automation_engineering_hiring'], base_confidence: 'high' },
-  { service: 'Computer Vision Quality AI',        category: 'quality',           demaze_fit: 'high',   trigger: ['quality_certification_pursuit', 'operations_hiring_surge'], base_confidence: 'medium' },
-  { service: 'Supply Chain AI',                   category: 'supply_chain',      demaze_fit: 'medium', trigger: ['new_market_entry', 'capacity_expansion'],              base_confidence: 'medium' },
-  { service: 'Operations Intelligence',           category: 'data_visibility',   demaze_fit: 'high',   trigger: ['mes_adoption', 'erp_implementation'],                  base_confidence: 'high' },
-  { service: 'Digital Twin Analytics',            category: 'data_visibility',   demaze_fit: 'medium', trigger: ['industry40_initiative'],                               base_confidence: 'medium' },
-  { service: 'Knowledge Intelligence AI',         category: 'process_automation', demaze_fit: 'medium', trigger: ['digital_transformation_hiring', 'ai_ml_hiring'],      base_confidence: 'exploratory' },
-]
-
-/** @deprecated See OPP_TEMPLATES. */
-function buildOpportunityDrafts(signals: DetectedSignal[], profile: CompanyProfile): OpportunityDraft[] {
-  const activeTypes = new Set(signals.map(s => s.type))
-  const signalByType = new Map(signals.map(s => [s.type, s]))
-
-  const drafts: OpportunityDraft[] = []
-  const usedServices = new Set<string>()
-
-  for (const tmpl of OPP_TEMPLATES) {
-    if (usedServices.has(tmpl.service)) continue
-
-    const triggeredBy = tmpl.trigger.filter(t => activeTypes.has(t))
-    if (triggeredBy.length === 0) continue
-
-    // Filter: SaaS-only companies (not also manufacturers) skip factory-floor opportunities
-    if (profile.company_type.software_saas && !profile.company_type.manufacturer) {
-      if (['Manufacturing Analytics Platform', 'Predictive Maintenance AI', 'Computer Vision Quality AI', 'Cross-Plant Intelligence'].includes(tmpl.service)) continue
-    }
-
-    // Find best evidence quote from triggering signals
-    let bestQuote = ''
-    for (const triggerType of triggeredBy) {
-      const sig = signalByType.get(triggerType)
-      if (sig && sig.best_quote.length > bestQuote.length) {
-        bestQuote = sig.best_quote
-      }
-    }
-
-    // Confidence boost if tier1 evidence exists
-    const hasTier1 = triggeredBy.some(t => signalByType.get(t)?.evidence.some(e => e.source_tier === 'tier1'))
-    const confidence: OppTemplate['base_confidence'] = hasTier1 && tmpl.base_confidence !== 'exploratory' ? 'high' : tmpl.base_confidence
-
-    drafts.push({
-      service: tmpl.service,
-      trigger_signals: triggeredBy,
-      confidence,
-      demaze_fit: tmpl.demaze_fit,
-      evidence_anchor: bestQuote,
-      category: tmpl.category,
-    })
-    usedServices.add(tmpl.service)
-
-    if (drafts.length >= 5) break
-  }
-
-  return drafts
-}
-
 // ── Signal summary builder (compact LLM-injectable string) ─────
 
 function buildSignalSummary(
   signals: DetectedSignal[],
   factors: DetectedFactors,
   profile: CompanyProfile,
-  opportunities: OpportunityDraft[],
 ): string {
   const lines: string[] = []
 
@@ -1711,13 +1610,6 @@ function buildSignalSummary(
   const activeFactors = (Object.keys(factors) as Array<keyof DetectedFactors>).filter(k => factors[k as keyof DetectedFactors])
   if (activeFactors.length > 0) {
     lines.push(`\nFACTORS: ${activeFactors.join(', ')}`)
-  }
-
-  if (opportunities.length > 0) {
-    lines.push(`\nOPPORTUNITY CANDIDATES:`)
-    for (const o of opportunities) {
-      lines.push(`  ${o.service} [fit:${o.demaze_fit} | confidence:${o.confidence}]`)
-    }
   }
 
   return lines.join('\n')

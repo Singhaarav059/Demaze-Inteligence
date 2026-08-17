@@ -11,6 +11,7 @@
 // ============================================================
 
 import { getBusinessProfile } from '@/lib/pipeline/analysis-sections'
+import { escapeRegex } from '@/lib/utils/regex'
 import { getAllSectorPlaybooks } from './playbooks'
 import type { TargetSector } from './types'
 
@@ -21,10 +22,6 @@ export interface SectorClassification {
   confidence: SectorMatchConfidence
   matchedSignals: string[]
   reason: string
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function wordBoundaryRegex(phrase: string): RegExp {

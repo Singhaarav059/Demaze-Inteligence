@@ -16,6 +16,8 @@
 // (±45/55 chars) for debug/audit output.
 // ============================================================
 
+import { escapeRegex } from '../utils/regex'
+
 export type QuoteMatchTier = 'exact' | 'close' | 'none'
 
 export interface QuoteVerificationResult {
@@ -31,9 +33,6 @@ const STOPWORDS = new Set([
   'will', 'would', 'could', 'should', 'about', 'across', 'which', 'while',
 ])
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 // Lowercase, normalize smart quotes/dashes, collapse whitespace — same
 // normalization shape as competitor-discovery.ts's normalizeName(), applied

@@ -42,14 +42,12 @@
 // prefer under-confidence to over-confidence.
 // ============================================================
 
+import { escapeRegex } from '@/lib/utils/regex'
+
 const GENERIC_NAME_WORDS = new Set([
   'the', 'a', 'an', 'and', 'of', 'for', 'inc', 'incorporated', 'llc', 'corp',
   'corporation', 'co', 'company', 'group', 'ltd', 'limited', 'pvt', 'private',
 ])
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 // JavaScript's \b is always defined in terms of the ASCII \w class, even
 // under the 'u' flag — it does not become Unicode-aware just by adding 'u'.

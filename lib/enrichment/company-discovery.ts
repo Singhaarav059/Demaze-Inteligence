@@ -30,6 +30,7 @@
 // ============================================================
 
 import { searchTavily, searchSerper } from './discovery-engine'
+import { escapeRegex } from '../utils/regex'
 import { isSelfName } from './competitor-discovery'
 import { discoverCompanyWebsite } from './website-discovery'
 import { getCompletion } from '../ai/provider-factory'
@@ -82,10 +83,6 @@ export function normalizeName(name: string): string {
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 // ── Input-shape guard ──────────────────────────────────────────────

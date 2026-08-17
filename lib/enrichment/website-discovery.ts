@@ -20,6 +20,7 @@
 // ============================================================
 
 import { searchTavily, searchSerper } from './discovery-engine'
+import { escapeRegex } from '../utils/regex'
 
 // A real, current-browser-shaped User-Agent — see the identical constant +
 // comment in lib/pipeline/scraper.ts (2026-07-23 Muthoot Finance / A-1 Fence
@@ -75,10 +76,6 @@ export function normalizeCompanyName(name: string): string {
 
 export function significantWords(normalizedName: string): string[] {
   return normalizedName.split(' ').filter(w => w.length > 0)
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 // JavaScript's \b is defined in terms of the ASCII \w class REGARDLESS of

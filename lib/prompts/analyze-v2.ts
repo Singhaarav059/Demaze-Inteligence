@@ -8,7 +8,7 @@
 //         outreach angle)
 // ============================================================
 
-import type { ExtractorResult, OpportunityDraft } from '@/lib/pipeline/evidence-extractor'
+import type { ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import type { CompetitorCandidate } from '@/lib/enrichment/competitor-discovery'
 import type { ICPCandidate } from '@/lib/enrichment/icp-generator'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
@@ -18,8 +18,6 @@ export interface NarrativePromptInput {
   domain: string
   websitePreview: string          // up to 16,000 chars, blended scraped+enriched content — the LLM's primary raw-evidence pool (see evidence-extractor.ts's 2026-07-22 construction note)
   signalSummary: string           // compact code-extracted signal block
-  /** @deprecated OPP_TEMPLATES seeding. Will be replaced by OPPORTUNITY_CATALOG titles injected directly. */
-  opportunityDrafts: OpportunityDraft[]
   analyzedAt: string
   contentQualityWarning?: string
   pagesAnalyzed: string[]
@@ -163,7 +161,6 @@ OUTPUT FORMAT — Return ONE flat JSON object with exactly these fields:
     "follow_up": "A follow-up message for if the first message gets no reply. MUST follow the REAL DEMAZE OUTREACH VOICE template below exactly (follow-up pattern). 2-4 sentences, ends on a direct but low-friction call-to-action."
   },
   "signal_summary": "1–2 sentence narrative of the most important signals detected, or what was inferred.",
-  "competitive_context": "Brief industry context relevant to Demaze's pitch. Prefix 'Industry context:' if not from website.",
   "confidence_level": "high | medium | low",
   "data_quality_notes": "Brief note on what was available and any key limitations.",
   "why_now": "ONE specific recent company signal or activity that creates outreach urgency — not a trend.",
@@ -213,7 +210,6 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     domain,
     websitePreview,
     signalSummary,
-    opportunityDrafts,
     analyzedAt,
     contentQualityWarning,
     pagesAnalyzed,
@@ -222,14 +218,6 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     businessProfile,
     proofPointCandidates,
   } = input
-
-  // Pre-detected signals as context hints (not constraints)
-  const signalHints = opportunityDrafts.length > 0
-    ? `PRE-DETECTED OPPORTUNITY HINTS (use as starting points, not constraints):\n` +
-      opportunityDrafts.map((o, i) =>
-        `  ${i + 1}. ${o.service} — evidence hint: "${o.evidence_anchor.slice(0, 120)}"`
-      ).join('\n')
-    : `PRE-DETECTED SIGNALS: None detected deterministically. Use business model inference to generate challenges and opportunities.`
 
   // [COMPETITOR CANDIDATES] — code-derived, already filtered by
   // discoverCompetitors() (self-name/customer/supplier/certifying-body/
@@ -319,8 +307,6 @@ ${contentQualityWarning ? `\nCONTENT NOTE: ${contentQualityWarning}` : ''}
 [PRE-EXTRACTED INTELLIGENCE -- produced by pattern analysis of the website content]
 ${signalSummary || 'No deterministic signals extracted. Rely on website content and business model inference.'}
 
-[${signalHints}]
-
 [BUSINESS PROFILE -- what the researched company itself does, extracted from its own website content. Use this only to judge category/similarities/use_cases/scoring below, never as a source of new competitor or segment names]
 ${businessProfileBlock}
 
@@ -368,7 +354,6 @@ export function buildNarrativeInput(
     domain,
     websitePreview: extractorResult.websitePreview,
     signalSummary: extractorResult.signalSummary,
-    opportunityDrafts: extractorResult.opportunityDrafts,
     analyzedAt: new Date().toISOString(),
     contentQualityWarning,
     pagesAnalyzed,

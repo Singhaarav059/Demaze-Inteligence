@@ -353,17 +353,6 @@ export interface NormalizedAnalysis {
   // See EVIDENCE_SOURCE_STRATEGY.md, "Insufficient Evidence" outcome.
   evidence_sufficiency: 'sufficient' | 'insufficient'
 
-  /**
-   * @deprecated Dead field — confirmed unrendered by ResearchCard.tsx or the
-   * brief export (grep-verified). Superseded by `competitors` /
-   * `competitor_sufficiency` below (Competitor Discovery Engine, Phase 2 item
-   * 1 — see CLAUDE.md "SCOPE PIVOT" and Latest Session Handoff.md). Left in
-   * place, still populated from the LLM prompt, until the new engine is
-   * actually implemented and wired — removing it now would be premature
-   * given nothing produces `competitors` yet.
-   */
-  competitive_context: string
-
   // Competitor Discovery Engine output (Phase 2 item 1). Code-derived
   // candidate list with LLM-narrated why_they_compete/market_position per
   // candidate — same deterministic-list + LLM-narration-merge discipline as
@@ -408,8 +397,7 @@ export interface NormalizedAnalysis {
   // Superseded as the primary Competitor Discovery / ICP Generator query
   // anchor by business_profile below (2026-07-16 rebuild) — kept as a
   // display field and as the fallback query source when business_profile is
-  // empty. Distinct from `competitive_context` (Demaze-pitch industry
-  // framing) and `business_model` prose. Pure passthrough, same as
+  // empty. Distinct from `business_model` prose. Pure passthrough, same as
   // market_intelligence above — content-derived only, no LLM narration step.
   company_offerings: string[]
 
@@ -1042,8 +1030,6 @@ export function normalizeAnalysisResult(
   ]
   console.log(`[normalize:opps] deterministic=${deterministic_opportunities.length} | llm_parsed=${llmOpportunities.length} | llm_enriched=${opportunitiesFromDeterministic.filter(o => o.evidence).length} | llm_verified=${opportunitiesFromLlmVerified.length} | llm_inferred=${opportunitiesFromLlmInferred.length}`)
 
-  const competitive_context = str(flat.competitive_context)
-
   // ── Competitors (Phase 2 item 1, business-understanding rebuild 2026-07-16) ──
   // route.ts's discoverCompetitorsFromBusinessProfile() call supplies
   // code-derived skeletons (name/confidence/source_urls/website + a fallback
@@ -1331,7 +1317,6 @@ export function normalizeAnalysisResult(
     opportunities,
     deterministic_opportunities,
     evidence_sufficiency,
-    competitive_context,
     competitors,
     competitor_sufficiency,
     icp_segments,

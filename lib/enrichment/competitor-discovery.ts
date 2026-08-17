@@ -127,6 +127,7 @@ import { searchTavily, searchSerper } from './discovery-engine'
 import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase, filterAdversarialContent } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 import { getCompletion } from '@/lib/ai/provider-factory'
+import { escapeRegex } from '@/lib/utils/regex'
 import { verifyQuoteInContent, type QuoteMatchTier } from '@/lib/pipeline/quote-verification'
 
 // ── Company-name word-boundary matching ─────────────────────────
@@ -148,10 +149,6 @@ export function normalizeName(name: string): string {
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 // Word-overlap self-name check — a candidate is the researched company
