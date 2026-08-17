@@ -35,7 +35,11 @@ const MAX_TOTAL_CHARS      = 20_000  // raised from 15k — more pages, more con
 const MAX_PAGE_CHARS       =  5_000
 const PAGE_TIMEOUT_MS      = 20_000
 const SITEMAP_TIMEOUT_MS   =  8_000
-const MIN_USEFUL_CHARS     =    150
+// Exported — lib/pipeline/scrape-relevance.ts (Phase 3, Production Hardening
+// Plan) reuses this same "too thin to be useful" floor when deciding whether
+// a scraped page belongs in the post-scrape research corpus, rather than
+// re-deriving its own threshold.
+export const MIN_USEFUL_CHARS = 150
 const MAX_DISCOVERED_PAGES =     15  // raised from 9
 
 // A real, current-browser-shaped User-Agent for every fetch() this file makes
@@ -408,7 +412,11 @@ function matchesKeyword(urlPath: string, kw: string): boolean {
   return urlPath.includes(kw)
 }
 
-function classifyUrl(path: string): { category: string; score: number; keep_b2c: boolean } {
+// Exported — lib/pipeline/scrape-relevance.ts (Phase 3, Production Hardening
+// Plan) reuses this same URL-category scoring for POST-scrape page relevance
+// (a different concern from this function's original PRE-scrape "what to
+// scrape" job) instead of re-deriving a parallel classifier.
+export function classifyUrl(path: string): { category: string; score: number; keep_b2c: boolean } {
   const lower = path.toLowerCase()
 
   for (const [category, config] of Object.entries(URL_CATEGORY_CONFIG)) {

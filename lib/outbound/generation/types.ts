@@ -9,6 +9,8 @@
 // outbound_contacts row — never re-derived here.
 // ============================================================
 
+import type { PersonalizationCheckResult } from './personalization-check'
+
 // Optional — sourced from outbound_sales_intelligence (lib/sales-knowledge)
 // when a Sales Strategy recommendation exists for this run. Absent for any
 // run predating this feature, or where Sales Knowledge was never
@@ -60,6 +62,12 @@ export interface EmailDraft {
   cta: string
   signature: string
   fullText: string
+  // Deterministic generic-personalization audit (Master Plan Phase 5, Step
+  // 5.2 — see lib/outbound/generation/personalization-check.ts), computed
+  // once at generation time and stored alongside the draft. Advisory only —
+  // never blocks generation; the UI surfaces it as a warning for the human
+  // reviewer. Absent on any draft generated before this field existed.
+  personalizationCheck?: PersonalizationCheckResult
 }
 
 export interface EmailDraftResult {

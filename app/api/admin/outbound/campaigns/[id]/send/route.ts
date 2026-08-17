@@ -136,6 +136,31 @@ export async function POST(
       continue
     }
 
+    // Atomic claim (Production Hardening Master Plan, Step 8.6 — "a retry
+    // must never send the same email twice"). This loop reads the whole
+    // 'queued' set in one query above, then sends one at a time — two
+    // overlapping calls to this route (a double-click, two open tabs) would
+    // otherwise both read the same queued rows before either updates one,
+    // and both would genuinely send a duplicate real email to the same
+    // prospect. Flip to 'sent' NOW, conditioned on the row still being
+    // 'queued' — Postgres's row-level update is atomic, so only one
+    // concurrent request's WHERE clause can match. `claimed` empty means
+    // another request already claimed (or otherwise moved) this row; skip
+    // it here rather than sending again. Rolled back to 'queued' below if
+    // the send itself then fails, preserving the existing "left queued for
+    // retry" behavior.
+    const { data: claimed } = await supabase
+      .from('outbound_campaign_contacts')
+      .update({ status: 'sent', updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+      .eq('status', 'queued')
+      .select('id')
+
+    if (!claimed || claimed.length === 0) {
+      outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: 'Already claimed by a concurrent send request.' })
+      continue
+    }
+
     const result = await sendEmail({
       campaignId,
       contactEmail: contact.email,
@@ -145,6 +170,10 @@ export async function POST(
     })
 
     if (result.status === 'failed') {
+      await supabase
+        .from('outbound_campaign_contacts')
+        .update({ status: 'queued', updated_at: new Date().toISOString() })
+        .eq('id', item.id)
       outcomes.push({ campaignContactId: item.id, status: 'failed', reason: result.error })
       await supabase.from('outbound_campaign_events').insert({
         campaign_id: campaignId,
@@ -155,6 +184,10 @@ export async function POST(
       continue
     }
     if (result.status === 'suppressed') {
+      await supabase
+        .from('outbound_campaign_contacts')
+        .update({ status: 'queued', updated_at: new Date().toISOString() })
+        .eq('id', item.id)
       outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: result.error })
       await supabase.from('outbound_campaign_events').insert({
         campaign_id: campaignId,

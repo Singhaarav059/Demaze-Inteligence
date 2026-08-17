@@ -46,6 +46,13 @@ function DraftSkeleton() {
   )
 }
 
+interface PersonalizationCheck {
+  isGeneric: boolean
+  genericPhrasesFound: string[]
+  referencesRealEvidence: boolean
+  reason: string
+}
+
 interface EmailDraft {
   hook: string
   personalization: string
@@ -54,6 +61,7 @@ interface EmailDraft {
   cta: string
   signature: string
   fullText: string
+  personalizationCheck?: PersonalizationCheck
 }
 
 interface FollowupDraft {
@@ -657,6 +665,15 @@ export function OutreachStep({
                           <div className="text-xs text-muted-foreground/70">
                             Subject: <span className="text-foreground font-medium">{generated.selected_subject_line}</span>
                           </div>
+                          {generated.email_draft.personalizationCheck?.isGeneric && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px]"
+                              title={generated.email_draft.personalizationCheck.reason}
+                            >
+                              Generic personalization — review before sending
+                            </Badge>
+                          )}
                           <p className="text-xs text-foreground whitespace-pre-wrap pt-2 border-t border-border/60">
                             <TypewriterText text={generated.email_draft.fullText} />
                           </p>

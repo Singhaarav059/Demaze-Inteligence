@@ -95,6 +95,39 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
     expect(result.opportunities.find(o => o.title === 'Invented 9th service')).toBeUndefined()
   })
 
+  it('assigns a real evidence_id to an llm_verified opportunity even when the LLM supplied none (Phase 4, Production Hardening Plan)', () => {
+    // Regression for a real, benchmark-confirmed bug: evidence_id used to
+    // come straight from the LLM's own field, which was almost always empty
+    // — benchmarks/research-evaluation.ts's "Evidence-backed opportunities"
+    // check (a plain `!!o.evidence_id`) scored 0/20 for nearly every company
+    // even when a real, quote-verified evidence string already existed.
+    const result = normalizeAnalysisResult(baseRaw([{
+      title: 'Predictive Maintenance for Jamnagar Refinery',
+      service_line: 'AI-powered business applications',
+      claim_type: 'observed',
+      evidence: 'Our refinery at Jamnagar is the world\'s largest, integrated, single-location refining complex',
+      confidence: 'high',
+      description: 'x',
+      // evidence_id deliberately omitted — this is the real-world shape.
+    }]))
+    const opp = result.opportunities.find(o => o.title === 'Predictive Maintenance for Jamnagar Refinery')
+    expect(opp?.evidence_id).toBeTruthy()
+  })
+
+  it('does NOT manufacture an evidence_id for an llm_inferred opportunity (no verified quote exists)', () => {
+    const result = normalizeAnalysisResult(baseRaw([{
+      title: 'Integrating new-energy assets with legacy oil-to-chemicals systems',
+      service_line: 'Workflow automation systems',
+      claim_type: 'inferred',
+      evidence: '',
+      inferred_from: 'deployment of Green Energy Giga Complex alongside existing hydrocarbon operations',
+      confidence: 'medium',
+      description: 'x',
+    }]))
+    const opp = result.opportunities.find(o => o.title === 'Integrating new-energy assets with legacy oil-to-chemicals systems')
+    expect(opp?.evidence_id).toBeFalsy()
+  })
+
   it('surfaces nothing via Path B when evidence is genuinely insufficient', () => {
     const result = normalizeAnalysisResult({
       company_name: 'Test Co',

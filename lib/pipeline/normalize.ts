@@ -109,6 +109,25 @@ function isCompanySubjectEvidence(ev: EvidenceItem): boolean {
   return COMPANY_SUBJECT_TYPES.has(ev.subject)
 }
 
+// ── Stable evidence IDs (Production Hardening Master Plan Phase 4) ─────
+// evidence_id on opportunities/pain_points used to come straight from the
+// LLM's own free-text field (llmMatch?.evidence_id / p.evidence_id) — never
+// generated or verified by code. In practice this was almost always empty:
+// benchmarks/research-evaluation.ts's "Evidence-backed opportunities"
+// dimension (a simple `!!o.evidence_id` check) scored 0/20 for nearly every
+// benchmark company even when a real, quote-verified evidence string was
+// already sitting right there in the same object. Fix: derive a short,
+// deterministic id FROM the real evidence content itself wherever one
+// genuinely exists (a code-matched deterministic-catalog id, or a quote
+// already verified against real content) — never trust the LLM to supply a
+// matching id, same "deterministic over LLM-trusted" discipline as the rest
+// of this file's evidence-grounding work (isQuoteGrounded/verifyQuoteInContent).
+function stableEvidenceId(prefix: string, text: string): string {
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0
+  return `${prefix}-${(h >>> 0).toString(36)}`
+}
+
 // ── v2/v3/v4 types ────────────────────────────────────────────
 
 export interface StructuredPainPoint {
@@ -869,10 +888,18 @@ export function normalizeAnalysisResult(
               return null
             }
           }
+          // Genuinely quote-verified ('observed', already passed isQuoteGrounded
+          // above) gets a real, code-derived id — never the LLM's own
+          // possibly-empty/possibly-hallucinated field. 'inferred' claims stay
+          // honest: no verified quote exists, so no evidence_id is manufactured
+          // for one (Rule 3: downgrade/don't claim evidence for an inference).
+          const evidenceId = claimType === 'observed' && evidence
+            ? stableEvidenceId('pp', evidence)
+            : str(p.evidence_id)
           return {
             title,
             confidence: (p.confidence === 'high' || p.confidence === 'medium' || p.confidence === 'low') ? p.confidence : 'low',
-            evidence_id: str(p.evidence_id),
+            evidence_id: evidenceId,
             evidence,
             reasoning: str(p.reasoning),
             claim_type: claimType,
@@ -916,7 +943,11 @@ export function normalizeAnalysisResult(
       title:             d.title,                                         // canonical from OPPORTUNITY_CATALOG
       description:       llmMatch?.description || d.strategic_challenge,  // LLM narrative; catalog challenge as fallback
       confidence:        llmMatch?.confidence,
-      evidence_id:       llmMatch?.evidence_id,
+      // d.id is a real, stable id from a regex-matched, code-verified
+      // service-evidence hit (opportunity-engine.ts) — the strongest-grounded
+      // evidence of any opportunity path here, so it's always used (not just
+      // when the LLM happens to also supply its own evidence_id).
+      evidence_id:       llmMatch?.evidence_id || `det-${d.id}`,
       evidence:          llmMatch?.evidence,
       reasoning:         d.llm_explanation_prompt,                        // always catalog prompt — not LLM-invented
       expected_impact:   llmMatch?.expected_impact ?? '',
@@ -961,11 +992,19 @@ export function normalizeAnalysisResult(
     evidence_anchor: string | undefined,
     source: 'llm_verified' | 'llm_inferred',
   ): NormalizedAnalysis['opportunities'][number] {
+    // 'llm_verified' means l.evidence already passed verifyQuoteInContent
+    // (see the B1 filter below) — genuine, code-checked evidence, so it
+    // earns a real evidence_id here rather than trusting whatever (if
+    // anything) the LLM put in its own evidence_id field. 'llm_inferred'
+    // has no verified quote by definition — stays honest, no id manufactured.
+    const evidenceId = source === 'llm_verified' && l.evidence
+      ? stableEvidenceId('opp', l.evidence)
+      : l.evidence_id
     return {
       title:             l.title,
       description:       l.description,
       confidence:        l.confidence,
-      evidence_id:       l.evidence_id,
+      evidence_id:       evidenceId,
       evidence:          l.evidence,
       reasoning:         l.reasoning,
       expected_impact:   l.expected_impact ?? '',

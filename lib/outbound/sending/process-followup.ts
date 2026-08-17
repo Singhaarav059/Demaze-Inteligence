@@ -191,6 +191,31 @@ export async function processFollowupForContact(
     return { campaignContactId, status: 'skipped', sequence, reason: `No generated follow-up ${sequence} content for this contact yet.` }
   }
 
+  // Atomic claim (Production Hardening Master Plan, Step 8.6 — "a retry
+  // must never send the same email twice"), same fix and reasoning as
+  // campaigns/[id]/send/route.ts's send loop. This function is the single
+  // shared choke point for every follow-up send (manual "Send Now",
+  // "Process Follow-ups", and the automatic follow-up engine tick) — two
+  // overlapping invocations for the SAME campaignContactId (e.g. the hourly
+  // engine tick firing while a user also clicks "Process Follow-ups") would
+  // otherwise both pass the due-ness check above before either updates the
+  // status, and both would genuinely send a duplicate follow-up. Guarded on
+  // cc.status (the exact value already read above), not a fixed literal,
+  // since this function advances FROM whatever status a contact is
+  // currently in TO followup_${sequence}. Rolled back to cc.status below if
+  // the send itself then fails, preserving retry-eligibility exactly as
+  // before this fix.
+  const { data: claimed } = await supabase
+    .from('outbound_campaign_contacts')
+    .update({ status: `followup_${sequence}`, updated_at: new Date().toISOString() })
+    .eq('id', cc.id)
+    .eq('status', cc.status)
+    .select('id')
+
+  if (!claimed || claimed.length === 0) {
+    return { campaignContactId, status: 'skipped', sequence, reason: 'Already claimed by a concurrent follow-up request.' }
+  }
+
   const result = await sendEmail({
     campaignId,
     contactEmail: contact.email,
@@ -202,6 +227,10 @@ export async function processFollowupForContact(
   })
 
   if (result.status === 'failed') {
+    await supabase
+      .from('outbound_campaign_contacts')
+      .update({ status: cc.status, updated_at: new Date().toISOString() })
+      .eq('id', cc.id)
     await supabase.from('outbound_campaign_events').insert({
       campaign_id: campaignId,
       campaign_contact_id: cc.id,
@@ -211,6 +240,10 @@ export async function processFollowupForContact(
     return { campaignContactId, status: 'failed', sequence, reason: result.error }
   }
   if (result.status === 'suppressed') {
+    await supabase
+      .from('outbound_campaign_contacts')
+      .update({ status: cc.status, updated_at: new Date().toISOString() })
+      .eq('id', cc.id)
     await supabase.from('outbound_campaign_events').insert({
       campaign_id: campaignId,
       campaign_contact_id: cc.id,
@@ -219,11 +252,6 @@ export async function processFollowupForContact(
     })
     return { campaignContactId, status: 'skipped', sequence, reason: result.error }
   }
-
-  await supabase
-    .from('outbound_campaign_contacts')
-    .update({ status: `followup_${sequence}`, updated_at: new Date().toISOString() })
-    .eq('id', cc.id)
 
   await supabase.from('outbound_campaign_events').insert({
     campaign_id: campaignId,

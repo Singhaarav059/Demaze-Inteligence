@@ -16,6 +16,7 @@ import { createHmac } from 'crypto'
 import { config as loadDotenv } from 'dotenv'
 import type { BenchmarkSpec, BenchmarkResult, CheckResult, CheckStatus, ProfileFlagMatch, AggregateEvaluation } from './benchmark-types'
 import { evaluateResearch, aggregateEvaluations, type EvaluationInput } from './research-evaluation'
+import { categorizeFailures } from './failure-taxonomy'
 
 // ── Environment ───────────────────────────────────────────────
 const cwd = process.cwd()
@@ -66,7 +67,7 @@ interface ApiResponse {
   error?: string
   validation?: {
     overall: string
-    gates: Array<{ stage: string; status: string; reason?: string }>
+    gates: Array<{ stage: string; status: string; reason?: string; reasonCode?: string }>
   }
   extractorResult?: {
     signals: unknown[]
@@ -314,6 +315,9 @@ function printCompanyDetail(result: BenchmarkResult): void {
   }
   console.log(`    ${C.dim}────────────────────────────────────────────────────────${C.reset}`)
   console.log(`    Result: ${colorStatus(result.overall)}  ${C.dim}(${result.durationMs}ms)${C.reset}`)
+  if (result.failureCategories.length > 0) {
+    console.log(`    ${C.yellow}Failure taxonomy: ${result.failureCategories.join(', ')}${C.reset}`)
+  }
   console.log(`    ${C.bold}Research Evaluation Score: ${scoreColor(result.evaluation.score)}${C.reset}${C.dim}/100${C.reset}`)
   for (const d of result.evaluation.dimensions) {
     const note = d.note ? ` ${C.dim}— ${d.note}${C.reset}` : ''
@@ -374,7 +378,7 @@ function writeEvaluationHistory(aggregate: AggregateEvaluation, results: Benchma
   const outPath = path.join(historyDir, `eval-${ts}.json`)
   const dump = {
     ...aggregate,
-    perCompany: results.map(r => ({ name: r.name, evaluation: r.evaluation })),
+    perCompany: results.map(r => ({ name: r.name, evaluation: r.evaluation, failureCategories: r.failureCategories })),
   }
   fs.writeFileSync(outPath, JSON.stringify(dump, null, 2), 'utf-8')
   console.log(`  ${C.dim}Evaluation history → ${outPath}${C.reset}\n`)
@@ -460,6 +464,7 @@ function writeDump(results: BenchmarkResult[]): void {
       checks: r.checks,
       profileEvidence: r.profileEvidence ?? {},
       error: r.error ?? null,
+      failureCategories: r.failureCategories,
     })),
   }
   fs.writeFileSync(outPath, JSON.stringify(dump, null, 2), 'utf-8')
@@ -511,6 +516,7 @@ async function main(): Promise<void> {
     const challenges    = (apiResponse.analysisResult?.pain_points ?? []).length
     const validationOverall = apiResponse.validation?.overall ?? (apiResponse.success ? 'UNKNOWN' : 'FAIL')
     const evaluation = evaluateResearch(buildEvaluationInput(spec, apiResponse, checks))
+    const failureCategories = categorizeFailures(apiResponse.validation?.gates ?? [], checks, apiError)
 
     const result: BenchmarkResult = {
       name: spec.name,
@@ -525,6 +531,7 @@ async function main(): Promise<void> {
       error: apiError,
       profileEvidence: apiResponse.extractorResult?.companyProfileEvidence,
       evaluation,
+      failureCategories,
     }
 
     results.push(result)

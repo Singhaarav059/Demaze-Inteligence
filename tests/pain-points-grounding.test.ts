@@ -44,6 +44,38 @@ describe('normalizeAnalysisResult — pain_points structured grounding', () => {
     expect(result.pain_points_structured[0].claim_type).toBe('observed')
   })
 
+  it('assigns a real evidence_id to a quote-verified observed pain point even when the LLM supplied none (Phase 4, Production Hardening Plan)', () => {
+    // Regression for a real, benchmark-confirmed bug: evidence_id used to
+    // come straight from the LLM's own field, which was almost always empty
+    // — benchmarks/research-evaluation.ts's "Pain-point quality" check
+    // filters on `!!p.evidence_id`, so a genuinely quote-verified pain point
+    // was still scoring as non-evidence-backed.
+    const result = normalizeAnalysisResult(baseRaw([
+      {
+        title: 'Manual coordination with the regional dealer network',
+        claim_type: 'observed',
+        evidence: 'the regional dealer network still coordinates orders manually via phone and email each week',
+        confidence: 'high',
+        reasoning: 'x',
+        // evidence_id deliberately omitted — this is the real-world shape.
+      },
+    ]))
+    expect(result.pain_points_structured[0].evidence_id).toBeTruthy()
+  })
+
+  it('does NOT manufacture an evidence_id for an inferred pain point (no verified quote exists)', () => {
+    const result = normalizeAnalysisResult(baseRaw([
+      {
+        title: 'Likely lacks unified cross-plant reporting',
+        claim_type: 'inferred',
+        evidence: 'Multi-plant operations typically face this without a dedicated system',
+        confidence: 'medium',
+        reasoning: 'x',
+      },
+    ]))
+    expect(result.pain_points_structured[0].evidence_id).toBeFalsy()
+  })
+
   it('drops an observed pain point whose evidence quote is fabricated, and logs a warning', () => {
     const result = normalizeAnalysisResult(baseRaw([
       {

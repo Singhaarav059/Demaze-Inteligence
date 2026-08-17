@@ -27,7 +27,7 @@ export function Step1Research({ result }: { result: RunResult }) {
   const {
     companyName, industry, subIndustry, summary, businessModel, confidence, signalCount,
     recentActivity, painPoints, opportunities, aiSynthesisFailed, aiSynthesisFailureReason,
-    businessProfile, openingAngle, whatToSell, whyNow, outreachDraft, matchedProofPoint,
+    businessProfile, openingAngle, whatToSell, whyNow, whyContact, likelyProblem, outreachDraft, matchedProofPoint,
     facts, briefInput, briefExtras,
   } = data
 
@@ -55,7 +55,7 @@ export function Step1Research({ result }: { result: RunResult }) {
         aiSynthesisFailed={aiSynthesisFailed}
       />
       <ResearchQualitySection quality={data.researchQuality} />
-      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} />
+      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} whyContact={whyContact} likelyProblem={likelyProblem} />
       <OutreachDraftSection draft={outreachDraft} matchedProofPoint={matchedProofPoint} />
     </div>
   )

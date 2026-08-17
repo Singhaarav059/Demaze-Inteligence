@@ -803,6 +803,7 @@ export default function AutoGtmFlowPage() {
           <ReviewSendStep
             contacts={sortedContacts}
             qualification={flow.qualification}
+            researchQualityFlagged={flow.researchQualityFlagged}
             campaignId={flow.campaignId}
             ensureCampaignId={flow.ensureCampaignId}
             campaignContactStatus={flow.campaignContactStatus}

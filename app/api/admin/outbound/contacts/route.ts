@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
     discovery_source,
     discovery_confidence,
     discovery_provider,
+    discovery_grounding_status,
+    discovery_grounding_reason,
   } = body
 
   if (!company_domain || !company_name || !person_name) {
@@ -88,6 +90,15 @@ export async function POST(req: NextRequest) {
     insertRow.discovery_source = discovery_source
     insertRow.discovery_confidence = discovery_confidence ?? null
     insertRow.discovery_provider = discovery_provider ?? null
+    // Grounding (migration 023) — only ever present when the candidate was
+    // actually cross-checked against the company's own scraped leadership
+    // content (see grounding.ts); absent for ungrounded candidates, same
+    // "only sent when the caller actually has one" pattern as the fields
+    // above, so an add against a pre-023 DB still works unchanged.
+    if (discovery_grounding_status) {
+      insertRow.discovery_grounding_status = discovery_grounding_status
+      insertRow.discovery_grounding_reason = discovery_grounding_reason ?? null
+    }
   }
 
   const { data, error } = await supabase

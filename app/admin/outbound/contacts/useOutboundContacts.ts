@@ -40,6 +40,12 @@ export interface OutboundContact {
   discovery_source: 'manual' | 'decision_maker_discovery'
   discovery_confidence: 'high' | 'medium' | 'low' | null
   discovery_provider: string | null
+  // Website-grounding result at add time (migration 023) — see
+  // lib/outbound/decision-maker-discovery/grounding.ts. Null for manual
+  // contacts, ungrounded candidates, or any contact added before this
+  // column existed.
+  discovery_grounding_status: 'confirmed' | 'conflict' | 'not_found' | null
+  discovery_grounding_reason: string | null
   created_at: string
 }
 
@@ -118,6 +124,8 @@ export function useOutboundContacts() {
       discovery_source?: 'manual' | 'decision_maker_discovery'
       discovery_confidence?: 'high' | 'medium' | 'low'
       discovery_provider?: string
+      discovery_grounding_status?: 'confirmed' | 'conflict' | 'not_found'
+      discovery_grounding_reason?: string
     }) => {
       if (!selectedRun) {
         toast.error('Select a research run first')
@@ -138,6 +146,8 @@ export function useOutboundContacts() {
             discovery_source: input.discovery_source,
             discovery_confidence: input.discovery_confidence,
             discovery_provider: input.discovery_provider,
+            discovery_grounding_status: input.discovery_grounding_status,
+            discovery_grounding_reason: input.discovery_grounding_reason,
           }),
         })
         const data = await res.json()

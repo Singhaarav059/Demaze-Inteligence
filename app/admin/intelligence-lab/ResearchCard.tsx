@@ -271,6 +271,29 @@ export interface OpportunityItem {
   title?: unknown
   description?: unknown
   entry_point?: unknown
+  evidence?: unknown
+  claim_type?: unknown
+  source?: unknown
+}
+
+// Master Plan Phase 4/10.4: "never present inference as fact." source/
+// claim_type already exist on every opportunity (normalize.ts) but were
+// never surfaced here — this is a pure read of already-present data, no
+// new plumbing. 'deterministic' (regex-matched real content) and
+// 'llm_verified' (quote-verified against real content) both read as
+// Confirmed; 'llm_inferred' (reasoning, no literal quote) reads as
+// Reasonable inference — matches this repo's own evidence_id discipline
+// (see normalize.ts's stableEvidenceId).
+function evidenceBadge(o: OpportunityItem): { label: string; className: string } | null {
+  const source = str(o.source)
+  const claimType = str(o.claim_type)
+  if (source === 'deterministic' || source === 'llm_verified' || claimType === 'observed') {
+    return { label: 'Confirmed evidence', className: 'text-signal-strong' }
+  }
+  if (source === 'llm_inferred' || claimType === 'inferred') {
+    return { label: 'Reasonable inference', className: 'text-muted-foreground/70' }
+  }
+  return null
 }
 
 export function PainPointsAndOpportunitiesSection({
@@ -304,22 +327,33 @@ export function PainPointsAndOpportunitiesSection({
       <Section label="AI Opportunities" accent="text-signal-strong">
         {opportunities.length > 0 ? (
           <ul className="space-y-3">
-            {opportunities.map((o, i) => (
-              <li key={i} className="flex gap-2.5 text-sm">
-                <span className="mt-0.5 shrink-0 text-signal-strong">▸</span>
-                <div>
-                  <span className="font-medium text-foreground">{humanizeText(o.title)}</span>
-                  {str(o.description) && (
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{humanizeText(o.description)}</p>
-                  )}
-                  {str(o.entry_point) && (
-                    <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                      Entry point: <span className="normal-case text-muted-foreground/80">{humanizeText(o.entry_point)}</span>
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
+            {opportunities.map((o, i) => {
+              const badge = evidenceBadge(o)
+              return (
+                <li key={i} className="flex gap-2.5 text-sm">
+                  <span className="mt-0.5 shrink-0 text-signal-strong">▸</span>
+                  <div>
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium text-foreground">{humanizeText(o.title)}</span>
+                      {badge && (
+                        <span className={`text-[10px] uppercase tracking-wider ${badge.className}`}>{badge.label}</span>
+                      )}
+                    </div>
+                    {str(o.description) && (
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{humanizeText(o.description)}</p>
+                    )}
+                    {str(o.evidence) && (
+                      <p className="mt-1 text-xs italic leading-relaxed text-muted-foreground/80">&ldquo;{humanizeText(o.evidence)}&rdquo;</p>
+                    )}
+                    {str(o.entry_point) && (
+                      <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                        Entry point: <span className="normal-case text-muted-foreground/80">{humanizeText(o.entry_point)}</span>
+                      </p>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         ) : (
           <p className="text-xs italic text-muted-foreground">
@@ -635,10 +669,21 @@ export function PersonalizationSummarySection({
   openingAngle,
   whatToSell,
   whyNow,
+  whyContact,
+  likelyProblem,
 }: {
   openingAngle: string
   whatToSell: string
   whyNow: string
+  // Master Plan Step 10.2 — "why this problem"/"why now" as distinct
+  // questions from "what to sell". Sourced from outreach_intelligence
+  // (getOutreachIntelligence()'s why_contact/likely_problem), previously
+  // only rendered in intelligence-lab/page.tsx's own separate debug-tab
+  // section — never in this shared component, which is what batch-upload,
+  // run-history, and Auto Flow resume actually use. Optional/additive:
+  // absent on any run predating these fields.
+  whyContact?: string
+  likelyProblem?: string
 }) {
   if (!openingAngle && !whatToSell) return null
   return (
@@ -654,6 +699,18 @@ export function PersonalizationSummarySection({
             </p>
           )}
           <div className="space-y-3 text-xs">
+            {whyContact && (
+              <div>
+                <p className="mb-0.5 font-semibold uppercase tracking-wider text-muted-foreground">Why this company, why now</p>
+                <p className="text-foreground/90">{whyContact}</p>
+              </div>
+            )}
+            {likelyProblem && (
+              <div>
+                <p className="mb-0.5 font-semibold uppercase tracking-wider text-muted-foreground">Why this problem</p>
+                <p className="text-foreground/90">{likelyProblem}</p>
+              </div>
+            )}
             {whatToSell && (
               <div>
                 <p className="mb-0.5 font-semibold uppercase tracking-wider text-muted-foreground">Lead with</p>
@@ -809,6 +866,8 @@ export function getResearchCardData(result: RunResult) {
   const openingAngle = humanizeText(str(outreachIntel?.conversation_angle) ?? str(a.outreach_angle) ?? '')
   const whyNow = humanizeText(str(outreachIntel?.why_now) ?? str((a.why_now as Record<string, unknown>)?.explanation) ?? '')
   const whatToSell = humanizeText(str((a.executive_brief as Record<string, unknown>)?.what_to_sell) ?? '')
+  const whyContact = humanizeText(str(outreachIntel?.why_contact) ?? '')
+  const likelyProblem = humanizeText(str(outreachIntel?.likely_problem) ?? '')
 
   const outreachDraft = getOutreachDraft(a)
   const matchedProofPoint = outreachDraft?.matched_proof_point_id
@@ -874,6 +933,8 @@ export function getResearchCardData(result: RunResult) {
     openingAngle,
     whatToSell,
     whyNow,
+    whyContact,
+    likelyProblem,
     outreachDraft,
     matchedProofPoint,
     facts,
@@ -911,6 +972,7 @@ export function ResearchCard({ result }: { result: RunResult }) {
     companyName, industry, subIndustry, summary, businessModel, confidence, signalCount,
     recentActivity, painPoints, opportunities, aiSynthesisFailed, aiSynthesisFailureReason,
     competitors, icpSegments, marketIntel, researchQuality, businessProfile, openingAngle, whatToSell, whyNow,
+    whyContact, likelyProblem,
     outreachDraft, matchedProofPoint, facts, briefInput, briefExtras,
   } = data
 
@@ -941,7 +1003,7 @@ export function ResearchCard({ result }: { result: RunResult }) {
       <TargetSegmentsSection segments={icpSegments} companyName={companyName} />
       <MarketIntelligenceSection items={marketIntel} />
       <ResearchQualitySection quality={researchQuality} />
-      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} />
+      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} whyContact={whyContact} likelyProblem={likelyProblem} />
       <OutreachDraftSection draft={outreachDraft} matchedProofPoint={matchedProofPoint} />
     </div>
   )

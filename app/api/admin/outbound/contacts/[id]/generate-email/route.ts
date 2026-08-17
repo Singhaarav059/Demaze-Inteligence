@@ -10,6 +10,7 @@ import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { loadGenerationContext } from '@/lib/outbound/generation/fetch-context'
 import { generateEmail } from '@/lib/outbound/generation/generate-email'
+import { checkPersonalization } from '@/lib/outbound/generation/personalization-check'
 
 export async function POST(
   req: NextRequest,
@@ -36,6 +37,15 @@ export async function POST(
     return NextResponse.json({ success: false, error: result.error }, { status: 502 })
   }
 
+  // Deterministic generic-personalization audit (Master Plan Phase 5, Step
+  // 5.2) — no new LLM call, computed against the exact evidence this draft
+  // was generated from. Advisory only, stored alongside the draft for the
+  // review UI to surface.
+  const draftWithCheck = {
+    ...result.draft,
+    personalizationCheck: checkPersonalization(result.draft.fullText, loaded.context.input),
+  }
+
   const supabase = createServerClient()
   const { data, error } = await supabase
     .from('outbound_generated_content')
@@ -43,7 +53,7 @@ export async function POST(
       {
         contact_id: id,
         selected_subject_line: subjectLine,
-        email_draft: result.draft,
+        email_draft: draftWithCheck,
         ai_provider_used: result.providerUsed,
         ai_model_used: result.modelUsed,
         updated_at: new Date().toISOString(),

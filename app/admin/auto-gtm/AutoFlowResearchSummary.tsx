@@ -69,7 +69,7 @@ export function AutoFlowResearchSummary({
   const {
     companyName, industry, subIndustry, summary, businessModel, confidence,
     aiSynthesisFailed, aiSynthesisFailureReason, recentActivity,
-    businessProfile, openingAngle, whatToSell, whyNow, facts,
+    businessProfile, openingAngle, whatToSell, whyNow, whyContact, likelyProblem, facts,
   } = data
 
   const confText =
@@ -118,7 +118,7 @@ export function AutoFlowResearchSummary({
 
       <BusinessProfileSection profile={businessProfile} />
       <RecentNewsSection items={recentActivity} />
-      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} />
+      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} whyContact={whyContact} likelyProblem={likelyProblem} />
     </div>
   )
 }

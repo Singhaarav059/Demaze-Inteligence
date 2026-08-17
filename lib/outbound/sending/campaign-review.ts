@@ -36,6 +36,15 @@ export interface ContactReviewRow {
   // already shows earlier in the flow, instead of that signal disappearing
   // once a contact reaches this screen.
   emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
+  // Additive, informational only (Master Plan Phase 5, Step 5.4 — company
+  // identity check) — never a gate. A 'conflict'/'not_found' grounding
+  // result still becomes 'ready' like any other contact with a real email
+  // and a drafted email; this carries the discovery-time website-grounding
+  // signal (lib/outbound/decision-maker-discovery/grounding.ts) through so
+  // Review & Send — the last checkpoint before a real send — can warn a
+  // human reviewer instead of that signal disappearing after discovery.
+  discoveryGroundingStatus?: 'confirmed' | 'conflict' | 'not_found' | null
+  discoveryGroundingReason?: string | null
 }
 
 export interface CampaignReviewSummary {
@@ -58,7 +67,7 @@ export async function classifyCampaignContacts(
   }
 
   const [{ data: contacts }, { data: generatedRows }, { data: campaignContactRows }] = await Promise.all([
-    supabase.from('outbound_contacts').select('id, person_name, email, email_confidence').in('id', contactIds),
+    supabase.from('outbound_contacts').select('id, person_name, email, email_confidence, discovery_grounding_status, discovery_grounding_reason').in('id', contactIds),
     supabase.from('outbound_generated_content').select('contact_id, selected_subject_line, email_draft').in('contact_id', contactIds),
     supabase.from('outbound_campaign_contacts').select('id, contact_id, status').eq('campaign_id', campaignId).in('contact_id', contactIds),
   ])
@@ -108,6 +117,8 @@ export async function classifyCampaignContacts(
     rows.push({
       contactId, personName, email, status: 'ready', campaignContactId: existingCc?.id,
       emailConfidence: contact?.email_confidence ?? null,
+      discoveryGroundingStatus: contact?.discovery_grounding_status ?? null,
+      discoveryGroundingReason: contact?.discovery_grounding_reason ?? null,
     })
   }
 

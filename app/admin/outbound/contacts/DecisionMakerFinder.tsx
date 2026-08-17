@@ -337,6 +337,8 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
             discovery_source: 'decision_maker_discovery',
             discovery_confidence: candidate.confidence,
             discovery_provider: candidatesProvider ?? undefined,
+            discovery_grounding_status: candidate.grounding?.status,
+            discovery_grounding_reason: candidate.grounding?.reason,
           }),
         })
         const data = await res.json()

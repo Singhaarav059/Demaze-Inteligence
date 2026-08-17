@@ -2,6 +2,8 @@
 // Demaze Benchmark Framework — Types
 // ============================================================
 
+import type { FailureCategory } from './failure-taxonomy'
+
 /** What a benchmark expects from the pipeline for a given company. */
 export interface BenchmarkExpectations {
   /** Minimum number of deterministic signals extractorResult must produce. */
@@ -73,6 +75,13 @@ export interface BenchmarkResult {
   profileEvidence?: Record<string, ProfileFlagMatch[]>
   /** Research Evaluation Framework score (Roadmap Phase 2, item 5). */
   evaluation: ResearchEvaluationScore
+  /**
+   * Failure taxonomy (Production Hardening Master Plan, Step 6.5) — see
+   * benchmarks/failure-taxonomy.ts. Empty when overall === 'PASS' with no
+   * WARN/PARTIAL/FAIL gates or checks; can hold more than one category
+   * since a single run can fail for more than one reason.
+   */
+  failureCategories: FailureCategory[]
 }
 
 // ============================================================

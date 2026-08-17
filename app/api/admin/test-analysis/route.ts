@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { scrapeCompanyWebsite, assessScrapeQuality, type ScrapeResult } from '@/lib/pipeline/scraper'
+import { selectResearchCorpus, type CorpusSelectionResult } from '@/lib/pipeline/scrape-relevance'
 import { validateAndNormalizeURL, extractDomain } from '@/lib/utils/url'
 import { SYSTEM_PROMPT_V2 } from '@/lib/prompts/system-v2'
 import { buildNarrativePrompt, buildNarrativeInput, estimateTokenCount } from '@/lib/prompts/analyze-v2'
@@ -89,10 +90,21 @@ function extractJsonFromLLMResponse(raw: string): string {
 
 type ValidationStatus = 'PASS' | 'WARN' | 'PARTIAL' | 'FAIL'
 
+// Machine-readable failure category for WARN/PARTIAL/FAIL gates, so a
+// "silent zero" can be filtered/alerted on programmatically instead of only
+// via free-text `reason` string matching. Optional — only attached where the
+// cause is already known at the call site (Production Hardening Plan Phase 2).
+type GateReasonCode =
+  | 'NO_RELEVANT_CONTENT' | 'NO_EVIDENCE' | 'SOURCE_FAILURE' | 'PARSER_FAILURE'
+  | 'LANGUAGE_MISMATCH' | 'IDENTITY_MISMATCH' | 'LOW_CONFIDENCE'
+  | 'PROVIDER_FAILURE' | 'VALIDATION_REJECTED'
+
 interface ValidationGate {
   stage: string
   status: ValidationStatus
   reason?: string
+  reasonCode?: GateReasonCode
+  durationMs?: number
   diagnostics?: Record<string, unknown>
 }
 
@@ -106,15 +118,22 @@ function gate(
   status: ValidationStatus,
   reason: string,
   diagnostics?: Record<string, unknown>,
+  opts?: { reasonCode?: GateReasonCode; durationMs?: number },
 ): ValidationGate {
-  const result: ValidationGate = { stage, status, reason, ...(diagnostics ? { diagnostics } : {}) }
+  const result: ValidationGate = {
+    stage, status, reason,
+    ...(opts?.reasonCode !== undefined ? { reasonCode: opts.reasonCode } : {}),
+    ...(opts?.durationMs !== undefined ? { durationMs: opts.durationMs } : {}),
+    ...(diagnostics ? { diagnostics } : {}),
+  }
   gates.push(result)
+  const codeSuffix = opts?.reasonCode ? ` code=${opts.reasonCode}` : ''
   if (status === 'FAIL') {
-    logger.error('pipeline', `GATE_FAIL stage=${stage} reason="${reason}"`, diagnostics)
+    logger.error('pipeline', `GATE_FAIL stage=${stage} reason="${reason}"${codeSuffix}`, diagnostics)
   } else if (status === 'PARTIAL') {
-    logger.warn('pipeline', `GATE_PARTIAL stage=${stage} reason="${reason}"`, diagnostics)
+    logger.warn('pipeline', `GATE_PARTIAL stage=${stage} reason="${reason}"${codeSuffix}`, diagnostics)
   } else if (status === 'WARN') {
-    logger.warn('pipeline', `GATE_WARN stage=${stage} reason="${reason}"`)
+    logger.warn('pipeline', `GATE_WARN stage=${stage} reason="${reason}"${codeSuffix}`)
   } else {
     logger.info('pipeline', `GATE_PASS stage=${stage} reason="${reason}"`)
   }
@@ -333,7 +352,8 @@ export async function POST(req: NextRequest) {
     if (scrapeResult.successfulUrls.length === 0 || scrapeResult.combinedContent.length < 200) {
       gate(pipelineGates, 'SCRAPE', 'WARN',
         'Scraper returned no usable content — using domain-only stub, enrichment will be primary source',
-        { successfulUrls: scrapeResult.successfulUrls.length, contentLength: scrapeResult.combinedContent.length, domain })
+        { successfulUrls: scrapeResult.successfulUrls.length, contentLength: scrapeResult.combinedContent.length, domain },
+        { reasonCode: 'SOURCE_FAILURE', durationMs: timing.scrape })
 
       // Build a minimal stub so the rest of the pipeline has something to parse.
       // Reuses the same companyGuess computed above (pre-scrape, for the
@@ -361,7 +381,7 @@ export async function POST(req: NextRequest) {
 
     // ── Stage 2: Content quality assessment ──────────────────
     const cqStart = Date.now()
-    const fullContent = scrapeResult.combinedContent
+    let fullContent = scrapeResult.combinedContent
     const contentQuality = assessContentQuality(fullContent)
     timing.contentQuality = Date.now() - cqStart
     logger.info('Timing', `Content Quality: ${t(timing.contentQuality)} | score=${contentQuality.score} | ${contentQuality.recommendation}`)
@@ -395,6 +415,45 @@ export async function POST(req: NextRequest) {
       }
       return guessCompanyNameFromDomain(domain)
     })()
+
+    // ── Stage 2.5: SCRAPE_RELEVANCE (Production Hardening Plan, Phase 3) ──
+    // Post-scrape, per-page relevance scoring + corpus selection — see
+    // lib/pipeline/scrape-relevance.ts's header for the full rationale. Only
+    // runs against a real, non-stub scrape (scrapeStubInjected means
+    // scrapeResult.pages has nothing real to score — the injected stub IS
+    // the intended content, must not be touched). Rebuilds `fullContent`
+    // from the selected corpus only — everything downstream (evidence
+    // extraction, the LLM's websitePreview) already reads `fullContent`, so
+    // this is the single, minimal-blast-radius hook point.
+    let scrapeRelevance: CorpusSelectionResult | null = null
+    if (!scrapeStubInjected && scrapeResult.pages.length > 0) {
+      scrapeRelevance = selectResearchCorpus(scrapeResult.pages, companyNameFromScrape)
+      const { selectedPages, rejectedPages, rejectionReasons, fallbackApplied } = scrapeRelevance
+
+      if (fallbackApplied) {
+        gate(pipelineGates, 'SCRAPE_RELEVANCE', 'WARN',
+          `Corpus selection would have rejected all ${scrapeResult.pages.length} page(s) — falling back to the unfiltered scrape`,
+          { pageCount: scrapeResult.pages.length },
+          { reasonCode: 'NO_RELEVANT_CONTENT' })
+      } else if (rejectedPages.length > 0) {
+        const reasonCounts = rejectedPages.reduce<Record<string, number>>((acc, p) => {
+          const r = rejectionReasons[p.url] ?? 'unknown'
+          acc[r] = (acc[r] ?? 0) + 1
+          return acc
+        }, {})
+        gate(pipelineGates, 'SCRAPE_RELEVANCE', 'WARN',
+          `${selectedPages.length}/${scrapeResult.pages.length} page(s) kept — ${rejectedPages.length} rejected (${Object.entries(reasonCounts).map(([r, n]) => `${r}=${n}`).join(', ')})`,
+          { selected: selectedPages.length, rejected: rejectedPages.length, reasonCounts },
+          reasonCounts.identity_mismatch ? { reasonCode: 'IDENTITY_MISMATCH' } : undefined)
+      } else {
+        gate(pipelineGates, 'SCRAPE_RELEVANCE', 'PASS',
+          `${selectedPages.length}/${scrapeResult.pages.length} page(s) kept — no rejections`)
+      }
+
+      if (selectedPages.length > 0) {
+        fullContent = scrapeRelevance.corpusContent
+      }
+    }
 
     // ── Step 3b: Enrichment (item 2, 2026-07-12) ──────────────────────
     // discoveryPromise (stages 1-3: discover+prioritize+fetch) was already
@@ -550,7 +609,8 @@ export async function POST(req: NextRequest) {
         // Downgrade to WARN: enrichment is primary source, pipeline must continue.
         gate(pipelineGates, 'PROFILE', 'WARN',
           'Stub content only — profile unknown, enrichment will be sole intelligence source',
-          { primary_type: extractorResult.companyProfile.primary_type, scrapeStubInjected: true })
+          { primary_type: extractorResult.companyProfile.primary_type, scrapeStubInjected: true },
+          { reasonCode: 'SOURCE_FAILURE' })
       } else {
         // L1-E: Never hard fail — real content was scraped (scrapeStubInjected=false,
         // so a fallback source in the scraper chain did return usable content), it just
@@ -558,11 +618,13 @@ export async function POST(req: NextRequest) {
         // the whole report; enrichment + the LLM narrative can still recover intelligence.
         gate(pipelineGates, 'PROFILE', 'PARTIAL',
           'Could not identify company type and found zero company-subject content — proceeding with reduced confidence, enrichment and LLM narrative are primary sources',
-          { primary_type: extractorResult.companyProfile.primary_type, companySubjectCount: extractorResult.companySubjectCount, confidence: 30 })
+          { primary_type: extractorResult.companyProfile.primary_type, companySubjectCount: extractorResult.companySubjectCount, confidence: 30 },
+          { reasonCode: 'NO_EVIDENCE' })
       }
     } else if (profileUnknown) {
       gate(pipelineGates, 'PROFILE', 'WARN',
-        `Company type uncertain (primary_type=unknown) — profile will rely on signal patterns only`)
+        `Company type uncertain (primary_type=unknown) — profile will rely on signal patterns only`,
+        undefined, { reasonCode: 'LOW_CONFIDENCE' })
     } else {
       gate(pipelineGates, 'PROFILE', 'PASS',
         `Profile extracted: primary=${extractorResult.companyProfile.primary_type} | companySubjectCount=${extractorResult.companySubjectCount}`)
@@ -571,13 +633,17 @@ export async function POST(req: NextRequest) {
     // Gate S3: Signal extraction viability
     if (extractorResult.signals.length === 0) {
       gate(pipelineGates, 'SIGNAL', 'WARN',
-        'No deterministic signals detected from website content — LLM narrative will carry full intelligence load')
+        'No deterministic signals detected from website content — LLM narrative will carry full intelligence load',
+        { signalCount: 0, companySubjectCount: extractorResult.companySubjectCount },
+        { reasonCode: 'NO_EVIDENCE', durationMs: timing.extraction })
     } else if (extractorResult.companySubjectCount < 3) {
       gate(pipelineGates, 'SIGNAL', 'WARN',
-        `Low company-subject evidence (companySubjectCount=${extractorResult.companySubjectCount}) — signals may reflect vendor/product content not company operations`)
+        `Low company-subject evidence (companySubjectCount=${extractorResult.companySubjectCount}) — signals may reflect vendor/product content not company operations`,
+        undefined, { reasonCode: 'LOW_CONFIDENCE', durationMs: timing.extraction })
     } else {
       gate(pipelineGates, 'SIGNAL', 'PASS',
-        `${extractorResult.signals.length} signals detected | companySubjectCount=${extractorResult.companySubjectCount}`)
+        `${extractorResult.signals.length} signals detected | companySubjectCount=${extractorResult.companySubjectCount}`,
+        undefined, { durationMs: timing.extraction })
     }
 
     // ── Option B: Soft-timeout enrichment race ────────────────────────
@@ -664,10 +730,12 @@ export async function POST(req: NextRequest) {
     // failure shapes rather than reporting one generic message for both.
     if (businessProfileTimedOut) {
       gate(pipelineGates, 'BUSINESS_PROFILE', 'WARN',
-        `timed out after ${BUSINESS_PROFILE_TIMEOUT_MS}ms — competitor/ICP discovery falls back to the offering-grounded pass`)
+        `timed out after ${BUSINESS_PROFILE_TIMEOUT_MS}ms — competitor/ICP discovery falls back to the offering-grounded pass`,
+        undefined, { reasonCode: 'PROVIDER_FAILURE', durationMs: timing.businessProfile })
     } else if (isEmptyBusinessProfile(businessProfile)) {
       gate(pipelineGates, 'BUSINESS_PROFILE', 'WARN',
-        'extraction returned empty (no API key, LLM failure, or genuinely no services/positioning content found) — competitor/ICP discovery falls back to the offering-grounded pass')
+        'extraction returned empty (no API key, LLM failure, or genuinely no services/positioning content found) — competitor/ICP discovery falls back to the offering-grounded pass',
+        undefined, { reasonCode: 'NO_EVIDENCE', durationMs: timing.businessProfile })
     } else {
       gate(pipelineGates, 'BUSINESS_PROFILE', 'PASS',
         `${businessProfile.services.length} service(s) | positioning=${businessProfile.market_positioning ? 'yes' : 'no'}`)
@@ -824,7 +892,8 @@ export async function POST(req: NextRequest) {
       gate(pipelineGates, 'COMPETITOR', 'PASS',
         `${competitorDiscoveryResult.competitors.length} competitor(s) found | ${competitorDiscoveryResult.reason}`)
     } else {
-      gate(pipelineGates, 'COMPETITOR', 'WARN', competitorDiscoveryResult.reason)
+      gate(pipelineGates, 'COMPETITOR', 'WARN', competitorDiscoveryResult.reason,
+        undefined, { reasonCode: 'NO_EVIDENCE' })
     }
 
     // ── Step 4c: Await ICP discovery (bounded) ──────────────────────
@@ -921,7 +990,8 @@ export async function POST(req: NextRequest) {
       gate(pipelineGates, 'ICP', 'PASS',
         `${icpDiscoveryResult.segments.length} segment(s) found | ${icpDiscoveryResult.reason}`)
     } else {
-      gate(pipelineGates, 'ICP', 'WARN', icpDiscoveryResult.reason)
+      gate(pipelineGates, 'ICP', 'WARN', icpDiscoveryResult.reason,
+        undefined, { reasonCode: 'NO_EVIDENCE' })
     }
 
     // ── Step 4d: Await Market Intelligence discovery (bounded) ──────
@@ -944,7 +1014,8 @@ export async function POST(req: NextRequest) {
       gate(pipelineGates, 'MARKET_INTEL', 'PASS',
         `${marketIntelResult.items.length} item(s) found | ${marketIntelResult.reason}`)
     } else {
-      gate(pipelineGates, 'MARKET_INTEL', 'WARN', marketIntelResult.reason)
+      gate(pipelineGates, 'MARKET_INTEL', 'WARN', marketIntelResult.reason,
+        undefined, { reasonCode: 'NO_EVIDENCE' })
     }
 
     // ── Step 4e: Match Demaze proof points (pure, zero I/O) ─────────
@@ -1191,7 +1262,7 @@ export async function POST(req: NextRequest) {
               contentLength: aiResponse.content.length,
               preview: aiResponse.content.slice(0, 200),
               finishReason: aiResponse.finishReason ?? 'unknown',
-            })
+            }, { reasonCode: 'PARSER_FAILURE' })
             rawParsed = {}
             break
           }
@@ -1214,7 +1285,8 @@ export async function POST(req: NextRequest) {
           } catch (retryErr) {
             aiSynthesisFailed = true
             aiSynthesisFailureReason = `LLM retry request failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`
-            gate(pipelineGates, 'LLM_PARSE', 'PARTIAL', aiSynthesisFailureReason)
+            gate(pipelineGates, 'LLM_PARSE', 'PARTIAL', aiSynthesisFailureReason,
+              undefined, { reasonCode: 'PROVIDER_FAILURE' })
             rawParsed = {}
             break
           }
@@ -1341,7 +1413,8 @@ export async function POST(req: NextRequest) {
         // generic "unexpected schema keys" WARN, which would be misleading here.
       } else if (_normOppCount === 0 && _normPainCount === 0) {
         gate(pipelineGates, 'NORMALIZATION', 'WARN',
-          'Normalizer produced 0 pain_points and 0 opportunities — LLM output may have used unexpected schema keys')
+          'Normalizer produced 0 pain_points and 0 opportunities — LLM output may have used unexpected schema keys',
+          undefined, { reasonCode: 'PARSER_FAILURE' })
       } else {
         gate(pipelineGates, 'NORMALIZATION', 'PASS',
           `Normalized: ${_normPainCount} pain_points | ${_normOppCount} opportunities`)
@@ -1364,10 +1437,29 @@ export async function POST(req: NextRequest) {
         if (shouldWarnEmptyPainPoints(_normPainCount, _evidenceSufficiency)) {
           gate(pipelineGates, 'PAIN_POINTS', 'WARN',
             'pain_points came back empty (0) despite evidence_sufficiency=sufficient — likely an LLM/parsing gap, not genuinely thin data',
-            { painPointsCount: _normPainCount, evidenceSufficiency: _evidenceSufficiency })
+            { painPointsCount: _normPainCount, evidenceSufficiency: _evidenceSufficiency },
+            { reasonCode: 'PARSER_FAILURE' })
         } else {
           gate(pipelineGates, 'PAIN_POINTS', 'PASS',
             `${_normPainCount} pain_point(s) | evidence_sufficiency=${_evidenceSufficiency}`)
+        }
+
+        // Gate: OPPORTUNITY (non-critical — WARN only, same tier/rule as
+        // PAIN_POINTS directly above, added Production Hardening Plan Phase 2.
+        // Previously opportunities were only checked jointly with pain_points
+        // in the NORMALIZATION gate above (0+0 => one combined WARN) — this
+        // repo's own history (see CLAUDE.md's "Research-quality initiative")
+        // documents opportunities silently going to 0 as its single most
+        // recurring bug class, so it earns its own standalone gate exactly
+        // like pain_points already has, not just a shared combined check.
+        if (shouldWarnEmptyPainPoints(_normOppCount, _evidenceSufficiency)) {
+          gate(pipelineGates, 'OPPORTUNITY', 'WARN',
+            'opportunities came back empty (0) despite evidence_sufficiency=sufficient — likely an LLM/parsing gap, not genuinely thin data',
+            { opportunitiesCount: _normOppCount, evidenceSufficiency: _evidenceSufficiency },
+            { reasonCode: 'PARSER_FAILURE' })
+        } else {
+          gate(pipelineGates, 'OPPORTUNITY', 'PASS',
+            `${_normOppCount} opportunit${_normOppCount === 1 ? 'y' : 'ies'} | evidence_sufficiency=${_evidenceSufficiency}`)
         }
       }
 
@@ -1568,6 +1660,16 @@ export async function POST(req: NextRequest) {
       cachedAt,
       scrapeResult,
       quality,
+      // Phase 3 (Production Hardening Plan) — per-page relevance scoring +
+      // corpus selection. null when it didn't run (stub-injected/empty
+      // scrape — see the SCRAPE_RELEVANCE gate above for why).
+      scrapeRelevance: scrapeRelevance ? {
+        selectedUrls: scrapeRelevance.selectedPages.map(p => p.url),
+        rejectedUrls: scrapeRelevance.rejectedPages.map(p => p.url),
+        rejectionReasons: scrapeRelevance.rejectionReasons,
+        relevanceScores: scrapeRelevance.relevanceScores,
+        fallbackApplied: scrapeRelevance.fallbackApplied,
+      } : null,
 
       // Content quality
       contentQuality,

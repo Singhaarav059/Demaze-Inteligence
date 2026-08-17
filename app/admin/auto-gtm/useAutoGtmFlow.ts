@@ -44,6 +44,7 @@ import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { DecisionMakerCandidate } from '@/lib/outbound/decision-maker-discovery/types'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 import { qualifyCompany } from '@/lib/sector-playbook/qualify'
+import { getResearchQuality } from '@/lib/pipeline/analysis-sections'
 
 export type FlowStep = 1 | 2 | 3 | 4 | 5 | 6
 export type InputMode = 'single' | 'batch'
@@ -401,6 +402,21 @@ export function useAutoGtmFlow() {
     [result?.analysisResult, contacts.length]
   )
 
+  // Master Plan Phase 5, Step 5.5 (confidence gate) — reuses
+  // auditResearchQuality()'s existing, already-computed output (see
+  // lib/pipeline/research-quality.ts) rather than duplicating its logic.
+  // That function itself stays purely informational; this is just the
+  // send-time surface for its output. Null (not 0) when no research is
+  // loaded yet, so ReviewSendStep can tell "nothing to check" apart from
+  // "checked, zero flags."
+  const researchQualityFlagged = useMemo(
+    () =>
+      result?.analysisResult
+        ? getResearchQuality(result.analysisResult)?.items_flagged ?? 0
+        : null,
+    [result?.analysisResult]
+  )
+
   // opts.force clears any cached scrape for this URL server-side and
   // researches fresh — the one-button "clear cache & rescrape" option
   // rendered next to Research on Step 1. Normal Research (force omitted)
@@ -721,6 +737,8 @@ export function useAutoGtmFlow() {
                         discovery_source: 'decision_maker_discovery',
                         discovery_confidence: candidate.confidence,
                         discovery_provider: discoverData.result.providerUsed,
+                        discovery_grounding_status: candidate.grounding?.status,
+                        discovery_grounding_reason: candidate.grounding?.reason,
                       }),
                     })
                     const addData = await addRes.json()
@@ -1038,6 +1056,7 @@ export function useAutoGtmFlow() {
     companyName,
     domain,
     qualification,
+    researchQualityFlagged,
     runResearch,
     contacts,
     addContactRow,

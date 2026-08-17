@@ -66,6 +66,12 @@ interface ReviewRow {
   // field. A 'low' value never changes `status`, it's shown as an
   // additional badge on an otherwise-'ready' row.
   emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
+  // Informational only, same discipline as emailConfidence above — see
+  // campaign-review.ts's comment. 'conflict'/'not_found' never changes
+  // `status`, it's surfaced as an additional badge + a confirm-dialog
+  // warning (Master Plan Phase 5, Step 5.4).
+  discoveryGroundingStatus?: 'confirmed' | 'conflict' | 'not_found' | null
+  discoveryGroundingReason?: string | null
 }
 
 interface ReviewSummary {
@@ -94,6 +100,7 @@ const STATUS_META: Record<ContactReviewStatus, { label: string; icon: typeof Che
 export function ReviewSendStep({
   contacts,
   qualification,
+  researchQualityFlagged,
   campaignId,
   ensureCampaignId,
   campaignContactStatus,
@@ -105,6 +112,12 @@ export function ReviewSendStep({
 }: {
   contacts: OutboundContact[]
   qualification: QualificationResult | null
+  // Count of items_flagged from lib/pipeline/research-quality.ts's
+  // auditResearchQuality() for this company's research (Master Plan Phase 5,
+  // Step 5.5 — confidence gate). That function is informational-only and
+  // never gates anything itself; this is the send-time surface for it. Null
+  // when no research is loaded yet.
+  researchQualityFlagged?: number | null
   campaignId: string | null
   ensureCampaignId: () => Promise<string | null>
   campaignContactStatus: Record<string, SendOutcomeDetail>
@@ -192,6 +205,9 @@ export function ReviewSendStep({
   }, [summary, excludedIds, campaignContactStatus])
 
   const readyRows = rowsWithLiveStatus.filter(r => r.status === 'ready')
+  const groundingIssueCount = readyRows.filter(
+    r => r.discoveryGroundingStatus === 'conflict' || r.discoveryGroundingStatus === 'not_found'
+  ).length
   const missingEmailRows = rowsWithLiveStatus.filter(r => r.status === 'missing_email')
   const suppressedRows = rowsWithLiveStatus.filter(r => r.status === 'suppressed')
   const alreadySentRows = rowsWithLiveStatus.filter(r => r.status === 'already_sent')
@@ -298,6 +314,15 @@ export function ReviewSendStep({
                       Unverified email
                     </Badge>
                   )}
+                  {row.status === 'ready' && (row.discoveryGroundingStatus === 'conflict' || row.discoveryGroundingStatus === 'not_found') && (
+                    <Badge
+                      variant={row.discoveryGroundingStatus === 'conflict' ? 'destructive' : 'outline'}
+                      className="text-[10px]"
+                      title={row.discoveryGroundingReason ?? undefined}
+                    >
+                      {row.discoveryGroundingStatus === 'conflict' ? 'Company conflict' : 'Not on company site'}
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground/70 truncate">{row.email ?? row.reason ?? '—'}</p>
                 {row.status !== 'ready' && row.reason && row.email && (
@@ -338,6 +363,24 @@ export function ReviewSendStep({
         })}
       </div>
 
+      {(groundingIssueCount > 0 || !!researchQualityFlagged) && (
+        <div className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-3 py-2 text-xs text-signal-medium space-y-0.5">
+          {groundingIssueCount > 0 && (
+            <p>
+              {groundingIssueCount} contact{groundingIssueCount === 1 ? '' : 's'} ready to send could not be fully
+              confirmed against this company's own website — review the "Company conflict" / "Not on company site"
+              badge{groundingIssueCount === 1 ? '' : 's'} above before sending.
+            </p>
+          )}
+          {!!researchQualityFlagged && (
+            <p>
+              {researchQualityFlagged} item{researchQualityFlagged === 1 ? '' : 's'} in this company's research were
+              flagged for lower confidence — review the Research step before sending.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 pt-1">
         <p className="text-xs text-muted-foreground/70">
           {readyRows.length === 0
@@ -354,7 +397,7 @@ export function ReviewSendStep({
         open={pendingConfirm}
         onOpenChange={open => { if (!open) setPendingConfirm(false) }}
         title="Send this campaign?"
-        description={`You are about to send ${readyRows.length} email${readyRows.length === 1 ? '' : 's'} from ${isRealSendingProvider ? sendingProviderName : 'the demo (mock) sending account'}. Follow-ups will be scheduled according to this campaign's rules. Emails will stop automatically when configured stop conditions are met (a reply, a bounce, or suppression). ${isRealSendingProvider ? 'This is a REAL send — real emails will go out.' : 'Mock sending only, no real email goes out yet.'}`}
+        description={`You are about to send ${readyRows.length} email${readyRows.length === 1 ? '' : 's'} from ${isRealSendingProvider ? sendingProviderName : 'the demo (mock) sending account'}. Follow-ups will be scheduled according to this campaign's rules. Emails will stop automatically when configured stop conditions are met (a reply, a bounce, or suppression). ${isRealSendingProvider ? 'This is a REAL send — real emails will go out.' : 'Mock sending only, no real email goes out yet.'}${groundingIssueCount > 0 ? ` WARNING: ${groundingIssueCount} contact${groundingIssueCount === 1 ? '' : 's'} could not be fully confirmed against this company's own website.` : ''}`}
         confirmLabel="Confirm & Send"
         loading={sendingSelected}
         onConfirm={() => void handleConfirmSend()}
