@@ -35,7 +35,7 @@
 // useSearchParams().
 // ============================================================
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import type { RunResult, AnalysisMode } from '@/app/admin/intelligence-lab/_types'
@@ -43,6 +43,7 @@ import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundC
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { DecisionMakerCandidate } from '@/lib/outbound/decision-maker-discovery/types'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
+import { qualifyCompany } from '@/lib/sector-playbook/qualify'
 
 export type FlowStep = 1 | 2 | 3 | 4 | 5 | 6
 export type InputMode = 'single' | 'batch'
@@ -378,6 +379,27 @@ export function useAutoGtmFlow() {
 
   const companyName = result?.domain ? deriveCompanyName(result.domain, result.analysisResult) : ''
   const domain = result?.domain ?? ''
+
+  // DRAFT sector-playbook qualification (lib/sector-playbook) — pure, sync,
+  // no network call, so this is just a memoized derivation over whatever
+  // research/contacts are already loaded, recomputed as decision-maker
+  // discovery adds contacts (contactability score improves with real data
+  // instead of staying "not yet determined").
+  const qualification = useMemo(
+    () =>
+      result?.analysisResult
+        ? qualifyCompany(result.analysisResult, {
+            // Only pass a real count once at least one contact exists —
+            // contacts.length === 0 is ambiguous between "discovery hasn't
+            // run yet" and "ran, found nobody," and qualify.ts treats those
+            // very differently (null/"not yet determined" vs. a real low
+            // score). Understating a genuine zero-found case is the safer
+            // default here, not fabricating a score before the step runs.
+            decisionMakerCount: contacts.length > 0 ? contacts.length : undefined,
+          })
+        : null,
+    [result?.analysisResult, contacts.length]
+  )
 
   // opts.force clears any cached scrape for this URL server-side and
   // researches fresh — the one-button "clear cache & rescrape" option
@@ -1015,6 +1037,7 @@ export function useAutoGtmFlow() {
     runId,
     companyName,
     domain,
+    qualification,
     runResearch,
     contacts,
     addContactRow,

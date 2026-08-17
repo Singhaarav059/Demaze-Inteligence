@@ -13,6 +13,8 @@
 // ============================================================
 
 import { getOpportunities, getPainPointsStructured, getOutreachIntelligence } from '@/lib/pipeline/analysis-sections'
+import { classifySector } from '@/lib/sector-playbook/classify'
+import { getSectorPlaybook } from '@/lib/sector-playbook/playbooks'
 import { DEFAULT_TARGET_TITLES } from './types'
 
 export interface RoleRecommendationGroup {
@@ -73,6 +75,22 @@ function collectResearchText(analysisResult: Record<string, unknown> | null | un
 export function recommendTitlesFromResearch(
   analysisResult: Record<string, unknown> | null | undefined
 ): RoleRecommendationGroup[] {
+  // DRAFT sector playbook roles take priority when the company confidently
+  // matches one of the 3 target sectors (lib/sector-playbook) — these are
+  // the sector's own draft decision-maker candidates (Part 11 of the sector-
+  // playbook spec), a better-targeted starting point than the generic
+  // keyword groups below. Falls through to the keyword groups when no
+  // sector match exists, unchanged from before.
+  const classification = classifySector(analysisResult)
+  if (classification.sector && classification.confidence !== 'none') {
+    const playbook = getSectorPlaybook(classification.sector)
+    return [{
+      titles: playbook.decisionMakerRoles,
+      reason: `${classification.reason} (DRAFT ${playbook.label} playbook role candidates.)`,
+      fromResearch: true,
+    }]
+  }
+
   const text = collectResearchText(analysisResult)
   const matched = text.trim() ? ROLE_GROUPS.filter(g => g.keywords.test(text)) : []
 

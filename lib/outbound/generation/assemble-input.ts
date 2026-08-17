@@ -11,6 +11,7 @@ import {
   getOutreachIntelligence,
   getPainPointsStructured,
 } from '@/lib/pipeline/analysis-sections'
+import { qualifyCompany } from '@/lib/sector-playbook/qualify'
 import type { EmailGenerationInput, EmailGenerationSalesIntelligence } from './types'
 
 interface ContactLike {
@@ -65,6 +66,20 @@ export function buildEmailGenerationInput(
   const executiveBrief = getExecutiveBrief(data)
   const outreachIntelligence = getOutreachIntelligence(data)
 
+  // Fallback source when no DB-backed Sales Knowledge match exists for this
+  // run (the common case today — see CLAUDE.md's Sales Intelligence Layer
+  // history): the DRAFT sector playbook (lib/sector-playbook), scoped to
+  // exactly the 3 active target sectors. Only used when a sector confidently
+  // matched and at least one opportunity pattern found real evidence.
+  // Deliberately never overrides the company's own narrative fields
+  // (outreachIntelligence/executiveBrief) below, which are more specific,
+  // per-company-grounded content — the playbook only fills the gap when
+  // that narrative is absent, and always rides along in the salesIntelligence
+  // object itself so the prompt still gets its recommended CTA/evidence
+  // framing regardless.
+  const playbookFallback = salesIntelligence ? undefined : buildPlaybookSalesIntelligence(data)
+  const resolvedSalesIntelligence = salesIntelligence ?? playbookFallback
+
   return {
     personName: contact.person_name,
     titleHint: contact.title_hint ?? undefined,
@@ -75,12 +90,29 @@ export function buildEmailGenerationInput(
     recentActivity,
     // Sales Intelligence is more curated than the raw narrative fields when
     // both exist — prefer its positioning/problem over conversation_angle/
-    // what_to_sell, but fall back to the pre-existing behavior when it
-    // doesn't (a run with no generated Sales Strategy, or one where neither
-    // field was matched).
-    openingAngle: salesIntelligence?.positioning ?? outreachIntelligence?.conversation_angle,
-    whatToSell: salesIntelligence?.problemLabel ?? executiveBrief?.what_to_sell,
+    // what_to_sell, but the company's own narrative wins over the generic
+    // DRAFT sector playbook (see playbookFallback above).
+    openingAngle: salesIntelligence?.positioning ?? outreachIntelligence?.conversation_angle ?? playbookFallback?.positioning,
+    whatToSell: salesIntelligence?.problemLabel ?? executiveBrief?.what_to_sell ?? playbookFallback?.problemLabel,
     whyNow: outreachIntelligence?.why_now ?? executiveBrief?.why_now,
-    salesIntelligence: salesIntelligence ?? undefined,
+    salesIntelligence: resolvedSalesIntelligence ?? undefined,
+  }
+}
+
+function buildPlaybookSalesIntelligence(data: Record<string, unknown>): EmailGenerationSalesIntelligence | undefined {
+  const qualification = qualifyCompany(data)
+  if (!qualification.playbook || qualification.classification.confidence === 'none') return undefined
+
+  const topMatch = qualification.matchedOpportunities[0]
+  const playbook = qualification.playbook
+
+  return {
+    problemLabel: topMatch?.possibleProblem ?? playbook.outreachAngle,
+    evidenceSentence: topMatch ? `${topMatch.tier === 'confirmed' ? 'Confirmed' : 'Inferred'}: ${topMatch.evidence}` : undefined,
+    // DRAFT — see lib/sector-playbook/types.ts. The email-generation rules
+    // in lib/outbound/generation/prompts.ts already instruct the model to
+    // use this as the core angle/CTA rather than inventing its own.
+    positioning: `[DRAFT ${playbook.label} playbook] ${playbook.valueProposition}`,
+    recommendedCta: playbook.cta,
   }
 }

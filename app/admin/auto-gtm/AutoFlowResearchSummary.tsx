@@ -43,7 +43,9 @@ import {
   RecentNewsSection,
   PersonalizationSummarySection,
 } from '@/app/admin/intelligence-lab/ResearchCard'
+import { SectorQualificationCard } from './SectorQualificationCard'
 import type { RunResult } from '@/app/admin/intelligence-lab/_types'
+import type { QualificationResult } from '@/lib/sector-playbook/qualify'
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -54,7 +56,13 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function AutoFlowResearchSummary({ result }: { result: RunResult }) {
+export function AutoFlowResearchSummary({
+  result,
+  qualification,
+}: {
+  result: RunResult
+  qualification: QualificationResult | null
+}) {
   const data = getResearchCardData(result)
   if (!data) return null
 
@@ -105,6 +113,8 @@ export function AutoFlowResearchSummary({ result }: { result: RunResult }) {
           </CardContent>
         </Card>
       </div>
+
+      {qualification && <SectorQualificationCard qualification={qualification} />}
 
       <BusinessProfileSection profile={businessProfile} />
       <RecentNewsSection items={recentActivity} />

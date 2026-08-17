@@ -687,7 +687,9 @@ export default function AutoGtmFlowPage() {
         </div>
       )}
 
-      {flow.step === 1 && flow.inputMode === 'single' && hasResearch && flow.result && <AutoFlowResearchSummary result={flow.result} />}
+      {flow.step === 1 && flow.inputMode === 'single' && hasResearch && flow.result && (
+        <AutoFlowResearchSummary result={flow.result} qualification={flow.qualification} />
+      )}
 
       {/* Step 2: Decision Makers (found automatically, user just selects who to keep) */}
 
@@ -800,6 +802,7 @@ export default function AutoGtmFlowPage() {
         <>
           <ReviewSendStep
             contacts={sortedContacts}
+            qualification={flow.qualification}
             campaignId={flow.campaignId}
             ensureCampaignId={flow.ensureCampaignId}
             campaignContactStatus={flow.campaignContactStatus}

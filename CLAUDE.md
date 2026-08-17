@@ -2875,6 +2875,311 @@ discipline as every other keyword-list guard in this codebase (matchesKeyword,
 NON_COMPETITOR_NAMES, etc.), not evidence the two-layer approach itself is
 wrong.
 
+## BUILT 2026-08-14 — Apollo.io added as a second vendor across 4 integration points
+User asked to discuss everything Apollo could fix/upgrade, then to implement
+it. Scoped via two decisions before writing code: (1) **no Apollo decision-
+maker-discovery provider** — Apollo's People Search only returns obfuscated
+last names (`"Mo***s"`); a usable name requires a separate People Match-by-ID
+call costing 1 real credit PER candidate just to reveal it, whereas Prospeo's
+existing decision-maker provider already returns full names for free in one
+search call. Not a good trade — Prospeo remains the only decision-maker-
+discovery provider. (2) **live-verify with a real key** this session, not
+deferred, following the same discipline as every other vendor integration in
+this file (`tsc`+tests first, then a real API call with explicit
+confirmation, never guessing at correctness).
+
+**What was built, 4 integration points**:
+1. **Email Finder** (`lib/outbound/email-finder/providers/apollo.ts`) and
+   **Contact Enrichment** (`lib/outbound/enrichment/providers/apollo.ts`) —
+   both call Apollo's People Match endpoint (`POST /v1/people/match`),
+   registered as `apollo` alongside `mock`/`prospeo` in both
+   `provider-factory.ts` files and `CAPABILITY_KNOWN_PROVIDERS` in
+   `lib/outbound/settings/types.ts` — same DB-row → env-var → mock
+   resolution as every other outbound capability. New shared client
+   `lib/outbound/shared/apollo-client.ts` (`callApolloPeopleMatch`,
+   `getApolloApiKey`), mirroring `prospeo-client.ts`'s shape but with one
+   documented divergence: Apollo uses real HTTP status codes (a non-2xx IS
+   a real error) — unlike Prospeo, which returns non-2xx even for soft
+   "not found" outcomes with the real detail in the JSON body. Copying
+   Prospeo's "any JSON body = ok:true" convention here would have been
+   wrong; this was flagged in the client's own header comment and confirmed
+   correct by the live test below.
+2. **Company Discovery Engine** (`lib/enrichment/company-discovery.ts`) —
+   Apollo Organization Search added as an additional parallel candidate
+   source (`searchOrganizationsApollo()`, new
+   `lib/enrichment/sources/apollo-client.ts`, same flat-env-var/no-DB
+   pattern as `edgar-client.ts`), feeding the same `grouped` Map the
+   regex/LLM extraction already populates — an Apollo-sourced name goes
+   through the identical `classifyCompanyRejection()` → tier → cap
+   pipeline, tagged `source: 'apollo'` (new field on
+   `CompanyDiscoveryCandidate`/`CompanyMatch`, mirrors
+   `CompetitorProfile.source`). `tierMatchConfidence()` treats an
+   Apollo match as `high` regardless of mention count (a licensed
+   structured-database hit, not a snippet-mention count). Apollo-sourced
+   candidates carry their own resolved domain and skip the expensive
+   `discoverCompanyWebsite()` verification pass entirely — reasoned as
+   correct because Apollo's org search is a structured DB match tied to a
+   specific organization ID, a fundamentally different (and stronger)
+   claim than "this page's text happens to mention these words," which is
+   the exact false-positive shape `discoverCompanyWebsite()` exists to
+   guard against for regex-extracted names.
+3. **Website Discovery** (`lib/enrichment/website-discovery.ts`) — Apollo
+   Organization Enrichment (`enrichOrganizationApollo()`) added as an
+   additional candidate-domain source inside `discoverCompanyWebsite()`,
+   ranked ahead of generic search-derived candidates but behind an
+   explicit caller-supplied `knownDomain`, and — unlike the company-
+   discovery integration above — still run through the exact same
+   `isKnownNonCorporateDomain()`/`scoreCandidate()`/homepage-fetch
+   verification gauntlet as every other candidate. Deliberately NOT given
+   the same "trust it directly" treatment as company-discovery's
+   integration: `discoverCompanyWebsite()`'s whole reason for existing is
+   "verify, never trust blindly" (see its own header comment), so an
+   Apollo guess here is a strong prior, not a bypass.
+
+Both `lib/enrichment/` integrations (2 and 3) are additive/no-op —
+`APOLLO_API_KEY` unset means zero behavior change, same "additive, not
+required" discipline as the EDGAR integration. New `.env.example` block
+documents that one `APOLLO_API_KEY` covers both the outbound-capability
+providers and the always-on enrichment sources.
+
+New tests: `tests/apollo-client.test.ts` (mocked `global.fetch`, including
+the real-HTTP-status-codes divergence from Prospeo), `tests/apollo-
+providers.test.ts` (both outbound providers' request/response mapping),
+`tests/apollo-enrichment-client.test.ts` (mirrors `tests/edgar-client
+.test.ts` for the two enrichment-source functions), plus targeted
+additions to `tests/company-discovery.test.ts` (`tierMatchConfidence`/
+`fallbackReason`'s apollo-source branches — the pure functions, not a full
+mocked end-to-end run, since this test file has no existing search-mocking
+infrastructure and adding it was judged disproportionate to this change)
+and `tests/website-discovery.test.ts` (Apollo-sourced domain going through
+full verification, not trusted blindly; a caller-supplied `knownDomain`
+still taking priority; no duplicate candidate when Apollo and search agree).
+`tsc --noEmit` clean, full suite 799/799 (799 = prior count + ~50 new).
+
+**Live-verified with the user's real Apollo API key** (Basic/Trial plan,
+explicit confirmation given first, throwaway `npx tsx` script deleted
+immediately after — same precedent as every other live-verification entry
+in this file): 3 real calls, one per non-DB-dependent code path.
+- **Organization Enrichment: fully works.** `enrichOrganizationApollo({
+  name: 'HubSpot', domain: 'hubspot.com' })` returned real, correctly-
+  mapped data (industry, `estimated_num_employees: 8900`,
+  `annual_revenue_printed: '3.1B'`, a real description) — confirms the
+  Website Discovery integration point end-to-end.
+- **People Match: blocked by account plan, not code.** Real response:
+  `403 API_INACCESSIBLE — "The api/v1/people/match API is not included in
+  your Basic (Trial) plan and is not accessible, even with a master key.
+  All paid plans include full API access."` The client correctly surfaced
+  this as a real error (proving the non-2xx-is-a-real-error handling works
+  as designed), not a code bug — Email Finder and Contact Enrichment are
+  code-complete and will work once the account is on a paid plan, but are
+  UNVERIFIED beyond this error response.
+- **Organization Search: same plan block.** Direct raw-fetch diagnostic
+  confirmed identical `403 API_INACCESSIBLE` on `mixed_companies/search` —
+  same conclusion: code-complete (a plan-restriction error, not a 404 or
+  malformed-request error, confirms the endpoint URL and request shape are
+  correct), Company Discovery Engine's Apollo path is UNVERIFIED against
+  real search results until the account upgrades.
+
+**Not done**: neither People Match nor Organization Search has been
+confirmed against a real successful response — only against a real,
+informative 403. Whoever revisits this after an Apollo plan upgrade should
+re-run the same 3-call live check (a throwaway script calling
+`callApolloPeopleMatch`/`searchOrganizationsApollo` directly, same pattern
+used this session) before trusting Email Finder, Contact Enrichment, or
+Company Discovery Engine's Apollo path in a real run. All 4 integration
+points default to `mock`/no-op — selecting `apollo` in `/admin/outbound/
+integrations` (or the equivalent env vars) is a deliberate opt-in, same
+safe-default discipline as every other vendor in this file.
+
+## BUILT 2026-08-14 (same day) — Demaze Lead Discovery: E-commerce sector +
+## a numeric revenue-range filter (₹50cr-₹500cr), using Apollo data already
+## fetched for domain resolution
+Follow-up to the Apollo build above, same session. User asked for two
+things for Demaze's own Lead Discovery flow (`/admin/company-discovery` →
+`/api/admin/demaze-leads`): restrict target sectors to Manufacturing/
+Automotive/E-commerce, and filter to companies roughly ₹50cr–₹500cr annual
+revenue. Manufacturing/Automotive already existed in
+`DEMAZE_CONFIRMED_SECTORS`; **E-commerce added** (`lib/enrichment/
+demaze-leads.ts`). Apollo's real Organization Search endpoint (which has a
+native `revenue_range` filter) is still plan-gated on this account (see the
+entry above), so this uses **Option 2**: a post-discovery filter against
+Apollo Organization Enrichment data, which already works on this account.
+
+**Cost-conscious design, not a second Apollo call**: `discoverCompanyWebsite()`
+(`website-discovery.ts`) already calls `enrichOrganizationApollo({ name })`
+internally for every candidate during domain resolution — that response's
+revenue/employee data was being fetched and then thrown away. Instead of
+calling Apollo a second time for revenue filtering, `WebsiteDiscoveryResult`
+now carries an `apolloOrg?: ApolloOrgEnrichResult` field forward (populated
+on every return branch), and `discoverCompanies()`'s domain-resolution loop
+(`company-discovery.ts`) reads `site.apolloOrg?.annualRevenue` directly —
+zero additional Apollo credits spent for this feature. Also added a raw
+numeric `annualRevenue` field to `ApolloOrgEnrichResult` itself
+(`lib/enrichment/sources/apollo-client.ts`) — the existing
+`annualRevenuePrinted` is a display string ("$50M") that can't be reliably
+parsed for a numeric range comparison.
+
+**New pure helper `isOutsideRevenueRange(annualRevenue, range)`**
+(`company-discovery.ts`), same "prefer under-confidence" discipline as
+`detectSizeMismatch()` right above it in the same file: a candidate Apollo
+has NO revenue figure for is NEVER rejected (unknown != outside) — Apollo's
+firmographic coverage skews toward larger/US-heavy companies, so plenty of
+genuinely in-range Indian SMEs will have no revenue data at all, and this
+must not silently drop them. Only a confirmed numeric value outside the
+caller-supplied bounds is grounds for rejection; rejections are pushed into
+the existing `rejected_candidates` diagnostic list, same visibility
+discipline as every other rejection reason in this file. New optional
+`discoverCompanies(icpSegment, excludeCompanyNames?, revenueRangeUsd?)`
+3rd param — every other caller (the manual `/api/admin/company-discovery`
+route) is unaffected, only `demaze-leads`'s route passes it.
+
+**INR→USD conversion, explicitly approximate, not a live FX rate**: new
+`DEMAZE_TARGET_REVENUE_RANGE_CR_INR = { min: 50, max: 500 }` and
+`DEMAZE_TARGET_REVENUE_RANGE_USD` (computed via a fixed `INR_PER_USD_APPROX
+= 83` constant, documented in `demaze-leads.ts` as needing a revisit if it
+drifts meaningfully — a few percent of drift just shifts the filter
+boundary slightly, it's not structurally fragile). `CompanyMatch` gained an
+optional `companySizeApollo?: { estimatedNumEmployees?: number;
+annualRevenue?: number }` field for transparency (threaded through, no new
+UI rendering added this pass — same "additive field, UI catches up later"
+precedent as `source` on `CompanyMatch`/`CompetitorProfile` earlier this
+session).
+
+New/extended tests: `tests/company-discovery.test.ts` (`isOutsideRevenueRange`
+— boundary-inclusive, unknown-is-kept, one-sided ranges, a real mega-cap
+example), `tests/website-discovery.test.ts` (`apolloOrg` threads through on
+both confirmed and not_found results, and is `undefined` when Apollo has no
+match), `tests/apollo-enrichment-client.test.ts` (extended the existing
+mapping test with `annualRevenue`), `tests/demaze-leads.test.ts`
+(E-commerce present in `DEMAZE_CONFIRMED_SECTORS`, the ₹→$ conversion lands
+in a plausible bound). `tsc --noEmit` clean, full suite 811/811 (799
+pre-existing + 12 new).
+
+**Not done / known limitation, stated plainly**: this filter is genuinely
+best-effort, not a hard guarantee — it can only reject candidates Apollo
+has confident revenue data for, and (per the entry above) Apollo's
+Organization *Search* path itself is still unverified on this account, so
+today this filter only ever gets a chance to run on candidates that
+survived regex/LLM extraction and reached the per-candidate domain-
+resolution loop, not on any Apollo-*sourced* candidate (those short-circuit
+past `discoverCompanyWebsite()` entirely per the entry above and have no
+`apolloOrg` data to filter on). Once the Organization Search plan-block
+lifts, revisit whether Apollo-sourced candidates should also carry revenue
+data (Organization Search's response may already include it — unconfirmed,
+since that endpoint has never returned a real 200 on this account) so they
+can be filtered too instead of automatically passing through.
+
+## BUILT 2026-08-17 — DRAFT sector playbook (Manufacturing/Automotive/
+## E-commerce), qualification scorecard, wired into Auto Flow (no new step)
+User asked for the outbound workflow to actually function as an
+evidence-based, sector-scoped qualification system (their own detailed
+31-part spec), restricted to exactly 3 active target sectors. Investigated
+first, per their own explicit instruction, before writing anything: found
+Auto Flow already had the exact 6-step structure requested (Research →
+Decision Makers → Contact Info → Campaign & Outreach → Review & Send →
+Track & Follow Up, see StepIndicator.tsx) and no Sales Strategy step (one
+was added and removed the same week back in 2026-08-13). Also found the
+Sales Knowledge/Sales Intelligence system (migrations 021/022,
+`lib/sales-knowledge/*`) already had a real 4-tier evidence hierarchy
+(confirmed_fact/research_supported_signal/industry_pattern/hypothesis) and
+was already fully wired end-to-end into email generation
+(`assemble-input.ts` already accepted a `salesIntelligence` param) — just
+disconnected from the UI, and scoped to 8 generic industries rather than
+the 3 the user now wants active.
+
+**Built, additive only, nothing removed**: new `lib/sector-playbook/`
+module — `types.ts` (`SectorPlaybook`, `status: 'DRAFT'`, all fields A-Q
+from the user's spec: qualification/disqualification criteria, ideal
+profile, signals, opportunity patterns, relevant services, decision-maker
+roles, evidence rules, personalization approach, outreach angle/value
+prop/CTA, follow-up strategy, 4 examples per sector, confidence rules,
+prohibited claims), `playbooks.ts` (the 3 draft playbooks, using ONLY the 8
+confirmed Demaze services from DEMAZE_CAPABILITY_MAP.md — nothing
+invented), `classify.ts` (pure, sync sector classification reusing
+`industry`/`sub_industry`/`company_summary`/business-profile fields already
+in the research output, word-boundary matched against each playbook's
+`signals` list — same discipline as `matchesKeyword()`'s historical 'ir'/
+'sec' substring-collision fix elsewhere in this file), `qualify.ts` (the
+5-score scorecard — sector fit / company fit / opportunity evidence /
+contactability / overall, each with a plain-English reasons array, reusing
+`company_fit`, pain-point `claim_type`, and `_service_evidence_debug`
+rather than re-deriving evidence — no new LLM call anywhere in this module).
+
+Deliberately a SEPARATE artifact from `lib/sales-knowledge/*` (the DB-backed
+8-industry system), not a rebuild of it — that system's schema has no room
+for qualification/disqualification rules, evidence rules, personalization
+approach, follow-up strategy, or example scenarios, and rebuilding it into
+3 rich sector objects would have meant a new migration + admin CRUD for
+content that's explicitly expected to be replaced wholesale once the
+official Word document arrives, not edited field-by-field. `getSectorPlaybook()`
+is the single read path every consumer goes through — swapping in the real
+document later means changing playbooks.ts's data source only.
+
+**Wired in, no new step**: `SectorQualificationCard`/`CompactSectorBadge`
+(new `app/admin/auto-gtm/SectorQualificationCard.tsx`) render on the
+Research step (full scorecard + matched opportunities, each tagged
+"Confirmed evidence" or "Reasonable inference") and Review & Send (compact
+sector/confidence line, satisfying the review screen's own "Sector" field
+requirement) — `useAutoGtmFlow.ts` computes `qualification` via a pure
+`useMemo` over `result.analysisResult` (no new network call; contactability
+score is deliberately `null`/"not yet determined" until at least one
+decision-maker contact exists, never fabricated before that step runs).
+`role-recommendation.ts` now prefers the matched sector playbook's
+`decisionMakerRoles` over its old generic keyword-group fallback when a
+sector confidently matches. `assemble-input.ts` threads the matched
+playbook's positioning/CTA into `EmailGenerationSalesIntelligence` as a
+fallback ONLY when neither a real DB Sales Knowledge match nor the
+company's own narrative fields (`outreach_intelligence.conversation_angle`/
+`executive_brief.what_to_sell`) are present — a real regression was caught
+here by the existing test suite (`tests/outbound-generation.test.ts`) and
+fixed before landing: the playbook fallback was initially unconditionally
+overriding the company's own specific, narrative-grounded opening angle
+with generic sector boilerplate. Fixed by making the playbook strictly the
+last-resort fallback, never a override.
+
+**Verified**: `tsc --noEmit` clean, full suite 823/823 (12 new assertions in
+`tests/sector-playbook.test.ts`, zero regressions in
+`tests/role-recommendation.test.ts`/`tests/outbound-generation.test.ts`).
+**Live-verified against a real cached run** (Ador Welding Limited, resumed
+from run-history, no new API/LLM quota spent): Research step correctly
+showed `Target Sector & Fit: Manufacturing, 85/100`, with Sector fit 90/
+Company fit 85/Opportunity evidence 100/Contactability 60 (2 decision-maker
+candidates), and 3 "Confirmed evidence" opportunities each citing a real
+snippet from `_service_evidence_debug`. Decision Makers step correctly
+showed "Recommended for this company: CIO, CTO, COO, Head of IT, Head of
+Digital Transformation, Head of Operations, VP Technology, VP Operations —
+Classified as Manufacturing... (DRAFT Manufacturing playbook role
+candidates.)" — the exact Manufacturing playbook role list, not the old
+generic keyword groups. Zero console errors throughout.
+
+**RESOLVED same day — Automotive and E-commerce also live-verified.**
+Automotive: resumed Honda Cars India from a cached run (no new quota) —
+`Target Sector & Fit: Automotive, 60/100` (Sector fit 90, Company fit 35,
+Opportunity evidence 15 with a correctly `Reasonable inference`-tagged
+match on "AI-powered business applications", Contactability 100 with 10
+real candidates), Decision Makers step correctly showed the Automotive
+playbook's exact role list. E-commerce had no cached company in run-history
+(checked via a real query, only false-positive substring matches existed)
+— explicit user confirmation given first, then a real fresh Full-mode
+research call against Nykaa (real Firecrawl/Tavily/LLM quota spent):
+`Target Sector & Fit: E-commerce, 73/100` (Sector fit 90, Company fit 40,
+Opportunity evidence 65, Contactability 100 with 9 real candidates), and —
+notably — all 3 tiers rendering correctly on one real company: 1
+`Confirmed evidence` match (Ecommerce ecosystems, from real
+`_service_evidence_debug` content) alongside 2 `Reasonable inference`
+matches (Analytics and reporting systems, Marketplace platforms), proving
+the confirmed/inferred distinction isn't cosmetic — it reflects genuinely
+different evidence strength per opportunity on the same live run. Decision
+Makers step showed the exact E-commerce playbook role list. Zero console
+errors on either run (only the pre-existing, already-documented HMR/Edge-
+runtime warnings). All 3 sector playbooks are now live-verified, not just
+unit-tested.
+
+Campaign state machine, tracking, follow-ups, Apollo/Prospeo integrations
+were investigated and confirmed already correct per this file's own
+extensive prior history — untouched, no changes needed. Sales Knowledge DB
+tables (021/022) untouched, left available for future use.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above

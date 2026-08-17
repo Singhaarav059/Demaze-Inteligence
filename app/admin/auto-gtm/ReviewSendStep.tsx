@@ -45,6 +45,8 @@ import { CheckCircle2, Mail, AlertTriangle, Ban, XCircle } from 'lucide-react'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 import type { ContactReviewStatus } from '@/lib/outbound/sending/campaign-review'
+import type { QualificationResult } from '@/lib/sector-playbook/qualify'
+import { CompactSectorBadge } from './SectorQualificationCard'
 
 interface SendOutcomeDetail {
   status: 'sent' | 'skipped' | 'failed'
@@ -91,6 +93,7 @@ const STATUS_META: Record<ContactReviewStatus, { label: string; icon: typeof Che
 
 export function ReviewSendStep({
   contacts,
+  qualification,
   campaignId,
   ensureCampaignId,
   campaignContactStatus,
@@ -101,6 +104,7 @@ export function ReviewSendStep({
   onEditContact,
 }: {
   contacts: OutboundContact[]
+  qualification: QualificationResult | null
   campaignId: string | null
   ensureCampaignId: () => Promise<string | null>
   campaignContactStatus: Record<string, SendOutcomeDetail>
@@ -258,6 +262,7 @@ export function ReviewSendStep({
           </InfoTooltip>
         </h2>
         <p className="text-xs text-muted-foreground/70 mt-0.5">{campaign?.name}</p>
+        {qualification && <div className="mt-1.5"><CompactSectorBadge qualification={qualification} /></div>}
       </div>
 
       <div className="rounded-lg border border-border bg-card px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 text-xs">
