@@ -5,12 +5,24 @@
 // in-memory, dedupes companies, and returns the structured list.
 // The uploaded file is NEVER written to disk or persisted anywhere —
 // it exists only as an in-memory Buffer for the duration of this request.
+//
+// 2026-08-18: additive company_registry lookup after in-batch dedup — every
+// uploaded row is checked against the SAME persistent identity system
+// automatic discovery uses (lib/companies/identity.ts), not a separate
+// dedup mechanism, per the governing plan's explicit "Excel/CSV and
+// automatic discovery must share the same identity system" requirement.
+// This only ANNOTATES `existingStatus` (read-only — no company_registry
+// row is created or modified here); the actual research/outreach lock
+// happens downstream when a row is selected for research or sent.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { parseLeadListFile } from '@/lib/batch/file-parser'
 import { dedupeCompanies } from '@/lib/batch/company-dedup'
+import { lookupExistingStatus } from '@/lib/companies/identity'
+import { createServerClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -40,6 +52,20 @@ export async function POST(req: NextRequest) {
   }
 
   const companies = dedupeCompanies(parseResult.rows)
+
+  // Best-effort annotation — a DB hiccup here must not fail the whole
+  // upload; the user still gets their parsed/deduped list, just without
+  // the already-researched/already-outreached badges this round.
+  try {
+    const supabase = createServerClient()
+    const statuses = await lookupExistingStatus(
+      supabase,
+      companies.map(c => ({ domain: c.companyWebsite, name: c.companyName, linkedinUrl: c.companyLinkedIn })),
+    )
+    companies.forEach((c, i) => { c.existingStatus = statuses[i] })
+  } catch (e) {
+    logger.warn('BatchParse', 'existingStatus annotation skipped', e instanceof Error ? e.message : String(e))
+  }
 
   return NextResponse.json({
     success: true,

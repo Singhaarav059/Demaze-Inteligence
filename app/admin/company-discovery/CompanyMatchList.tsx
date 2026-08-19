@@ -56,6 +56,19 @@ import type { DemazeMatch } from './useCompanyDiscoverySearch'
 // user isn't stuck scrolling/scanning a long flat list.
 const FILTER_THRESHOLD = 8
 
+const LOCK_REASON_LABELS: Record<string, string> = {
+  duplicate: 'already discovered',
+  already_researched: 'already researched',
+  already_outreached: 'already outreached',
+  wrong_sector: 'outside target sector',
+  outside_size_range: 'outside size range',
+}
+
+function lockedReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return 'already known'
+  return LOCK_REASON_LABELS[reason] ?? reason.replace(/_/g, ' ')
+}
+
 function serviceFitFor(match: DemazeMatch, demazeSegments: ICPSegment[]): string {
   const segNames = match.segments ?? []
   if (segNames.length === 0) return 'Not available, no Demaze ICP segment tagged for this lead.'
@@ -201,6 +214,12 @@ export function CompanyMatchList({
                       <Badge className="text-[10px] bg-signal-medium/10 text-signal-medium border border-signal-medium/30 gap-1">
                         domain not confirmed
                         <InfoTooltip>We couldn&rsquo;t confidently resolve a website for this company. It will still be researched by name only, but results may be thinner.</InfoTooltip>
+                      </Badge>
+                    )}
+                    {match.existingStatus === 'disqualified' && (
+                      <Badge className="text-[10px] bg-destructive/10 text-destructive border border-destructive/30 gap-1">
+                        {lockedReasonLabel(match.rejectionReason)}
+                        <InfoTooltip>Unselected by default — this company is already in Demaze&rsquo;s records. Check the box yourself to research/reconsider it anyway.</InfoTooltip>
                       </Badge>
                     )}
                   </div>

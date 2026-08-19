@@ -8,6 +8,7 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 import type { ScrapeResult } from '@/lib/pipeline/scraper'
+import { recordMetric } from '@/lib/pipeline/research-metrics'
 
 // How long a cache entry is considered fresh
 export const CACHE_TTL_HOURS = 24
@@ -36,17 +37,19 @@ export async function getCachedScrape(url: string): Promise<CachedScrape | null>
       .eq('url', url)
       .single()
 
-    if (error || !data) return null
+    if (error || !data) { recordMetric('cacheMisses'); return null }
 
     const ageMs = Date.now() - new Date(data.scraped_at).getTime()
     const ttlMs = CACHE_TTL_HOURS * 60 * 60 * 1000
 
     if (ageMs > ttlMs) {
       console.log(`[scrape-cache] Cache expired for ${url} (age: ${Math.round(ageMs / 3600000)}h)`)
+      recordMetric('cacheMisses')
       return null
     }
 
     console.log(`[scrape-cache] Cache hit for ${url} (age: ${Math.round(ageMs / 60000)}m)`)
+    recordMetric('cacheHits')
 
     return {
       scrapeResult: data.scrape_result as ScrapeResult,

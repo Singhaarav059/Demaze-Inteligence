@@ -40,6 +40,7 @@ import {
   type PrioritizedSource,
 } from './source-prioritizer'
 import { fetchEdgarFilings } from './sources/edgar-client'
+import { recordMetric } from '@/lib/pipeline/research-metrics'
 
 // ── Public types ──────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ async function fetchWithFirecrawl(url: string, timeoutMs = 12_000): Promise<stri
     const { default: Firecrawl } = await import('@mendable/firecrawl-js')
     const app = new Firecrawl({ apiKey: firecrawlKey })
 
+    recordMetric('firecrawlCalls')
     const result = await Promise.race([
       app.scrape(url, { formats: ['markdown'] }),
       new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs)),
@@ -225,6 +227,7 @@ export async function extractPdfText(buffer: Buffer): Promise<string | null> {
 async function fetchPdfText(url: string, timeoutMs = 15_000): Promise<string | null> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  recordMetric('directFetchCalls')
   try {
     const res = await fetch(url, {
       signal: controller.signal,

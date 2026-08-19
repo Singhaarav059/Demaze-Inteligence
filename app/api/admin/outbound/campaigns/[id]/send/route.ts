@@ -56,6 +56,8 @@ import { sendEmail } from '@/lib/outbound/sending/provider-factory'
 import { isWithinSendWindow, remainingDailySendCapacity } from '@/lib/outbound/sending/campaign-limits'
 import { claimCampaignContact } from '@/lib/outbound/sending/claim'
 import { checkEmailFormat, checkCompanyIdentity } from '@/lib/outbound/sending/send-eligibility'
+import { markOutreachedByIdentity } from '@/lib/companies/identity'
+import { logger } from '@/lib/logger'
 
 interface SendOutcome {
   campaignContactId: string
@@ -137,7 +139,7 @@ export async function POST(
 
     const { data: contact } = await supabase
       .from('outbound_contacts')
-      .select('email, discovery_grounding_status')
+      .select('email, discovery_grounding_status, company_domain, company_name')
       .eq('id', item.contact_id)
       .maybeSingle()
 
@@ -275,6 +277,23 @@ export async function POST(
         providerStatus: result.status,
       },
     })
+
+    // Outreach-lock (governing plan section D): a real send marks this
+    // company 'outreached' in the persistent registry, so no future
+    // discovery run or Excel/CSV upload can automatically resurface it —
+    // only an explicit manual override in the UI can. Best-effort: a
+    // failure here must never undo an already-successful send.
+    if (contact.company_domain || contact.company_name) {
+      try {
+        await markOutreachedByIdentity(
+          supabase,
+          { domain: contact.company_domain, name: contact.company_name },
+          campaignId,
+        )
+      } catch (e) {
+        logger.warn('CampaignSend', 'outreach-lock write skipped', e instanceof Error ? e.message : String(e))
+      }
+    }
 
     outcomes.push({ campaignContactId: item.id, status: 'sent' })
   }

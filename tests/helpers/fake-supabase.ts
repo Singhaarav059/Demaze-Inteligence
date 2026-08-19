@@ -27,6 +27,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: any }> {
   private insertData: Row[] | null = null
   private orderCol: string | null = null
   private orderAscending = true
+  private limitCount: number | null = null
 
   constructor(private rows: Row[], private idSeed: () => string) {}
 
@@ -81,6 +82,10 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: any }> {
     this.orderAscending = opts?.ascending ?? true
     return this
   }
+  limit(count: number) {
+    this.limitCount = count
+    return this
+  }
 
   private matched() {
     return this.rows.filter(r => this.filters.every(f => f(r)))
@@ -111,12 +116,13 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: any }> {
       }
       return { data: matches.map(r => ({ ...r })), error: null }
     }
-    const matched = this.matched()
+    let matched = this.matched()
     if (this.orderCol) {
       const col = this.orderCol
       const dir = this.orderAscending ? 1 : -1
       matched.sort((a, b) => (a[col] > b[col] ? 1 : a[col] < b[col] ? -1 : 0) * dir)
     }
+    if (this.limitCount !== null) matched = matched.slice(0, this.limitCount)
     return { data: matched.map(r => ({ ...r })), error: null }
   }
 

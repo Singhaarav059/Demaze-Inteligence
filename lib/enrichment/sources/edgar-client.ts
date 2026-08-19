@@ -26,6 +26,8 @@
 // website-discovery.ts's ambiguous-match handling.
 // ============================================================
 
+import { recordMetric } from '@/lib/pipeline/research-metrics'
+
 const TICKER_MAP_URL = 'https://www.sec.gov/files/company_tickers.json'
 const SUBMISSIONS_URL = (cik10: string) => `https://data.sec.gov/submissions/CIK${cik10}.json`
 const FETCH_TIMEOUT_MS = 8_000
@@ -62,6 +64,7 @@ async function loadTickerMap(): Promise<TickerEntry[] | null> {
   if (!inFlight) {
     inFlight = (async () => {
       try {
+        recordMetric('directFetchCalls')
         const res = await fetch(TICKER_MAP_URL, {
           headers: { 'User-Agent': userAgent() },
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -215,6 +218,7 @@ export async function fetchEdgarFilings(companyName: string): Promise<EdgarResul
 
   let data: SubmissionsResponse
   try {
+    recordMetric('directFetchCalls')
     const res = await fetch(SUBMISSIONS_URL(cik10), {
       headers: { 'User-Agent': userAgent() },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),

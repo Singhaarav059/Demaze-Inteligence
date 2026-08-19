@@ -1033,14 +1033,22 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
 // Splits content into segments by --- PAGE: url --- markers.
 // Also handles [SOURCE: type | tier | url] markers from web-enricher.
 
-interface ContentSegment {
+// Exported for reuse by evidence-ledger.ts's attributeQuoteToSource() (G2) —
+// the same --- PAGE: ... --- / [SOURCE: ...] header parsing a quote needs to
+// be localized to its real source URL, not a second regex reimplementing it.
+export interface ContentSegment {
   url: string
   text: string
   pageType: PageType
   tier: 'tier1' | 'tier2' | 'tier3'
+  // 'scraped_page': the researched company's own site (--- PAGE: ... ---).
+  // 'enriched_source': external evidence ([SOURCE: type | tier | url]) —
+  // its real SourceType has to be re-derived from the URL by the caller,
+  // pageType here is only the coarse investor/careers/press/other bucket.
+  origin: 'scraped_page' | 'enriched_source'
 }
 
-function parseContentSegments(content: string): ContentSegment[] {
+export function parseContentSegments(content: string): ContentSegment[] {
   const segments: ContentSegment[] = []
 
   // Website content format: --- PAGE: /path (https://url) ---
@@ -1065,7 +1073,7 @@ function parseContentSegments(content: string): ContentSegment[] {
     const path = urlMatch ? urlHeader.slice(0, urlMatch.index).trim() : url
     const pageType = detectPageType(path)
     const tier = tierFromPageType(pageType)
-    segments.push({ url, text, pageType, tier })
+    segments.push({ url, text, pageType, tier, origin: 'scraped_page' })
   }
 
   // Enriched source format: [SOURCE: type (confidence) | tier | url]
@@ -1084,12 +1092,12 @@ function parseContentSegments(content: string): ContentSegment[] {
       : /press.?release|newsroom|news.?article|ceo.?interview|blog/i.test(typeLabel) ? 'press'
       : 'other'
 
-    segments.push({ url, text, pageType, tier: tierLabel })
+    segments.push({ url, text, pageType, tier: tierLabel, origin: 'enriched_source' })
   }
 
   // If no markers found, treat entire content as homepage
   if (segments.length === 0 && content.trim()) {
-    segments.push({ url: '', text: content, pageType: 'homepage', tier: 'tier3' })
+    segments.push({ url: '', text: content, pageType: 'homepage', tier: 'tier3', origin: 'scraped_page' })
   }
 
   return segments

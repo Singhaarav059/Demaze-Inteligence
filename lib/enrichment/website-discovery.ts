@@ -21,6 +21,7 @@
 
 import { searchTavily, searchSerper } from './discovery-engine'
 import { escapeRegex } from '../utils/regex'
+import { recordMetric } from '@/lib/pipeline/research-metrics'
 
 // A real, current-browser-shaped User-Agent — see the identical constant +
 // comment in lib/pipeline/scraper.ts (2026-07-23 Muthoot Finance / A-1 Fence
@@ -201,6 +202,7 @@ export interface HomepageIdentity {
 }
 
 async function fetchHomepageIdentityPlain(url: string): Promise<HomepageIdentity | null> {
+  recordMetric('directFetchCalls')
   try {
     const resp = await Promise.race([
       fetch(url, {
@@ -237,6 +239,7 @@ async function fetchHomepageIdentityViaFirecrawl(url: string): Promise<HomepageI
     const { default: Firecrawl } = await import('@mendable/firecrawl-js')
     const app = new Firecrawl({ apiKey: firecrawlKey })
 
+    recordMetric('firecrawlCalls')
     const result = await Promise.race([
       app.scrapeUrl(url, { formats: ['markdown'] }),
       new Promise<null>(resolve => setTimeout(() => resolve(null), 12_000)),

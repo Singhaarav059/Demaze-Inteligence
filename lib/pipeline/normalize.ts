@@ -38,7 +38,7 @@ import {
   DeterministicOpportunity,
   CONFIRMED_SERVICE_NAMES,
 } from '@/lib/pipeline/opportunity-engine'
-import { verifyQuoteInContent, isQuoteGrounded } from '@/lib/pipeline/quote-verification'
+import { verifyQuoteInContent } from '@/lib/pipeline/quote-verification'
 import {
   detectServiceEvidence,
   type ServiceThresholdResult,
@@ -51,6 +51,17 @@ import type { ICPSegment, ICPSufficiency, ICPDiscoveryResult } from '@/lib/enric
 import type { MarketIntelItem, MarketIntelSufficiency, MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
 import { auditResearchQuality, ResearchQualityAudit } from '@/lib/pipeline/research-quality'
 import { emptyBusinessProfile, type CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
+import type { ResearchMetrics } from '@/lib/pipeline/research-metrics'
+import {
+  attributeQuoteToSource,
+  classifySourceAuthority,
+  classifyFreshness,
+  computeCompanyIdentityConfidence,
+  computeEvidenceConfidence,
+  detectContradictions,
+} from '@/lib/pipeline/evidence-ledger'
+
+export type ResearchRunMetrics = ResearchMetrics & { estimatedCostUsd: number }
 
 // Converts a BusinessModelType string to a minimal CompanyProfile for
 // backward compatibility when companyProfile is not available from extractor.
@@ -96,6 +107,25 @@ export interface EvidenceItem {
   category: string
   quote: string
   source_page: string
+
+  // ── G2 evidence-ledger additions (docs/evidence-ledger-design.md §G2.2) ──
+  // All optional/additive — the pre-existing LLM-authored `evidence[]` array
+  // (flat.evidence, feeds detected_factors) never populates any of these and
+  // keeps working unchanged. Only code-verified evidence built in this
+  // file's opportunities-Path-B1 / pain-points-'observed' branches populates
+  // the full shape — see evidence-ledger.ts.
+  claimType?: 'observed' | 'inferred' | 'hypothesis'
+  sourceUrl?: string | null
+  sourceType?: string   // SourceType from discovery-engine.ts, or 'unknown'
+  sourceAuthority?: 'first_party' | 'regulatory' | 'reputable_third_party' | 'weak' | 'unknown'
+  publishedAt?: string | null
+  accessedAt?: string
+  freshness?: 'very_recent' | 'recent' | 'aging' | 'stale' | 'unknown'
+  companyIdentityConfidence?: 'high' | 'low' | 'unknown'
+  contradictionStatus?: 'none' | 'conflict' | 'unknown'
+  confidence?: number
+  supportingEvidenceIds?: string[]
+  contradictoryEvidenceIds?: string[]
 }
 
 const COMPANY_SUBJECT_TYPES = new Set([
@@ -141,6 +171,9 @@ export interface StructuredPainPoint {
   // LLM was shown before surviving into the report; 'inferred' claims are
   // kept as legitimate business-model reasoning without requiring a quote.
   claim_type?: 'observed' | 'inferred'
+  // G2 evidence-ledger propagation — ids into NormalizedAnalysis.evidence_ledger,
+  // populated only for 'observed' claims that built a real EvidenceItem.
+  supportingEvidenceIds?: string[]
 }
 
 export interface ReasoningChain {
@@ -361,6 +394,9 @@ export interface NormalizedAnalysis {
     inferred_from?: string
     opportunity_confidence?: string
     demaze_fit_score?: string
+    // G2 evidence-ledger propagation — ids into NormalizedAnalysis.evidence_ledger,
+    // populated only for 'llm_verified' entries that built a real EvidenceItem.
+    supportingEvidenceIds?: string[]
   }>
 
   // v4: Deterministic opportunities from opportunity engine
@@ -429,6 +465,18 @@ export interface NormalizedAnalysis {
   // company-name-based competitor search. Pure passthrough — it IS an LLM
   // output already, no further narration/merge step applies to it.
   business_profile: CompanyBusinessProfile
+
+  // Provider call counts + estimated cost for this run (plan §35, G1). Pure
+  // passthrough from route.ts's `_research_metrics` — null on legacy saved
+  // runs from before this field existed.
+  research_metrics: ResearchRunMetrics | null
+
+  // G2 evidence ledger (docs/evidence-ledger-design.md) — real, code-verified
+  // EvidenceItem records built during this run's opportunities/pain-points
+  // construction (Path B1 / 'observed' branch only, see design doc §G2.10).
+  // opportunities[].supportingEvidenceIds / pain_points_structured[].
+  // supportingEvidenceIds index into this array by id.
+  evidence_ledger: EvidenceItem[]
 
   // Research Quality Framework (Phase 2 item 4) — per-item confidence audit,
   // informational only, never gates. Computed last, from the fully-assembled
@@ -731,6 +779,42 @@ export function normalizeAnalysisResult(
   // LLM never actually saw and couldn't have legitimately quoted from.
   const llmContentPool = str(extractorData?.websitePreview) || ''
 
+  // ── G2 Evidence Ledger (docs/evidence-ledger-design.md) ─────────────────
+  // Collects real, attributed EvidenceItem records as opportunities/pain
+  // points are built below (Path B1 / 'observed' branch only — the two
+  // paths that already quote-verify against llmContentPool). Contradiction
+  // detection runs once at the end, over the whole ledger.
+  const evidence_ledger: EvidenceItem[] = []
+  function buildLedgerEntry(
+    category: string,
+    quote: string,
+    matchedSnippet: string | undefined,
+    claimType: 'observed' | 'inferred',
+  ): EvidenceItem {
+    const { sourceUrl, sourceType } = attributeQuoteToSource(quote, matchedSnippet, llmContentPool)
+    const sourceAuthority = classifySourceAuthority(sourceType)
+    const freshness = classifyFreshness(null) // no publish date available from scraped/search content today, see design doc §G2.8
+    const companyIdentityConfidence = computeCompanyIdentityConfidence(matchedSnippet ?? quote, company_name)
+    const item: EvidenceItem = {
+      id: stableEvidenceId('ev', quote),
+      category,
+      quote,
+      source_page: sourceUrl ?? 'unknown',
+      claimType,
+      sourceUrl,
+      sourceType,
+      sourceAuthority,
+      publishedAt: null,
+      accessedAt: new Date().toISOString(),
+      freshness,
+      companyIdentityConfidence,
+      contradictionStatus: 'none',
+    }
+    item.confidence = computeEvidenceConfidence(item)
+    evidence_ledger.push(item)
+    return item
+  }
+
   // ── Service Evidence Debug (diagnostic, internal-only) ──────────────
   // Re-runs detectServiceEvidence() (same call generateDeterministicOpportunities()
   // already makes above, cheap pure regex, no I/O) purely to keep the full
@@ -882,11 +966,15 @@ export function normalizeAnalysisResult(
           if (!title) return null
           const claimType = p.claim_type === 'observed' || p.claim_type === 'inferred' ? p.claim_type : undefined
           const evidence = str(p.evidence)
+          let supportingEvidenceIds: string[] | undefined
           if (claimType === 'observed') {
-            if (!isQuoteGrounded(evidence, llmContentPool)) {
+            const verification = verifyQuoteInContent(evidence, llmContentPool)
+            if (verification.tier === 'none') {
               droppedUngrounded++
               return null
             }
+            const ledgerEntry = buildLedgerEntry('pain_point', evidence, verification.matchedSnippet, 'observed')
+            supportingEvidenceIds = [ledgerEntry.id]
           }
           // Genuinely quote-verified ('observed', already passed isQuoteGrounded
           // above) gets a real, code-derived id — never the LLM's own
@@ -903,6 +991,7 @@ export function normalizeAnalysisResult(
             evidence,
             reasoning: str(p.reasoning),
             claim_type: claimType,
+            supportingEvidenceIds,
           }
         })
         .filter((p): p is StructuredPainPoint => p !== null)
@@ -991,6 +1080,7 @@ export function normalizeAnalysisResult(
     relevance: string,
     evidence_anchor: string | undefined,
     source: 'llm_verified' | 'llm_inferred',
+    supportingEvidenceIds?: string[],
   ): NormalizedAnalysis['opportunities'][number] {
     // 'llm_verified' means l.evidence already passed verifyQuoteInContent
     // (see the B1 filter below) — genuine, code-checked evidence, so it
@@ -1022,6 +1112,7 @@ export function normalizeAnalysisResult(
       opportunity_confidence: l.opportunity_confidence ?? l.confidence,
       demaze_fit_score:  l.demaze_fit_score,
       service_line:      l.service_line,
+      supportingEvidenceIds,
     }
   }
 
@@ -1037,9 +1128,10 @@ export function normalizeAnalysisResult(
     .filter(l => l.claim_type === 'observed')
     .map(l => ({ opp: l, verification: verifyQuoteInContent(l.evidence ?? '', llmContentPool) }))
     .filter(({ verification }) => verification.tier !== 'none')
-    .map(({ opp: l, verification }) =>
-      shapeOpportunity(l, verification.tier === 'exact' ? 'Medium' : 'Low', verification.matchedSnippet, 'llm_verified')
-    )
+    .map(({ opp: l, verification }) => {
+      const ledgerEntry = buildLedgerEntry(l.service_line ?? 'opportunity', l.evidence ?? '', verification.matchedSnippet, 'observed')
+      return shapeOpportunity(l, verification.tier === 'exact' ? 'Medium' : 'Low', verification.matchedSnippet, 'llm_verified', [ledgerEntry.id])
+    })
 
   // Sub-path B2 (found+fixed 2026-07-22, same day as B1, via live RIL usage):
   // claim_type 'inferred' opportunities were being discarded entirely — a
@@ -1068,6 +1160,27 @@ export function normalizeAnalysisResult(
     ...opportunitiesFromLlmInferred,
   ]
   console.log(`[normalize:opps] deterministic=${deterministic_opportunities.length} | llm_parsed=${llmOpportunities.length} | llm_enriched=${opportunitiesFromDeterministic.filter(o => o.evidence).length} | llm_verified=${opportunitiesFromLlmVerified.length} | llm_inferred=${opportunitiesFromLlmInferred.length}`)
+
+  // ── G2.7 contradiction detection, run once over this run's whole evidence
+  // ledger (pain points above + opportunities just built) — never silently
+  // drops either side of a conflict; downgrades the dependent opportunity/
+  // pain-point's own confidence instead (plan §10: "downgrade or block", never delete).
+  detectContradictions(evidence_ledger)
+  const conflictedIds = new Set(evidence_ledger.filter(e => e.contradictionStatus === 'conflict').map(e => e.id))
+  if (conflictedIds.size > 0) {
+    for (const opp of opportunities) {
+      if (opp.supportingEvidenceIds?.some(id => conflictedIds.has(id))) {
+        opp.opportunity_confidence = 'low'
+        opp.confidence = 'low'
+      }
+    }
+    for (const pp of pain_points_structured) {
+      if (pp.supportingEvidenceIds?.some(id => conflictedIds.has(id))) {
+        pp.confidence = 'low'
+      }
+    }
+    console.log(`[normalize:evidence_ledger] ${evidence_ledger.length} item(s), ${conflictedIds.size} conflicted — downgraded dependent opportunities/pain_points to low confidence`)
+  }
 
   // ── Competitors (Phase 2 item 1, business-understanding rebuild 2026-07-16) ──
   // route.ts's discoverCompetitorsFromBusinessProfile() call supplies
@@ -1187,6 +1300,12 @@ export function normalizeAnalysisResult(
   // `_business_profile` (route.ts), same passthrough shape as
   // market_intelligence above — it's already an LLM output, nothing to merge.
   const business_profile: CompanyBusinessProfile = (flat._business_profile as CompanyBusinessProfile | undefined) ?? emptyBusinessProfile()
+
+  // ── Research Metrics — provider call counts + estimated cost (plan §35) ──
+  // Pure passthrough from route.ts's `_research_metrics`, same shape as
+  // market_intelligence/business_profile above — nothing to merge, this is
+  // already the final computed value.
+  const research_metrics = (flat._research_metrics as ResearchRunMetrics | null | undefined) ?? null
 
   // ── Why Demaze V4 ────────────────────────────────────────────
   const rawWhyDemaze = flat.why_demaze
@@ -1365,6 +1484,8 @@ export function normalizeAnalysisResult(
     leadership_contacts,
     company_offerings,
     business_profile,
+    research_metrics,
+    evidence_ledger,
     why_demaze,
     outreach_angle, outreach_intelligence, outreach_draft,
     validation_warnings, content_quality_flags,

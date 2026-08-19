@@ -28,6 +28,7 @@
 import Firecrawl from '@mendable/firecrawl-js'
 import { displayURL } from '@/lib/utils/url'
 import { formatScrapedPages } from '@/lib/prompts/scrape-utils'
+import { recordMetric } from '@/lib/pipeline/research-metrics'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -484,6 +485,7 @@ async function fetchSitemapUrls(baseUrl: string): Promise<string[]> {
 }
 
 async function fetchXml(url: string): Promise<string | null> {
+  recordMetric('directFetchCalls')
   try {
     const resp = await Promise.race([
       fetch(url, { headers: { 'Accept': 'application/xml, text/xml, */*', 'User-Agent': BROWSER_USER_AGENT } }),
@@ -680,6 +682,7 @@ async function probeCorporateSeeds(
         // Use GET + Range:bytes=0-0 instead of HEAD.
         // Many servers (Cloudflare, CloudFront, nginx hardened) block HEAD
         // with 405 even when the page exists.
+        recordMetric('directFetchCalls')
         const resp = await Promise.race([
           fetch(url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-0', 'User-Agent': BROWSER_USER_AGENT } }),
           rejectAfter(4_000, 'probe timeout'),
@@ -728,6 +731,7 @@ async function probeUniversalPaths(
     const batch = candidates.slice(i, i + PROBE_CONCURRENCY)
     const settled = await Promise.allSettled(
       batch.map(async ({ url, normalized }) => {
+        recordMetric('directFetchCalls')
         const resp = await Promise.race([
           fetch(url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-0', 'User-Agent': BROWSER_USER_AGENT } }),
           rejectAfter(4_000, 'probe timeout'),
@@ -760,6 +764,7 @@ async function probeUniversalPaths(
 // Returns [] gracefully on timeout or error so other discovery paths still run.
 
 async function fetchMapUrls(client: Firecrawl, baseUrl: string): Promise<string[]> {
+  recordMetric('firecrawlCalls')
   try {
     const result = await Promise.race([
       client.mapUrl(baseUrl, { limit: 50, includeSubdomains: false }),
@@ -853,6 +858,7 @@ async function searchFallbackScrape(
   for (const query of queries) {
     if (allPages.length >= 8) break
     try {
+      recordMetric('firecrawlCalls')
       const result = await Promise.race([
         (client as unknown as {
           search(q: string, opts: Record<string, unknown>): Promise<SearchResponse>
@@ -940,6 +946,7 @@ function extractLinksFromMarkdown(markdown: string, baseUrl: string): string[] {
 
 async function fetchViaJina(url: string): Promise<ScrapePageResult> {
   const jinaUrl = `https://r.jina.ai/${url}`
+  recordMetric('jinaCalls')
   try {
     const resp = await Promise.race([
       fetch(jinaUrl, {
@@ -1300,6 +1307,8 @@ async function scrapeHomepageWithLinks(
 ): Promise<{ page: ScrapePageResult; links: string[] }> {
   const url = baseUrl.replace(/\/$/, '')
 
+  recordMetric('firecrawlCalls')
+  recordMetric('firecrawlPages')
   try {
     const response = await Promise.race([
       client.scrape(url, {
@@ -1381,6 +1390,8 @@ async function scrapeSinglePage(
   url: string,
   debugInfo: ScrapeDebugInfo
 ): Promise<ScrapePageResult> {
+  recordMetric('firecrawlCalls')
+  recordMetric('firecrawlPages')
   try {
     const response = await Promise.race([
       client.scrape(url, {

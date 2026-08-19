@@ -47,7 +47,7 @@ function normalizeText(s: string): string {
     .trim()
 }
 
-function significantWords(s: string): string[] {
+export function significantWords(s: string): string[] {
   const words = s.toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g) ?? []
   return words.filter(w => w.length > 3 && !STOPWORDS.has(w))
 }

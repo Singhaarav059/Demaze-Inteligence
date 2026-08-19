@@ -45,6 +45,11 @@ export interface DedupedCompany {
   /** Other company names in this batch that share a weak/partial name match
    * but weren't confident enough to auto-merge — surfaced for manual review. */
   possibleDuplicateOf: string[]
+  /** Populated additively by the batch-parse route via a company_registry
+   * lookup (lib/companies/identity.ts) — set only when this company is
+   * already known ('researched'/'outreached'/etc). Never set by
+   * dedupeCompanies() itself, which stays pure/network-free. */
+  existingStatus?: 'discovered' | 'qualified' | 'disqualified' | 'researched' | 'outreached'
 }
 
 // ── Name normalization (same principle as website-discovery.ts) ────────

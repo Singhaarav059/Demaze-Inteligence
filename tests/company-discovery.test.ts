@@ -111,6 +111,20 @@ describe('classifyCompanyRejection — filtering rules', () => {
   it('does not reject a multi-word candidate containing a common word (only bare single-word candidates are suspect)', () => {
     expect(classifyCompanyRejection('Launched Global', exclude)).toBeNull()
   })
+
+  // Live 2026-08-19: "OpenAI" was extracted and qualified as an e-commerce
+  // company from a real "Companies like OpenAI, Shopify and Amazon are
+  // leveraging agentic AI..." article — a genuinely real company, just
+  // never a manufacturing/automotive/ecommerce operator itself.
+  it('rejects well-known AI/foundation-model platforms as sector operators (the live OpenAI/e-commerce bug)', () => {
+    expect(classifyCompanyRejection('OpenAI', exclude)).toMatch(/AI\/foundation-model platform/)
+    expect(classifyCompanyRejection('Anthropic', exclude)).toMatch(/AI\/foundation-model platform/)
+  })
+
+  it('does not reject general big-tech companies that have real sector operations (Amazon sells, Google/Microsoft build hardware)', () => {
+    expect(classifyCompanyRejection('Amazon', exclude)).toBeNull()
+    expect(classifyCompanyRejection('Microsoft', exclude)).toBeNull()
+  })
 })
 
 describe('detectSizeMismatch — ICP-fit company-size filter (live 2026-07-17 bug)', () => {

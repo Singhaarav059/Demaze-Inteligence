@@ -1,5 +1,6 @@
 // ============================================================
 // Company Discovery Engine (Roadmap Phase 2, item 3) — 2026-07-15
+// Global/3-sector rework — 2026-08-18
 // ============================================================
 // Given an ICP segment (e.g. an ICPSegment.name from icp-generator.ts, or
 // free text typed by a user on the new /admin/company-discovery page),
@@ -27,13 +28,45 @@
 // Governing principle, same as every other discovery module in this repo:
 // prefer under-confidence to over-confidence. A wrong company name or a
 // wrongly-attributed domain is worse than an honest empty list.
+//
+// 2026-08-18 rework — two entry points now share one core
+// (runDiscoveryCore, below):
+//   - discoverCompanies(icpSegment, exclude) — the ORIGINAL free-text
+//     entry point, UNCHANGED behavior/signature (still used by the URL/
+//     domain-shape guard test and available for ad hoc segment lookups).
+//   - discoverCompaniesForSector(sector, options) — NEW, restricted to
+//     the 3 active target sectors (lib/sector-playbook's TargetSector),
+//     query-rotation-driven (company-discovery-queries.ts) instead of a
+//     fixed 8-query set, and applies a pre-domain-resolution sector-signal
+//     filter. Both production routes (company-discovery, demaze-leads) now
+//     call this one, never the free-text path, enforcing "only these 3
+//     sectors" at the code level, not just by convention.
+//   - discoverCompaniesUntil(supabase, sector, targetCount, options) — the
+//     target-count loop: repeatedly calls discoverCompaniesForSector() with
+//     a rotating, non-repeating query batch, running each survivor through
+//     company-qualification.ts's qualifyCandidate() (persistent identity/
+//     dedup/already-researched/already-outreached/size-band check) until
+//     targetCount genuinely NEW qualified companies are found or sources
+//     are exhausted.
+// Search calls across all three entry points now go through
+// lib/enrichment/search-router.ts's routedSearch() (cache -> Gemini Search
+// -> Serper -> Tavily, early-stopping) instead of a raw Tavily-then-Serper
+// fallback — this is the G7 wiring called for in the governing plan.
 // ============================================================
 
-import { searchTavily, searchSerper } from './discovery-engine'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { routedSearch } from './search-router'
 import { escapeRegex } from '../utils/regex'
 import { isSelfName } from './competitor-discovery'
 import { discoverCompanyWebsite } from './website-discovery'
 import { getCompletion } from '../ai/provider-factory'
+import type { TargetSector } from '../sector-playbook/types'
+import { generateQueryBatch } from './company-discovery-queries'
+import { matchesSectorSignals, qualifyCandidate } from './company-qualification'
+import {
+  emptyFunnel, recordDiscovered, recordQualified, recordRejection,
+  type DiscoveryFunnel,
+} from './discovery-funnel'
 
 export type CompanyMatchConfidence = 'high' | 'medium' | 'low'
 export type CompanyDiscoverySufficiency = 'sufficient' | 'insufficient'
@@ -48,6 +81,9 @@ export interface CompanyDiscoveryCandidate {
   mention_count: number   // independent search results naming this candidate
   source_urls: string[]
   snippets: string[]      // raw search snippets — becomes the fallback `reason` text
+  /** First-touch attribution: which routedSearch() tier / query first surfaced this candidate. */
+  discoverySource?: string
+  discoveryQuery?: string
 }
 
 // Final, filtered shape — one per surfaced company. `domain` is only set
@@ -60,6 +96,8 @@ export interface CompanyMatch {
   reason: string           // code-derived, built from the matched search snippet — never LLM-narrated
   confidence: CompanyMatchConfidence
   source_urls: string[]
+  discoverySource?: string
+  discoveryQuery?: string
 }
 
 export interface CompanyDiscoveryResult {
@@ -152,6 +190,29 @@ const NON_COMPANY_NAMES = [
   'PRNewswire', 'Clutch', 'Google', 'Yelp', 'Medium', 'Quora', 'Reddit',
 ]
 
+// Real false positive found live 2026-08-19: "OpenAI" was extracted and
+// qualified as an e-commerce company from a real article
+// (builtin.com/articles/e-commerce-companies) whose own body text reads
+// "Companies like OpenAI, Shopify and Amazon are leveraging agentic AI for
+// personalization" — the "companies like X, Y, Z" trigger and the sector
+// signal ("E-Commerce" in the article's own title) both fired correctly on
+// genuinely ambiguous input; the article itself sloppily lumps an AI
+// platform in with real sector operators. This is a distinct failure class
+// from NON_COMPANY_NAMES above (those are never real companies at all;
+// these ARE real companies, just never legitimately a manufacturing/
+// automotive/ecommerce OPERATOR) — kept as its own list with its own
+// rejection reason for diagnostic clarity. Deliberately narrow: only
+// foundation-model/AI-research companies with literally no legitimate
+// operator presence in any of the 3 target sectors — NOT general "big
+// tech" names like Google/Microsoft/Amazon/Meta, which have real hardware/
+// retail operations and would create false negatives if excluded here.
+// "AI is transforming industry X" listicle content is common right now and
+// will likely resurface this same pattern for Manufacturing/Automotive too.
+const AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES = [
+  'OpenAI', 'Anthropic', 'xAI', 'Mistral AI', 'Cohere', 'Stability AI',
+  'Perplexity', 'DeepSeek', 'Google DeepMind', 'Hugging Face',
+]
+
 // Returns a rejection reason, or null if the candidate survives. Order
 // matters for diagnostic quality, same discipline as the sibling modules'
 // classifyRejection()/classifySegmentRejection().
@@ -166,6 +227,11 @@ export function classifyCompanyRejection(name: string, excludeCompanyNames: stri
   for (const bad of NON_COMPANY_NAMES) {
     if (new RegExp(`\\b${escapeRegex(bad)}\\b`, 'i').test(name)) {
       return 'known directory/aggregator/news-outlet/social-network name, not a company'
+    }
+  }
+  for (const aiPlatform of AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES) {
+    if (new RegExp(`\\b${escapeRegex(aiPlatform)}\\b`, 'i').test(name)) {
+      return 'AI/foundation-model platform, not a manufacturing/automotive/ecommerce operator (commonly name-dropped in "AI is transforming X" listicles)'
     }
   }
   const normalized = normalizeName(name)
@@ -243,6 +309,13 @@ export function extractNumberedListCompanies(text: string): string[] {
 // this file. Not a hard, invisible drop — rejected candidates still surface
 // in `rejected_candidates` for visibility/debugging, same as every other
 // rejection reason.
+//
+// NOTE (2026-08-18): this stays as discoverCompanies()'s fast, coarse,
+// upper-bound-only PRE-filter (unchanged, still applied before domain
+// resolution). The fuller multi-metric revenue/valuation/market-cap/
+// employee-count band check (lib/enrichment/company-size.ts's
+// assessCompanySize()) is a separate, more thorough check applied at the
+// company-qualification.ts layer, not a replacement for this one.
 const REVENUE_BILLION_RE = /(?:US\$|USD|\$)\s?(\d+(?:\.\d+)?)\s*(?:billion|bn)\b/i
 const EMPLOYEES_MILLION_RE = /(\d+(?:\.\d+)?)\s*million\s+employees\b/i
 const EMPLOYEES_COUNT_RE = /([\d,]{5,})\+?\s*employees\b/i
@@ -295,40 +368,40 @@ export function fallbackReason(candidate: CompanyDiscoveryCandidate, icpSegment:
 }
 
 // ── Search ─────────────────────────────────────────────────────────
-// Duplicated per-query Tavily→Serper fallback, same shape as the sibling
-// discovery modules — kept as its own copy rather than a shared import,
-// matching this codebase's existing precedent (see website-discovery.ts /
-// competitor-discovery.ts / icp-generator.ts, each has its own copy).
+// Routes every query through search-router.ts's routedSearch() (G7:
+// cache -> Gemini Search -> Serper -> Tavily, stopping at the first tier
+// judged sufficient) instead of a raw Tavily-then-Serper fallback — this
+// directly cuts paid-call volume per query and reuses the already-wired
+// search_query_cache for free on a repeat query.
 
 // Results-per-query bumped from the sibling modules' default of 3 to 10 —
 // company discovery specifically wants breadth (as many raw candidates as
 // possible to filter down), unlike competitor/ICP discovery which only need
-// a handful of high-signal snippets. Scoped locally via the new maxResults
-// param on searchTavily/searchSerper rather than changing their defaults,
-// so competitor-discovery.ts/icp-generator.ts/website-discovery.ts are
-// unaffected.
+// a handful of high-signal snippets.
 const RESULTS_PER_QUERY = 10
 
-async function searchWithFallback(
-  query: string,
-  tavilyKey: string | undefined,
-  serperKey: string | undefined,
-): Promise<Array<{ title: string; url: string; content: string }>> {
-  if (tavilyKey) {
-    const results = await searchTavily(query, tavilyKey, RESULTS_PER_QUERY)
-    if (results.length > 0) return results
-  }
-  if (serperKey) return searchSerper(query, serperKey, RESULTS_PER_QUERY)
-  return []
+interface QueryResultBatch {
+  query: string
+  tier: string
+  results: Array<{ title: string; url: string; content: string }>
+}
+
+async function searchQueryWithTier(query: string): Promise<QueryResultBatch> {
+  const routed = await routedSearch(query, { maxResults: RESULTS_PER_QUERY })
+  const tier = routed.sufficientAt ?? routed.triedTiers[routed.triedTiers.length - 1] ?? 'tavily'
+  return { query, tier, results: routed.results }
 }
 
 // 4 generic queries (as before) + 4 site:-restricted queries against known
 // structured B2B/company directories. Serper is a Google SERP wrapper so
 // `site:` operators work natively; Tavily's own index respects them loosely
-// (may return fewer/no results — searchWithFallback already tolerates that).
-// These directories were picked to match this repo's actual target
-// industries (manufacturing/industrial/automotive/SaaS/SMB, see CLAUDE.md) —
-// not an attempt at universal coverage.
+// (may return fewer/no results — routedSearch already tolerates that via
+// its own multi-tier fallback). These directories were picked to match this
+// repo's actual target industries (manufacturing/industrial/automotive/
+// SaaS/SMB, see CLAUDE.md) — not an attempt at universal coverage.
+// Only used by the legacy free-text discoverCompanies() entry point —
+// discoverCompaniesForSector() below uses the rotating, sector-scoped
+// generator in company-discovery-queries.ts instead.
 function buildCompanyDiscoveryQueries(icpSegment: string): string[] {
   return [
     `top companies in ${icpSegment}`,
@@ -451,13 +524,21 @@ async function tryExtractCompaniesWithLLM(
   }
 }
 
-// ── Already-researched dedup (cross-search) ─────────────────────────
+// ── Already-researched dedup (cross-search, legacy) ─────────────────
 // discoverCompanies() itself has no DB access (kept Supabase-free, same as
 // every other lib/enrichment module — I/O happens at the route layer). This
 // is the pure matching logic the API route calls after fetching
 // pipeline_test_runs, so a repeat search (same segment re-run, or a
 // different segment surfacing an overlapping company) doesn't resurface a
 // company already sent through the research pipeline.
+//
+// NOTE (2026-08-18): superseded operationally by the persistent
+// company_registry table (lib/companies/identity.ts) + company-
+// qualification.ts's qualifyCandidate(), which both discovery routes now
+// use instead of this function. Left in place, unchanged and still tested
+// — it's not wired into either production route anymore, but nothing about
+// it is broken, and removing it would mean deleting 10 passing tests for
+// no functional gain.
 
 export interface AlreadyResearchedRecord {
   companyUrl: string | null
@@ -507,41 +588,26 @@ export function filterAlreadyResearched(
   return { survivors, filteredOut }
 }
 
-// ── Main export ───────────────────────────────────────────────────
+// ── Shared core ───────────────────────────────────────────────────
+// Both discoverCompanies() (legacy free-text) and discoverCompaniesForSector()
+// (new, sector-restricted) delegate here — the search/extract/classify/
+// tier/domain-resolution pipeline is identical either way; only how the
+// query list is built, and whether a sector filter applies, differs.
 
 // Raised from 6 — wider search net (more queries, more results/query) should
 // actually surface more candidates to the user, not get truncated back down.
 const MAX_COMPANIES = 10
 const MAX_SNIPPETS_PER_CANDIDATE = 2
 
-export async function discoverCompanies(
-  icpSegment: string,
-  excludeCompanyNames?: string[],
+async function runDiscoveryCore(
+  queries: string[],
+  excludeCompanyNames: string[] | undefined,
+  sector: TargetSector | undefined,
+  segmentLabel: string,
 ): Promise<CompanyDiscoveryResult> {
-  if (!icpSegment || icpSegment.trim().length === 0) {
-    return { companies: [], sufficiency: 'insufficient', reason: 'no ICP segment given to search for', candidates_considered: 0 }
-  }
-  if (looksLikeUrlOrDomain(icpSegment)) {
-    return {
-      companies: [],
-      sufficiency: 'insufficient',
-      reason: `"${icpSegment.trim()}" looks like a company URL/domain, not an ICP segment. This field expects a segment description (e.g. "oil and gas", "automotive manufacturers", "mid-size SaaS companies"), not the company itself. To find companies similar to a specific company, research that company first and copy one of its "Target Customer Segments," or use Competitor Discovery on that company's report.`,
-      candidates_considered: 0,
-    }
-  }
-
-  const tavilyKey = process.env.TAVILY_API_KEY
-  const serperKey = process.env.SERPER_API_KEY
-
-  if (!tavilyKey && !serperKey) {
-    return { companies: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
-  }
-
-  const queries = buildCompanyDiscoveryQueries(icpSegment.trim())
-  let allResults: Array<{ title: string; url: string; content: string }>
+  let batches: QueryResultBatch[]
   try {
-    const resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
-    allResults = resultsPerQuery.flat()
+    batches = await Promise.all(queries.map(q => searchQueryWithTier(q)))
   } catch (e) {
     return {
       companies: [], sufficiency: 'insufficient',
@@ -550,21 +616,30 @@ export async function discoverCompanies(
     }
   }
 
+  const allResults: Array<{ title: string; url: string; content: string }> = []
+  const allResultsMeta: Array<{ tier: string; query: string }> = []
+  for (const b of batches) {
+    for (const r of b.results) {
+      allResults.push(r)
+      allResultsMeta.push({ tier: b.tier, query: b.query })
+    }
+  }
+
   if (allResults.length === 0) {
     return { companies: [], sufficiency: 'insufficient', reason: 'search returned no results for any company-discovery query', candidates_considered: 0 }
   }
 
   // ── Extract + group raw candidates by normalized name ─────────────
-  // LLM extraction is a second, independent pass over the same raw text
-  // (see tryExtractCompaniesWithLLM above) — soft-fails to null if
-  // unavailable, in which case this falls back to regex-only exactly like
-  // before.
-  const llmNamesByResult = await tryExtractCompaniesWithLLM(allResults, icpSegment.trim())
+  const llmNamesByResult = await tryExtractCompaniesWithLLM(allResults, segmentLabel)
 
-  const grouped = new Map<string, { displayName: string; mention_count: number; source_urls: Set<string>; snippets: string[] }>()
+  const grouped = new Map<string, {
+    displayName: string; mention_count: number; source_urls: Set<string>; snippets: string[]
+    discoverySource: string; discoveryQuery: string
+  }>()
 
   for (let i = 0; i < allResults.length; i++) {
     const r = allResults[i]
+    const meta = allResultsMeta[i]
     const names = [
       ...extractCompaniesAfterTrigger(r.title),
       ...extractCompaniesAfterTrigger(r.content),
@@ -577,7 +652,18 @@ export async function discoverCompanies(
       const key = normalizeName(name)
       if (!key) continue
       const existing = grouped.get(key)
-      const snippetText = (r.content || r.title).slice(0, 300)
+      // Combine title + content, not content-with-title-as-fallback. Real
+      // bug found live 2026-08-19: a numbered-list-style result's content
+      // is often a bare enumeration ("1. George Weston · 2. NOVAGOLD
+      // Resources · 3. Magna International · ...") with zero descriptive
+      // words, while the actual sector context ("Canada's Top 10
+      // Manufacturers") sits in the title — which the old title-as-
+      // fallback-only logic discarded entirely whenever content was
+      // non-empty, starving the sector-signal check of the one piece of
+      // text that actually carried the signal. Magna International (a
+      // real automotive-parts manufacturer) was wrongly rejected as
+      // wrong_sector this exact way.
+      const snippetText = [r.title, r.content].filter(Boolean).join(' — ').slice(0, 300)
       if (existing) {
         existing.mention_count += 1
         existing.source_urls.add(r.url)
@@ -588,6 +674,8 @@ export async function discoverCompanies(
           mention_count: 1,
           source_urls: new Set([r.url]),
           snippets: [snippetText],
+          discoverySource: meta.tier,
+          discoveryQuery: meta.query,
         })
       }
     }
@@ -613,14 +701,36 @@ export async function discoverCompanies(
       mention_count: c.mention_count,
       source_urls: Array.from(c.source_urls),
       snippets: c.snippets,
+      discoverySource: c.discoverySource,
+      discoveryQuery: c.discoveryQuery,
     })
   }
 
-  if (survivors.length === 0) {
+  // ── Sector filter (only for the sector-restricted entry point) ─────
+  // Cheap, pre-domain-resolution — reject a candidate with zero sector-
+  // signal-word matches in its own snippets BEFORE spending a
+  // discoverCompanyWebsite() call on it (the real cost saving finding G
+  // flagged). Uses the same lib/sector-playbook signal vocabulary
+  // company-qualification.ts's final gate also checks — this is a cheap
+  // early pass, not a replacement for that authoritative check.
+  let sectorFiltered = survivors
+  if (sector) {
+    const stillOk: CompanyDiscoveryCandidate[] = []
+    for (const c of survivors) {
+      if (matchesSectorSignals(c.snippets.join(' '), sector)) {
+        stillOk.push(c)
+      } else {
+        rejected.push({ name: c.name, reason: `outside target sector (${sector})` })
+      }
+    }
+    sectorFiltered = stillOk
+  }
+
+  if (sectorFiltered.length === 0) {
     return {
       companies: [],
       sufficiency: 'insufficient',
-      reason: `${grouped.size} raw candidate(s) found, all rejected (self-name/directory/generic-term)`,
+      reason: `${grouped.size} raw candidate(s) found, all rejected (self-name/directory/generic-term${sector ? '/wrong-sector' : ''})`,
       candidates_considered: grouped.size,
       rejected_candidates: rejected,
     }
@@ -628,7 +738,7 @@ export async function discoverCompanies(
 
   // ── Confidence tiering + cap (pre-domain-resolution rank) ──────────
   const rank: Record<CompanyMatchConfidence, number> = { high: 2, medium: 1, low: 0 }
-  const tiered = survivors
+  const tiered = sectorFiltered
     .map(c => ({ candidate: c, confidence: tierMatchConfidence(c) }))
     .sort((a, b) => rank[b.confidence] - rank[a.confidence] || b.candidate.mention_count - a.candidate.mention_count)
     .slice(0, MAX_COMPANIES)
@@ -653,9 +763,11 @@ export async function discoverCompanies(
       name: candidate.name,
       domain: domainConfirmed ? site.domain ?? undefined : undefined,
       domain_confidence: site.status === 'confirmed' && site.confidence !== 'none' ? site.confidence : undefined,
-      reason: fallbackReason(candidate, icpSegment),
+      reason: fallbackReason(candidate, segmentLabel),
       confidence: domainConfirmed ? confidence : 'low',
       source_urls: candidate.source_urls,
+      discoverySource: candidate.discoverySource,
+      discoveryQuery: candidate.discoveryQuery,
     })
   }
 
@@ -665,5 +777,157 @@ export async function discoverCompanies(
     reason: `${companies.length} of ${grouped.size} raw candidate(s) survived filtering`,
     candidates_considered: grouped.size,
     rejected_candidates: rejected,
+  }
+}
+
+// ── Main export — legacy free-text entry point (UNCHANGED behavior) ────
+
+export async function discoverCompanies(
+  icpSegment: string,
+  excludeCompanyNames?: string[],
+): Promise<CompanyDiscoveryResult> {
+  if (!icpSegment || icpSegment.trim().length === 0) {
+    return { companies: [], sufficiency: 'insufficient', reason: 'no ICP segment given to search for', candidates_considered: 0 }
+  }
+  if (looksLikeUrlOrDomain(icpSegment)) {
+    return {
+      companies: [],
+      sufficiency: 'insufficient',
+      reason: `"${icpSegment.trim()}" looks like a company URL/domain, not an ICP segment. This field expects a segment description (e.g. "oil and gas", "automotive manufacturers", "mid-size SaaS companies"), not the company itself. To find companies similar to a specific company, research that company first and copy one of its "Target Customer Segments," or use Competitor Discovery on that company's report.`,
+      candidates_considered: 0,
+    }
+  }
+
+  const tavilyKey = process.env.TAVILY_API_KEY
+  const serperKey = process.env.SERPER_API_KEY
+  if (!tavilyKey && !serperKey && !process.env.GEMINI_VERTEX_API_KEY) {
+    return { companies: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
+  }
+
+  const queries = buildCompanyDiscoveryQueries(icpSegment.trim())
+  return runDiscoveryCore(queries, excludeCompanyNames, undefined, icpSegment.trim())
+}
+
+// ── New: sector-restricted entry point ─────────────────────────────
+// The ONLY entry point either production discovery route calls — enforces
+// "discover only Manufacturing/Automotive/E-commerce" at the code level.
+// `refinement` is an optional free-text addition (what used to be the
+// standalone "ICP segment" field) — always composed WITH a sector, never
+// searched standalone.
+
+export interface DiscoverForSectorOptions {
+  refinement?: string
+  excludeCompanyNames?: string[]
+  /** Carries rotation state across repeated calls (the target-count loop) so each call explores new query combinations instead of repeating itself. */
+  usedCombos?: Set<string>
+  batchSize?: number
+}
+
+const DEFAULT_SECTOR_BATCH_SIZE = 8
+
+export async function discoverCompaniesForSector(
+  sector: TargetSector,
+  options: DiscoverForSectorOptions = {},
+): Promise<CompanyDiscoveryResult> {
+  const tavilyKey = process.env.TAVILY_API_KEY
+  const serperKey = process.env.SERPER_API_KEY
+  if (!tavilyKey && !serperKey && !process.env.GEMINI_VERTEX_API_KEY) {
+    return { companies: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
+  }
+
+  const usedCombos = options.usedCombos ?? new Set<string>()
+  const batchSize = options.batchSize ?? DEFAULT_SECTOR_BATCH_SIZE
+  const queries = generateQueryBatch(sector, usedCombos, batchSize)
+
+  if (options.refinement?.trim()) {
+    queries.push(`${options.refinement.trim()} ${sector} company`)
+  }
+
+  if (queries.length === 0) {
+    return {
+      companies: [], sufficiency: 'insufficient',
+      reason: `discovery query pool exhausted for sector "${sector}" — no new region/directory combination left to try`,
+      candidates_considered: 0,
+    }
+  }
+
+  const label = options.refinement?.trim() ? `${options.refinement.trim()} (${sector})` : sector
+  return runDiscoveryCore(queries, options.excludeCompanyNames, sector, label)
+}
+
+// ── New: target-count discovery loop ────────────────────────────────
+// Repeatedly calls discoverCompaniesForSector() with a rotating query
+// batch, running every survivor through company-qualification.ts's
+// qualifyCandidate() (persistent identity dedup + already-researched +
+// already-outreached + sector + size-band check, all against the
+// company_registry table) until `targetCount` genuinely NEW qualified
+// companies are found, the query pool is exhausted, or a safety cap on
+// iterations is hit. Needs a Supabase client (qualifyCandidate() writes to
+// company_registry) — the one place in this module that isn't Supabase-free.
+
+export interface DiscoverUntilResult {
+  companies: CompanyMatch[]
+  funnel: DiscoveryFunnel
+  iterationsUsed: number
+  stoppedReason: 'target_reached' | 'sources_exhausted' | 'max_iterations'
+}
+
+const MAX_DISCOVERY_ITERATIONS = 15
+const ITERATION_BATCH_SIZE = 8
+
+export async function discoverCompaniesUntil(
+  supabase: SupabaseClient,
+  sector: TargetSector,
+  targetCount: number,
+  options: { refinement?: string; excludeCompanyNames?: string[] } = {},
+): Promise<DiscoverUntilResult> {
+  const usedCombos = new Set<string>()
+  const funnel = emptyFunnel()
+  const qualified: CompanyMatch[] = []
+  let iterations = 0
+
+  while (iterations < MAX_DISCOVERY_ITERATIONS && qualified.length < targetCount) {
+    iterations++
+    const comboCountBefore = usedCombos.size
+
+    const result = await discoverCompaniesForSector(sector, {
+      refinement: options.refinement,
+      excludeCompanyNames: options.excludeCompanyNames,
+      usedCombos,
+      batchSize: ITERATION_BATCH_SIZE,
+    })
+
+    if (usedCombos.size === comboCountBefore) {
+      // generateQueryBatch() had nothing new to give — the combo pool for
+      // this sector is exhausted, further looping would just repeat.
+      return { companies: qualified, funnel, iterationsUsed: iterations, stoppedReason: 'sources_exhausted' }
+    }
+
+    recordDiscovered(funnel, result.companies.length)
+
+    for (const candidate of result.companies) {
+      const outcome = await qualifyCandidate(supabase, {
+        name: candidate.name,
+        domain: candidate.domain,
+        snippets: [candidate.reason],
+        discoverySource: candidate.discoverySource ?? null,
+        discoveryQuery: candidate.discoveryQuery ?? options.refinement ?? sector,
+      }, sector)
+
+      if (outcome.status === 'qualified') {
+        recordQualified(funnel)
+        qualified.push(candidate)
+        if (qualified.length >= targetCount) break
+      } else if (outcome.reason) {
+        recordRejection(funnel, outcome.reason)
+      }
+    }
+  }
+
+  return {
+    companies: qualified.slice(0, targetCount),
+    funnel,
+    iterationsUsed: iterations,
+    stoppedReason: qualified.length >= targetCount ? 'target_reached' : 'max_iterations',
   }
 }

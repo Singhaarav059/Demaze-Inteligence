@@ -20,31 +20,37 @@
 import type { CompanyMatch, CompanyMatchConfidence } from './company-discovery'
 import { normalizeDomain, normalizeName } from './company-discovery'
 import { normalizeSegmentName, type ICPSegment } from './icp-generator'
+import { getAllSectorPlaybooks } from '../sector-playbook/playbooks'
 
-export const DEMAZE_URL = 'https://www.demazetech.com/'
-export const DEMAZE_DOMAIN = 'demazetech.com'
-// Passed as excludeCompanyNames to discoverCompanies() for every segment, so
-// Demaze never lists itself as its own lead — same isSelfName() word-overlap
-// check every other discovery module already uses for this.
-export const DEMAZE_EXCLUDE_NAMES = ['Demaze', 'Demaze Technologies', 'Demaze Tech', 'Demazetech']
+export { DEMAZE_URL, DEMAZE_DOMAIN, DEMAZE_EXCLUDE_NAMES } from './demaze-constants'
 
 // Demaze's confirmed target industries, given directly (not inferred) — see
 // CLAUDE.md's opening "Target industries" line and DEMAZE_CAPABILITY_MAP.md's
-// "Draft — Ideal Customer Problems" section. Found live 2026-07-17: the
-// Discover page's Target Sectors step was showing ONLY whatever
-// discoverICPSegments() happened to extract from demazetech.com's own
-// homepage copy — a single, thin "Industries We Serve: Healthcare,
-// Telemedicine Platforms, Electronic Health" blurb — which badly
-// under-represents Demaze's actual scope (Demaze is a services company
-// that sells INTO these industries broadly; its 8 confirmed service lines
-// aren't industry-specific). The research-derived pass is still real and
-// kept (a company's own site CAN legitimately state served industries, and
-// might surface a genuinely new one over time) — this list is merged
-// alongside it, not a replacement, so neither source silently overrides
-// the other.
-export const DEMAZE_CONFIRMED_SECTORS = [
-  'Manufacturing', 'Automotive', 'Industrial', 'SaaS', 'Financial Institutions', 'SMBs',
-] as const
+// "Draft — Ideal Customer Problems" section.
+//
+// 2026-08-18 REWORK: sourced from lib/sector-playbook's TargetSector enum
+// (Manufacturing/Automotive/E-commerce) instead of a separately-maintained
+// 6-item list (Manufacturing/Automotive/Industrial/SaaS/Financial
+// Institutions/SMBs). Two independent "sector" concepts existed side by
+// side before this — this file's list (what Demaze itself sells into) and
+// sector-playbook's TargetSector (what sector a DISCOVERED company falls
+// into) — with no restriction anywhere actually enforcing the "only 3
+// active sectors" requirement. Unifying on sector-playbook's list means
+// there is exactly one place that defines the active discovery
+// configuration, and it's the same list company-discovery.ts's sector-
+// restricted entry point (discoverCompaniesForSector) enforces.
+//
+// Found live 2026-07-17: the Discover page's Target Sectors step was
+// showing ONLY whatever discoverICPSegments() happened to extract from
+// demazetech.com's own homepage copy — a single, thin "Industries We
+// Serve: Healthcare, Telemedicine Platforms, Electronic Health" blurb —
+// which badly under-represents Demaze's actual scope. The research-derived
+// pass (withConfirmedSectors, below) is still real and kept for display
+// purposes (a company's own site CAN legitimately state served
+// industries), but it is no longer used to drive what gets DISCOVERED —
+// only the 3 confirmed sectors are ever passed to
+// discoverCompaniesForSector().
+export const DEMAZE_CONFIRMED_SECTORS = getAllSectorPlaybooks().map(p => p.label)
 
 function confirmedSectorAsICPSegment(name: string): ICPSegment {
   return {

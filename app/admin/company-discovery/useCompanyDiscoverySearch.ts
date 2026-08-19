@@ -1,16 +1,24 @@
 // ============================================================
 // Shared company-discovery search + sequential-research hook
 // ============================================================
-// Extracted from company-discovery/page.tsx so the standalone page AND
-// the wizard's Step4Discovery (components/wizard/steps/Step4Discovery.tsx)
-// share exactly one implementation of "search a segment -> select matches
-// -> research sequentially -> persist to run-history", instead of the
-// wizard duplicating this page's logic. The Demaze-specific "Find Leads
-// for Demaze" aggregate flow stays page-local (out of wizard scope) but
-// still needs write access to this hook's companies/sufficiency/
-// discoveryReason/searchError state and its persistResult, since it
-// populates the same shared results list — those setters/helpers are
-// returned alongside the higher-level handlers for that reason.
+// The Demaze-specific "Find Leads for Demaze" aggregate flow stays
+// page-local but still needs write access to this hook's companies/
+// sufficiency/discoveryReason/searchError state and its persistResult,
+// since it populates the same shared results list — those setters/helpers
+// are returned alongside the higher-level handlers for that reason.
+//
+// 2026-08-18 REWORK: the free-text-only `icpSegment` search is gone —
+// `sector` (one of the 3 active target sectors) is now required, with an
+// optional `refinement` free-text string composed alongside it, matching
+// /api/admin/company-discovery's new contract. Every returned candidate is
+// now pre-qualified server-side (company-qualification.ts, against the
+// persistent company_registry) and annotated with `existingStatus` —
+// genuinely new ('qualified') candidates default to selected, anything
+// locked ('disqualified': already researched/outreached/duplicate/wrong
+// sector/size) defaults to UNselected with a reason badge. The existing
+// per-row checkbox IS the manual "research again" / "reconsider" override
+// — no separate confirm dialog needed, since ticking the box is already an
+// explicit action.
 // ============================================================
 
 import { useRef, useState } from 'react'
@@ -18,14 +26,22 @@ import { toast } from 'sonner'
 import type { RunResult } from '../intelligence-lab/_types'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { CompanyMatch, CompanyDiscoverySufficiency } from '@/lib/enrichment/company-discovery'
+import type { TargetSector } from '@/lib/sector-playbook/types'
+import type { DiscoveryFunnel } from '@/lib/enrichment/discovery-funnel'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 
 export type CompanyStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
 // `segments` is only set when a row came from the "Find Leads for Demaze"
 // aggregate flow (one company can surface under more than one ICP segment)
-// — absent for the manual single-segment search, same component renders both.
-export type DemazeMatch = CompanyMatch & { segments?: string[] }
+// — absent for the manual single-sector search, same component renders both.
+// `existingStatus`/`rejectionReason` come from the qualification pass every
+// discovery route now runs server-side.
+export type DemazeMatch = CompanyMatch & {
+  segments?: string[]
+  existingStatus?: 'qualified' | 'disqualified'
+  rejectionReason?: string | null
+}
 
 export interface DiscoveredCompanyState {
   company: DedupedCompany
@@ -47,17 +63,22 @@ export function toDedupedCompany(match: DemazeMatch, idx: number): DedupedCompan
 }
 
 export interface UseCompanyDiscoverySearchOptions {
-  initialSegment?: string
+  initialSector?: TargetSector
+  initialRefinement?: string
   initialExclude?: string
 }
 
+const DEFAULT_SECTOR: TargetSector = 'manufacturing'
+
 export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOptions) {
-  const [icpSegment, setIcpSegment] = useState(options?.initialSegment ?? '')
+  const [sector, setSector] = useState<TargetSector>(options?.initialSector ?? DEFAULT_SECTOR)
+  const [refinement, setRefinement] = useState(options?.initialRefinement ?? '')
   const [excludeCompanyName, setExcludeCompanyName] = useState(options?.initialExclude ?? '')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [sufficiency, setSufficiency] = useState<CompanyDiscoverySufficiency | null>(null)
   const [discoveryReason, setDiscoveryReason] = useState<string | null>(null)
+  const [funnel, setFunnel] = useState<DiscoveryFunnel | null>(null)
 
   const [companies, setCompanies] = useState<DiscoveredCompanyState[]>([])
   const [running, setRunning] = useState(false)
@@ -69,23 +90,30 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
 
   // ── Search ──────────────────────────────────────────────────
   // Accepts optional overrides so callers (arrive-via-link autosearch on
-  // the standalone page, or the wizard's onSelectSegment handoff) can fire
-  // immediately without waiting on a setState round-trip.
+  // the standalone page) can fire immediately without waiting on a
+  // setState round-trip. Optional `targetCount` switches the server onto
+  // discoverCompaniesUntil()'s "keep going until N genuinely new companies
+  // are found" loop instead of a single search pass.
 
-  async function handleSearch(overrideSegment?: string, overrideExclude?: string) {
-    const segment = (overrideSegment ?? icpSegment).trim()
-    if (!segment) return
+  async function handleSearch(overrideSector?: TargetSector, overrideRefinement?: string, overrideExclude?: string, targetCount?: number) {
+    const searchSector = overrideSector ?? sector
     setSearching(true)
     setSearchError(null)
     setSufficiency(null)
     setDiscoveryReason(null)
+    setFunnel(null)
     setCompanies([])
 
     try {
       const res = await fetch('/api/admin/company-discovery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ icpSegment: segment, excludeCompanyName: (overrideExclude ?? excludeCompanyName).trim() || undefined }),
+        body: JSON.stringify({
+          sector: searchSector,
+          refinement: (overrideRefinement ?? refinement).trim() || undefined,
+          excludeCompanyName: (overrideExclude ?? excludeCompanyName).trim() || undefined,
+          targetCount,
+        }),
       })
       const data = await res.json()
 
@@ -96,15 +124,19 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
 
       setSufficiency(data.sufficiency)
       setDiscoveryReason(data.reason)
-      const matches: CompanyMatch[] = data.companies ?? []
-      // Tag with the searched segment so the "Industry" column in
+      setFunnel(data.funnel ?? null)
+      const matches: DemazeMatch[] = data.companies ?? []
+      // Tag with the searched sector so the "Industry" column in
       // CompanyMatchList always has something to show, same as the
       // "Find Leads for Demaze" aggregate path's real `segments` field —
-      // this is literally the segment the user searched for, not invented.
+      // this is literally the sector the user searched, not invented.
+      // A locked row (existingStatus === 'disqualified' — already
+      // researched/outreached/duplicate/wrong-sector/size) defaults to
+      // UNselected; the checkbox itself is the manual override.
       setCompanies(matches.map((match, idx) => ({
         company: toDedupedCompany(match, idx),
-        match: { ...match, segments: [segment] },
-        selected: true,
+        match: { ...match, segments: [searchSector] },
+        selected: match.existingStatus !== 'disqualified',
         status: 'pending' as CompanyStatus,
       })))
     } catch (e) {
@@ -243,11 +275,13 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
   const doneCount = companies.filter(c => c.status === 'done').length
 
   return {
-    icpSegment, setIcpSegment,
+    sector, setSector,
+    refinement, setRefinement,
     excludeCompanyName, setExcludeCompanyName,
     searching, searchError, setSearchError,
     sufficiency, setSufficiency,
     discoveryReason, setDiscoveryReason,
+    funnel, setFunnel,
     companies, setCompanies,
     running, progress, pausedReason,
     expandedId, setExpandedId,

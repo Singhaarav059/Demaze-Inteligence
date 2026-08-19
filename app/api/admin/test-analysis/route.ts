@@ -24,6 +24,7 @@ import { SYSTEM_PROMPT_V2 } from '@/lib/prompts/system-v2'
 import { buildNarrativePrompt, buildNarrativeInput, estimateTokenCount } from '@/lib/prompts/analyze-v2'
 import { getCompletion } from '@/lib/ai/provider-factory'
 import { normalizeAnalysisResult, shouldWarnEmptyPainPoints } from '@/lib/pipeline/normalize'
+import { runWithResearchMetrics, getCurrentResearchMetrics, estimateCostUsd } from '@/lib/pipeline/research-metrics'
 import { getCachedScrape, saveScrapeCache } from '@/lib/cache/scrape-cache'
 import { assessContentQuality } from '@/lib/pipeline/content-quality'
 import {
@@ -165,6 +166,14 @@ function failResponse(
 }
 
 export async function POST(req: NextRequest) {
+  // Wraps the whole handler in an AsyncLocalStorage context so every
+  // scraper/discovery/LLM call site can call recordMetric() without this
+  // route threading a counter object through dozens of function signatures.
+  // See lib/pipeline/research-metrics.ts (plan §35 "Cost Instrumentation").
+  return runWithResearchMetrics(() => handleTestAnalysis(req))
+}
+
+async function handleTestAnalysis(req: NextRequest) {
   const authError = verifyAdminRequest(req)
   if (authError) return authError
 
@@ -1373,6 +1382,13 @@ export async function POST(req: NextRequest) {
         // out rather than trusted, same belt-and-suspenders pattern as
         // research-quality.ts's self-name-collision check.
         _proof_point_candidates: proofPointMatches,
+        // Provider call counts + estimated cost for this run (plan §35). Passed
+        // through normalize.ts the same way as every other underscore-prefixed
+        // internal field above — see research_metrics there for the read side.
+        _research_metrics: (() => {
+          const m = getCurrentResearchMetrics()
+          return m ? { ...m, estimatedCostUsd: estimateCostUsd(m) } : null
+        })(),
       }
 
       // Gate S6: Normalization
@@ -1654,6 +1670,12 @@ export async function POST(req: NextRequest) {
         user_tokens: userTokens,
         signals_detected: extractorResult.signals.length,
       },
+
+      // Provider call counts + estimated cost for this run (plan §35).
+      researchMetrics: (() => {
+        const m = getCurrentResearchMetrics()
+        return m ? { ...m, estimatedCostUsd: estimateCostUsd(m) } : null
+      })(),
 
       // Cache metadata
       scrapeSource,

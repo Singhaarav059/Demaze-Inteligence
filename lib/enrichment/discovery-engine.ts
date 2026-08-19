@@ -11,6 +11,7 @@
 // ============================================================
 
 import { getCachedSearch, saveSearchCache } from '@/lib/cache/search-cache'
+import { recordMetric } from '@/lib/pipeline/research-metrics'
 
 export type SourceType =
   | 'annual_report'
@@ -209,9 +210,11 @@ export async function searchTavily(
   maxResults: number = 3,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
   const cached = await getCachedSearch('tavily', query, maxResults)
-  if (cached) return cached
+  if (cached) { recordMetric('cacheHits'); return cached }
+  recordMetric('cacheMisses')
 
   try {
+    recordMetric('tavilyCalls')
     const resp = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -244,9 +247,11 @@ export async function searchSerper(
   numResults: number = 3,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
   const cached = await getCachedSearch('serper', query, numResults)
-  if (cached) return cached
+  if (cached) { recordMetric('cacheHits'); return cached }
+  recordMetric('cacheMisses')
 
   try {
+    recordMetric('serperCalls')
     const resp = await fetch('https://google.serper.dev/search', {
       method: 'POST',
       headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },

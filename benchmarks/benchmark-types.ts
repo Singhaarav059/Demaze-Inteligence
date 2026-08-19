@@ -82,6 +82,22 @@ export interface BenchmarkResult {
    * since a single run can fail for more than one reason.
    */
   failureCategories: FailureCategory[]
+  /** Provider call counts + estimated cost for this run (plan §35, G1 baseline). */
+  researchMetrics?: {
+    firecrawlCalls: number
+    firecrawlPages: number
+    tavilyCalls: number
+    serperCalls: number
+    jinaCalls: number
+    directFetchCalls: number
+    geminiCalls: number
+    geminiTokens: number
+    nvidiaCalls: number
+    nvidiaTokens: number
+    cacheHits: number
+    cacheMisses: number
+    estimatedCostUsd: number
+  }
 }
 
 // ============================================================

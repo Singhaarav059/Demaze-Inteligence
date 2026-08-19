@@ -589,9 +589,15 @@ export function useAutoGtmFlow() {
 
       setBatchUploadWarnings(data.warnings ?? [])
       setBatchCompanies(
+        // Excel/CSV uploads share the same company_registry identity system
+        // as automatic discovery (governing plan, "no separate dedup system
+        // for uploads") — batch-parse annotates each row with
+        // existingStatus. A row already 'researched'/'outreached' defaults
+        // to UNselected, same "checkbox is the manual override" discipline
+        // as the Discover page.
         (data.companies as DedupedCompany[]).map(company => ({
           company,
-          selected: true,
+          selected: company.existingStatus !== 'researched' && company.existingStatus !== 'outreached',
           status: 'pending' as BatchCompanyStatus,
           contactsFound: 0,
         }))

@@ -114,6 +114,7 @@ interface ApiResponse {
       items_flagged: number
     }
   }
+  researchMetrics?: BenchmarkResult['researchMetrics']
 }
 
 // ── API call ──────────────────────────────────────────────────
@@ -424,6 +425,38 @@ function printSummary(results: BenchmarkResult[]): void {
 
   console.log(`\n  OVERALL: ${overallLabel}  ${C.green}${passed} passed${C.reset}, ${C.yellow}${warned} warned${C.reset}, ${C.red}${failed} failed${C.reset}`)
   console.log(`  ${'═'.repeat(74)}\n`)
+
+  printCostSummary(results)
+}
+
+// ── Cost/latency baseline summary (plan §35, G1) ─────────────
+function printCostSummary(results: BenchmarkResult[]): void {
+  const withMetrics = results.filter(r => r.researchMetrics)
+  if (withMetrics.length === 0) {
+    console.log(`  ${C.dim}(no researchMetrics on any result — pre-instrumentation run)${C.reset}\n`)
+    return
+  }
+
+  const totalDurationMs = results.reduce((s, r) => s + r.durationMs, 0)
+  const sum = (f: (m: NonNullable<BenchmarkResult['researchMetrics']>) => number) =>
+    withMetrics.reduce((s, r) => s + f(r.researchMetrics!), 0)
+
+  const totalCost = sum(m => m.estimatedCostUsd)
+  const n = results.length
+
+  console.log(`  ${C.bold}COST / LATENCY BASELINE (n=${n})${C.reset}`)
+  console.log(`  ${'─'.repeat(74)}`)
+  console.log(`  Wall time:        ${(totalDurationMs / 1000).toFixed(1)}s total, ${(totalDurationMs / n / 1000).toFixed(1)}s/company avg`)
+  console.log(`  Firecrawl:        ${sum(m => m.firecrawlCalls)} calls, ${sum(m => m.firecrawlPages)} pages`)
+  console.log(`  Tavily:           ${sum(m => m.tavilyCalls)} calls`)
+  console.log(`  Serper:           ${sum(m => m.serperCalls)} calls`)
+  console.log(`  Jina:             ${sum(m => m.jinaCalls)} calls`)
+  console.log(`  Direct fetch:     ${sum(m => m.directFetchCalls)} calls`)
+  console.log(`  Gemini:           ${sum(m => m.geminiCalls)} calls, ${sum(m => m.geminiTokens)} tokens`)
+  console.log(`  NVIDIA NIM:       ${sum(m => m.nvidiaCalls)} calls, ${sum(m => m.nvidiaTokens)} tokens`)
+  console.log(`  Cache hit rate:   ${sum(m => m.cacheHits)}/${sum(m => m.cacheHits) + sum(m => m.cacheMisses)}`)
+  console.log(`  Estimated cost:   $${totalCost.toFixed(3)} total, $${(totalCost / n).toFixed(4)}/company avg`)
+  console.log(`  ${'═'.repeat(74)}\n`)
 }
 
 // ── Print per-company profile evidence to stdout ─────────────
@@ -465,6 +498,7 @@ function writeDump(results: BenchmarkResult[]): void {
       profileEvidence: r.profileEvidence ?? {},
       error: r.error ?? null,
       failureCategories: r.failureCategories,
+      researchMetrics: r.researchMetrics ?? null,
     })),
   }
   fs.writeFileSync(outPath, JSON.stringify(dump, null, 2), 'utf-8')
@@ -532,6 +566,7 @@ async function main(): Promise<void> {
       profileEvidence: apiResponse.extractorResult?.companyProfileEvidence,
       evaluation,
       failureCategories,
+      researchMetrics: apiResponse.researchMetrics,
     }
 
     results.push(result)

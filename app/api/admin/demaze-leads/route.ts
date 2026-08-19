@@ -4,38 +4,43 @@
 // Given demazetech.com's most recent CACHED full-pipeline research run
 // (never re-runs research here — that's a separate, explicit, quota-spending
 // action the client triggers via the existing /api/admin/test-analysis +
-// /api/admin/test-runs endpoints), reads its icp_segments and runs
-// discoverCompanies() once per segment (sequential — same quota discipline
-// as every other batch loop in this repo), then aggregates the results into
-// one deduped lead list via aggregateLeadsAcrossSegments().
+// /api/admin/test-runs endpoints), runs company discovery across Demaze's 3
+// active target sectors and aggregates the results into one deduped lead
+// list via aggregateLeadsAcrossSegments().
 // See lib/enrichment/demaze-leads.ts for the aggregation logic and the
 // product-reframing note this endpoint exists to serve.
 //
+// 2026-08-18 REWORK: 'discover' mode used to loop over Demaze's own
+// research-derived ICP segments (arbitrary strings like "oil and gas",
+// "shipbuilding") — that's gone. It now loops over the 3 active target
+// sectors (lib/sector-playbook's TargetSector: manufacturing/automotive/
+// ecommerce) via discoverCompaniesForSector(), enforcing "only these 3
+// sectors" the same way /api/admin/company-discovery does. Demaze's own
+// research-derived ICP segments are still surfaced in 'profile' mode for
+// display/context, but no longer drive what gets discovered.
+//
 // Two-phase body shape (2026-07-16, 5-step Discover workflow) — both
 // optional, fully backward compatible with the original no-body call:
-//   { mode: 'profile' }              -> cached icp_segments only, NO
-//                                        discoverCompanies() calls at all
-//                                        (zero Tavily/Serper spend). Used by
-//                                        Discover's Step 1/2 to show Demaze's
-//                                        own target sectors before the user
-//                                        picks any.
-//   { mode: 'discover', segments }   -> runs discoverCompanies() only for the
-//                                        given segment name(s) (case-
-//                                        insensitive match against the
-//                                        cached icp_segments) instead of all
-//                                        of them. Used by Step 3's sector
-//                                        selection -> Step 4 lead discovery.
-//   (no body / mode omitted)         -> original behavior: discovery across
-//                                        every cached segment in one shot.
+//   { mode: 'profile' }              -> cached icp_segments (context only)
+//                                        + the 3 active sectors, NO
+//                                        discovery calls at all (zero
+//                                        Tavily/Serper spend).
+//   { mode: 'discover', sectors }    -> runs discoverCompaniesForSector()
+//                                        for the given sector label(s)
+//                                        (case-insensitive match against
+//                                        the 3 active sector labels)
+//                                        instead of all 3.
+//   (no body / mode omitted)         -> discovery across all 3 sectors.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
-import { discoverCompanies, filterAlreadyResearched, type CompanyMatch } from '@/lib/enrichment/company-discovery'
+import { discoverCompaniesForSector, type CompanyMatch } from '@/lib/enrichment/company-discovery'
+import { qualifyAndAnnotate } from '@/lib/enrichment/company-qualification'
+import { emptyFunnel, recordDiscovered, type DiscoveryFunnel } from '@/lib/enrichment/discovery-funnel'
 import { aggregateLeadsAcrossSegments, withConfirmedSectors, DEMAZE_DOMAIN, DEMAZE_EXCLUDE_NAMES } from '@/lib/enrichment/demaze-leads'
-import type { ICPSegment } from '@/lib/enrichment/icp-generator'
-import { logger } from '@/lib/logger'
+import { getAllSectorPlaybooks } from '@/lib/sector-playbook/playbooks'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -43,7 +48,10 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const mode = body?.mode === 'profile' ? 'profile' : body?.mode === 'discover' ? 'discover' : null
-  const requestedSegments: string[] = Array.isArray(body?.segments)
+  const requestedSectorLabels: string[] = Array.isArray(body?.sectors)
+    ? body.sectors.filter((s: unknown): s is string => typeof s === 'string' && s.trim().length > 0)
+    // Backward compatible with the older `segments` field name.
+    : Array.isArray(body?.segments)
     ? body.segments.filter((s: unknown): s is string => typeof s === 'string' && s.trim().length > 0)
     : []
 
@@ -71,80 +79,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, needsResearch: true })
   }
 
-  const finalResult = cached.final_result as { icp_segments?: ICPSegment[] }
-  // Merged with Demaze's confirmed, ground-truth target industries (see
-  // withConfirmedSectors()'s own header comment) — the research-derived
-  // pass alone badly under-represents Demaze's real scope when
-  // demazetech.com's own "Industries We Serve" copy is thin/narrow.
-  const icpSegments = withConfirmedSectors(finalResult.icp_segments ?? [])
-
-  if (icpSegments.length === 0) {
-    return NextResponse.json({
-      success: true,
-      needsResearch: false,
-      icpSegments: [],
-      leads: [],
-      researchedAt: cached.created_at,
-      reason: 'Cached Demaze research has no ICP segments (insufficient evidence on that run). Re-run research, or search a segment manually below.',
-    })
-  }
+  // Restricted to exactly the 3 active target sectors — NOT merged with
+  // Demaze's own research-derived ICP segments anymore. Showing an extra,
+  // non-restricted segment as a selectable chip (e.g. a stray "Healthcare"
+  // segment demazetech.com's own homepage copy might mention) would be a
+  // dead end once selected, since 'discover' mode below only ever searches
+  // the 3 active sectors regardless of what's requested. withConfirmedSectors([])
+  // reduces to exactly the 3 confirmed-sector entries with no research-
+  // derived merge, reusing the existing function rather than duplicating
+  // its ICPSegment-shaping logic.
+  const icpSegments = withConfirmedSectors([])
+  const playbooks = getAllSectorPlaybooks()
 
   // Profile-only phase (Step 1/2): return the cached sectors so the client
-  // can render them for selection — no discoverCompanies() call, no quota
-  // spent, since discovery only makes sense once the user has picked which
-  // sector(s) to search (Step 3/4).
+  // can render them for selection — no discovery call, no quota spent.
   if (mode === 'profile') {
     return NextResponse.json({
       success: true,
       needsResearch: false,
       icpSegments,
+      activeSectors: playbooks.map(p => ({ sector: p.sector, label: p.label })),
       leads: [],
       researchedAt: cached.created_at,
-      reason: `${icpSegments.length} target sector(s) available from cached Demaze research`,
+      reason: `${playbooks.length} active target sector(s) available for discovery`,
     })
   }
 
-  // Discover phase, scoped to selected segments only (mode === 'discover').
-  // Falls back to ALL cached segments when no explicit selection is given —
-  // preserves the original one-shot "Find Leads for Demaze" behavior for any
-  // caller that doesn't pass `segments`.
-  const segmentsToSearch = requestedSegments.length > 0
-    ? icpSegments.filter(seg => requestedSegments.some(name => name.toLowerCase() === seg.name.toLowerCase()))
-    : icpSegments
+  // Discover phase — restricted to the 3 active target sectors, optionally
+  // narrowed by the requested sector label(s). Falls back to ALL 3 when no
+  // explicit selection is given.
+  const sectorsToSearch = requestedSectorLabels.length > 0
+    ? playbooks.filter(p => requestedSectorLabels.some(name => name.toLowerCase() === p.label.toLowerCase() || name.toLowerCase() === p.sector))
+    : playbooks
 
-  if (segmentsToSearch.length === 0) {
+  if (sectorsToSearch.length === 0) {
     return NextResponse.json({
       success: true,
       needsResearch: false,
       icpSegments,
       leads: [],
       researchedAt: cached.created_at,
-      reason: 'none of the requested sector name(s) matched a cached ICP segment',
+      reason: 'none of the requested sector name(s) matched an active target sector',
     })
   }
 
-  // Sequential per-segment discovery — same "respect real Firecrawl/Tavily
+  // Sequential per-sector discovery — same "respect real Firecrawl/Tavily
   // quota limits" discipline as researchSelected()/batch-upload's loops.
+  const funnel: DiscoveryFunnel = emptyFunnel()
   const perSegment: Array<{ segmentName: string; companies: CompanyMatch[] }> = []
-  for (const seg of segmentsToSearch) {
-    const result = await discoverCompanies(seg.name, DEMAZE_EXCLUDE_NAMES)
-    perSegment.push({ segmentName: seg.name, companies: result.companies })
+  for (const playbook of sectorsToSearch) {
+    const result = await discoverCompaniesForSector(playbook.sector, { excludeCompanyNames: DEMAZE_EXCLUDE_NAMES })
+    recordDiscovered(funnel, result.companies.length)
+    const annotated = await qualifyAndAnnotate(supabase, result.companies, playbook.sector, funnel)
+    const qualifiedOnly = annotated.filter(c => c.existingStatus === 'qualified')
+    perSegment.push({ segmentName: playbook.label, companies: qualifiedOnly })
   }
 
-  let leads = aggregateLeadsAcrossSegments(perSegment)
-
-  // Cross-search dedup against already-researched companies — same as
-  // /api/admin/company-discovery.
-  try {
-    const { data: history } = await supabase.from('pipeline_test_runs').select('company_url, domain')
-    const { survivors } = filterAlreadyResearched(
-      leads,
-      (history ?? []).map(h => ({ companyUrl: h.company_url, domain: h.domain })),
-    )
-    leads = survivors as typeof leads
-  } catch (e) {
-    logger.warn('DemazeLeads', 'already-researched dedup skipped', e instanceof Error ? e.message : String(e))
-  }
+  const leads = aggregateLeadsAcrossSegments(perSegment)
 
   return NextResponse.json({
     success: true,
@@ -152,6 +143,7 @@ export async function POST(req: NextRequest) {
     icpSegments,
     leads,
     researchedAt: cached.created_at,
-    reason: `${leads.length} lead(s) aggregated across ${segmentsToSearch.length} selected ICP segment(s)`,
+    reason: `${leads.length} genuinely new lead(s) aggregated across ${sectorsToSearch.length} active sector(s)`,
+    funnel,
   })
 }

@@ -111,6 +111,7 @@
 import { OpenAICompatibleProvider } from './providers/openai-compatible'
 import { VertexGeminiProvider } from './providers/vertex-gemini'
 import type { AIProvider, CompletionRequest, CompletionResponse } from './types'
+import { recordMetric } from '@/lib/pipeline/research-metrics'
 
 const VERTEX_GEMINI_MODELS = [process.env.GEMINI_MODEL ?? 'gemini-3.6-flash']
 
@@ -294,12 +295,20 @@ export async function getCompletion(
   const geminiResult = await tryVertexGeminiChain(
     VERTEX_GEMINI_MODELS, process.env.GEMINI_VERTEX_API_KEY, request, LLM_TIMEOUT_MS, errors
   )
-  if (geminiResult) return geminiResult
+  if (geminiResult) {
+    recordMetric('geminiCalls')
+    recordMetric('geminiTokens', geminiResult.tokensUsed)
+    return geminiResult
+  }
 
   const nvidiaResult = await tryVendorChain(
     NVIDIA_NIM_MODELS, NVIDIA_NIM_BASE_URL, process.env.NVIDIA_NIM_API_KEY, 'nvidia_nim', 'NVIDIA NIM', request, LLM_TIMEOUT_MS, errors
   )
-  if (nvidiaResult) return nvidiaResult
+  if (nvidiaResult) {
+    recordMetric('nvidiaCalls')
+    recordMetric('nvidiaTokens', nvidiaResult.tokensUsed)
+    return nvidiaResult
+  }
 
   throw new Error(
     `All AI providers failed.\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`

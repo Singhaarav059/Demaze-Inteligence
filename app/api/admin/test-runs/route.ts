@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
 import { createServerClient } from '@/lib/supabase/server'
+import { markResearchedByIdentity } from '@/lib/companies/identity'
+import { logger } from '@/lib/logger'
 
 // ── GET: fetch run history ────────────────────────────────────
 
@@ -113,6 +115,22 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+
+  // Research-lock (governing plan section D): a genuinely completed full
+  // pipeline run marks this company 'researched' in the persistent
+  // registry, regardless of whether it originated from automatic
+  // discovery, Excel/CSV upload, or a manually-typed URL — this is the one
+  // save path every research entry point already goes through, so it's
+  // the correct place to enforce "never automatically re-research"
+  // universally. Scraper-only/error/partial runs don't count. Best-effort:
+  // a failure here must never fail the run save itself.
+  if (operation === 'full_pipeline' && (status ?? 'completed') === 'completed') {
+    try {
+      await markResearchedByIdentity(supabase, { domain, name: company_url }, data.id)
+    } catch (e) {
+      logger.warn('TestRuns', 'research-lock write skipped', e instanceof Error ? e.message : String(e))
+    }
   }
 
   return NextResponse.json({ success: true, id: data.id })

@@ -30,7 +30,7 @@
 // a workflow/UI reorganization over that existing logic.
 // ============================================================
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -44,9 +44,16 @@ import { InfoTooltip } from '@/components/ui/tooltip'
 import { fadeSlideUp } from '@/lib/motion'
 import type { RunResult } from '../intelligence-lab/_types'
 import type { ICPSegment } from '@/lib/enrichment/icp-generator'
-import { DEMAZE_URL } from '@/lib/enrichment/demaze-leads'
+import type { TargetSector } from '@/lib/sector-playbook/types'
+import { DEMAZE_URL } from '@/lib/enrichment/demaze-constants'
 import { useCompanyDiscoverySearch, toDedupedCompany, type DemazeMatch } from './useCompanyDiscoverySearch'
 import { CompanyMatchList } from './CompanyMatchList'
+
+const ACTIVE_SECTORS: { sector: TargetSector; label: string }[] = [
+  { sector: 'manufacturing', label: 'Manufacturing' },
+  { sector: 'automotive', label: 'Automotive' },
+  { sector: 'ecommerce', label: 'E-commerce' },
+]
 
 type ProfileStatus = 'idle' | 'checking' | 'needs_research' | 'researching' | 'ready' | 'error'
 
@@ -125,14 +132,21 @@ function CompanyRowSkeletons() {
 
 function CompanyDiscoveryInner() {
   const searchParams = useSearchParams()
+  // ?segment= arrives from a researched company's "Find companies in this
+  // segment →" link (ResearchCard.tsx) — an arbitrary ICP-segment string,
+  // not one of the 3 active sectors. Prefilled as a REFINEMENT alongside a
+  // manually-picked sector rather than auto-searched, since we can't
+  // reliably map an arbitrary segment string onto one of the 3 sectors
+  // without another LLM call (out of scope) — same "don't guess" discipline
+  // as the rest of this codebase's discovery modules.
   const search = useCompanyDiscoverySearch({
-    initialSegment: searchParams.get('segment') ?? '',
+    initialRefinement: searchParams.get('segment') ?? '',
     initialExclude: searchParams.get('exclude') ?? '',
   })
   const {
-    icpSegment, setIcpSegment, excludeCompanyName, setExcludeCompanyName,
+    sector, setSector, refinement, setRefinement, excludeCompanyName, setExcludeCompanyName,
     searching, searchError, setSearchError, sufficiency, setSufficiency,
-    discoveryReason, setDiscoveryReason, setCompanies, handleSearch, persistResult,
+    discoveryReason, setDiscoveryReason, funnel, setCompanies, handleSearch, persistResult,
   } = search
 
   // ── Step 1: Research Demaze ──────────────────────────────────
@@ -284,21 +298,6 @@ function CompanyDiscoveryInner() {
     }
   }
 
-  // ── Arrive-via-link autosearch ───────────────────────────────
-  // From a report's "Find companies in this segment →" link
-  // (?segment=...&exclude=...). Runs once via the manual/advanced search path
-  // (this is a specific segment string, not one of Demaze's own sectors).
-
-  const autoSearchedRef = useRef(false)
-  useEffect(() => {
-    if (autoSearchedRef.current) return
-    const segment = searchParams.get('segment')
-    if (!segment) return
-    autoSearchedRef.current = true
-    handleSearch(segment, searchParams.get('exclude') ?? '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-5">
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
@@ -430,14 +429,27 @@ function CompanyDiscoveryInner() {
               )}
 
               <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground/70 hover:text-foreground/80">Manual / advanced: search a segment by free text instead</summary>
+                <summary className="cursor-pointer text-muted-foreground/70 hover:text-foreground/80">Manual / advanced: search one sector directly</summary>
                 <div className="mt-3 space-y-2 max-w-md">
+                  <label className="block text-[11px] text-muted-foreground/70">
+                    Sector (discovery is restricted to these 3)
+                    <select
+                      aria-label="Sector to search"
+                      value={sector}
+                      onChange={(e) => setSector(e.target.value as TargetSector)}
+                      className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-foreground text-sm"
+                    >
+                      {ACTIVE_SECTORS.map(s => (
+                        <option key={s.sector} value={s.sector}>{s.label}</option>
+                      ))}
+                    </select>
+                  </label>
                   <Input
-                    aria-label="ICP segment to search"
-                    value={icpSegment}
-                    onChange={(e) => setIcpSegment(e.target.value)}
+                    aria-label="Optional refinement (composed with the sector above)"
+                    value={refinement}
+                    onChange={(e) => setRefinement(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !searching) handleSearch() }}
-                    placeholder="e.g. automotive manufacturers, oil and gas, mid-size SaaS companies…"
+                    placeholder="Optional refinement, e.g. contract manufacturer, D2C brand…"
                     className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
                   />
                   <Input
@@ -447,9 +459,21 @@ function CompanyDiscoveryInner() {
                     placeholder="Exclude companies (optional, comma-separated)"
                     className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
                   />
-                  <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={() => handleSearch()} disabled={searching || !icpSegment.trim()}>
-                    {searching ? <><Spinner /> Searching…</> : 'Find Companies for This Segment'}
+                  <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={() => handleSearch()} disabled={searching}>
+                    {searching ? <><Spinner /> Searching…</> : `Find ${ACTIVE_SECTORS.find(s => s.sector === sector)?.label ?? sector} Companies`}
                   </Button>
+
+                  {funnel && (
+                    <div className="rounded-lg border border-border bg-background/60 px-3 py-2 text-[11px] text-muted-foreground/80 space-y-0.5">
+                      <p className="font-medium text-foreground/80">Discovery funnel (this search)</p>
+                      <p>{funnel.discovered} discovered → {funnel.qualified} genuinely new & qualified</p>
+                      <p className="text-muted-foreground/60">
+                        Filtered out: {funnel.duplicate} duplicate, {funnel.alreadyResearched} already researched,{' '}
+                        {funnel.alreadyOutreached} already outreached, {funnel.wrongSector} wrong sector,{' '}
+                        {funnel.outsideSize} outside size range, {funnel.otherRejected} other
+                      </p>
+                    </div>
+                  )}
                 </div>
               </details>
             </div>

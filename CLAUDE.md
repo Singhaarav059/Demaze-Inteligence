@@ -11,6 +11,246 @@ export, and this pipeline never infers or ranks WHO the buyer is. Target
 industries: Manufacturing, Automotive, Industrial, SaaS, Financial
 Institutions, SMBs.
 
+## IN PROGRESS (2026-08-18) — Master Research Optimization Plan (G0-G15)
+A separate, session-spanning plan document,
+`demaze_master_research_optimization_plan.md` (repo root), governs the
+current research-engineering work — NOT part of the earlier "Implementation
+sequence" phases below, and NOT the same effort as the outbound-workflow/
+sector-playbook work also documented in this file. Read that file's own
+"Standing rules" and "What Not To Do" sections before touching anything it
+covers — it has its own strict scope guards (no Apollo, no LinkedIn
+scraping, no removing Firecrawl/Tavily/Serper without benchmarking, no new
+vendors without approval) independent of this file's own such rules.
+
+**Done so far, in order, each phase's own doc is the source of truth (this
+entry is just a pointer, not a summary of contents):**
+- **G0 (read-only architecture audit)** — `docs/research-architecture-audit.md`.
+  Inventoried every Firecrawl/Tavily/Serper/Jina/direct-fetch/Gemini/LLM call
+  site, cache, DB table, and the batch-vs-inner-pipeline concurrency split.
+  Key finding: the inner single-company pipeline is already heavily
+  parallelized; the OUTER cross-company batch loop (`wizard/page.tsx`,
+  `useAutoGtmFlow.ts`) is the real, confirmed sequential bottleneck.
+- **G1 (cost/latency instrumentation + real baseline)** —
+  `docs/research-cost-baseline.md`. New `lib/pipeline/research-metrics.ts`
+  (`AsyncLocalStorage`-based per-request provider-call/token/cache counters,
+  no function-signature threading needed) instrumented into every provider
+  call site found in G0; persists as `research_metrics` on
+  `NormalizedAnalysis` via the existing JSONB passthrough (no migration).
+  Real 10-company benchmark run recorded: $0.0406/company estimated,
+  33.9s/company avg — this is a CACHE-HEAVY baseline (not force-fresh), not
+  a cold-cache number. **Real bug fixed along the way**: extracted
+  `DEMAZE_URL`/`DEMAZE_DOMAIN`/`DEMAZE_EXCLUDE_NAMES` into new
+  `lib/enrichment/demaze-constants.ts` — the old location
+  (`demaze-leads.ts`) transitively pulled `node:async_hooks` into a client
+  bundle via `company-discovery/page.tsx`'s value-import, a hard Turbopack
+  build failure introduced by the new instrumentation module, now fixed.
+  **Known gap, not fabricated**: the plan assumes a "30-company benchmark";
+  the repo genuinely only has 10 fixtures (`benchmarks/companies/*.json`) —
+  documented as a real gap, not silently padded.
+- **G2 (evidence ledger)** — `docs/evidence-ledger-audit.md` +
+  `docs/evidence-ledger-design.md`. New `lib/pipeline/evidence-ledger.ts` —
+  deterministic source-authority tiering (first_party/regulatory/
+  reputable_third_party/weak/unknown, a genuinely new axis separate from
+  `SourceType`'s existing document-genre classification), freshness
+  (never invents a publish date — `'unknown'` is the honest default for
+  almost all evidence today, since no publish-date extraction exists yet
+  for scraped/search content), company-identity confidence (reuses
+  `mentionsCompany()`), and a deterministic 0-100 confidence score. Wired
+  into `normalize.ts`'s two already-quote-verified paths (opportunities
+  Path B1 `llm_verified`, pain-points' `'observed'` branch) — extends the
+  existing `EvidenceItem` interface additively rather than creating a
+  parallel type. New pairwise contradiction detection (narrow, ~3
+  English-only polarity pairs, honestly scoped as a first pass) downgrades
+  — never deletes — conflicting claims. No migration; `evidence_ledger`
+  persists the same JSONB-passthrough way as `research_metrics`. 15 new
+  tests (`tests/evidence-ledger.test.ts`), full suite 919/919, `tsc`/
+  `npm run build` clean. Verified against 2 real already-persisted
+  production runs (Lechler, Ador Welding) via a deleted throwaway probe —
+  zero new API spend.
+- **G3 (in-house fetcher)** — `docs/direct-fetcher-comparison.md`. New
+  `lib/pipeline/direct-fetcher.ts`'s `directFetch()` — consolidates the
+  browser-UA + `AbortController`-timeout pattern already duplicated across
+  `scraper.ts`/`web-enricher.ts`/`website-discovery.ts` into one reusable
+  function, additive only (none of those existing call sites touched).
+  Handles timeout, one retry on a transient failure (network error/timeout/
+  5xx, not a definitive 4xx), redirect, non-HTML content-type, and an 8MB
+  size cap. **Not wired into the live scrape chain** — no in-house
+  HTML→text extractor exists until G4, so raw HTML from this fetcher isn't
+  safe to feed into `evidence-extractor.ts` yet; this module only proves
+  the fetch layer works. 8 new tests (`tests/direct-fetcher.test.ts`), full
+  suite 927/927, `tsc` clean. **Live-verified for real** (plain HTTP, no
+  paid API, zero quota cost) against all 10 real benchmark company URLs:
+  9/10 succeeded with real HTML, including two domains `CLAUDE.md` already
+  documents as historically flaky for other fetch paths (A-1 Fence
+  Products, Muthoot Finance's WAF block) — both succeeded here because the
+  fetcher reuses the same real-browser-UA fix already proven elsewhere in
+  this codebase. ATE Group failed, consistent with this file's own
+  pre-existing note about that domain — not a new gap.
+- **G4 (in-house extractor)** — `docs/html-extractor-comparison.md`. New
+  `lib/pipeline/html-extractor.ts`'s `extractCleanText()`/`fetchAndExtract()`
+  — `cheerio` strips script/style/nav/footer/tracking noise, `turndown`
+  (pure-JS, no browser engine — depends only on `@mixmark-io/domino`)
+  converts the remaining structured HTML into markdown, matching plan §21's
+  pipeline exactly. Output shape matches `scraper.ts`'s `ScrapePageResult`
+  field-for-field (drop-in-compatible for a future G5/G8 session, not
+  wired in yet). 7 new tests (`tests/html-extractor.test.ts`), full suite
+  934/934, `tsc`/build clean. **Live-verified against real already-persisted
+  Firecrawl output** (adorwelding.com, 7 real cached pages, zero new API
+  spend — same precedent as G2/G3) — 7/7 extraction succeeded, titles
+  matched real `<title>` tags exactly, content spot-checked as
+  comparably complete (a real image-ref/skip-link noise gap was found and
+  fixed during this comparison, see the doc for detail).
+- **G5 (smart crawler)** — `docs/smart-crawler-comparison.md`. New
+  `lib/pipeline/smart-crawler.ts`'s `crawlWebsite()` — the crawl-POLICY
+  layer on top of G3's `directFetch()`/G4's `extractCleanText()`: robots.txt
+  fetch+parse (`fetchRobotsTxt()`/`parseRobotsTxt()`/`isPathAllowed()`,
+  standard longest-prefix-wins semantics, fails OPEN on any fetch/parse
+  failure — same "prefer under-confidence, never silently block legitimate
+  research" discipline as `website-discovery.ts`), sitemap discovery
+  (`discoverSitemapUrls()`, sitemap-index-follows-corporate-sub-sitemaps-only,
+  via G3's `directFetch()` not Firecrawl), homepage same-domain link
+  extraction (`extractSameDomainLinks()`, new — reuses `cheerio`), dedup
+  (`dedupeUrls()`), a page limit (default 15, mirrors `scraper.ts`'s private
+  `MAX_DISCOVERED_PAGES`), and early stopping (4+ high-value pages across
+  3+ of `scraper.ts`'s own `VALUABLE_CATEGORIES` — an inversion of
+  `scraper.ts`'s existing probe-trigger condition, not a new threshold;
+  checked `evidence-ledger.ts` first per this session's own instruction and
+  ruled it out as a fit — its confidence scoring is post-claim-verification,
+  not a pre-extraction "enough raw content yet" signal). URL
+  scoring/selection (`classifyUrl`, `selectUrlsToScrape`,
+  `detectLocalizedUrlStructure`, `isEnglishLocaleSegment`) is IMPORTED
+  directly from `scraper.ts`, not duplicated — that logic has been fixed
+  through several real, documented bug sessions (word-boundary keyword
+  matching, the lechler.com locale-scoring regression) and duplicating it
+  risked silently drifting out of sync. `CrawlResult.pages` reuses G4's
+  `FetchAndExtractResult` shape directly, no new page type. 18 new tests
+  (`tests/smart-crawler.test.ts`), full suite 952/952 (934 pre-existing +
+  18 new), `tsc`/build clean. **Live-verified for real** (plain HTTP + a
+  real robots.txt/sitemap fetch per domain, zero paid API cost) against 3
+  real benchmark companies (adorwelding.com, bharatforge.com,
+  a-1fenceproducts.com) — 2 of 3 correctly early-stopped before `maxPages`;
+  the third (bharatforge.com) hit `maxPages` without early-stopping.
+  **Real bug found and fixed via this live run, not just documented**:
+  `discoverSitemapUrls()` didn't filter non-HTML file extensions the way
+  `extractSameDomainLinks()` already did for homepage links — before the
+  fix, bharatforge.com's real sitemap (dominated by investor-report `.pdf`s,
+  the top-scoring `investor` category) meant all top-15 highest-scored
+  candidates were PDFs, and G4's `extractCleanText()` has no PDF-handling
+  path, so 0 of 15 candidate fetches succeeded (1 page total, homepage
+  only). Fixed by sharing the extension-exclusion regex
+  `extractSameDomainLinks()` already had (`NON_PAGE_EXTENSION_RE`) with
+  `discoverSitemapUrls()`'s output too; re-verified live after the fix —
+  bharatforge.com went from 1 page/0 successful candidates to 16 pages/16
+  successful (real investor/corporate-governance/financial pages, 43,524
+  chars). New regression test added, 18/18 (was 17/17 before this fix).
+  robots.txt Disallow-filtering was proven correct only by the mocked unit
+  test — none of the 3 real live domains actually had a Disallow rule to
+  exercise the skip path against.
+- **G6 (cache layer)** — `docs/cache-layer-design.md`. Checked what already
+  existed first (ladder rung 2): `lib/cache/search-cache.ts` (Supabase-
+  backed, 30-day TTL, migration `012_search_query_cache.sql`) already
+  satisfies plan §42 G6's "search cache" requirement, already wired into
+  the live `searchTavily()`/`searchSerper()` choke point every discovery
+  module shares — not rebuilt. New `lib/cache/page-cache.ts` —
+  `fetchAndExtractCached()`, a cache-first wrapper around G4's
+  `fetchAndExtract()`, keyed by URL, 24h TTL (matches `scrape-cache.ts`'s
+  own TTL — a single page is roughly as volatile as a full company scrape).
+  Content hashing via new `lib/cache/content-hash.ts`'s `hashContent()`
+  (`sha256`, `node:crypto`, no new dependency) enables real "stale refresh"
+  semantics (plan §43's own Cache-tests list): a refetch past TTL compares
+  the new hash against the prior one and reports `contentChanged: true/
+  false`, distinguishing "TTL lapsed but the site is honestly unchanged"
+  from a real update. Failures are never cached (a transient fetch error
+  isn't "the page's state" for a full TTL window). Wired into G5's
+  `smart-crawler.ts` per-candidate-page loop (the one real repeat-fetch hot
+  spot in the still-standalone G3-G5 stack) — `smart-crawler.ts` itself
+  remains NOT wired into any live route, unchanged from G5, so this is
+  wiring within the already-standalone module stack, not a live-pipeline
+  change. New `lib/cache/evidence-cache.ts` — caches G2's
+  `attributeQuoteToSource()` (the one real cost center in
+  `evidence-ledger.ts`: a full regex re-parse of the entire content pool,
+  identical across every evidence item attributed within one run), keyed
+  by a hash of `(quote+snippet, contentPool)` plus a `SCORING_VERSION` tag
+  (bumpable to invalidate every cached entry with a one-line change if
+  G2's confidence-weighting formula — explicitly "not tuned yet" per its
+  own design doc — is later recalibrated). New
+  `attributeQuoteToSourceCached()` export on `evidence-ledger.ts` —
+  **deliberately NOT wired into `normalize.ts`'s existing, already-live
+  call site this session**; that call site keeps calling the uncached
+  function unchanged, so this session's change has zero behavior effect
+  on any real research run today. Both new caches are in-memory
+  (module-scope `Map`, no Supabase migration) — the deciding test applied
+  consistently: `scrape-cache.ts`/`search-cache.ts` need Supabase because
+  they're wired into the LIVE request path; neither new G6 module's only
+  caller (`smart-crawler.ts`, its own test suite) is live yet, so
+  in-memory is the correct, lower-risk choice per the task's own "lean
+  toward simpler when unsure" guidance, not a shortcut. 21 new tests
+  (`tests/page-cache.test.ts` 13, `tests/evidence-cache.test.ts` 8),
+  `tsc`/full suite (969/969)/build all clean. **Live-verified for real**
+  (plain HTTP via G3's `directFetch()`, zero paid API cost, same
+  precedent as G3/G5) against adorwelding.com via a deleted throwaway
+  probe: a cold fetch (2.7s, 7,605 real chars) followed by an
+  identical-URL second call served entirely from cache (0ms,
+  byte-identical content) — confirms the hit path against real data, not
+  just mocked tests. **Not live-verified**: the `contentChanged`
+  stale-refresh branch (would need a real site's content to genuinely
+  change across a 24h gap, not practically forceable in one session) and
+  the evidence-cache path against a real `normalize.ts` run (deliberately
+  not wired into that live call site this session, nothing real to verify
+  yet) — both covered by mocked unit tests instead.
+- **G7 (search router)** — `docs/search-router-design.md`. New
+  `lib/ai/providers/vertex-gemini-search.ts`'s `searchWithGeminiGrounding()`
+  — a sibling file to `vertex-gemini.ts` (not a method on
+  `VertexGeminiProvider`, since this returns search results, not a
+  `CompletionResponse`), attaches Gemini's native Google Search grounding
+  tool (`tools: [{ googleSearch: {} }]`) to a `generateContent()` call — the
+  one real gap G0's audit flagged (Gemini had zero web-search capability of
+  its own anywhere in this codebase). Not a new vendor — Vertex Gemini is
+  already approved and live; this is a new capability on that same vendor.
+  In-memory cache only (the Supabase `search_query_cache` table's
+  `provider` column has a hard `CHECK (provider IN ('tavily','serper'))`
+  constraint — widening it for a capability with no live caller yet would
+  be premature). New `lib/enrichment/search-router.ts`'s `routedSearch()`
+  — priority `cache → Gemini Search → Serper → Tavily` (deliberately
+  Tavily-LAST, the opposite of `discovery-engine.ts`'s own live
+  Tavily-first order — that file is untouched this phase), stopping at the
+  first tier whose results clear `isSearchSufficient()`, a pure
+  count-based floor (≥3 results with ≥40 real content chars each) —
+  deliberately not a reuse of G2's post-extraction evidence-ledger
+  confidence scoring, since a router has no claim yet to score, only raw
+  search hits. `SearchResultItem` is structurally identical to what
+  `searchTavily()`/`searchSerper()` already return, so a `routedSearch()`
+  result is a drop-in substitute anywhere that shape is consumed. Standalone
+  and additive only — **not wired into `discovery-engine.ts` or any of its
+  5 call sites** (Enrichment Discovery, Competitor Discovery, ICP
+  Generator, Market Intelligence, Website Discovery, Company Discovery)
+  this phase; a future G8+ session decides whether/how to point any of
+  them at this router, including resolving the Tavily-ordering question.
+  10 new tests (`tests/vertex-gemini-search.test.ts`), 13 new
+  (`tests/search-router.test.ts`), full suite 990/990, `tsc --noEmit`
+  clean. **Not live-verified** — no real Vertex/Tavily/Serper call was made
+  through this module; a real `searchWithGeminiGrounding()` smoke test
+  (explicit confirmation + real quota) is the natural next step for
+  whoever wires this in, including confirming Search grounding actually
+  returns metadata under Vertex Express Mode specifically (unconfirmed —
+  some Gemini API surfaces gate grounding behind billing-enabled projects)
+  and whether `jsonMode` and grounding are combinable in one call.
+- **Explicitly NOT started**: G8 onward (Firecrawl-to-fallback demotion,
+  LinkedIn evidence adapter, concurrent job queue, adaptive research
+  depth, UX, final comparison) — per the plan's own phase-by-phase
+  discipline.
+
+**Standing gap, not specific to G7**: none of G0–G7 has actually been
+committed to git yet — every file this whole plan has produced so far
+(including G7's) exists only as uncommitted changes in the working tree.
+Worth a deliberate commit at some point rather than letting it keep
+growing unstaged.
+
+**Before starting G8**: read `demaze_master_research_optimization_plan.md`
+§42's G8 entry (move Firecrawl from default to fallback, measure usage
+reduction) and `docs/search-router-design.md` in full, not just this
+pointer — this entry deliberately doesn't restate their content.
+
 ## SCOPE PIVOT — 2026-07-14: FULL AutoGTM loop now IN SCOPE (contact + send included)
 Two explicit product-direction decisions made the same day, in sequence —
 recorded as they happened rather than collapsed into one, since the second

@@ -1,0 +1,392 @@
+
+> demaze-platform@0.1.0 benchmark
+> npx tsx benchmarks/benchmark-runner.ts
+
+◇ injected env (16) from .env.local // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+
+[1m  ══════════════════════════════════════════════════════════════════════════[0m
+[1m  DEMAZE BENCHMARK[0m  [2m10 companies | http://localhost:3000[0m
+[1m  ══════════════════════════════════════════════════════════════════════════[0m
+
+  [1mA-1 Fence Products[0m [2m(https://www.a-1fenceproducts.com)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [33m⚠[0m min_signals                      [2mactual: 1[0m
+    [32m✓[0m min_opportunities                [2mactual: 5[0m
+    [32m✓[0m min_challenges                   [2mactual: 3[0m
+    [32m✓[0m profile_flag:manufacturer        [2mactual: true[0m
+    [32m✓[0m primary_type                     [2mactual: manufacturer[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [33mWARN[0m  [2m(52544ms)[0m
+    [33mFailure taxonomy: CLASSIFICATION_FAILURE, EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE, RELEVANCE_FAILURE[0m
+    [1mResearch Evaluation Score: [33m65.2[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         12/20[0m [2m— 3/5 opportunities carry an evidence_id[0m
+      [2mEvidence sufficiency & signal depth   11.25/15[0m [2m— evidence_sufficiency=sufficient, signals=1/2[0m
+      [2mPain-point quality                    3.33/10[0m [2m— 1/3 pain points evidence-backed, non-low-confidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           4.62/15[0m [2m— 9/13 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36mmanufacturer[0m  [2m[manufactur* + company/facilit/plant/unit][0m  matched: [1m"manufacturing unit"[0m
+        [2m…. A-1 Fence’s operations are spread over six manufacturing units – Khopoli (Maharashtra, India), Umbergaon (Gujarat, I…[0m
+      [36mmanufacturer[0m  [2m[N manufacturing facilit/plant/unit][0m  matched: [1m"six manufacturing unit"[0m
+        [2m…etc. A-1 Fence’s operations are spread over six manufacturing units – Khopoli (Maharashtra, India), Umbergaon (Gujarat, I…[0m
+      [36mmanufacturer[0m  [2m[manufactures and exports][0m  matched: [1m"manufacturing and exporting"[0m
+        [2m…security solutions. A-1 Fence started off by manufacturing and exporting concertina coils and with persistence & commitment tow…[0m
+      [36mhealthcare_provider[0m  [2m[healthcare provider/services/company][0m  matched: [1m"healthcare services"[0m
+        [2m…nt, rural development, water and sanitation, healthcare services. ## CSR INITIATIVES * * * Some of the successful CS…[0m
+
+  [1mAce Pipeline[0m [2m(https://acepipeline.co.in)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [33m⚠[0m min_signals                      [2mactual: 0[0m
+    [33m⚠[0m min_opportunities                [2mactual: 0[0m
+    [33m⚠[0m min_challenges                   [2mactual: 0[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [33mWARN[0m  [2m(28925ms)[0m
+    [33mFailure taxonomy: EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE, EXTRACTION_FAILURE, RELEVANCE_FAILURE[0m
+    [1mResearch Evaluation Score: [33m67.75[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         20/20[0m [2m— no opportunities, honestly reported as insufficient evidence[0m
+      [2mEvidence sufficiency & signal depth   0/15[0m [2m— evidence_sufficiency=insufficient, signals=0/1[0m
+      [2mPain-point quality                    10/10[0m [2m— no pain points, honestly reported as insufficient evidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           3.75/15[0m [2m— 6/8 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36mconglomerate[0m  [2m[group/holding/conglomerate company/with diverse...][0m  matched: [1m"group compan"[0m
+        [2m…and grow. In this spirit of a start-up, our group company **Ace Energy Infrastructure** ventured into the busin…[0m
+
+  [1mAdor Welding[0m [2m(https://adorwelding.com)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: PASS[0m
+    [32m✓[0m min_signals                      [2mactual: 2[0m
+    [32m✓[0m min_opportunities                [2mactual: 5[0m
+    [32m✓[0m min_challenges                   [2mactual: 3[0m
+    [32m✓[0m profile_flag:manufacturer        [2mactual: true[0m
+    [32m✓[0m primary_type                     [2mactual: industrial_vendor_manufacturer[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [32mPASS[0m  [2m(39059ms)[0m
+    [1mResearch Evaluation Score: [33m77[0m[0m[2m/100[0m
+      [2mPipeline reliability                  20/20[0m [2m— validation gate: PASS[0m
+      [2mEvidence-backed opportunities         16/20[0m [2m— 4/5 opportunities carry an evidence_id[0m
+      [2mEvidence sufficiency & signal depth   15/15[0m [2m— evidence_sufficiency=sufficient, signals=2/2[0m
+      [2mPain-point quality                    0/10[0m [2m— 0/3 pain points evidence-backed, non-low-confidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           6/15[0m [2m— 9/15 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36mmanufacturer[0m  [2m[manufactur* + company/facilit/plant/unit][0m  matched: [1m"manufacturing plant"[0m
+        [2m…Oil & Gas sectors, Ador operates world-class manufacturing plants and a DSIR-recognized R&D center. A pioneer of the Ma…[0m
+      [36mmanufacturer[0m  [2m[N manufacturing facilit/plant/unit][0m  matched: [1m"six manufacturing facilit"[0m
+        [2m…,” Ador produces world-class products across six manufacturing facilities nationwide. Its Research and Development Centre, re…[0m
+      [36mindustrial_vendor[0m  [2m[welding equipment/solution/machine/system][0m  matched: [1m"welding solution"[0m
+        [2m…burdi Dimetrics to accelerate automation-led welding solutions in India\\ \\ July 31, 2026](https://adorwelding.com/…[0m
+      [36mindustrial_vendor[0m  [2m[automation/robotic/welding/cutting solution(s)][0m  matched: [1m"cutting solution"[0m
+        [2m…Limited (AWL) is India’s leading welding and cutting solutions company, offering a comprehensive range of welding co…[0m
+      [36mconglomerate[0m  [2m[group/holding/conglomerate company/with diverse...][0m  matched: [1m"Group Compan"[0m
+        [2m…t 20 years with the US$ 2.7 Trillion Capital Group Companies from Los Angeles, USA. His last role in the Company…[0m
+
+  [1mAITG[0m [2m(https://www.aitg.co)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [32m✓[0m min_signals                      [2mactual: 2[0m
+    [32m✓[0m min_opportunities                [2mactual: 4[0m
+    [32m✓[0m min_challenges                   [2mactual: 3[0m
+    [31m✗[0m profile_flag:manufacturer        [2mactual: false[0m [2m— company_type.manufacturer=false, primary_type=healthcare_provider[0m
+    [31m✗[0m primary_type                     [2mactual: healthcare_provider[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [31mFAIL[0m  [2m(39620ms)[0m
+    [33mFailure taxonomy: CLASSIFICATION_FAILURE, EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE, IDENTITY_FAILURE[0m
+    [1mResearch Evaluation Score: [33m79.15[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         20/20[0m [2m— 4/4 opportunities carry an evidence_id[0m
+      [2mEvidence sufficiency & signal depth   15/15[0m [2m— evidence_sufficiency=sufficient, signals=2/2[0m
+      [2mPain-point quality                    3.33/10[0m [2m— 1/3 pain points evidence-backed, non-low-confidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           6.82/15[0m [2m— 6/11 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [33mretailer_suppressed[0m  [2m[fmcg / consumer goods [SUPPRESSED — automotive/industrial context detected]][0m  matched: [1m"FMCG"[0m
+        [2m…aving 40 years of diverse experience in FMCG, Tractor, Auto parts & Chemical industry, to conduct a Work…[0m
+      [36mhealthcare_provider[0m  [2m[hospital / clinic / medical devices][0m  matched: [1m"hospital"[0m
+        [2m…siness, Nanasaheb chanced upon many imported hospital equipment lying unused due to failure. He offered to r…[0m
+      [36mconglomerate[0m  [2m[group/holding/conglomerate company/with diverse...][0m  matched: [1m"group compan"[0m
+        [2m…synergy in administrative activities of the group companies. With time and experience, AITG has gained command…[0m
+
+  [1mAS Agri and Aqua[0m [2m(https://sites.google.com/view/asagriaqua/home)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: PARTIAL[0m
+    [32m✓[0m min_signals                      [2mactual: 0[0m
+    [32m✓[0m min_opportunities                [2mactual: 3[0m
+    [32m✓[0m min_challenges                   [2mactual: 2[0m
+    [32m✓[0m primary_type                     [2mactual: unknown[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [32mPASS[0m  [2m(27049ms)[0m
+    [33mFailure taxonomy: EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE[0m
+    [1mResearch Evaluation Score: [31m35.5[0m[0m[2m/100[0m
+      [2mPipeline reliability                  8/20[0m [2m— validation gate: PARTIAL[0m
+      [2mEvidence-backed opportunities         0/20[0m [2m— 0/3 opportunities carry an evidence_id[0m
+      [2mEvidence sufficiency & signal depth   7.5/15[0m [2m— evidence_sufficiency=sufficient, signals=0/0[0m
+      [2mPain-point quality                    0/10[0m [2m— 0/2 pain points evidence-backed, non-low-confidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           0/15[0m [2m— 11/11 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+
+  [1mATE Group[0m [2m(https://www.ategroup.com)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [33m⚠[0m min_signals                      [2mactual: 0[0m
+    [33m⚠[0m min_opportunities                [2mactual: 0[0m
+    [33m⚠[0m min_challenges                   [2mactual: 0[0m
+    [32m✓[0m profile_flag:manufacturer        [2mactual: true[0m
+    [32m✓[0m primary_type                     [2mactual: manufacturer[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [33mWARN[0m  [2m(37494ms)[0m
+    [33mFailure taxonomy: EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE, EXTRACTION_FAILURE[0m
+    [1mResearch Evaluation Score: [33m64[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         20/20[0m [2m— no opportunities, honestly reported as insufficient evidence[0m
+      [2mEvidence sufficiency & signal depth   0/15[0m [2m— evidence_sufficiency=insufficient, signals=0/2[0m
+      [2mPain-point quality                    10/10[0m [2m— no pain points, honestly reported as insufficient evidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           0/15[0m [2m— 8/8 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36mmanufacturer[0m  [2m[forging/casting/machining/fabrication + (enumerated list) + facility/plant/unit][0m  matched: [1m"fabrication, machining, control system design facility"[0m
+        [2m…ity. The Group operates a **large integrated fabrication, machining, control system design facility** in Ahmedabad, encompassing product development, asse…[0m
+      [36mconglomerate[0m  [2m[diverse portfolio/businesses/industries/sectors][0m  matched: [1m"diverse sectors"[0m
+        [2m…chnologies, and sustainable solutions across diverse sectors. Our business is built on foundation of innovation, de…[0m
+
+  [1mBharat Forge[0m [2m(https://www.bharatforge.com)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [32m✓[0m min_signals                      [2mactual: 3[0m
+    [32m✓[0m min_opportunities                [2mactual: 3[0m
+    [32m✓[0m min_challenges                   [2mactual: 3[0m
+    [32m✓[0m profile_flag:manufacturer        [2mactual: true[0m
+    [32m✓[0m primary_type                     [2mactual: manufacturer[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [32mPASS[0m  [2m(31389ms)[0m
+    [33mFailure taxonomy: RELEVANCE_FAILURE[0m
+    [1mResearch Evaluation Score: [33m64.64[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         13.33/20[0m [2m— 2/3 opportunities carry an evidence_id[0m
+      [2mEvidence sufficiency & signal depth   15/15[0m [2m— evidence_sufficiency=sufficient, signals=3/1[0m
+      [2mPain-point quality                    0/10[0m [2m— 0/3 pain points evidence-backed, non-low-confidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           2.31/15[0m [2m— 11/13 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36mmanufacturer[0m  [2m[leader in forgings/castings/machining/.../high-performance components][0m  matched: [1m"leader in high-performance components"[0m
+        [2m…e USD 3.5 billion Kalyani Group, is a global leader in high-performance components across sectors such as Automotive, Railways, Defence,…[0m
+      [36mmanufacturer[0m  [2m[N years/decades/century of manufactur*][0m  matched: [1m"century of manufacturing"[0m
+        [2m…ace, Marine, and Oil & Gas. With over half a century of manufacturing history, we have the largest repository of metallurgic…[0m
+
+  [1mChargebee[0m [2m(https://www.chargebee.com)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [32m✓[0m min_signals                      [2mactual: 2[0m
+    [32m✓[0m min_opportunities                [2mactual: 4[0m
+    [32m✓[0m min_challenges                   [2mactual: 3[0m
+    [32m✓[0m profile_flag:software_saas       [2mactual: true[0m
+    [32m✓[0m primary_type                     [2mactual: software_saas[0m
+    [32m✓[0m no_forbidden:"manufacturing plant" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"assembly line"     [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"raw material sourcing" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"factory floor"     [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"welding"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"conveyor belt"     [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"loan"              [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"banking"           [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"insurance"         [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [32mPASS[0m  [2m(31360ms)[0m
+    [33mFailure taxonomy: CLASSIFICATION_FAILURE, EXTERNAL_PROVIDER_FAILURE, RELEVANCE_FAILURE[0m
+    [1mResearch Evaluation Score: [32m81.67[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         20/20[0m [2m— 4/4 opportunities carry an evidence_id[0m
+      [2mEvidence sufficiency & signal depth   15/15[0m [2m— evidence_sufficiency=sufficient, signals=2/1[0m
+      [2mPain-point quality                    6.67/10[0m [2m— 2/3 pain points evidence-backed, non-low-confidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           6/15[0m [2m— 9/15 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36msoftware_saas[0m  [2m[SaaS / software-as-a-service][0m  matched: [1m"SaaS"[0m
+        [2m…gebee.com/solutions/industry/gen-ai/) - [B2B SaaS & SoftwareSeats, tiers and enterprise contracts in one…[0m
+      [36msoftware_saas[0m  [2m[subscription billing/management/platform][0m  matched: [1m"subscription billing"[0m
+        [2m…will be reaching out to you to discuss your subscription billing needs ## Hate waiting? Book a call Introducing **AI…[0m
+
+  [1mLechler[0m [2m(https://www.lechler.com/de-en)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: PARTIAL[0m
+    [32m✓[0m min_signals                      [2mactual: 0[0m
+    [33m⚠[0m min_opportunities                [2mactual: 0[0m
+    [33m⚠[0m min_challenges                   [2mactual: 0[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [33mWARN[0m  [2m(28229ms)[0m
+    [33mFailure taxonomy: EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE, EXTRACTION_FAILURE, RELEVANCE_FAILURE, RETRIEVAL_FAILURE[0m
+    [1mResearch Evaluation Score: [33m60.14[0m[0m[2m/100[0m
+      [2mPipeline reliability                  8/20[0m [2m— validation gate: PARTIAL[0m
+      [2mEvidence-backed opportunities         20/20[0m [2m— no opportunities, honestly reported as insufficient evidence[0m
+      [2mEvidence sufficiency & signal depth   0/15[0m [2m— evidence_sufficiency=insufficient, signals=0/0[0m
+      [2mPain-point quality                    10/10[0m [2m— no pain points, honestly reported as insufficient evidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           2.14/15[0m [2m— 6/7 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+
+  [1mMuthoot Finance[0m [2m(https://www.muthootfinance.com)[0m
+    [32m✓[0m pipeline_success                 [2mactual: true[0m
+    [32m✓[0m validation_not_failed            [2mactual: WARN[0m
+    [32m✓[0m min_signals                      [2mactual: 0[0m
+    [32m✓[0m min_opportunities                [2mactual: 0[0m
+    [32m✓[0m min_challenges                   [2mactual: 0[0m
+    [32m✓[0m no_forbidden:"SaaS onboarding"   [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"subscription churn" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"monthly recurring revenue" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"churn rate"        [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"software subscription" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"user acquisition"  [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"manufacturing plant" [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"assembly line"     [2mactual: absent[0m
+    [32m✓[0m no_forbidden:"factory floor"     [2mactual: absent[0m
+    [2m────────────────────────────────────────────────────────[0m
+    Result: [32mPASS[0m  [2m(23300ms)[0m
+    [33mFailure taxonomy: EVIDENCE_FAILURE, EXTERNAL_PROVIDER_FAILURE, EXTRACTION_FAILURE, IDENTITY_FAILURE[0m
+    [1mResearch Evaluation Score: [33m64[0m[0m[2m/100[0m
+      [2mPipeline reliability                  14/20[0m [2m— validation gate: WARN[0m
+      [2mEvidence-backed opportunities         20/20[0m [2m— no opportunities, honestly reported as insufficient evidence[0m
+      [2mEvidence sufficiency & signal depth   0/15[0m [2m— evidence_sufficiency=insufficient, signals=0/0[0m
+      [2mPain-point quality                    10/10[0m [2m— no pain points, honestly reported as insufficient evidence[0m
+      [2mCompetitor / ICP discovery yield      10/10[0m [2m— competitor_sufficiency=sufficient, icp_sufficiency=sufficient[0m
+      [2mResearch quality flag ratio           0/15[0m [2m— 10/10 audited items flagged[0m
+      [2mNarrative safety                      10/10[0m
+    [2mProfile Evidence:[0m
+      [36mfinancial_institution[0m  [2m[insurance/NBFC/mutual fund/asset management/investment bank][0m  matched: [1m"Insurance"[0m
+        [2m…oan - Loan Against Property - Vehicle Loan - Insurance - Mutual Fund - Money Transfer - PAN Card - NCD - Micr…[0m
+      [36mfinancial_institution[0m  [2m[loan/deposit/credit card/mortgage/NPA][0m  matched: [1m"Loan"[0m
+        [2m…ent) Cancel ### Search Suggestions - Gold Loan - Money Transfer - Mutual Funds - Enquiry - [\\ iMut…[0m
+
+[1m  SUMMARY[0m
+  ──────────────────────────────────────────────────────────────────────────
+  Company               Signals  Opps   Challenges  Gate      Result
+  ──────────────────────────────────────────────────────────────────────────
+  A-1 Fence Products    1        5      3           [33mWARN      [0m[33mWARN[0m
+  Ace Pipeline          0        0      0           [33mWARN      [0m[33mWARN[0m
+  Ador Welding          2        5      3           [32mPASS      [0m[32mPASS[0m
+  AITG                  2        4      3           [33mWARN      [0m[31mFAIL[0m
+  AS Agri and Aqua      0        3      2           [33mPARTIAL   [0m[32mPASS[0m
+  ATE Group             0        0      0           [33mWARN      [0m[33mWARN[0m
+  Bharat Forge          3        3      3           [33mWARN      [0m[32mPASS[0m
+  Chargebee             2        4      3           [33mWARN      [0m[32mPASS[0m
+  Lechler               0        0      0           [33mPARTIAL   [0m[33mWARN[0m
+  Muthoot Finance       0        0      0           [33mWARN      [0m[32mPASS[0m
+  ──────────────────────────────────────────────────────────────────────────
+
+  OVERALL: [31m[1mFAIL[0m  [32m5 passed[0m, [33m4 warned[0m, [31m1 failed[0m
+  ══════════════════════════════════════════════════════════════════════════
+
+  [1mCOST / LATENCY BASELINE (n=10)[0m
+  ──────────────────────────────────────────────────────────────────────────
+  Wall time:        339.0s total, 33.9s/company avg
+  Firecrawl:        60 calls, 0 pages
+  Tavily:           40 calls
+  Serper:           36 calls
+  Jina:             0 calls
+  Direct fetch:     147 calls
+  Gemini:           42 calls, 167307 tokens
+  NVIDIA NIM:       0 calls, 0 tokens
+  Cache hit rate:   387/463
+  Estimated cost:   $0.406 total, $0.0406/company avg
+  ══════════════════════════════════════════════════════════════════════════
+
+  [2mDebug dump → C:\Users\singh\Claude\Projects\Demaze AI Outbound Intelligence Platform\demaze-platform\benchmarks\debug\run-2026-08-18T03-51-16.json[0m
+
+
+[1m  RESEARCH EVALUATION FRAMEWORK[0m
+  ──────────────────────────────────────────────────────────────────────────
+  A-1 Fence Products            [33m65.2[0m[2m/100[0m
+  Ace Pipeline                  [33m67.75[0m[2m/100[0m
+  Ador Welding                  [33m77[0m[2m/100[0m
+  AITG                          [33m79.15[0m[2m/100[0m
+  AS Agri and Aqua              [31m35.5[0m[2m/100[0m
+  ATE Group                     [33m64[0m[2m/100[0m
+  Bharat Forge                  [33m64.64[0m[2m/100[0m
+  Chargebee                     [32m81.67[0m[2m/100[0m
+  Lechler                       [33m60.14[0m[2m/100[0m
+  Muthoot Finance               [33m64[0m[2m/100[0m
+  ──────────────────────────────────────────────────────────────────────────
+  Mean: [1m[33m65.91[0m[2m/100[0m  [2m(min 35.5, max 81.67)[0m
+  [2mvs previous run (2026-08-17T05:56:24.348Z): mean 51.64 → [32m+14.27[0m
+  ══════════════════════════════════════════════════════════════════════════
+
+  [2mEvaluation history → C:\Users\singh\Claude\Projects\Demaze AI Outbound Intelligence Platform\demaze-platform\benchmarks\evaluation-history\eval-2026-08-18T03-51-16.json[0m
+

@@ -282,6 +282,54 @@ export const getCompanyOfferings = (data: Record<string, unknown>): string[] =>
 export const getBusinessProfile = (data: Record<string, unknown>): CompanyBusinessProfile | undefined =>
   data.business_profile as CompanyBusinessProfile | undefined
 
+// Research Metrics (plan §35, G1 cost instrumentation) — provider call
+// counts + estimated cost for the run. Same "add now" pattern as the
+// getters above; null on legacy saved runs from before this field existed.
+export interface ResearchMetricsSection {
+  firecrawlCalls: number
+  firecrawlPages: number
+  tavilyCalls: number
+  serperCalls: number
+  jinaCalls: number
+  directFetchCalls: number
+  geminiCalls: number
+  geminiTokens: number
+  nvidiaCalls: number
+  nvidiaTokens: number
+  cacheHits: number
+  cacheMisses: number
+  estimatedCostUsd: number
+}
+
+export const getResearchMetrics = (data: Record<string, unknown>): ResearchMetricsSection | undefined =>
+  (data.research_metrics as ResearchMetricsSection | null | undefined) ?? undefined
+
+// G2 evidence ledger (docs/evidence-ledger-design.md) — loosened-optional
+// local type mirror of normalize.ts's EvidenceItem, per this file's own
+// no-cross-import convention (same precedent as ServiceEvidenceDebug above).
+export interface EvidenceLedgerEntry {
+  id: string
+  category: string
+  quote: string
+  source_page: string
+  claimType?: string
+  sourceUrl?: string | null
+  sourceType?: string
+  sourceAuthority?: string
+  freshness?: string
+  companyIdentityConfidence?: string
+  contradictionStatus?: string
+  confidence?: number
+  supportingEvidenceIds?: string[]
+  contradictoryEvidenceIds?: string[]
+}
+
+// Real, code-verified EvidenceItem records built during this run. Same
+// "add now" pattern as the getters above; [] on legacy saved runs from
+// before this field existed.
+export const getEvidenceLedger = (data: Record<string, unknown>): EvidenceLedgerEntry[] =>
+  arr<EvidenceLedgerEntry>(data.evidence_ledger)
+
 // Research Quality Framework (Phase 2 item 4, schema in
 // lib/pipeline/research-quality.ts — this is that file's QualityFlag/
 // ResearchQualityAudit, loosened to optional fields per this file's
