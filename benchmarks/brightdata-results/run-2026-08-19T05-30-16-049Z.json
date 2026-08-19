@@ -1,0 +1,314 @@
+{
+  "ranAt": "2026-08-19T05:30:16.049Z",
+  "batchSize": 6,
+  "brightDataConfigured": true,
+  "results": {
+    "manufacturing": {
+      "existing": {
+        "discovered": 76,
+        "totalMentions": 79,
+        "duplicateRate": 0.0379746835443038,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 78,
+        "totalMentions": 80,
+        "duplicateRate": 0.025,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      }
+    },
+    "automotive": {
+      "existing": {
+        "discovered": 21,
+        "totalMentions": 28,
+        "duplicateRate": 0.25,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 56,
+        "totalMentions": 73,
+        "duplicateRate": 0.2328767123287671,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 7
+      }
+    },
+    "ecommerce": {
+      "existing": {
+        "discovered": 91,
+        "totalMentions": 118,
+        "duplicateRate": 0.2288135593220339,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 75,
+        "totalMentions": 96,
+        "duplicateRate": 0.21875,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 7
+      }
+    }
+  },
+  "overlaps": {
+    "manufacturing": {
+      "shared": [],
+      "existingOnly": [
+        "RTX",
+        "Pratt & Whitney",
+        "The Boeing Company",
+        "Tesla",
+        "Frito-Lay",
+        "International Paper",
+        "Parker Hannifin",
+        "Procter & Gamble",
+        "Nucor Corporation",
+        "Amcor"
+      ],
+      "brightdataOnly": [
+        "Tata Motors",
+        "Boeing",
+        "Renault Nissan Technology and Business Centre India",
+        "Pare Innovations",
+        "Fanuc",
+        "Saurav Chemicals",
+        "Larsen & Toubro",
+        "L&T",
+        "Mahindra & Mahindra",
+        "Ashok Leyland"
+      ]
+    },
+    "automotive": {
+      "shared": [
+        "Bosch",
+        "Denso",
+        "Continental AG",
+        "ZF Friedrichshafen",
+        "Magna"
+      ],
+      "existingOnly": [
+        "Hyundai",
+        "Samvardhana Motherson International Limited",
+        "GKN Driveline",
+        "Unipart Automotive",
+        "ZF UK"
+      ],
+      "brightdataOnly": [
+        "Cummins Inc.",
+        "Lear",
+        "Sterling Sintered Technologies",
+        "Robert Bosch LLC",
+        "Magna International"
+      ]
+    },
+    "ecommerce": {
+      "shared": [
+        "Amazon",
+        "eBay"
+      ],
+      "existingOnly": [
+        "Shopify",
+        "Walmart",
+        "Instacart",
+        "Maplebear Inc.",
+        "Flutterwave, Inc.",
+        "Etsy",
+        "Target",
+        "Nike."
+      ],
+      "brightdataOnly": [
+        "Flipkart",
+        "Snapdeal",
+        "Myntra",
+        "Behind Their Success",
+        "Amazon India",
+        "Paytm Mall",
+        "Tata",
+        "Amazon UK Services LTD."
+      ]
+    }
+  },
+  "companyNames": {
+    "manufacturing": {
+      "existing": [
+        "RTX",
+        "Pratt & Whitney",
+        "The Boeing Company",
+        "Tesla",
+        "Frito-Lay",
+        "International Paper",
+        "Parker Hannifin",
+        "Procter & Gamble",
+        "Nucor Corporation",
+        "Amcor"
+      ],
+      "brightdata": [
+        "Tata Motors",
+        "Boeing",
+        "Renault Nissan Technology and Business Centre India",
+        "Pare Innovations",
+        "Fanuc",
+        "Saurav Chemicals",
+        "Larsen & Toubro",
+        "L&T",
+        "Mahindra & Mahindra",
+        "Ashok Leyland"
+      ]
+    },
+    "automotive": {
+      "existing": [
+        "Bosch",
+        "Denso",
+        "Continental AG",
+        "ZF Friedrichshafen",
+        "Magna",
+        "Hyundai",
+        "Samvardhana Motherson International Limited",
+        "GKN Driveline",
+        "Unipart Automotive",
+        "ZF UK"
+      ],
+      "brightdata": [
+        "Cummins Inc.",
+        "Lear",
+        "Bosch",
+        "Continental AG",
+        "Sterling Sintered Technologies",
+        "Robert Bosch LLC",
+        "Magna International",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Magna"
+      ]
+    },
+    "ecommerce": {
+      "existing": [
+        "Amazon",
+        "Shopify",
+        "eBay",
+        "Walmart",
+        "Instacart",
+        "Maplebear Inc.",
+        "Flutterwave, Inc.",
+        "Etsy",
+        "Target",
+        "Nike."
+      ],
+      "brightdata": [
+        "Amazon",
+        "Flipkart",
+        "Snapdeal",
+        "Myntra",
+        "Behind Their Success",
+        "Amazon India",
+        "Paytm Mall",
+        "Tata",
+        "eBay",
+        "Amazon UK Services LTD."
+      ]
+    }
+  },
+  "enrichmentSamples": [
+    {
+      "company": "Tata Motors",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Boeing",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Cummins Inc.",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Lear",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Amazon",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "industry",
+        "companySize",
+        "followers"
+      ]
+    },
+    {
+      "company": "Flipkart",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    }
+  ]
+}

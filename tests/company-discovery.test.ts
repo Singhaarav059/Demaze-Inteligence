@@ -121,9 +121,18 @@ describe('classifyCompanyRejection — filtering rules', () => {
     expect(classifyCompanyRejection('Anthropic', exclude)).toMatch(/AI\/foundation-model platform/)
   })
 
-  it('does not reject general big-tech companies that have real sector operations (Amazon sells, Google/Microsoft build hardware)', () => {
-    expect(classifyCompanyRejection('Amazon', exclude)).toBeNull()
+  it('does not reject general big-tech companies as NON-OPERATORS (Google/Microsoft build real hardware, so the AI-platform check must not overreach)', () => {
     expect(classifyCompanyRejection('Microsoft', exclude)).toBeNull()
+  })
+
+  // 2026-08-19 (Bright Data benchmark): Amazon is a real sector operator
+  // (so the AI-platform/non-operator check above correctly leaves it
+  // alone), but it's now separately rejected as a known mega-cap — too
+  // large for Demaze's mid-market ICP regardless of being a legitimate
+  // operator. These are two independent checks, not a contradiction.
+  it('rejects Amazon for being a known mega-cap, not for being a non-operator', () => {
+    expect(classifyCompanyRejection('Amazon', exclude)).toMatch(/mega-cap/)
+    expect(classifyCompanyRejection('Amazon', exclude)).not.toMatch(/AI\/foundation-model platform/)
   })
 })
 
@@ -172,8 +181,18 @@ describe('detectSizeMismatch — ICP-fit company-size filter (live 2026-07-17 bu
 })
 
 describe('discoverCompanies filter loop — size-mismatch rejection is wired in and visible in rejected_candidates', () => {
-  it('classifyCompanyRejection alone does not catch a real name with a mega-scale snippet (confirms detectSizeMismatch is a separate, additional check)', () => {
-    expect(classifyCompanyRejection('Volkswagen Group', undefined)).toBeNull()
+  it('classifyCompanyRejection alone does not catch a real name with a mega-scale snippet, for a name NOT on the curated KNOWN_MEGA_CAP_NAMES list (confirms detectSizeMismatch is still a separate, additional, evidence-based check)', () => {
+    expect(classifyCompanyRejection('RTX', undefined)).toBeNull()
+  })
+
+  // 2026-08-19: Volkswagen specifically WAS added to KNOWN_MEGA_CAP_NAMES
+  // (a Bright Data benchmark run surfaced it as a candidate with no
+  // revenue/employee figure in its snippet, so detectSizeMismatch alone
+  // couldn't catch it) — this documents that narrower fix, distinct from
+  // the general "name-only checks don't catch snippet-only evidence" case
+  // above.
+  it('classifyCompanyRejection alone DOES catch Volkswagen, a curated known mega-cap', () => {
+    expect(classifyCompanyRejection('Volkswagen Group', undefined)).toMatch(/mega-cap/)
   })
 })
 

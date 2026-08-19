@@ -1,0 +1,311 @@
+{
+  "ranAt": "2026-08-19T06:07:28.418Z",
+  "batchSize": 20,
+  "brightDataConfigured": true,
+  "results": {
+    "manufacturing": {
+      "existing": {
+        "discovered": 110,
+        "totalMentions": 129,
+        "duplicateRate": 0.14728682170542637,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 20
+      },
+      "brightdata": {
+        "discovered": 94,
+        "totalMentions": 131,
+        "duplicateRate": 0.2824427480916031,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 21
+      }
+    },
+    "automotive": {
+      "existing": {
+        "discovered": 61,
+        "totalMentions": 98,
+        "duplicateRate": 0.37755102040816324,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 20
+      },
+      "brightdata": {
+        "discovered": 39,
+        "totalMentions": 63,
+        "duplicateRate": 0.38095238095238093,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 23
+      }
+    },
+    "ecommerce": {
+      "existing": {
+        "discovered": 110,
+        "totalMentions": 139,
+        "duplicateRate": 0.20863309352517986,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 20
+      },
+      "brightdata": {
+        "discovered": 117,
+        "totalMentions": 140,
+        "duplicateRate": 0.16428571428571428,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 21
+      }
+    }
+  },
+  "overlaps": {
+    "manufacturing": {
+      "shared": [
+        "Mazagon Dock",
+        "Indo-MIM"
+      ],
+      "existingOnly": [
+        "Industrial Automation",
+        "Aerospace",
+        "RTX",
+        "Pratt & Whitney",
+        "Oyak Renault",
+        "Nigerian Breweries PLC",
+        "Julphar",
+        "Genetco"
+      ],
+      "brightdataOnly": [
+        "Johnson",
+        "Lancaster Colony",
+        "Lear Corporation",
+        "Patrick",
+        "Johnson & Johnson",
+        "Rio Tinto",
+        "Unilever",
+        "Aditya Infotech"
+      ]
+    },
+    "automotive": {
+      "shared": [
+        "Continental AG",
+        "Bosch",
+        "Samvardhana Motherson International Limited",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Magna",
+        "Hyundai"
+      ],
+      "existingOnly": [
+        "Sterling Sintered Technologies",
+        "Lear",
+        "Knauf Industries Automotive"
+      ],
+      "brightdataOnly": [
+        "Bharat Forge",
+        "Uno Minda",
+        "GKN Driveline"
+      ]
+    },
+    "ecommerce": {
+      "shared": [
+        "Shopify",
+        "eBay",
+        "Instacart",
+        "Maplebear Inc.",
+        "Glossier"
+      ],
+      "existingOnly": [
+        "Flutterwave, Inc.",
+        "Etsy",
+        "Target",
+        "Nike.",
+        "Ecommerce Europe"
+      ],
+      "brightdataOnly": [
+        "Blibli",
+        "Shopee",
+        "Tokopedia",
+        "Lazada",
+        "Orami"
+      ]
+    }
+  },
+  "companyNames": {
+    "manufacturing": {
+      "existing": [
+        "Industrial Automation",
+        "Aerospace",
+        "RTX",
+        "Pratt & Whitney",
+        "Mazagon Dock",
+        "Indo-MIM",
+        "Oyak Renault",
+        "Nigerian Breweries PLC",
+        "Julphar",
+        "Genetco"
+      ],
+      "brightdata": [
+        "Johnson",
+        "Lancaster Colony",
+        "Lear Corporation",
+        "Patrick",
+        "Johnson & Johnson",
+        "Rio Tinto",
+        "Unilever",
+        "Mazagon Dock",
+        "Indo-MIM",
+        "Aditya Infotech"
+      ]
+    },
+    "automotive": {
+      "existing": [
+        "Continental AG",
+        "Bosch",
+        "Samvardhana Motherson International Limited",
+        "Sterling Sintered Technologies",
+        "Lear",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Magna",
+        "Hyundai",
+        "Knauf Industries Automotive"
+      ],
+      "brightdata": [
+        "Bosch",
+        "Bharat Forge",
+        "Uno Minda",
+        "Denso",
+        "Continental AG",
+        "ZF Friedrichshafen",
+        "Magna",
+        "Hyundai",
+        "Samvardhana Motherson International Limited",
+        "GKN Driveline"
+      ]
+    },
+    "ecommerce": {
+      "existing": [
+        "Shopify",
+        "eBay",
+        "Instacart",
+        "Maplebear Inc.",
+        "Flutterwave, Inc.",
+        "Etsy",
+        "Target",
+        "Glossier",
+        "Nike.",
+        "Ecommerce Europe"
+      ],
+      "brightdata": [
+        "Blibli",
+        "eBay",
+        "Shopify",
+        "Instacart",
+        "Maplebear Inc.",
+        "Shopee",
+        "Tokopedia",
+        "Lazada",
+        "Orami",
+        "Glossier"
+      ]
+    }
+  },
+  "enrichmentSamples": [
+    {
+      "company": "Johnson",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Lancaster Colony",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Bosch",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Bharat Forge",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Blibli",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "eBay",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    }
+  ]
+}

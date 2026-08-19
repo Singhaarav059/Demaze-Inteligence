@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "benchmark": "npx tsx benchmarks/benchmark-runner.ts"
+    "benchmark": "npx tsx benchmarks/benchmark-runner.ts",
+    "benchmark:brightdata": "npx tsx benchmarks/brightdata-comparison.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

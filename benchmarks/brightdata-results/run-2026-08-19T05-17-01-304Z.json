@@ -1,0 +1,147 @@
+{
+  "ranAt": "2026-08-19T05:17:01.304Z",
+  "batchSize": 6,
+  "brightDataConfigured": true,
+  "results": {
+    "manufacturing": {
+      "existing": {
+        "discovered": 76,
+        "totalMentions": 79,
+        "duplicateRate": 0.0379746835443038,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 50,
+        "totalMentions": 57,
+        "duplicateRate": 0.12280701754385964,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 8
+      }
+    },
+    "automotive": {
+      "existing": {
+        "discovered": 45,
+        "totalMentions": 68,
+        "duplicateRate": 0.3382352941176471,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 58,
+        "totalMentions": 80,
+        "duplicateRate": 0.275,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 8
+      }
+    },
+    "ecommerce": {
+      "existing": {
+        "discovered": 92,
+        "totalMentions": 119,
+        "duplicateRate": 0.226890756302521,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 58,
+        "totalMentions": 69,
+        "duplicateRate": 0.15942028985507245,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 7
+      }
+    }
+  },
+  "enrichmentSamples": [
+    {
+      "company": "Boeing",
+      "sector": "manufacturing",
+      "success": false,
+      "fields": []
+    },
+    {
+      "company": "Johnson",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Continental AG",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Bosch",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Amazon",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "industry",
+        "companySize",
+        "followers"
+      ]
+    },
+    {
+      "company": "Instacart",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    }
+  ]
+}

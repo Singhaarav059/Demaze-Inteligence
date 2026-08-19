@@ -1,0 +1,311 @@
+{
+  "ranAt": "2026-08-19T05:45:52.875Z",
+  "batchSize": 6,
+  "brightDataConfigured": true,
+  "results": {
+    "manufacturing": {
+      "existing": {
+        "discovered": 76,
+        "totalMentions": 79,
+        "duplicateRate": 0.0379746835443038,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 76,
+        "totalMentions": 80,
+        "duplicateRate": 0.05,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      }
+    },
+    "automotive": {
+      "existing": {
+        "discovered": 53,
+        "totalMentions": 76,
+        "duplicateRate": 0.3026315789473684,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 53,
+        "totalMentions": 68,
+        "duplicateRate": 0.22058823529411764,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      }
+    },
+    "ecommerce": {
+      "existing": {
+        "discovered": 91,
+        "totalMentions": 118,
+        "duplicateRate": 0.2288135593220339,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 6
+      },
+      "brightdata": {
+        "discovered": 72,
+        "totalMentions": 87,
+        "duplicateRate": 0.1724137931034483,
+        "uniqueCompanies": 10,
+        "sectorRejected": 0,
+        "sizeRejected": 0,
+        "qualified": 10,
+        "requestsConsumed": 9
+      }
+    }
+  },
+  "overlaps": {
+    "manufacturing": {
+      "shared": [],
+      "existingOnly": [
+        "RTX",
+        "Pratt & Whitney",
+        "Tesla",
+        "Frito-Lay",
+        "International Paper",
+        "Parker Hannifin",
+        "Procter & Gamble",
+        "Nucor Corporation",
+        "Amcor",
+        "Cummins"
+      ],
+      "brightdataOnly": [
+        "Manufacturing USA",
+        "Rosendin",
+        "Nuvation Bio",
+        "Air Products",
+        "Skanska",
+        "Sandisk Corporation",
+        "Pivot",
+        "PepsiCo",
+        "John Crane",
+        "JBT Corporation"
+      ]
+    },
+    "automotive": {
+      "shared": [
+        "Continental AG",
+        "Bosch",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Magna",
+        "Hyundai",
+        "Knauf Industries Automotive",
+        "Knauf Industries"
+      ],
+      "existingOnly": [
+        "Sterling Sintered Technologies",
+        "Lear"
+      ],
+      "brightdataOnly": [
+        "Automotive Components",
+        "ACDelco"
+      ]
+    },
+    "ecommerce": {
+      "shared": [
+        "Shopify",
+        "eBay",
+        "Instacart",
+        "Snapdeal"
+      ],
+      "existingOnly": [
+        "Maplebear Inc.",
+        "Flutterwave, Inc.",
+        "Etsy",
+        "Target",
+        "Nike.",
+        "Ecommerce Europe"
+      ],
+      "brightdataOnly": [
+        "Apple Inc.",
+        "Clos19",
+        "24 Sèvres",
+        "Glossier",
+        "Nixon",
+        "Size?"
+      ]
+    }
+  },
+  "companyNames": {
+    "manufacturing": {
+      "existing": [
+        "RTX",
+        "Pratt & Whitney",
+        "Tesla",
+        "Frito-Lay",
+        "International Paper",
+        "Parker Hannifin",
+        "Procter & Gamble",
+        "Nucor Corporation",
+        "Amcor",
+        "Cummins"
+      ],
+      "brightdata": [
+        "Manufacturing USA",
+        "Rosendin",
+        "Nuvation Bio",
+        "Air Products",
+        "Skanska",
+        "Sandisk Corporation",
+        "Pivot",
+        "PepsiCo",
+        "John Crane",
+        "JBT Corporation"
+      ]
+    },
+    "automotive": {
+      "existing": [
+        "Continental AG",
+        "Sterling Sintered Technologies",
+        "Lear",
+        "Bosch",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Magna",
+        "Hyundai",
+        "Knauf Industries Automotive",
+        "Knauf Industries"
+      ],
+      "brightdata": [
+        "Continental AG",
+        "Bosch",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Knauf Industries Automotive",
+        "Knauf Industries",
+        "Automotive Components",
+        "Magna",
+        "Hyundai",
+        "ACDelco"
+      ]
+    },
+    "ecommerce": {
+      "existing": [
+        "Shopify",
+        "eBay",
+        "Instacart",
+        "Maplebear Inc.",
+        "Flutterwave, Inc.",
+        "Etsy",
+        "Target",
+        "Nike.",
+        "Ecommerce Europe",
+        "Snapdeal"
+      ],
+      "brightdata": [
+        "eBay",
+        "Shopify",
+        "Apple Inc.",
+        "Snapdeal",
+        "Clos19",
+        "24 Sèvres",
+        "Glossier",
+        "Nixon",
+        "Size?",
+        "Instacart"
+      ]
+    }
+  },
+  "enrichmentSamples": [
+    {
+      "company": "Manufacturing USA",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Rosendin",
+      "sector": "manufacturing",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Continental AG",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Bosch",
+      "sector": "automotive",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "eBay",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Shopify",
+      "sector": "ecommerce",
+      "success": true,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    }
+  ]
+}

@@ -104,7 +104,9 @@ export interface CompanyDiscoveryResult {
   companies: CompanyMatch[]
   sufficiency: CompanyDiscoverySufficiency
   reason: string                 // human-readable summary for diagnostics/logs
-  candidates_considered: number  // pre-filter candidate count
+  candidates_considered: number  // pre-filter candidate count, already deduped by normalized name
+  /** Sum of mention_count across all deduped candidates — i.e. candidate name-mentions before dedup. `total_mentions - candidates_considered` is the raw duplicate-mention count; used by benchmarks/brightdata-comparison.ts to report a duplicate rate. */
+  total_mentions?: number
   rejected_candidates?: Array<{ name: string; reason: string }>
 }
 
@@ -213,6 +215,36 @@ const AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES = [
   'Perplexity', 'DeepSeek', 'Google DeepMind', 'Hugging Face',
 ]
 
+// Real false positive found live 2026-08-19 (Bright Data benchmark run,
+// 3 sectors): unambiguous global mega-caps / Fortune-500-class
+// conglomerates (Boeing, Tata Motors, Larsen & Toubro, Mahindra &
+// Mahindra, Amazon...) were surfacing as candidates and NOT getting
+// caught by detectSizeMismatch() below, because that check can only
+// reject on a revenue/employee-count figure actually present in the ONE
+// captured snippet — a bare listicle mention ("...companies like Boeing,
+// Airbus...") has no such figure, and detectSizeMismatch() correctly
+// refuses to guess when evidence is absent (same "prefer under-
+// confidence" discipline documented on that function). For a small,
+// deliberately narrow set of companies this universally known, no snippet
+// evidence should be required — same "known entity, reject outright"
+// pattern as NON_COMPANY_NAMES/AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES
+// above, not a general size heuristic. Extend only when a new company
+// this unambiguous surfaces, same discipline as those two lists — this is
+// NOT meant to become an exhaustive Fortune 500 registry.
+const KNOWN_MEGA_CAP_NAMES = [
+  'Boeing', 'Tata Motors', 'Larsen & Toubro', 'Larsen and Toubro', 'L&T',
+  'Mahindra & Mahindra', 'Mahindra and Mahindra', 'Ashok Leyland',
+  'Toyota', 'Volkswagen', 'General Motors', 'Ford Motor', 'Honda Motor',
+  'Robert Bosch', 'Magna International', 'Cummins Inc', 'Fanuc',
+  'Amazon', 'Walmart', 'Alibaba', 'Flipkart',
+  // Added 2026-08-19, second benchmark pass: real misses found live.
+  'Apple Inc', 'PepsiCo',
+  // Added 2026-08-19, third pass (batch=20 run): real misses found live.
+  // "Johnson & Johnson" specifically, not bare "Johnson" — too generic,
+  // would false-positive real SMEs like "Johnson Electric".
+  'Rio Tinto', 'Unilever', 'Johnson & Johnson',
+]
+
 // Returns a rejection reason, or null if the candidate survives. Order
 // matters for diagnostic quality, same discipline as the sibling modules'
 // classifyRejection()/classifySegmentRejection().
@@ -232,6 +264,11 @@ export function classifyCompanyRejection(name: string, excludeCompanyNames: stri
   for (const aiPlatform of AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES) {
     if (new RegExp(`\\b${escapeRegex(aiPlatform)}\\b`, 'i').test(name)) {
       return 'AI/foundation-model platform, not a manufacturing/automotive/ecommerce operator (commonly name-dropped in "AI is transforming X" listicles)'
+    }
+  }
+  for (const megaCap of KNOWN_MEGA_CAP_NAMES) {
+    if (new RegExp(`\\b${escapeRegex(megaCap)}\\b`, 'i').test(name)) {
+      return `known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched "${megaCap}")`
     }
   }
   const normalized = normalizeName(name)
@@ -380,11 +417,19 @@ export function fallbackReason(candidate: CompanyDiscoveryCandidate, icpSegment:
 // a handful of high-signal snippets.
 const RESULTS_PER_QUERY = 10
 
-interface QueryResultBatch {
+export interface QueryResultBatch {
   query: string
   tier: string
   results: Array<{ title: string; url: string; content: string }>
 }
+
+/** Swaps the search backend a discovery run uses. Only ever set explicitly
+ * by a benchmark/comparison caller (see benchmarks/brightdata-comparison.ts)
+ * — every existing call site is unaffected, since this defaults to the
+ * normal routedSearch()-backed tier. This is the ONLY way a non-default
+ * search source (e.g. Bright Data) can reach the discovery pipeline; it is
+ * never selected automatically. */
+export type SearchQueryFn = (query: string) => Promise<QueryResultBatch>
 
 async function searchQueryWithTier(query: string): Promise<QueryResultBatch> {
   const routed = await routedSearch(query, { maxResults: RESULTS_PER_QUERY })
@@ -599,15 +644,16 @@ export function filterAlreadyResearched(
 const MAX_COMPANIES = 10
 const MAX_SNIPPETS_PER_CANDIDATE = 2
 
-async function runDiscoveryCore(
+export async function runDiscoveryCore(
   queries: string[],
   excludeCompanyNames: string[] | undefined,
   sector: TargetSector | undefined,
   segmentLabel: string,
+  searchFn: SearchQueryFn = searchQueryWithTier,
 ): Promise<CompanyDiscoveryResult> {
   let batches: QueryResultBatch[]
   try {
-    batches = await Promise.all(queries.map(q => searchQueryWithTier(q)))
+    batches = await Promise.all(queries.map(q => searchFn(q)))
   } catch (e) {
     return {
       companies: [], sufficiency: 'insufficient',
@@ -726,12 +772,15 @@ async function runDiscoveryCore(
     sectorFiltered = stillOk
   }
 
+  const totalMentions = Array.from(grouped.values()).reduce((sum, c) => sum + c.mention_count, 0)
+
   if (sectorFiltered.length === 0) {
     return {
       companies: [],
       sufficiency: 'insufficient',
       reason: `${grouped.size} raw candidate(s) found, all rejected (self-name/directory/generic-term${sector ? '/wrong-sector' : ''})`,
       candidates_considered: grouped.size,
+      total_mentions: totalMentions,
       rejected_candidates: rejected,
     }
   }
@@ -776,6 +825,7 @@ async function runDiscoveryCore(
     sufficiency: 'sufficient',
     reason: `${companies.length} of ${grouped.size} raw candidate(s) survived filtering`,
     candidates_considered: grouped.size,
+    total_mentions: totalMentions,
     rejected_candidates: rejected,
   }
 }
@@ -821,6 +871,8 @@ export interface DiscoverForSectorOptions {
   /** Carries rotation state across repeated calls (the target-count loop) so each call explores new query combinations instead of repeating itself. */
   usedCombos?: Set<string>
   batchSize?: number
+  /** Benchmark/comparison hook only — see SearchQueryFn. Never set by production callers. */
+  searchFn?: SearchQueryFn
 }
 
 const DEFAULT_SECTOR_BATCH_SIZE = 8
@@ -852,7 +904,7 @@ export async function discoverCompaniesForSector(
   }
 
   const label = options.refinement?.trim() ? `${options.refinement.trim()} (${sector})` : sector
-  return runDiscoveryCore(queries, options.excludeCompanyNames, sector, label)
+  return runDiscoveryCore(queries, options.excludeCompanyNames, sector, label, options.searchFn)
 }
 
 // ── New: target-count discovery loop ────────────────────────────────
