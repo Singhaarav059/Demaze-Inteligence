@@ -10,9 +10,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
-import { discoverCompanies, filterAlreadyResearched } from '@/lib/enrichment/company-discovery'
+import { discoverCompanies, filterAlreadyResearched, normalizeDomain } from '@/lib/enrichment/company-discovery'
 import { createServerClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logger'
+import { qualifyBySizeStructured } from '@/lib/company-universe/discovery'
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -58,6 +59,66 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       logger.warn('CompanyDiscovery', 'already-researched dedup skipped', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // Section 18 of Demaze_Multi_Source_Company_Universe_Claude_Prompt.md:
+  // "Integrate structured source evidence into size qualification...
+  // prefer deterministic evidence over LLM inference... if a structured
+  // source clearly establishes a company is far above the ICP ceiling,
+  // reject deterministically, do not spend an LLM call." This checks
+  // company_universe (built by the new lib/company-universe/ ingestion
+  // layer) for any surviving candidate whose domain is already known
+  // there — additive only: a candidate with no company_universe match
+  // (the common case until that table has real ingested data) is
+  // completely unaffected, same graceful-degradation contract as the
+  // already-researched dedup block above. Deliberately kept at the route
+  // layer, not inside discoverCompanies() itself, which stays Supabase-free
+  // per its own established "pure lib, I/O at the route layer" convention.
+  const employeeCountMax = typeof body?.employeeCountMax === 'number' ? body.employeeCountMax : undefined
+  const revenueMaxUsd = typeof body?.revenueMaxUsd === 'number' ? body.revenueMaxUsd : undefined
+  if (result.companies.length > 0 && (employeeCountMax !== undefined || revenueMaxUsd !== undefined)) {
+    try {
+      const supabase = createServerClient()
+      const domains = result.companies.map(c => c.domain).filter((d): d is string => !!d).map(normalizeDomain)
+      if (domains.length > 0) {
+        const { data: universeMatches } = await supabase
+          .from('company_universe')
+          .select('domain, employee_count, employee_count_min, revenue, revenue_currency')
+          .in('domain', domains)
+
+        const byDomain = new Map((universeMatches ?? []).map(row => [row.domain as string, row]))
+        const survivors: typeof result.companies = []
+        for (const c of result.companies) {
+          const universeRow = c.domain ? byDomain.get(normalizeDomain(c.domain)) : undefined
+          if (!universeRow) { survivors.push(c); continue }
+          const q = qualifyBySizeStructured(
+            {
+              canonicalName: c.name,
+              status: 'unknown',
+              industryCodes: [], sicCodes: [], naicsCodes: [],
+              employeeCount: universeRow.employee_count ?? undefined,
+              employeeCountMin: universeRow.employee_count_min ?? undefined,
+              revenue: universeRow.revenue ?? undefined,
+              revenueCurrency: universeRow.revenue_currency ?? undefined,
+            },
+            { employeeCountMax, revenueMaxUsd }
+          )
+          if (q.verdict === 'reject') {
+            result.rejected_candidates = [...(result.rejected_candidates ?? []), { name: c.name, reason: q.reason }]
+          } else {
+            survivors.push(c)
+          }
+        }
+        const rejectedCount = result.companies.length - survivors.length
+        if (rejectedCount > 0) {
+          result.companies = survivors
+          result.reason = `${result.reason} | ${rejectedCount} rejected via structured-source size qualification`
+          if (result.companies.length === 0) result.sufficiency = 'insufficient'
+        }
+      }
+    } catch (e) {
+      logger.warn('CompanyDiscovery', 'structured size qualification skipped', e instanceof Error ? e.message : String(e))
     }
   }
 

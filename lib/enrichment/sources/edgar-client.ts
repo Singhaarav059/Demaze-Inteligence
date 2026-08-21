@@ -27,8 +27,10 @@
 // ============================================================
 
 const TICKER_MAP_URL = 'https://www.sec.gov/files/company_tickers.json'
-const SUBMISSIONS_URL = (cik10: string) => `https://data.sec.gov/submissions/CIK${cik10}.json`
-const FETCH_TIMEOUT_MS = 8_000
+// Exported alongside FETCH_TIMEOUT_MS for the company-universe adapter's
+// getCompany() lookups — same URL shape, same timeout budget.
+export const SUBMISSIONS_URL = (cik10: string) => `https://data.sec.gov/submissions/CIK${cik10}.json`
+export const FETCH_TIMEOUT_MS = 8_000
 const MAX_FILINGS_LISTED = 8
 
 // SEC's fair-access policy asks for a descriptive User-Agent identifying
@@ -37,11 +39,16 @@ const MAX_FILINGS_LISTED = 8
 // convention for this one vendor. Overridable via env for a real deployment
 // with a real contact address; the default is still a genuine identifying
 // string, not blank.
-function userAgent(): string {
+// Exported for the same reuse reason as loadTickerMap()/TickerEntry above.
+export function userAgent(): string {
   return process.env.SEC_EDGAR_USER_AGENT || 'Demaze Outbound Intelligence Platform (research tool; no contact configured)'
 }
 
-interface TickerEntry {
+// Exported (was module-private) so lib/company-universe/providers/sec-edgar.ts
+// can reuse the exact same shape without redefining it — the company-universe
+// discovery adapter and this enrichment client both ultimately read the same
+// SEC ticker map, see loadTickerMap()'s own export note below.
+export interface TickerEntry {
   cik_str: number
   ticker: string
   title: string
@@ -57,7 +64,12 @@ interface TickerEntry {
 let cachedTickers: TickerEntry[] | null = null
 let inFlight: Promise<TickerEntry[] | null> | null = null
 
-async function loadTickerMap(): Promise<TickerEntry[] | null> {
+// Exported (was module-private) — the company-universe SEC EDGAR discovery
+// adapter (lib/company-universe/providers/sec-edgar.ts) reuses this exact
+// cached list for search() rather than fetching/caching a second copy of
+// the same ~1MB file. Behavior is completely unchanged for this file's own
+// existing caller (fetchEdgarFilings) — this is a pure visibility change.
+export async function loadTickerMap(): Promise<TickerEntry[] | null> {
   if (cachedTickers) return cachedTickers
   if (!inFlight) {
     inFlight = (async () => {
@@ -164,9 +176,14 @@ interface EdgarFiling {
   accessionNumber: string
 }
 
-interface SubmissionsResponse {
+// Exported for the same reuse reason as TickerEntry/loadTickerMap above —
+// intentionally a loose/partial mirror of SEC's real response, same
+// "narrow to what we actually read" convention as every other external-API
+// response type in this codebase.
+export interface SubmissionsResponse {
   name?: string
   sicDescription?: string
+  sic?: string
   addresses?: { business?: { city?: string; stateOrCountry?: string } }
   filings?: {
     recent?: {

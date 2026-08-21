@@ -3405,6 +3405,138 @@ remains mandatory") and Section 17 stop conditions ("business decision
 required," "real email sending required") — not something to advance
 autonomously.
 
+## BUILT 2026-08-21 — Company Universe: multi-source structured company
+## data layer (GLEIF, SEC EDGAR, OpenCorporates, UK Companies House, India
+## MCA), for Demaze_Multi_Source_Company_Universe_Claude_Prompt.md
+User supplied a new task prompt (`Demaze_Multi_Source_Company_Universe_Claude_Prompt.md`)
+asking for a free/public structured-company-data layer to sit ahead of the
+existing search-based Company Discovery Engine, on the diagnosis that
+search-only discovery has real limits (overlapping/duplicate results, no
+firmographic data in snippets, mega-cap leakage). The prompt's own Section
+1 explicitly instructed inspecting the real repo before writing code and
+NOT trusting this file blindly — that inspection found real, material
+drift worth recording here directly rather than only in the session's own
+report doc:
+
+**CLAUDE.md drift found, not fixed (flagging is the fix — see below for
+why no code was reverted/rebuilt over it)**: this file's own 2026-08-14
+"Apollo.io added as a second vendor" entry, and the `isOutsideRevenueRange`/
+`apolloOrg`/`revenueRangeUsd`-param description of `company-discovery.ts`
+it depends on, describe code that **does not exist in this checkout** —
+confirmed via `git log --all --oneline | grep -i apollo` (zero results) and
+a repo-wide grep for those exact identifiers (zero results). The real
+`discoverCompanies()` signature is `(icpSegment, excludeCompanyNames?)`, no
+third parameter. Likewise, no `company_registry` table or "262 qualified
+rows" state (both assumed by the source prompt) exist anywhere in this
+schema — `pipeline_test_runs` is the closest real analog. Not investigated
+further or reverted this session (out of scope for this task, and this
+file's own narrative-can-lag-code precedent is already well-established
+elsewhere in this document) — flagged here as a concrete, evidence-backed
+instance for whoever next relies on an Apollo-related note in this file:
+verify against the actual repo before trusting it, same as this session
+had to.
+
+**What was built** (full detail in `docs/company-universe-final-report.md`,
+which follows the source prompt's own Section 39 report structure
+A-L — this entry is a summary, that doc is the record):
+- New `lib/company-universe/` module: `types.ts` (the `CompanyDataProvider`
+  abstraction + canonical `CanonicalCompanyFields` schema, Sections 7-8),
+  `identity.ts` (cross-source dedup — deterministic IDs first, conservative
+  fuzzy fallback, field-level source-precedence merge per Section 13;
+  the most heavily-tested file in this build, 22 assertions, since Section
+  12's "never merge two companies purely because names are similar" is the
+  single highest-consequence rule in the whole prompt), `http-client.ts`
+  (shared retry/backoff/429/rate-limit wrapper, reuses `lib/rate-limit.ts`
+  directly), `ingestion.ts` (VALIDATE -> IDENTITY MATCH -> UPSERT ->
+  PROVENANCE, re-run-safe — verified via a dedicated test that ingesting
+  the same provider record twice resolves to the same canonical company
+  and upserts rather than duplicates its source record), `discovery.ts`
+  (`discoverCompaniesStructuredFirst()` — query `company_universe` locally
+  first, only call live providers when local results are sparse, per
+  Section 14/21; `qualifyBySizeStructured()` — deterministic reject on
+  clear structured over-scale evidence, per Section 18, never converts
+  uncertainty into a rejection per Section 17).
+- Five provider adapters (`lib/company-universe/providers/*.ts`): SEC EDGAR
+  (extends the EXISTING `lib/enrichment/sources/edgar-client.ts` — exported
+  `loadTickerMap`/`userAgent`/`matchTicker`/`SUBMISSIONS_URL`/
+  `FETCH_TIMEOUT_MS`/`TickerEntry`/`SubmissionsResponse` from that file
+  rather than building a second SEC client; that file's own
+  `fetchEdgarFilings()` is completely unchanged), GLEIF (free, no key),
+  OpenCorporates (API-token-gated, degrades gracefully when unset — no
+  token configured in this environment), UK Companies House (API-key-gated,
+  the one rate limit the source prompt states directly — 600 req/5min —
+  used verbatim), India MCA (the lowest-confidence adapter by a wide
+  margin — its own file header explains why in detail; resource ID and
+  column names are NOT hardcoded/guessed, both required env vars, per this
+  repo's no-hallucination discipline).
+- Migration `026_company_universe.sql` (NOT yet applied to the live
+  Supabase project) — `company_universe` (canonical companies),
+  `company_source_records` (raw per-provider provenance), and
+  `company_universe_ingestion_runs` (append-only health/metrics log,
+  Section 25). No RLS, matching every other table in this schema.
+- Two new small admin routes (Section 31's "no large UI yet, a small
+  admin/status endpoint is acceptable"): `GET .../company-universe/status`
+  (per-provider health), `POST .../company-universe/discover` (structured
+  query -> ranked candidates). Neither replaces
+  `POST /api/admin/company-discovery` — both coexist by design (Section
+  15: "search should no longer be the ONLY way to generate candidates,"
+  not that it stops being used).
+- One additive-only change to the EXISTING discovery route
+  (`app/api/admin/company-discovery/route.ts`): when a caller passes
+  `employeeCountMax`/`revenueMaxUsd`, it now also checks `company_universe`
+  for a deterministic size rejection before the existing snippet/LLM-tier
+  heuristic runs. `lib/enrichment/company-discovery.ts` itself was NOT
+  modified — stays Supabase-free per its own established convention.
+- New `benchmarks/company-universe-comparison.ts` (structured+search vs.
+  search-only, the 9-cell grid Section 27 asks for — 3 confirmed sectors x
+  3 regions, since no such benchmark existed to reuse) and
+  `docs/company-universe-sources.md` (per-provider licensing/terms,
+  Section 29 — flags OpenCorporates' commercial-use terms as a genuine
+  open question, not resolved unilaterally).
+
+**A real bug found and fixed by this session's own test suite**: India
+MCA's `mapStatus()` checked for the substring `"struck off"`, but MCA's
+actual status vocabulary uses `"Strike Off"` — caught by a failing
+assertion while writing `tests/company-universe-india-mca-provider.test.ts`,
+fixed in the same session (now matches both forms).
+
+**The one fact that shapes everything else about this session's
+verification**: this session's network egress policy blocks every one of
+the 5 providers' domains entirely — confirmed via direct `curl`
+(`CONNECT tunnel failed, response 403`) and `WebFetch`
+(`EGRESS_BLOCKED`) for api.gleif.org, api.opencorporates.com,
+api.company-information.service.gov.uk, www.sec.gov/data.sec.gov, and
+api.data.gov.in, all before any provider code was written. Every adapter
+was still built and unit-tested thoroughly against each API's documented
+response shape (120 new tests, all mocked HTTP/module dependencies — no
+live network anywhere, which Section 32 requires regardless of the block),
+but **zero live verification against a real provider response happened in
+this session** — stated plainly in every provider file's own header
+comment and in the final report's section L, not glossed over.
+
+**Verified**: `npx tsc --noEmit` clean across the entire repo.
+`npm test`: **1023/1023 passing** (903 pre-existing + 120 new across 9 new
+test files), zero regressions. `npx eslint` on every new SOURCE file
+(`lib/company-universe/**`, the two new routes, the benchmark script)
+returns zero problems; the new TEST files carry the same
+`@typescript-eslint/no-explicit-any`-on-mocked-Supabase/fetch pattern
+already present throughout this repo's existing test suite (confirmed via
+`npx eslint tests/helpers/fake-supabase.ts`, the pre-existing shared fake,
+showing the identical error shape) — not new debt of a different kind, and
+lint stays `continue-on-error: true` in CI per this file's own Track 6
+entry, unchanged by this session.
+
+**Not done this session, stated in the final report's section L**: any
+live provider smoke test (blocked by network, not skipped by choice);
+running the benchmark comparison (needs the network block lifted AND real
+Tavily/Serper quota + explicit confirmation); applying migration 026 to
+the live Supabase project; confirming India MCA's real resource ID/column
+names or OpenCorporates' actual commercial-use terms; locating or building
+the Section 20 entity-type classifier (the closest existing candidate,
+`classifyCompanyRejection()` in `company-discovery.ts`, is name-based not
+entity-type-based, and was left untouched per "do not rewrite working
+discovery code unnecessarily").
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
