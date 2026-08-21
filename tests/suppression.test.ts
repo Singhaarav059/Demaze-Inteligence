@@ -47,10 +47,13 @@ describe('isSuppressed', () => {
     expect(result).toEqual({ suppressed: false })
   })
 
-  it('fails OPEN (not suppressed) when the DB is unreachable — documented, not a hidden default', async () => {
+  it('fails CLOSED (treated as suppressed) when the DB is unreachable — Pilot Readiness Plan Rule 6', async () => {
     state.throwOnCreate = true
     const result = await isSuppressed('anyone@acme.com')
-    expect(result).toEqual({ suppressed: false })
+    expect(result.suppressed).toBe(true)
+    expect(result.checkFailed).toBe(true)
+    expect(result.reason).toBeUndefined()
+    expect(result.detail).toMatch(/could not be verified/i)
   })
 })
 
