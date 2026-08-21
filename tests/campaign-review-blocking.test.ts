@@ -1,14 +1,24 @@
 // ============================================================
 // classifyCampaignContacts — Phase B blocking-status tests
 // ============================================================
-// isSuppressed() (called internally) hits the real createServerClient(),
-// which throws with no Supabase env vars configured in this test
-// environment — its own try/catch already fails open to {suppressed:
-// false} (see suppression.ts), so this is safe to leave unmocked, same as
-// every other test in this repo that exercises code calling it indirectly.
+// isSuppressed() (called internally) is mocked to {suppressed: false} for
+// every test below except the dedicated fail-closed case at the bottom —
+// isSuppressed() itself now fails CLOSED on a DB error (see suppression.ts
+// / tests/suppression.test.ts), and this test environment has no Supabase
+// env vars configured, so leaving it unmocked would make every contact here
+// resolve as "suppressed" regardless of what each test is actually
+// exercising (B4/B5/B6). Mocking it keeps these tests isolated to the
+// specific check each one targets.
 // ============================================================
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+const suppressionState = vi.hoisted(() => ({ result: { suppressed: false } as { suppressed: boolean; reason?: string; detail?: string | null; checkFailed?: boolean } }))
+
+vi.mock('../lib/outbound/sending/suppression', () => ({
+  isSuppressed: vi.fn(() => Promise.resolve(suppressionState.result)),
+}))
+
 import { classifyCampaignContacts } from '../lib/outbound/sending/campaign-review'
 import { FakeSupabase } from './helpers/fake-supabase'
 
@@ -23,6 +33,10 @@ function seedContact(supabase: FakeSupabase, overrides: Record<string, unknown> 
 }
 
 describe('classifyCampaignContacts — Phase B blocking checks', () => {
+  beforeEach(() => {
+    suppressionState.result = { suppressed: false }
+  })
+
   it('a normal, clean contact is ready', async () => {
     const supabase = new FakeSupabase()
     seedContact(supabase)
@@ -84,5 +98,18 @@ describe('classifyCampaignContacts — Phase B blocking checks', () => {
     seedContact(supabase, { email: null })
     const summary = await classifyCampaignContacts(supabase as any, 'camp1', ['c1'])
     expect(summary.rows[0].status).toBe('missing_email')
+  })
+
+  it('an unresolved suppression check (fail-closed) surfaces as suppressed, not ready', async () => {
+    suppressionState.result = {
+      suppressed: true,
+      checkFailed: true,
+      detail: 'Suppression status could not be verified (the suppression list was unreachable) — treated as suppressed pending manual review.',
+    }
+    const supabase = new FakeSupabase()
+    seedContact(supabase)
+    const summary = await classifyCampaignContacts(supabase as any, 'camp1', ['c1'])
+    expect(summary.rows[0].status).toBe('suppressed')
+    expect(summary.rows[0].reason).toMatch(/could not be verified/i)
   })
 })

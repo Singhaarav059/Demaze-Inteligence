@@ -54,9 +54,12 @@ export function isOutboundSendingEnabled(): boolean {
 // Checked before resolving/calling any provider — every real send path
 // (initial "Send Queued", manual "Send Now", scheduled follow-ups) funnels
 // through this one function, so this is the single place a suppression
-// needs to be enforced. See lib/outbound/sending/suppression.ts's header
-// for why this fails open (treats a DB read error as "not suppressed")
-// rather than blocking every send in the app on that table being reachable.
+// needs to be enforced. See lib/outbound/sending/suppression.ts's header —
+// isSuppressed() fails CLOSED on a DB read error (a suppression check that
+// can't be resolved blocks the send rather than risking a duplicate/unwanted
+// message), so `suppression.suppressed` here can mean either a real
+// suppression-list match or an unresolved check; `checkFailed`/`detail`
+// distinguish the two in the surfaced error.
 export async function sendEmail(request: SendEmailRequest): Promise<SendEmailResult> {
   if (!isOutboundSendingEnabled()) {
     return {
@@ -71,7 +74,9 @@ export async function sendEmail(request: SendEmailRequest): Promise<SendEmailRes
     return {
       status: 'suppressed',
       providerUsed: 'suppression-list',
-      error: `${request.contactEmail} is on the suppression list (${suppression.reason}) — not sent.`,
+      error: suppression.reason
+        ? `${request.contactEmail} is on the suppression list (${suppression.reason}) — not sent.`
+        : (suppression.detail ?? `${request.contactEmail}'s suppression status could not be verified — not sent.`),
     }
   }
 

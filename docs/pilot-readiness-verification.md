@@ -111,6 +111,30 @@ This is a small, isolated change, but it does change send-path behavior
 under a DB outage, so per Rule 6/Rule 7's spirit it's flagged here for an
 explicit decision rather than made unilaterally.
 
+**RESOLVED (2026-08-21).** Flipped per the recommendation above —
+`isSuppressed()` (`suppression.ts`) now returns `{ suppressed: true,
+checkFailed: true, detail: '...treated as suppressed pending manual
+review.' }` on a DB read error instead of `{ suppressed: false }`.
+`sendEmail()` (`provider-factory.ts`, the one real chokepoint) surfaces
+`detail` when `reason` is absent so the blocked-send message reads as
+"could not be verified," not "(undefined)." `classifyCampaignContacts()`
+(`campaign-review.ts`, the pre-send UI review classification) needed no
+code change — it already read `suppression.detail ?? ...` — but its own
+test file (`tests/campaign-review-blocking.test.ts`) was unmocking
+`isSuppressed()` and relying on its *old* fail-open behavior (no Supabase
+env configured in the test environment throws → used to resolve to
+`{suppressed: false}`) to keep unrelated B4/B5/B6 tests passing; the flip
+broke 4 of those tests by making every contact resolve as `suppressed`.
+Fixed by mocking `isSuppressed()` explicitly in that file (each test now
+controls its own suppression state) and adding a new dedicated test
+confirming a fail-closed check surfaces as `status: 'suppressed'` with a
+readable reason, not silently as `ready`. New
+`tests/send-suppression-failclosed.test.ts` covers the same behavior at
+the `sendEmail()` chokepoint. `tsc --noEmit` clean, full suite 903/903 (901
+prior + 2 new). The second flagged item (`OUTBOUND_TRACKING_BASE_URL`
+pointing at a dead tunnel URL) is an environment/ops config value, not a
+code change — still open, unchanged by this fix.
+
 ---
 
 ## C4 — Unsubscribe suppression
@@ -294,18 +318,18 @@ switch and suppression checking.
 |---|---|---|
 | C1 Campaign pause | Verified | No |
 | C2 Reply stops follow-up | Verified | No |
-| C3 Bounce suppression | Verified | No — but see fail-open finding |
-| C4 Unsubscribe suppression | Verified (manual trigger) | No — see fail-open finding, and the manual-only design is worth a conscious yes/no before the pilot |
+| C3 Bounce suppression | Verified | No — fail-open finding RESOLVED 2026-08-21 (now fails closed) |
+| C4 Unsubscribe suppression | Verified (manual trigger) | No — fail-open finding RESOLVED 2026-08-21; the manual-only detection design is still worth a conscious yes/no before the pilot |
 | C5 Gmail OAuth | Verified live | No — currently connected and working |
 | C6 Tracking failure | Verified (code); operational gap found | Not blocking C6 itself, but must fix before enabling the automatic follow-up engine |
 | C7 Kill switch | Verified | No |
 
-**Two items need an explicit decision before Phase F, not a code change made
-unilaterally here:**
-1. Should `isSuppressed()` fail closed instead of open on a DB error? (C3/C4)
+**One item remains open, not a code change to make unilaterally:**
+1. ~~Should `isSuppressed()` fail closed instead of open on a DB error?~~
+   RESOLVED 2026-08-21 — see the C3 finding above. (C3/C4)
 2. Point `OUTBOUND_TRACKING_BASE_URL` at a real live origin before enabling
    `FOLLOWUP_ENGINE_ENABLED`. (C6 — this one has an obvious right answer,
-   just needs doing, not deciding)
+   just needs doing, not deciding — an environment/ops change, not code)
 
 Full suite: 879/879 passing (867 before this phase's 12 new assertions
 across `tests/kill-switch-callers.test.ts` (2),

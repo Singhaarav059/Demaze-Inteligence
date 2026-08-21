@@ -7,14 +7,17 @@
 // adding the check there means every send path is covered without having
 // to remember to call this from each route individually.
 //
-// Same "any DB failure just falls back to the safe default" discipline as
-// lib/outbound/settings/provider-selection.ts and lib/outbound/sending/
-// followup-settings.ts — for isSuppressed() specifically, the safe default
-// on failure is "not suppressed" (fail open on a read error, since this
-// table being briefly unreachable shouldn't block every send in the app),
-// but the two exceptions below (add/remove) surface their errors properly
-// since a failed suppression WRITE is a real problem worth knowing about,
-// not something to silently swallow.
+// isSuppressed() fails CLOSED on a read error (Pilot Readiness Plan, Rule 6:
+// "Sending must fail closed... when suppression is uncertain, do not send").
+// This used to fail open ("not suppressed" on any DB error) on the reasoning
+// that a briefly-unreachable table shouldn't block every send in the app —
+// docs/pilot-readiness-verification.md's Phase C3/C4 finding flagged that as
+// a real tension with Rule 6 and recommended flipping it; this is that flip.
+// A read failure now returns `{ suppressed: true, checkFailed: true }` with
+// a human-readable `detail` — the send is blocked and surfaced for manual
+// review rather than silently risking a send to an address that might
+// actually be suppressed. The two exceptions below (add/remove) already
+// surfaced their errors properly, unchanged.
 // ============================================================
 
 import { createServerClient } from '@/lib/supabase/server'
@@ -31,7 +34,7 @@ export interface SuppressionEntry {
   created_at: string
 }
 
-export async function isSuppressed(email: string): Promise<{ suppressed: boolean; reason?: SuppressionReason; detail?: string | null }> {
+export async function isSuppressed(email: string): Promise<{ suppressed: boolean; reason?: SuppressionReason; detail?: string | null; checkFailed?: boolean }> {
   try {
     const supabase = createServerClient()
     const { data } = await supabase
@@ -43,7 +46,11 @@ export async function isSuppressed(email: string): Promise<{ suppressed: boolean
     if (!data) return { suppressed: false }
     return { suppressed: true, reason: data.reason, detail: data.detail }
   } catch {
-    return { suppressed: false }
+    return {
+      suppressed: true,
+      checkFailed: true,
+      detail: 'Suppression status could not be verified (the suppression list was unreachable) — treated as suppressed pending manual review.',
+    }
   }
 }
 

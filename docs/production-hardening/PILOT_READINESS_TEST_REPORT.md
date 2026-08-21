@@ -119,11 +119,12 @@ a test + (where meaningful) a live check against real data:
   resolution (both mocked to throw if reached — with the switch off,
   neither fires).
 
-**One real finding not fixed, flagged for a decision**: `isSuppressed()`
-fails OPEN (treats a DB read error as "not suppressed") — a documented,
-deliberate design choice, but in tension with the plan's own Rule 6 ("fail
-closed when suppression is uncertain"). Recommended for a decision before
-the real pilot sends anything at scale.
+**One real finding not fixed at the time, flagged for a decision**:
+`isSuppressed()` failed OPEN (treated a DB read error as "not suppressed")
+— a documented, deliberate design choice, but in tension with the plan's
+own Rule 6 ("fail closed when suppression is uncertain"). **RESOLVED
+2026-08-21** — flipped to fail closed per that recommendation; see
+`docs/pilot-readiness-verification.md`'s C3 finding for full detail.
 
 Full detail: `docs/pilot-readiness-verification.md`.
 
@@ -242,9 +243,12 @@ application and/or the real Supabase project:
 
 ## 6. Known gaps / open findings (not fixed, flagged for a decision)
 
-1. **`isSuppressed()` fails open on a DB read error** (Phase C3/C4) — in
-   tension with the plan's "fail closed" rule. Small, isolated fix if the
-   decision is made to flip it.
+1. ~~`isSuppressed()` fails open on a DB read error~~ **RESOLVED 2026-08-21**
+   — flipped to fail closed (`{ suppressed: true, checkFailed: true }` on a
+   DB error), per Rule 6. See `docs/pilot-readiness-verification.md`'s C3
+   finding for the full detail, including the pre-existing test that was
+   incidentally relying on the old fail-open behavior and got fixed
+   alongside it.
 2. **`OUTBOUND_TRACKING_BASE_URL` currently points at a dead URL** (Phase
    C6) — must be pointed at a real live origin before the automatic
    follow-up engine is ever enabled (it's currently unset/inactive, so

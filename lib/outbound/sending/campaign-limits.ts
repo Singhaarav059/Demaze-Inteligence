@@ -100,8 +100,12 @@ export async function remainingDailySendCapacity(
     .gte('occurred_at', startOfDay.toISOString())
 
   // A count-query failure fails OPEN (treat as "capacity available") rather
-  // than silently blocking every send in the app on a transient read error —
-  // same discipline as lib/outbound/sending/suppression.ts's isSuppressed().
+  // than silently blocking every send in the app on a transient read error.
+  // Unlike lib/outbound/sending/suppression.ts's isSuppressed() (which now
+  // fails closed per Pilot Readiness Plan Rule 6), a daily-cap read failure
+  // isn't a safety/identity/suppression/dedup question — it's a soft
+  // capacity throttle, so failing open here stays a deliberately different
+  // call, not an inconsistency.
   if (error) return Infinity
   return Math.max(0, dailyLimit - (count ?? 0))
 }

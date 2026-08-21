@@ -3310,6 +3310,101 @@ reproduce, not reliably forceable on demand; the fix targets the
 confirmed root cause (no retry on a confirmed-real failure class) rather
 than a hypothesis.
 
+## RESOLVED 2026-08-21 — Demaze_Post_Hardening_Pilot_Readiness_Plan.md:
+## isSuppressed() flipped to fail closed (the plan's one remaining
+## unilateral-decision item from Phase C)
+`Demaze_Post_Hardening_Pilot_Readiness_Plan.md` (added 2026-08-17 alongside
+its own substantial implementation in the same commit, `66a3408`) was never
+given its own CLAUDE.md entry despite this file's own stated convention of
+updating CLAUDE.md in the same commit as any code change — this entry closes
+that gap and records what was actually still open. That commit already
+built Phase A (atomic claim-based send concurrency, `lib/outbound/sending/
+claim.ts`), Phase B (`docs/outbound-safety-policy.md`'s hard/advisory
+matrix), Phase C (`docs/pilot-readiness-verification.md`, all 7 soft items
+verified), Phase D (pilot funnel/failure-funnel panel), Phase E (pilot CSV
+fields), and the Phase F2 review-queue tool
+(`/admin/outbound/pilot-review`) — plus, per
+`docs/production-hardening/PILOT_READINESS_TEST_REPORT.md`, a real Phase F1
+30-company pilot research run (user-supplied real target list, 30/30
+succeeded, 24/30 with real evidence-quoted opportunities). Phase F2's actual
+human review pass, and F3-F5 (outreach generation/approval/staged sending)
+were explicitly left for the user per the plan's own Rule 7/stop-condition
+rules — not something this pipeline decides on its own.
+
+That work left exactly one concrete, unambiguous action item still open,
+not a business decision: `docs/pilot-readiness-verification.md`'s C3
+finding had already diagnosed `isSuppressed()` (`lib/outbound/sending/
+suppression.ts`) failing OPEN on a DB read error (returning `{suppressed:
+false}`) as a real tension with the plan's own Rule 6 ("Sending must fail
+closed... when suppression is uncertain, do not send") and had already
+written out the exact fix to make — it was left undone only because a prior
+session's own discipline treats a send-path behavior change as needing an
+explicit go-ahead rather than being made unilaterally. Since the plan's
+Rule 6 text is unambiguous and the verification doc's own author already
+recommended this exact change, implemented it directly rather than leaving
+it sitting as a known gap across two docs indefinitely.
+
+**Fixed**: `isSuppressed()` now returns `{ suppressed: true, checkFailed:
+true, detail: '...treated as suppressed pending manual review.' }` on a DB
+read error instead of `{ suppressed: false }`. `sendEmail()`
+(`lib/outbound/sending/provider-factory.ts`, the single real-send
+chokepoint every caller funnels through per this file's own C7 finding)
+surfaces `suppression.detail` when `reason` is absent, so the blocked-send
+message reads as "could not be verified" rather than interpolating
+`undefined`. `classifyCampaignContacts()` (`campaign-review.ts`, the
+pre-send UI review classification) needed no code change — it already read
+`suppression.detail ?? ...` for its display reason — but its own test file
+was inadvertently relying on the OLD fail-open behavior: with no Supabase
+env configured in the test environment, the real `isSuppressed()` throws
+internally, which used to resolve to `{suppressed: false}` and let 4
+unrelated B4/B5/B6 tests pass by accident. The flip broke those 4 tests by
+making every contact resolve as `suppressed` regardless of what each test
+was actually exercising. Fixed by mocking `isSuppressed()` explicitly in
+`tests/campaign-review-blocking.test.ts` (each test now controls its own
+suppression state instead of depending on an unrelated function's failure
+mode) and adding a new dedicated test confirming a fail-closed check
+correctly surfaces as `status: 'suppressed'` with a readable reason, not
+silently as `ready`. New `tests/send-suppression-failclosed.test.ts` covers
+the identical behavior at the `sendEmail()` chokepoint directly. Also
+updated `tests/suppression.test.ts`'s own "fails OPEN" test to assert the
+new fail-closed shape, and touched two comments that cited the old
+behavior as precedent (`provider-factory.ts`'s header comment,
+`campaign-limits.ts`'s daily-cap comment — the latter's own fail-open
+behavior is deliberately unchanged, since a soft capacity throttle isn't a
+safety/identity/suppression/dedup question under Rule 6, just no longer
+cited the now-stale suppression precedent).
+
+Both `docs/pilot-readiness-verification.md` (C3 finding, summary table, the
+"needs an explicit decision" list) and
+`docs/production-hardening/PILOT_READINESS_TEST_REPORT.md` (Known Gaps
+item 1, the Phase C narrative paragraph) updated with RESOLVED addenda
+rather than rewritten, matching this repo's own convention of appending
+resolution notes to a report's original finding instead of erasing the
+historical record of what was found and when.
+
+**Verified**: `npm ci` (this worktree had no `node_modules` at session
+start), `tsc --noEmit` clean, full suite 903/903 passing (901 pre-existing
++ 2 new — one in `tests/send-suppression-failclosed.test.ts`, one added to
+`tests/campaign-review-blocking.test.ts`). No live Gmail/Supabase call made
+this session — this is a pure error-path behavior change in already-tested
+code, verified via the same "mock the DB-unreachable path, assert the
+returned shape" discipline every other test in this suite already uses for
+this class of change, not a new vendor call needing live confirmation.
+
+**Not done, out of scope for this session per the plan's own rules**: the
+plan's remaining "needs doing, not deciding" item —
+`OUTBOUND_TRACKING_BASE_URL` pointing at a real live origin instead of a
+dead ad hoc tunnel URL — is an environment/ops config value change
+(`.env.local` / Railway production config), not a code change, and the
+automatic follow-up engine remains unset/inactive regardless so this isn't
+live-impacting today. Phase F2's actual 30-company human review pass, and
+Phases F3-F5 (real outreach generation, explicit batch approval, staged
+real sending), all remain exactly where the prior session's report left
+them: waiting on the user, per the plan's own Rule 7 ("human approval
+remains mandatory") and Section 17 stop conditions ("business decision
+required," "real email sending required") — not something to advance
+autonomously.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
