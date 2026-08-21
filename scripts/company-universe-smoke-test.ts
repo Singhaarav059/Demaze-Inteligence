@@ -14,11 +14,17 @@ dotenv.config({ path: ".env.local" });
 //
 // Run this ONLY once you've confirmed (a) this environment's egress policy
 // allows outbound HTTPS to api.gleif.org / data.sec.gov / www.sec.gov /
-// api.opencorporates.com / api.company-information.service.gov.uk /
-// api.data.gov.in, and (b) you're comfortable spending whatever real quota
-// each configured provider charges for a handful of calls (GLEIF and SEC
-// EDGAR are free/unmetered; OpenCorporates/Companies House/India MCA may
-// count against a real quota once keys are set).
+// api.company-information.service.gov.uk / api.data.gov.in, and (b) you're
+// comfortable spending whatever real quota each configured provider charges
+// for a handful of calls (GLEIF and SEC EDGAR are free/unmetered;
+// Companies House/India MCA may count against a real quota once keys are
+// set).
+//
+// Exactly 4 providers, deliberately — OpenCorporates was removed
+// (2026-08-21, user directive): this is a free-first structured layer
+// feeding the existing Demaze pipeline, not a global company-database
+// replacement. Do not re-add it or any other paid provider here without a
+// separate explicit decision.
 //
 //   npx tsx scripts/company-universe-smoke-test.ts
 //
@@ -49,7 +55,6 @@ const DIVIDER = "─".repeat(70);
 const SEARCH_QUERY: Record<CompanyDataProvider["name"], { name: string; countryCode?: string }> = {
   gleif: { name: "Apple" },
   sec_edgar: { name: "Apple" },
-  opencorporates: { name: "Apple", countryCode: "US" },
   companies_house: { name: "Tesco", countryCode: "GB" },
   india_mca: { name: "Tata", countryCode: "IN" },
 };
@@ -60,7 +65,6 @@ const SEARCH_QUERY: Record<CompanyDataProvider["name"], { name: string; countryC
 const LOOKUP_IDENTIFIER: Record<CompanyDataProvider["name"], Record<string, string>> = {
   gleif: { lei: "HWUPKR0MPOU8FGXBT394" }, // Apple Inc.'s real LEI
   sec_edgar: { cik: "0000320193" }, // Apple Inc.'s real CIK
-  opencorporates: { name: "Apple Inc", registrationAuthority: "us_de" },
   companies_house: { companyNumber: "00445790" }, // Tesco PLC's real company number
   india_mca: { name: "Tata Consultancy Services" }, // no CIN on hand; exercises the name-lookup path
 };

@@ -16,13 +16,13 @@
 //
 // Rate limit is the one number this prompt gave directly (Section 3: "the
 // default rate limit of 600 requests per 5 minutes") — used verbatim
-// below, not a placeholder like the GLEIF/OpenCorporates limits.
+// below, not a placeholder like GLEIF's limit.
 //
 // NOT LIVE-VERIFIED in this session — api.company-information.service.gov.uk
 // is blocked by this session's network egress policy (confirmed via
 // WebFetch/curl, EGRESS_BLOCKED/403). No COMPANIES_HOUSE_API_KEY is
-// configured in this environment either — same "two separate blockers,
-// reported separately" note as opencorporates.ts.
+// configured in this environment either — two separate blockers, reported
+// separately.
 // ============================================================
 
 import { fetchProviderJson } from '../http-client'

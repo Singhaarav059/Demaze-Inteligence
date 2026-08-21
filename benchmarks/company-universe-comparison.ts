@@ -13,9 +13,9 @@
 //
 // NOT RUN in this session. Two independent reasons, stated plainly rather
 // than glossed over:
-//   1. This session's network egress policy blocks every one of the 5
-//      structured providers (GLEIF, SEC EDGAR, OpenCorporates, Companies
-//      House, India MCA) AND the search providers (Tavily/Serper) the old
+//   1. This session's network egress policy blocks every one of the 4
+//      structured providers (GLEIF, SEC EDGAR, Companies House, India MCA)
+//      AND the search providers (Tavily/Serper) the old
 //      path depends on — confirmed via direct curl/WebFetch returning
 //      EGRESS_BLOCKED/403 for every one of them before this file was
 //      written. A run here would produce all-zero/all-error results that

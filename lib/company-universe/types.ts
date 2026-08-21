@@ -14,15 +14,16 @@
 // via identity.ts, a fundamentally different shape.
 // ============================================================
 
-export type ProviderName = 'india_mca' | 'companies_house' | 'gleif' | 'opencorporates' | 'sec_edgar'
+export type ProviderName = 'india_mca' | 'companies_house' | 'gleif' | 'sec_edgar'
 
 export type CompanyStatus = 'active' | 'inactive' | 'dissolved' | 'unknown'
 
 // A provider may support some methods and not others (Section 7: "Do not
-// force every provider to implement methods it doesn't support... e.g.
-// bulkDownload() may be supported by GLEIF/Companies House but not
-// OpenCorporates"). Consumers must check capabilities before calling a
-// method rather than assuming every provider supports everything.
+// force every provider to implement methods it doesn't support" — e.g.
+// bulkIngest() is supported by GLEIF/Companies House/SEC EDGAR but not
+// India MCA, which has no bulk-download capability, only a live search
+// API). Consumers must check capabilities before calling a method rather
+// than assuming every provider supports everything.
 export interface ProviderCapabilities {
   search: boolean
   getCompany: boolean

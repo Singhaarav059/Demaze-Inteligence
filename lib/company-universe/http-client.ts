@@ -5,7 +5,7 @@
 // "Every external provider must have rate limiting, retry with backoff,
 // 429 handling, timeout, circuit breaker or graceful failure, quota
 // awareness, logging. Respect provider policies. Never bypass rate
-// limits." One shared implementation for all 5 providers rather than each
+// limits." One shared implementation for all 4 providers rather than each
 // adapter reinventing retry/backoff — the actual provider-specific parts
 // (auth header shape, response parsing, endpoint URLs) stay in each
 // provider's own file, matching this repo's "duplication-over-sharing for

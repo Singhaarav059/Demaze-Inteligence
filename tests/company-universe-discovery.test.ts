@@ -114,14 +114,14 @@ describe('discoverCompaniesStructuredFirst', () => {
       .mockResolvedValueOnce([]) // first call: sparse
       .mockResolvedValueOnce([{ id: 'new-1', fields: fields({ canonicalName: 'New Co' }), sourceProviders: ['gleif' as const], dataConfidence: 'single_source' }]) // refreshed after live search
 
-    const unconfigured = mockProvider({ name: 'opencorporates', healthCheck: vi.fn(async () => ({ provider: 'opencorporates' as const, configured: false, healthy: false, reason: 'OPENCORPORATES_API_TOKEN is not set' })) })
+    const unconfigured = mockProvider({ name: 'companies_house', healthCheck: vi.fn(async () => ({ provider: 'companies_house' as const, configured: false, healthy: false, reason: 'COMPANIES_HOUSE_API_KEY is not set' })) })
     const healthy = mockProvider({ name: 'gleif' })
     ;(ALL_PROVIDERS as CompanyDataProvider[]).push(unconfigured, healthy)
     vi.mocked(runProviderSearch).mockResolvedValue({ result: { records: [], appliedFilters: [], unsupportedFilters: [] }, summary: { fetched: 0, parsed: 0, inserted: 0, updated: 0, conflicts: 0, rejected: 0 } })
 
     const result = await discoverCompaniesStructuredFirst(fakeSupabase, { name: 'test' })
     expect(result.providersQueriedLive).toEqual(['gleif'])
-    expect(result.providersSkipped).toEqual([{ provider: 'opencorporates', reason: 'OPENCORPORATES_API_TOKEN is not set' }])
+    expect(result.providersSkipped).toEqual([{ provider: 'companies_house', reason: 'COMPANIES_HOUSE_API_KEY is not set' }])
     expect(result.candidates).toHaveLength(1)
   })
 

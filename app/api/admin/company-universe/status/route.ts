@@ -3,8 +3,8 @@
 // ============================================================
 // Demaze_Multi_Source_Company_Universe_Claude_Prompt.md, Section 25/31:
 // "Demaze should know India MCA = healthy, Companies House = healthy,
-// GLEIF = stale, OpenCorporates = quota exhausted, SEC = healthy... rather
-// than silently returning incomplete discovery." A small admin/status
+// GLEIF = stale, SEC = healthy... rather than silently returning incomplete
+// discovery." A small admin/status
 // endpoint, per Section 31's "no large UI yet, a small admin/status
 // endpoint is acceptable" — no page built for this in this session, this
 // is the API surface a future session's UI (or a curl/Postman check) reads.

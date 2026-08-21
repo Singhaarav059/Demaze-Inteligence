@@ -239,14 +239,14 @@ const CATEGORY_PRECEDENCE: Record<FieldCategory, ProviderName[]> = {
   // National registries (india_mca / companies_house) are authoritative for
   // their own jurisdiction and never actually compete with each other (a
   // company has exactly one home jurisdiction) — ordering them ahead of
-  // GLEIF/SEC/OpenCorporates reflects Section 13's "prefer national
-  // government registry" for legal identity.
-  legal_identity: ['india_mca', 'companies_house', 'gleif', 'sec_edgar', 'opencorporates'],
+  // GLEIF/SEC reflects Section 13's "prefer national government registry"
+  // for legal identity.
+  legal_identity: ['india_mca', 'companies_house', 'gleif', 'sec_edgar'],
   // SEC financial disclosures are the single most authoritative number this
   // system can get for a US-reporting company — Section 13: "prefer SEC /
   // government filings / official company filings" for financial data.
-  financial: ['sec_edgar', 'india_mca', 'companies_house', 'gleif', 'opencorporates'],
-  business_activity: ['india_mca', 'companies_house', 'sec_edgar', 'gleif', 'opencorporates'],
+  financial: ['sec_edgar', 'india_mca', 'companies_house', 'gleif'],
+  business_activity: ['india_mca', 'companies_house', 'sec_edgar', 'gleif'],
 }
 
 const FIELD_CATEGORY: Partial<Record<keyof CanonicalCompanyFields, FieldCategory>> = {
@@ -270,7 +270,7 @@ function isEmptyValue(v: unknown): boolean {
 
 // Fields with no listed category (currently just `domain`) use this
 // fallback: keep the existing value unless it's empty, in which case take
-// whatever the incoming provider offers — none of the 5 providers here is
+// whatever the incoming provider offers — none of the 4 providers here is
 // specifically authoritative on a field like `domain`, so "first non-empty
 // wins, never silently clobbered afterward" is the safest default.
 export function mergeCanonicalFields(

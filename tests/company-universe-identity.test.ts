@@ -153,30 +153,30 @@ describe('mergeCanonicalFields — source precedence (Section 13)', () => {
   it('never overwrites a real value with an incoming empty/unknown value', () => {
     const existing = fields({ employeeCount: 500 })
     const incoming = fields({ employeeCount: undefined })
-    const merged = mergeCanonicalFields(existing, incoming, 'opencorporates', ['sec_edgar'])
+    const merged = mergeCanonicalFields(existing, incoming, 'gleif', ['sec_edgar'])
     expect(merged.employeeCount).toBe(500)
   })
 
   it('fills a genuinely-empty existing field from any provider', () => {
     const existing = fields({ industry: undefined })
     const incoming = fields({ industry: 'Manufacturing' })
-    const merged = mergeCanonicalFields(existing, incoming, 'opencorporates', [])
+    const merged = mergeCanonicalFields(existing, incoming, 'gleif', [])
     expect(merged.industry).toBe('Manufacturing')
   })
 
-  it('prefers SEC EDGAR over OpenCorporates for financial fields (Section 13)', () => {
+  it('prefers SEC EDGAR over GLEIF for financial fields (Section 13)', () => {
     const existing = fields({ revenue: 1000, revenueCurrency: 'USD' })
     const incoming = fields({ revenue: 999999, revenueCurrency: 'USD' })
     // existing came from sec_edgar (highest financial precedence); incoming
-    // from opencorporates (lowest) — must NOT overwrite.
-    const merged = mergeCanonicalFields(existing, incoming, 'opencorporates', ['sec_edgar'])
+    // from gleif (lowest of the 4 remaining providers) — must NOT overwrite.
+    const merged = mergeCanonicalFields(existing, incoming, 'gleif', ['sec_edgar'])
     expect(merged.revenue).toBe(1000)
   })
 
-  it('DOES let SEC EDGAR override an OpenCorporates-sourced financial value', () => {
+  it('DOES let SEC EDGAR override a GLEIF-sourced financial value', () => {
     const existing = fields({ revenue: 999999, revenueCurrency: 'USD' })
     const incoming = fields({ revenue: 1000, revenueCurrency: 'USD' })
-    const merged = mergeCanonicalFields(existing, incoming, 'sec_edgar', ['opencorporates'])
+    const merged = mergeCanonicalFields(existing, incoming, 'sec_edgar', ['gleif'])
     expect(merged.revenue).toBe(1000)
   })
 
@@ -190,7 +190,7 @@ describe('mergeCanonicalFields — source precedence (Section 13)', () => {
   it('leaves a field with no precedence rule (e.g. domain) untouched when already set', () => {
     const existing = fields({ domain: 'first-seen.com' })
     const incoming = fields({ domain: 'second-provider.com' })
-    const merged = mergeCanonicalFields(existing, incoming, 'opencorporates', ['gleif'])
+    const merged = mergeCanonicalFields(existing, incoming, 'gleif', ['companies_house'])
     expect(merged.domain).toBe('first-seen.com')
   })
 })

@@ -5,6 +5,21 @@ that document's own Section 39 report structure (A-L below map directly to
 its A-L). Self-contained — written for a reader with no access to this
 session.
 
+**RESOLVED 2026-08-21 (same day) — OpenCorporates removed from the active
+implementation.** Everything below this note is the original, unedited
+report from the session that built all 5 providers described here,
+preserved as history per this repo's own convention (see CLAUDE.md) of
+appending resolution notes rather than rewriting a session's own record.
+Later the same day, explicit user directive: keep only the 4 free/public
+sources this layer's own goal actually requires (India MCA, UK Companies
+House, SEC EDGAR, GLEIF) and remove OpenCorporates entirely — no optional/
+fallback/enrichment role, no paid replacement. Every `opencorporates`
+reference below (the provider file, its registration, its config var, its
+tests, its row in the coverage/cost/gap tables) describes code and analysis
+that no longer exists in the current implementation. See
+`docs/company-universe-sources.md`'s own RESOLVED note for the licensing
+reasoning behind the removal.
+
 **Headline fact that shapes everything below**: this session's network
 egress policy blocks every one of the 5 target providers' domains
 (api.gleif.org, api.opencorporates.com, api.company-information.service.gov.uk,

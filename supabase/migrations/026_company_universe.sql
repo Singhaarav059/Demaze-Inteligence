@@ -26,7 +26,7 @@
 --      References company_universe once identity resolution has run.
 --   3. company_universe_ingestion_runs — append-only health/metrics log per
 --      ingestion run (Section 25 of the source prompt), so "GLEIF = stale" /
---      "OpenCorporates = quota exhausted" is a real, queryable fact instead
+--      "India MCA = quota exhausted" is a real, queryable fact instead
 --      of a silent gap.
 --
 -- No RLS, matching every other table in this schema — this app has no
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS company_universe (
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE company_universe IS 'Canonical, identity-resolved company-existence records from free/public structured sources (GLEIF, SEC EDGAR, OpenCorporates, Companies House, India MCA). Distinct from pipeline_test_runs: this table answers "which companies exist," not "which companies Demaze has researched." Populated by lib/company-universe/ingestion.ts.';
+COMMENT ON TABLE company_universe IS 'Canonical, identity-resolved company-existence records from free/public structured sources (GLEIF, SEC EDGAR, Companies House, India MCA). Distinct from pipeline_test_runs: this table answers "which companies exist," not "which companies Demaze has researched." Populated by lib/company-universe/ingestion.ts.';
 COMMENT ON COLUMN company_universe.data_confidence IS 'How this canonical record was formed: deterministic_id (matched via a real registration identifier — the strongest evidence), fuzzy_name_domain (conservative name+domain fallback, only used when no deterministic identifier was available), or single_source (only one provider has ever contributed — no cross-source match attempted).';
 COMMENT ON COLUMN company_universe.source_providers IS 'Denormalized list of providers currently contributing to this record — see company_source_records for the authoritative per-provider rows this is derived from.';
 
@@ -149,7 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_company_universe_canonical_name ON company_univer
 -- re-fetching from the provider.
 CREATE TABLE IF NOT EXISTS company_source_records (
   id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_provider      TEXT        NOT NULL CHECK (source_provider IN ('india_mca', 'companies_house', 'gleif', 'opencorporates', 'sec_edgar')),
+  source_provider      TEXT        NOT NULL CHECK (source_provider IN ('india_mca', 'companies_house', 'gleif', 'sec_edgar')),
   source_record_id     TEXT        NOT NULL,
   source_type          TEXT        NOT NULL DEFAULT 'api' CHECK (source_type IN ('api', 'bulk')),
   source_url           TEXT,
@@ -170,7 +170,7 @@ CREATE INDEX IF NOT EXISTS idx_company_source_records_universe_id ON company_sou
 
 -- ── 3. Append-only ingestion-run health/metrics log ────────────────────
 -- Section 25 — "Demaze should know India MCA = healthy, GLEIF = stale,
--- OpenCorporates = quota exhausted... rather than silently returning
+-- Companies House = quota exhausted... rather than silently returning
 -- incomplete discovery." One row per ingestion run (not per provider) so
 -- history is preserved — "last successful sync"/"source freshness" is a
 -- query (MAX(completed_at) WHERE status='succeeded' GROUP BY provider),
@@ -178,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_company_source_records_universe_id ON company_sou
 -- shape as outbound_warmup_metrics (migration 009).
 CREATE TABLE IF NOT EXISTS company_universe_ingestion_runs (
   id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider             TEXT        NOT NULL CHECK (provider IN ('india_mca', 'companies_house', 'gleif', 'opencorporates', 'sec_edgar')),
+  provider             TEXT        NOT NULL CHECK (provider IN ('india_mca', 'companies_house', 'gleif', 'sec_edgar')),
   run_type             TEXT        NOT NULL DEFAULT 'incremental' CHECK (run_type IN ('initial', 'incremental', 'search')),
   status               TEXT        NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'succeeded', 'failed', 'partial')),
 

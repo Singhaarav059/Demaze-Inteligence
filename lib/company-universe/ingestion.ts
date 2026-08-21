@@ -452,7 +452,7 @@ export async function finishIngestionRun(
  * Runs a live search() against one provider and ingests every result —
  * used both for an on-demand discovery query (Section 21: query local
  * first, hit providers "for... missing data") and as the small-scale path
- * for a provider with no bulkIngest support (India MCA, OpenCorporates).
+ * for a provider with no bulkIngest support (India MCA).
  * Returns the ingested records' resulting canonical ids alongside the raw
  * search records, so a caller doing a live discovery request gets useful
  * results immediately rather than having to re-query company_universe

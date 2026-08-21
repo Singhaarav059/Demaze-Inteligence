@@ -3537,7 +3537,76 @@ the Section 20 entity-type classifier (the closest existing candidate,
 entity-type-based, and was left untouched per "do not rewrite working
 discovery code unnecessarily").
 
+## RESOLVED 2026-08-21 (same day) — OpenCorporates removed entirely; exactly
+## 4 approved free/public sources remain (India MCA, UK Companies House,
+## SEC EDGAR, GLEIF)
+Same-day follow-up to the build directly above. User read
+`docs/company-universe-sources.md`'s own flagged open question (OpenCorporates'
+free tier has real commercial-use/long-term-storage tension — see that
+doc's original table row) and made the call directly rather than leaving it
+provisional: remove OpenCorporates from the active implementation entirely
+— no optional/fallback/enrichment role, no paid replacement provider. This
+layer's stated goal is a **free-first structured company universe feeding
+the existing Demaze discovery/qualification/research pipeline**, not a
+global Apollo/ZoomInfo-shaped company-database replacement, and
+OpenCorporates was the one provider here that didn't cleanly fit that goal.
+
+**What changed**: `lib/company-universe/providers/opencorporates.ts` and
+its dedicated test file deleted outright. `ProviderName` (types.ts) and
+`ALL_PROVIDERS` (providers/index.ts) both narrowed from 5 to exactly 4.
+`identity.ts`'s `CATEGORY_PRECEDENCE` arrays (legal_identity/financial/
+business_activity) had the trailing `'opencorporates'` entry dropped from
+each — GLEIF is now the lowest-precedence provider for financial fields
+(was OpenCorporates), no other ordering changed. Migration
+`026_company_universe.sql` (still not applied to the live Supabase
+project, so a direct in-place edit was safe rather than a new migration)
+had `opencorporates` dropped from both CHECK constraint enums
+(`company_source_records.source_provider`,
+`company_universe_ingestion_runs.provider`) and its table comments.
+`OPENCORPORATES_API_TOKEN` removed from `.env.example`. Two test files
+(`company-universe-identity.test.ts`, `company-universe-discovery.test.ts`)
+that used `'opencorporates'` as their "lowest-precedence"/"unconfigured
+provider" example updated to use `'gleif'`/`'companies_house'` instead —
+same test intent, real remaining providers. The live smoke-test script
+(`scripts/company-universe-smoke-test.ts`, built the prior session) had its
+OpenCorporates query/lookup entries removed and now tests exactly 4
+providers. `docs/company-universe-sources.md` and
+`docs/company-universe-final-report.md` both got RESOLVED addenda
+explaining the removal, with the original OpenCorporates content preserved
+as clearly-marked history rather than deleted — same "append, don't
+rewrite history" convention this file uses throughout.
+
+**Deliberately unchanged**: `discovery.ts`'s `discoverCompaniesStructuredFirst()`
+and `qualifyBySizeStructured()`, the existing Demaze qualification/entity-
+classification/size-check logic in `company-discovery.ts`, and the
+additive size-rejection hook in `app/api/admin/company-discovery/route.ts`
+— none of these ever hardcoded a 5-provider assumption; they all iterate
+`ALL_PROVIDERS`, so narrowing the registry to 4 required no logic changes
+in any of them. No re-audit of any existing `company_universe` row was
+performed or needed — the table has no live data yet (migration 026 still
+unapplied).
+
+**Verified**: `npx tsc --noEmit` clean across the entire repo. `npm test`:
+1023/1023 passing, zero regressions (net test count unchanged — one
+provider's dedicated test file was deleted, two shared test files were
+edited in place, no assertions were dropped without a replacement).
+`npm run build` succeeds. `npm run smoke-test:company-universe` runs
+cleanly against exactly 4 providers, no OpenCorporates line anywhere in
+its output. A repo-wide case-insensitive grep for `opencorporates`
+confirms zero references remain in any active source, test, config, or
+route file — the only remaining occurrences are the deliberately-preserved
+historical notes in `docs/company-universe-sources.md`,
+`docs/company-universe-final-report.md`, and this file's own dated history
+above, all clearly marked as removed/historical rather than active.
+
 ## DO NOT WORK ON RIGHT NOW
+- **OpenCorporates, or any other paid/commercial company-data provider, in
+  the Company Universe layer.** Removed 2026-08-21 by explicit user
+  decision — exactly 4 free/public sources (India MCA, UK Companies House,
+  SEC EDGAR, GLEIF) is the deliberate, final scope for this layer, not a
+  starting point to expand from. Do not re-add OpenCorporates or propose a
+  paid replacement without a separate explicit decision, same standing
+  discipline as every other vendor choice in this file.
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
 - More regexes as a first resort, EXCEPT the 4 confirmed SIGNAL_PATTERNS gaps
