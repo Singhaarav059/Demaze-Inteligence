@@ -36,6 +36,19 @@ describe('explee-client', () => {
     expect(result.meta.total).toBe(1)
   })
 
+  it('defaults location_hq to true whenever geo_include is set, to avoid matching on customer/traffic location instead of headquarters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ companies: [], meta: { total: 0, results_count: 0, credits_charged: 0, remaining_balance: 100 } }),
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    await searchExpleeCompanies({ definition: 'manufacturing company', geo_include: ['IN'] })
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.filters).toEqual({ definition: 'manufacturing company', geo_include: ['IN'], location_hq: true })
+  })
+
   it('throws ExpleeApiError with the real detail on a non-2xx response', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

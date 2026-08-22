@@ -1,16 +1,12 @@
 // ============================================================
-// Shared company-discovery search + sequential-research hook
+// Company Discovery search + sequential-research hook
 // ============================================================
-// Extracted from company-discovery/page.tsx so the standalone page AND
-// the wizard's Step4Discovery (components/wizard/steps/Step4Discovery.tsx)
-// share exactly one implementation of "search a segment -> select matches
-// -> research sequentially -> persist to run-history", instead of the
-// wizard duplicating this page's logic. The Demaze-specific "Find Leads
-// for Demaze" aggregate flow stays page-local (out of wizard scope) but
-// still needs write access to this hook's companies/sufficiency/
-// discoveryReason/searchError state and its persistResult, since it
-// populates the same shared results list — those setters/helpers are
-// returned alongside the higher-level handlers for that reason.
+// Owns: structured search against /api/admin/explee-discovery (the only
+// company-discovery data source — see explee-client.ts), and the existing
+// sequential "research the selected companies with Demaze's own pipeline"
+// loop. Explee is an implementation detail of handleSearch()'s network call
+// only — everything this hook returns (CompanyMatch-shaped results,
+// sufficiency, reason strings) is vendor-neutral.
 // ============================================================
 
 import { useRef, useState } from 'react'
@@ -18,25 +14,32 @@ import { toast } from 'sonner'
 import type { RunResult } from '../intelligence-lab/_types'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { CompanyMatch, CompanyDiscoverySufficiency } from '@/lib/enrichment/company-discovery'
+import type { ExpleeCompany, ExpleeSearchMeta } from '@/lib/enrichment/sources/explee-client'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
+import { EMPLOYEE_RANGES, sectorDefinition, type SectorOption } from './search-options'
 
 export type CompanyStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
-// `segments` is only set when a row came from the "Find Leads for Demaze"
-// aggregate flow (one company can surface under more than one ICP segment)
-// — absent for the manual single-segment search, same component renders both.
-export type DemazeMatch = CompanyMatch & { segments?: string[] }
+// CompanyMatch plus the real Explee firmographic fields the results list
+// renders (employee count, HQ location, industry, founding year) — nothing
+// here is invented, all of it comes straight off ExpleeCompany.
+export interface DiscoveredMatch extends CompanyMatch {
+  industry?: string | null
+  employeeCount?: number | null
+  hqLocation?: string | null
+  founded?: number | null
+}
 
 export interface DiscoveredCompanyState {
   company: DedupedCompany
-  match: DemazeMatch
+  match: DiscoveredMatch
   selected: boolean
   status: CompanyStatus
   result?: RunResult
   errorMessage?: string
 }
 
-export function toDedupedCompany(match: DemazeMatch, idx: number): DedupedCompany {
+export function toDedupedCompany(match: DiscoveredMatch, idx: number): DedupedCompany {
   return {
     id: `discovered-${idx}-${match.name}`,
     companyName: match.name,
@@ -46,14 +49,25 @@ export function toDedupedCompany(match: DemazeMatch, idx: number): DedupedCompan
   }
 }
 
-export interface UseCompanyDiscoverySearchOptions {
-  initialSegment?: string
-  initialExclude?: string
+export interface DiscoverySearchFilters {
+  sector?: SectorOption
+  countries?: string[]
+  employeeRangeKey?: string
+  excludeKeywords?: string[]
+  // Deep-link escape hatch for ResearchCard's "Find companies in this
+  // segment →" link — bypasses the sector enum with a raw free-text
+  // definition, and excludes the one company the segment came from.
+  definitionOverride?: string
+  excludeCompanyName?: string
 }
 
-export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOptions) {
-  const [icpSegment, setIcpSegment] = useState(options?.initialSegment ?? '')
-  const [excludeCompanyName, setExcludeCompanyName] = useState(options?.initialExclude ?? '')
+function sanitizeSearchError(message?: string): string {
+  if (!message) return 'Something went wrong while searching for companies.'
+  if (/explee/i.test(message)) return 'Company search is temporarily unavailable. Please try again shortly.'
+  return message
+}
+
+export function useCompanyDiscoverySearch() {
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [sufficiency, setSufficiency] = useState<CompanyDiscoverySufficiency | null>(null)
@@ -68,47 +82,82 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
   const stopRequested = useRef(false)
 
   // ── Search ──────────────────────────────────────────────────
-  // Accepts optional overrides so callers (arrive-via-link autosearch on
-  // the standalone page, or the wizard's onSelectSegment handoff) can fire
-  // immediately without waiting on a setState round-trip.
+  // Returns the number of matches found (or -1 on error) so the caller can
+  // record a real "recent search" entry — never a fabricated count.
 
-  async function handleSearch(overrideSegment?: string, overrideExclude?: string) {
-    const segment = (overrideSegment ?? icpSegment).trim()
-    if (!segment) return
+  async function handleSearch(filters: DiscoverySearchFilters): Promise<number> {
+    const definition = filters.definitionOverride?.trim() || (filters.sector ? sectorDefinition(filters.sector) : '')
+    if (!definition) {
+      setSearchError('Select an industry to search.')
+      return -1
+    }
+
     setSearching(true)
     setSearchError(null)
     setSufficiency(null)
     setDiscoveryReason(null)
     setCompanies([])
 
+    const range = EMPLOYEE_RANGES.find(r => r.key === filters.employeeRangeKey)
+    const excludeKeywords = (filters.excludeKeywords ?? []).map(k => k.trim().toLowerCase()).filter(Boolean)
+    const excludeName = filters.excludeCompanyName?.trim().toLowerCase()
+    const industryLabel = filters.sector ?? filters.definitionOverride ?? null
+
     try {
-      const res = await fetch('/api/admin/company-discovery', {
+      const res = await fetch('/api/admin/explee-discovery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ icpSegment: segment, excludeCompanyName: (overrideExclude ?? excludeCompanyName).trim() || undefined }),
+        body: JSON.stringify({
+          definition,
+          geoInclude: filters.countries && filters.countries.length > 0 ? filters.countries : undefined,
+          sizeMin: range?.min,
+          sizeMax: range?.max,
+          pageSize: 20,
+        }),
       })
       const data = await res.json()
 
       if (!data.success) {
-        setSearchError(data.error ?? 'Company discovery failed')
-        return
+        setSearchError(sanitizeSearchError(data.error))
+        return -1
       }
 
-      setSufficiency(data.sufficiency)
-      setDiscoveryReason(data.reason)
-      const matches: CompanyMatch[] = data.companies ?? []
-      // Tag with the searched segment so the "Industry" column in
-      // CompanyMatchList always has something to show, same as the
-      // "Find Leads for Demaze" aggregate path's real `segments` field —
-      // this is literally the segment the user searched for, not invented.
+      const raw: ExpleeCompany[] = data.companies ?? []
+      const matches: DiscoveredMatch[] = raw
+        .filter((c): c is ExpleeCompany & { name: string } => !!c.name)
+        .filter(c => !excludeName || !c.name.toLowerCase().includes(excludeName))
+        .filter(c => excludeKeywords.length === 0 || !excludeKeywords.some(k =>
+          [c.name, c.domain, c.description, c.industry].some(field => field?.toLowerCase().includes(k))
+        ))
+        .map(c => ({
+          name: c.name,
+          domain: c.domain ?? undefined,
+          reason: `Matches your search criteria${industryLabel ? ` (${industryLabel})` : ''}.`,
+          confidence: 'high' as const,
+          source_urls: c.url ? [c.url] : [],
+          industry: c.industry ?? industryLabel,
+          employeeCount: c.size,
+          hqLocation: c.geo_city || c.geo,
+          founded: c.founded,
+        }))
+
+      const meta: ExpleeSearchMeta | undefined = data.meta
+      setSufficiency(matches.length > 0 ? 'sufficient' : 'insufficient')
+      setDiscoveryReason(
+        matches.length > 0
+          ? `${matches.length} compan${matches.length === 1 ? 'y' : 'ies'} found${meta && meta.total > matches.length ? ` (${meta.total} total matches, showing top ${matches.length})` : ''}.`
+          : 'No companies matched these criteria. Try a broader location or employee range.'
+      )
       setCompanies(matches.map((match, idx) => ({
         company: toDedupedCompany(match, idx),
-        match: { ...match, segments: [segment] },
+        match,
         selected: true,
         status: 'pending' as CompanyStatus,
       })))
+      return matches.length
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : 'Network error while searching')
+      return -1
     } finally {
       setSearching(false)
     }
@@ -243,8 +292,6 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
   const doneCount = companies.filter(c => c.status === 'done').length
 
   return {
-    icpSegment, setIcpSegment,
-    excludeCompanyName, setExcludeCompanyName,
     searching, searchError, setSearchError,
     sufficiency, setSufficiency,
     discoveryReason, setDiscoveryReason,

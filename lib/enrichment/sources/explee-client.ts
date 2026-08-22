@@ -29,6 +29,13 @@ export interface ExpleeCompanyFilters {
   definition: string
   geo_include?: string[]
   size?: { min?: number; max?: number }
+  // Without this, Explee's geo_include matches ANY location signal (HQ,
+  // customer base, or employee presence), not just headquarters — proven
+  // live to leak companies headquartered in a different country entirely
+  // (Colgate-Palmolive/MX, OnePlus/CN, Levi's/HK all returned under a
+  // geo_include:['IN'] query with this unset). Always true when geo_include
+  // is set — see searchExpleeCompanies().
+  location_hq?: boolean
 }
 
 // PublicCompanyResponse has ~60 fields; this is the subset used for
@@ -76,13 +83,17 @@ export async function searchExpleeCompanies(
   const apiKey = getExpleeApiKey()
   if (!apiKey) throw new Error('EXPLEE_API_KEY is not set')
 
+  const effectiveFilters = filters.geo_include && filters.geo_include.length > 0
+    ? { ...filters, location_hq: filters.location_hq ?? true }
+    : filters
+
   const res = await fetch(`${BASE_URL}/search/companies`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-API-Key': apiKey,
     },
-    body: JSON.stringify({ filters, page: 1, page_size: pageSize }),
+    body: JSON.stringify({ filters: effectiveFilters, page: 1, page_size: pageSize }),
     signal: AbortSignal.timeout(30_000),
   })
 
