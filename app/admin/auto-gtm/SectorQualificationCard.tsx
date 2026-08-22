@@ -39,7 +39,7 @@ function ScoreRow({ label, score, reasons }: { label: string; score: number | nu
   )
 }
 
-export function SectorQualificationCard({ qualification }: { qualification: QualificationResult }) {
+export function SectorQualificationCard({ qualification, companyFitLabel = 'Company fit' }: { qualification: QualificationResult; companyFitLabel?: string }) {
   const { classification, playbook, sectorFit, companyFit, opportunityEvidence, contactability, overall, matchedOpportunities } = qualification
 
   return (
@@ -64,7 +64,7 @@ export function SectorQualificationCard({ qualification }: { qualification: Qual
 
       <div className="pt-1">
         <ScoreRow label="Sector fit" score={sectorFit.score} reasons={sectorFit.reasons} />
-        <ScoreRow label="Company fit" score={companyFit.score} reasons={companyFit.reasons} />
+        <ScoreRow label={companyFitLabel} score={companyFit.score} reasons={companyFit.reasons} />
         <ScoreRow label="Opportunity evidence" score={opportunityEvidence.score} reasons={opportunityEvidence.reasons} />
         <ScoreRow label="Contactability" score={contactability.score} reasons={contactability.reasons} />
       </div>

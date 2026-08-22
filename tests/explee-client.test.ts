@@ -64,4 +64,30 @@ describe('explee-client', () => {
     delete process.env.EXPLEE_API_KEY
     await expect(searchExpleeCompanies({ definition: 'x' })).rejects.toThrow('EXPLEE_API_KEY is not set')
   })
+
+  it('sends revenue/founded/boolean filters and the requested page through untouched', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ companies: [], meta: { total: 0, results_count: 0, credits_charged: 0, remaining_balance: 100 } }),
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    await searchExpleeCompanies({
+      definition: 'manufacturing company',
+      revenue_annual: { min: 1_000_000, max: 9_999_999 },
+      founded: { min: 2010, max: 2023 },
+      is_b2b: true,
+      is_tech: true,
+      has_public_emails: true,
+    }, 20, 2)
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.page).toBe(2)
+    expect(body.filters.revenue_annual).toEqual({ min: 1_000_000, max: 9_999_999 })
+    expect(body.filters.founded).toEqual({ min: 2010, max: 2023 })
+    expect(body.filters.is_b2b).toBe(true)
+    expect(body.filters.is_tech).toBe(true)
+    expect(body.filters.has_public_emails).toBe(true)
+  })
 })

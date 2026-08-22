@@ -43,6 +43,10 @@ export class VertexGeminiProvider implements AIProvider {
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
     const startTime = Date.now()
 
+    // Gemini's API rejects tools + responseMimeType together, so jsonMode is
+    // dropped whenever grounding is on (see enableSearchGrounding's doc
+    // comment in lib/ai/types.ts) — callers requesting grounding must ask
+    // for JSON in the prompt text instead.
     const response = await this.client.models.generateContent({
       model: this.model,
       contents: request.userPrompt,
@@ -50,7 +54,8 @@ export class VertexGeminiProvider implements AIProvider {
         systemInstruction: request.systemPrompt,
         maxOutputTokens: request.maxTokens,
         temperature: request.temperature,
-        ...(request.jsonMode && { responseMimeType: 'application/json' }),
+        ...(request.jsonMode && !request.enableSearchGrounding && { responseMimeType: 'application/json' }),
+        ...(request.enableSearchGrounding && { tools: [{ googleSearch: {} }] }),
         thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
       },
     })
@@ -59,6 +64,9 @@ export class VertexGeminiProvider implements AIProvider {
     const latencyMs = Date.now() - startTime
     const tokensUsed = response.usageMetadata?.totalTokenCount ?? 0
     const finishReason = response.candidates?.[0]?.finishReason
+    const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+      ?.map(c => ({ uri: c.web?.uri, title: c.web?.title }))
+      .filter(s => s.uri)
 
     return {
       content,
@@ -67,6 +75,7 @@ export class VertexGeminiProvider implements AIProvider {
       tokensUsed,
       latencyMs,
       finishReason,
+      groundingSources,
     }
   }
 

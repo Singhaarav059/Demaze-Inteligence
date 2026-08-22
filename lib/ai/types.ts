@@ -20,6 +20,14 @@ export interface CompletionRequest {
   // (subject lines, email, follow-ups) should pass a much shorter value so a
   // hanging/slow provider fails fast instead of eating minutes per attempt.
   timeoutMs?: number
+  // Gemini/Vertex-only: attaches the googleSearch tool so the model can
+  // search the live web instead of answering from parametric knowledge. Only
+  // VertexGeminiProvider honors this (other providers silently ignore it —
+  // there is no equivalent capability to fall back to). Gemini's API can't
+  // combine tool use with forced JSON response mode, so jsonMode is ignored
+  // when this is set; callers must ask for JSON in the prompt text and parse
+  // the response themselves (see lib/outbound/generation/extract-json.ts).
+  enableSearchGrounding?: boolean
 }
 
 export interface CompletionResponse {
@@ -33,6 +41,9 @@ export interface CompletionResponse {
   // the model finished normally but still produced malformed JSON. Undefined
   // if the provider/SDK didn't report one.
   finishReason?: string
+  // Real citations from googleSearch grounding (see enableSearchGrounding
+  // above) — only populated by VertexGeminiProvider when that flag was set.
+  groundingSources?: { uri?: string; title?: string }[]
 }
 
 // Every provider must implement this interface.

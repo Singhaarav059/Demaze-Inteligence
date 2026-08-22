@@ -21,14 +21,28 @@ export function getExpleeApiKey(): string | null {
   return process.env.EXPLEE_API_KEY || null
 }
 
-// Subset of PublicCompaniesFilters we actually expose for this POC —
-// Explee's real filter schema has ~40 fields (geo, funding, tech stack,
-// traffic, NACE codes, etc.); add more here only once the POC proves the
-// data is worth building against.
+// Subset of PublicCompaniesFilters the Company Discovery UI exposes —
+// verified field-by-field against Explee's own OpenAPI schema
+// (https://api.explee.com/public/api/openapi.json, PublicCompaniesFilters).
+// Explee's real filter schema has ~40 fields total; only the ones with a
+// real UI control map here — do not add a field without a control that sets it.
 export interface ExpleeCompanyFilters {
   definition: string
   geo_include?: string[]
   size?: { min?: number; max?: number }
+  revenue_annual?: { min?: number; max?: number }
+  founded?: { min?: number; max?: number }
+  is_b2b?: boolean
+  is_saas?: boolean
+  is_startup?: boolean
+  is_tech?: boolean
+  is_digital?: boolean
+  is_ai?: boolean
+  is_merchant?: boolean
+  has_public_emails?: boolean
+  has_company_phone?: boolean
+  has_linkedin_page?: boolean
+  has_employees_on_linkedin?: boolean
   // Without this, Explee's geo_include matches ANY location signal (HQ,
   // customer base, or employee presence), not just headquarters — proven
   // live to leak companies headquartered in a different country entirely
@@ -79,6 +93,7 @@ export class ExpleeApiError extends Error {
 export async function searchExpleeCompanies(
   filters: ExpleeCompanyFilters,
   pageSize = 20,
+  page = 1,
 ): Promise<ExpleeSearchResult> {
   const apiKey = getExpleeApiKey()
   if (!apiKey) throw new Error('EXPLEE_API_KEY is not set')
@@ -93,7 +108,7 @@ export async function searchExpleeCompanies(
       'Content-Type': 'application/json',
       'X-API-Key': apiKey,
     },
-    body: JSON.stringify({ filters: effectiveFilters, page: 1, page_size: pageSize }),
+    body: JSON.stringify({ filters: effectiveFilters, page, page_size: pageSize }),
     signal: AbortSignal.timeout(30_000),
   })
 

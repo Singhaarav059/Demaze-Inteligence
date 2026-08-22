@@ -309,3 +309,16 @@ export async function getCompletion(
 export async function getDefaultProviderName(): Promise<string | null> {
   return 'gemini_vertex_gemini_3_6_flash'
 }
+
+// Web-search-grounded completion — Gemini/Vertex only, no NVIDIA fallback,
+// since NVIDIA has no equivalent live-search capability and a fallback
+// answer built from parametric knowledge alone would defeat the whole point
+// of a grounded call (see lib/research/company-signals.ts, the one caller).
+export async function getGroundedCompletion(request: CompletionRequest): Promise<CompletionResponse> {
+  const errors: string[] = []
+  const result = await tryVertexGeminiChain(
+    VERTEX_GEMINI_MODELS, process.env.GEMINI_VERTEX_API_KEY, request, request.timeoutMs ?? 60_000, errors
+  )
+  if (result) return result
+  throw new Error(`Grounded search unavailable.\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`)
+}

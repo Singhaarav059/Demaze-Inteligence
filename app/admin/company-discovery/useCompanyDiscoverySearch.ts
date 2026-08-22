@@ -11,23 +11,26 @@
 
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { RunResult } from '../intelligence-lab/_types'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { CompanyMatch, CompanyDiscoverySufficiency } from '@/lib/enrichment/company-discovery'
 import type { ExpleeCompany, ExpleeSearchMeta } from '@/lib/enrichment/sources/explee-client'
+import type { CompanyResearchResult } from '@/lib/research/company-signals'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
-import { EMPLOYEE_RANGES, sectorDefinition, type SectorOption } from './search-options'
+import { EMPLOYEE_RANGES, REVENUE_RANGES, sectorDefinition, type SectorOption } from './search-options'
 
-export type CompanyStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+export type CompanyStatus = 'not_researched' | 'already_researched' | 'running' | 'done' | 'failed'
 
 // CompanyMatch plus the real Explee firmographic fields the results list
-// renders (employee count, HQ location, industry, founding year) — nothing
-// here is invented, all of it comes straight off ExpleeCompany.
+// renders (employee count, HQ location, industry, founding year, revenue) —
+// nothing here is invented, all of it comes straight off ExpleeCompany.
 export interface DiscoveredMatch extends CompanyMatch {
   industry?: string | null
   employeeCount?: number | null
   hqLocation?: string | null
+  hqCountryCode?: string | null
   founded?: number | null
+  revenueAnnual?: number | null
+  lastResearchedAt?: string | null
 }
 
 export interface DiscoveredCompanyState {
@@ -35,7 +38,7 @@ export interface DiscoveredCompanyState {
   match: DiscoveredMatch
   selected: boolean
   status: CompanyStatus
-  result?: RunResult
+  result?: CompanyResearchResult
   errorMessage?: string
 }
 
@@ -51,8 +54,17 @@ export function toDedupedCompany(match: DiscoveredMatch, idx: number): DedupedCo
 
 export interface DiscoverySearchFilters {
   sector?: SectorOption
+  // Final, resolved ISO 3166-1 alpha-2 codes — the page merges its region
+  // buttons (India/Europe/America) and any individually-picked "more
+  // locations" countries into this one list before calling handleSearch.
   countries?: string[]
   employeeRangeKey?: string
+  revenueRangeKey?: string
+  foundedAfter?: number
+  foundedBefore?: number
+  // Keys from COMPANY_TYPE_FILTERS / PRESENCE_FILTERS that are checked.
+  companyTypeKeys?: string[]
+  presenceKeys?: string[]
   excludeKeywords?: string[]
   // Deep-link escape hatch for ResearchCard's "Find companies in this
   // segment →" link — bypasses the sector enum with a raw free-text
@@ -67,11 +79,15 @@ function sanitizeSearchError(message?: string): string {
   return message
 }
 
+const PAGE_SIZE = 20
+
 export function useCompanyDiscoverySearch() {
   const [searching, setSearching] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [sufficiency, setSufficiency] = useState<CompanyDiscoverySufficiency | null>(null)
   const [discoveryReason, setDiscoveryReason] = useState<string | null>(null)
+  const [totalAvailable, setTotalAvailable] = useState(0)
 
   const [companies, setCompanies] = useState<DiscoveredCompanyState[]>([])
   const [running, setRunning] = useState(false)
@@ -80,6 +96,70 @@ export function useCompanyDiscoverySearch() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const stopRequested = useRef(false)
+  // Remembers the last-run request so "Load more" can re-issue it at the
+  // next page without the caller re-passing every filter.
+  const lastRequestBody = useRef<Record<string, unknown> | null>(null)
+  const lastPage = useRef(1)
+  const lastIndustryLabel = useRef<string | null>(null)
+
+  function buildRequestBody(filters: DiscoverySearchFilters, definition: string) {
+    const employeeRange = EMPLOYEE_RANGES.find(r => r.key === filters.employeeRangeKey)
+    const revenueRange = REVENUE_RANGES.find(r => r.key === filters.revenueRangeKey)
+    const body: Record<string, unknown> = {
+      definition,
+      geoInclude: filters.countries && filters.countries.length > 0 ? filters.countries : undefined,
+      sizeMin: employeeRange?.min,
+      sizeMax: employeeRange?.max,
+      revenueMin: revenueRange?.min,
+      revenueMax: revenueRange?.max,
+      foundedMin: filters.foundedAfter,
+      foundedMax: filters.foundedBefore,
+      pageSize: PAGE_SIZE,
+    }
+    for (const key of filters.companyTypeKeys ?? []) body[key] = true
+    for (const key of filters.presenceKeys ?? []) body[key] = true
+    return body
+  }
+
+  async function runSearchRequest(body: Record<string, unknown>, page: number): Promise<{ ok: true; companies: ExpleeCompany[]; meta?: ExpleeSearchMeta } | { ok: false; error: string }> {
+    try {
+      const res = await fetch('/api/admin/explee-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, page }),
+      })
+      const data = await res.json()
+      if (!data.success) return { ok: false, error: sanitizeSearchError(data.error) }
+      return { ok: true, companies: data.companies ?? [], meta: data.meta }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Network error while searching' }
+    }
+  }
+
+  function toMatches(raw: ExpleeCompany[], filters: DiscoverySearchFilters, industryLabel: string | null): DiscoveredMatch[] {
+    const excludeKeywords = (filters.excludeKeywords ?? []).map(k => k.trim().toLowerCase()).filter(Boolean)
+    const excludeName = filters.excludeCompanyName?.trim().toLowerCase()
+    return raw
+      .filter((c): c is ExpleeCompany & { name: string } => !!c.name)
+      .filter(c => !excludeName || !c.name.toLowerCase().includes(excludeName))
+      .filter(c => excludeKeywords.length === 0 || !excludeKeywords.some(k =>
+        [c.name, c.domain, c.description, c.industry].some(field => field?.toLowerCase().includes(k))
+      ))
+      .map(c => ({
+        name: c.name,
+        domain: c.domain ?? undefined,
+        reason: `Matches your search criteria${industryLabel ? ` (${industryLabel})` : ''}.`,
+        confidence: 'high' as const,
+        source_urls: c.url ? [c.url] : [],
+        industry: c.industry ?? industryLabel,
+        employeeCount: c.size,
+        hqLocation: c.geo_city || c.geo,
+        hqCountryCode: c.geo,
+        founded: c.founded,
+        revenueAnnual: c.revenue_annual,
+        lastResearchedAt: (c as ExpleeCompany & { lastResearchedAt?: string | null }).lastResearchedAt ?? null,
+      }))
+  }
 
   // ── Search ──────────────────────────────────────────────────
   // Returns the number of matches found (or -1 on error) so the caller can
@@ -97,70 +177,67 @@ export function useCompanyDiscoverySearch() {
     setSufficiency(null)
     setDiscoveryReason(null)
     setCompanies([])
+    setTotalAvailable(0)
 
-    const range = EMPLOYEE_RANGES.find(r => r.key === filters.employeeRangeKey)
-    const excludeKeywords = (filters.excludeKeywords ?? []).map(k => k.trim().toLowerCase()).filter(Boolean)
-    const excludeName = filters.excludeCompanyName?.trim().toLowerCase()
     const industryLabel = filters.sector ?? filters.definitionOverride ?? null
+    const body = buildRequestBody(filters, definition)
+    const result = await runSearchRequest(body, 1)
+    setSearching(false)
 
-    try {
-      const res = await fetch('/api/admin/explee-discovery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          definition,
-          geoInclude: filters.countries && filters.countries.length > 0 ? filters.countries : undefined,
-          sizeMin: range?.min,
-          sizeMax: range?.max,
-          pageSize: 20,
-        }),
-      })
-      const data = await res.json()
-
-      if (!data.success) {
-        setSearchError(sanitizeSearchError(data.error))
-        return -1
-      }
-
-      const raw: ExpleeCompany[] = data.companies ?? []
-      const matches: DiscoveredMatch[] = raw
-        .filter((c): c is ExpleeCompany & { name: string } => !!c.name)
-        .filter(c => !excludeName || !c.name.toLowerCase().includes(excludeName))
-        .filter(c => excludeKeywords.length === 0 || !excludeKeywords.some(k =>
-          [c.name, c.domain, c.description, c.industry].some(field => field?.toLowerCase().includes(k))
-        ))
-        .map(c => ({
-          name: c.name,
-          domain: c.domain ?? undefined,
-          reason: `Matches your search criteria${industryLabel ? ` (${industryLabel})` : ''}.`,
-          confidence: 'high' as const,
-          source_urls: c.url ? [c.url] : [],
-          industry: c.industry ?? industryLabel,
-          employeeCount: c.size,
-          hqLocation: c.geo_city || c.geo,
-          founded: c.founded,
-        }))
-
-      const meta: ExpleeSearchMeta | undefined = data.meta
-      setSufficiency(matches.length > 0 ? 'sufficient' : 'insufficient')
-      setDiscoveryReason(
-        matches.length > 0
-          ? `${matches.length} compan${matches.length === 1 ? 'y' : 'ies'} found${meta && meta.total > matches.length ? ` (${meta.total} total matches, showing top ${matches.length})` : ''}.`
-          : 'No companies matched these criteria. Try a broader location or employee range.'
-      )
-      setCompanies(matches.map((match, idx) => ({
-        company: toDedupedCompany(match, idx),
-        match,
-        selected: true,
-        status: 'pending' as CompanyStatus,
-      })))
-      return matches.length
-    } catch (e) {
-      setSearchError(e instanceof Error ? e.message : 'Network error while searching')
+    if (!result.ok) {
+      setSearchError(result.error)
       return -1
-    } finally {
-      setSearching(false)
     }
+
+    lastRequestBody.current = body
+    lastPage.current = 1
+    lastIndustryLabel.current = industryLabel
+
+    const matches = toMatches(result.companies, filters, industryLabel)
+    const total = result.meta?.total ?? matches.length
+    setSufficiency(matches.length > 0 ? 'sufficient' : 'insufficient')
+    setTotalAvailable(total)
+    setDiscoveryReason(
+      matches.length > 0
+        ? `${matches.length} compan${matches.length === 1 ? 'y' : 'ies'} found${total > matches.length ? ` — showing the best ${matches.length}` : ''}.`
+        : 'No companies matched these criteria. Try a broader location or employee range.'
+    )
+    setCompanies(matches.map((match, idx) => ({
+      company: toDedupedCompany(match, idx),
+      match,
+      selected: !match.lastResearchedAt,
+      status: (match.lastResearchedAt ? 'already_researched' : 'not_researched') as CompanyStatus,
+    })))
+    return matches.length
+  }
+
+  // ── Load more — same filters, next page, appended ────────────
+
+  async function loadMore() {
+    if (!lastRequestBody.current || loadingMore) return
+    setLoadingMore(true)
+    const nextPage = lastPage.current + 1
+    const result = await runSearchRequest(lastRequestBody.current, nextPage)
+    setLoadingMore(false)
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    lastPage.current = nextPage
+    const matches = toMatches(result.companies, {}, lastIndustryLabel.current)
+    setCompanies(prev => {
+      const seen = new Set(prev.map(c => (c.match.domain ? `d:${c.match.domain}` : `n:${c.match.name.toLowerCase()}`)))
+      const fresh = matches.filter(m => !seen.has(m.domain ? `d:${m.domain}` : `n:${m.name.toLowerCase()}`))
+      return [
+        ...prev,
+        ...fresh.map((match, idx) => ({
+          company: toDedupedCompany(match, prev.length + idx),
+          match,
+          selected: !match.lastResearchedAt,
+          status: (match.lastResearchedAt ? 'already_researched' : 'not_researched') as CompanyStatus,
+        })),
+      ]
+    })
   }
 
   // ── Selection ───────────────────────────────────────────────
@@ -179,46 +256,12 @@ export function useCompanyDiscoverySearch() {
     setCompanies(prev => prev.map(c => c.company.id === id ? { ...c, ...patch } : c))
   }
 
-  // ── Persist a completed result to run-history immediately ───
-  // Same as batch-upload/page.tsx's persistResult — non-fatal on failure.
-
-  async function persistResult(company: DedupedCompany, data: RunResult) {
-    try {
-      await fetch('/api/admin/test-runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_url: company.companyWebsite ?? company.companyName,
-          domain: data.domain,
-          operation: 'full_pipeline',
-          status: data.success ? 'completed' : 'error',
-          scraped_pages: data.scrapeResult?.successfulUrls.length ?? 0,
-          failed_pages: data.scrapeResult?.failedUrls.length ?? 0,
-          quality_score: data.quality?.score ?? 0,
-          quality_note: data.quality?.note,
-          token_usage: data.aiMeta?.tokensUsed ?? 0,
-          provider_used: data.aiMeta?.provider,
-          model_used: data.aiMeta?.model,
-          ai_latency_ms: data.aiMeta?.latencyMs,
-          execution_time_ms: data.executionTimeMs,
-          scrape_time_ms: data.scrapeTimeMs,
-          analysis_time_ms: data.analysisTimeMs,
-          discovery_method: data.scrapeResult?.discoveryMethod,
-          website_discovery: data.websiteDiscovery ?? null,
-          scrape_result: data.scrapeResult,
-          final_result: data.analysisResult,
-          prompts: data.prompts,
-          error_message: data.error,
-        }),
-      })
-    } catch (e) {
-      console.warn('[CompanyDiscovery] Failed to persist result:', e)
-      toast.warning(`Couldn't save "${company.companyName}" to History, but its result is still shown below`)
-    }
-  }
-
   // ── Sequential research loop — one company at a time, by design ────
-  // Identical shape to batch-upload/page.tsx's researchSelected().
+  // Calls the Demaze intelligence layer (one grounded search call per
+  // company, see lib/research/company-signals.ts) instead of the full
+  // scrape pipeline — Explee already supplied the company record, so this
+  // step only needs to find recent public signals, not re-derive who the
+  // company is. The route persists its own run-history row.
 
   async function researchSelected() {
     const queue = companies.filter(c => c.selected && c.status !== 'done')
@@ -240,27 +283,31 @@ export function useCompanyDiscoverySearch() {
       updateCompany(item.company.id, { status: 'running' })
 
       try {
-        const body = item.company.companyWebsite
-          ? { url: item.company.companyWebsite, mode: 'full' }
-          : { companyName: item.company.companyName, mode: 'full' }
-
-        const res = await fetch('/api/admin/test-analysis', {
+        const res = await fetch('/api/admin/company-research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            name: item.match.name,
+            domain: item.match.domain,
+            industry: item.match.industry,
+            hqLocation: item.match.hqLocation,
+            employeeCount: item.match.employeeCount,
+            founded: item.match.founded,
+            revenueAnnual: item.match.revenueAnnual,
+          }),
         })
-        const data: RunResult = await res.json()
+        const data = await res.json()
+        const succeeded = data.success && !data.result?.error
+        const result: CompanyResearchResult | undefined = data.result
 
-        if (data.success) succeededCount += 1
+        if (succeeded) succeededCount += 1
         updateCompany(item.company.id, {
-          status: data.success ? 'done' : 'failed',
-          result: data,
-          errorMessage: data.success ? undefined : (data.error ?? 'Unknown error'),
+          status: succeeded ? 'done' : 'failed',
+          result,
+          errorMessage: succeeded ? undefined : (result?.error ?? data.error ?? 'Unknown error'),
         })
 
-        await persistResult(item.company, data)
-
-        const quotaMsg = quotaSignatureIn(data)
+        const quotaMsg = quotaSignatureIn({ error: result?.error ?? data.error })
         consecutiveQuotaHits = nextConsecutiveHits(consecutiveQuotaHits, quotaMsg)
         if (quotaMsg && shouldPauseBatch(consecutiveQuotaHits)) {
           const reason = `Stopped at company ${i + 1} of ${queue.length}, quota likely exhausted (${QUOTA_PAUSE_THRESHOLD} consecutive companies hit the same provider limit): "${quotaMsg}". Already-completed results below are saved. Re-run the remaining companies once quota resets.`
@@ -289,18 +336,20 @@ export function useCompanyDiscoverySearch() {
   }
 
   const selectedCount = companies.filter(c => c.selected).length
-  const doneCount = companies.filter(c => c.status === 'done').length
+  const doneCount = companies.filter(c => c.status === 'done' || c.status === 'already_researched').length
+  const hasMore = companies.length > 0 && companies.length < totalAvailable
 
   return {
     searching, searchError, setSearchError,
     sufficiency, setSufficiency,
     discoveryReason, setDiscoveryReason,
+    totalAvailable, hasMore, loadingMore, loadMore,
     companies, setCompanies,
     running, progress, pausedReason,
     expandedId, setExpandedId,
     selectedCount, doneCount,
     handleSearch, toggle, selectAll, selectNone, updateCompany,
-    persistResult, researchSelected, stopBatch,
+    researchSelected, stopBatch,
   }
 }
 

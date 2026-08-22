@@ -1,15 +1,32 @@
 // ============================================================
-// Admin: Explee Discovery POC — POST /api/admin/explee-discovery
+// Admin: Company Discovery search — POST /api/admin/explee-discovery
 // ============================================================
-// Thin wrapper around searchExpleeCompanies(). POC only: no DB dedup, no
-// research-pipeline hookup, no persistence — just a pass-through so the
-// UI can show raw Explee results for a data-quality check before any
-// production pipeline gets built on top of this.
+// Thin wrapper around searchExpleeCompanies() (Explee is the sole
+// company-discovery data source, kept invisible to the UI/response shape
+// beyond this file) plus an "already researched" annotation against
+// pipeline_test_runs, reusing normalizeDomain()/normalizeName() from
+// company-discovery.ts — this ANNOTATES (alreadyResearched/lastResearchedAt)
+// rather than silently dropping, so the results UI can show real status per
+// company (see CompanyMatchList.tsx).
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
-import { searchExpleeCompanies, ExpleeApiError, getExpleeApiKey } from '@/lib/enrichment/sources/explee-client'
+import { searchExpleeCompanies, ExpleeApiError, getExpleeApiKey, type ExpleeCompany } from '@/lib/enrichment/sources/explee-client'
+import { normalizeDomain, normalizeName } from '@/lib/enrichment/company-discovery'
+import { createServerClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logger'
+
+function num(v: unknown): number | undefined {
+  return Number.isFinite(v) ? Number(v) : undefined
+}
+function range(min: unknown, max: unknown): { min?: number; max?: number } | undefined {
+  const r = { min: num(min), max: num(max) }
+  return r.min !== undefined || r.max !== undefined ? r : undefined
+}
+function bool(v: unknown): boolean | undefined {
+  return v === true ? true : undefined
+}
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
@@ -28,22 +45,77 @@ export async function POST(req: NextRequest) {
   const geoInclude = Array.isArray(body?.geoInclude)
     ? body.geoInclude.filter((s: unknown) => typeof s === 'string' && s.trim())
     : undefined
-  const sizeMin = Number.isFinite(body?.sizeMin) ? Number(body.sizeMin) : undefined
-  const sizeMax = Number.isFinite(body?.sizeMax) ? Number(body.sizeMax) : undefined
-  const pageSize = Number.isFinite(body?.pageSize) ? Math.min(Math.max(Number(body.pageSize), 1), 20) : 20
+  const page = Number.isFinite(body?.page) ? Math.max(Number(body.page), 1) : 1
+  const pageSize = Number.isFinite(body?.pageSize) ? Math.min(Math.max(Number(body.pageSize), 1), 100) : 20
 
   try {
     const result = await searchExpleeCompanies(
       {
         definition,
         geo_include: geoInclude && geoInclude.length > 0 ? geoInclude : undefined,
-        size: (sizeMin !== undefined || sizeMax !== undefined) ? { min: sizeMin, max: sizeMax } : undefined,
+        size: range(body?.sizeMin, body?.sizeMax),
+        revenue_annual: range(body?.revenueMin, body?.revenueMax),
+        founded: range(body?.foundedMin, body?.foundedMax),
+        is_b2b: bool(body?.isB2b),
+        is_saas: bool(body?.isSaas),
+        is_startup: bool(body?.isStartup),
+        is_tech: bool(body?.isTech),
+        is_digital: bool(body?.isDigital),
+        is_ai: bool(body?.isAi),
+        is_merchant: bool(body?.isMerchant),
+        has_public_emails: bool(body?.hasPublicEmails),
+        has_company_phone: bool(body?.hasCompanyPhone),
+        has_linkedin_page: bool(body?.hasLinkedinPage),
+        has_employees_on_linkedin: bool(body?.hasEmployeesOnLinkedin),
       },
       pageSize,
+      page,
     )
-    return NextResponse.json({ success: true, ...result })
+
+    const companies = await annotateAlreadyResearched(result.companies)
+    return NextResponse.json({ success: true, ...result, companies })
   } catch (e) {
     const message = e instanceof ExpleeApiError ? e.message : (e instanceof Error ? e.message : 'Explee search failed')
     return NextResponse.json({ success: false, error: message }, { status: 502 })
+  }
+}
+
+// Non-fatal on DB error — an unannotated result is far cheaper than the
+// whole search failing.
+async function annotateAlreadyResearched(companies: ExpleeCompany[]): Promise<ExpleeCompany[]> {
+  if (companies.length === 0) return companies
+  try {
+    const supabase = createServerClient()
+    const { data: history } = await supabase
+      .from('pipeline_test_runs')
+      .select('company_url, domain, created_at')
+      .order('created_at', { ascending: false })
+
+    const byDomain = new Map<string, string>()
+    const byName = new Map<string, string>()
+    for (const h of history ?? []) {
+      const at = h.created_at as string
+      if (h.domain && !byDomain.has(normalizeDomain(h.domain))) byDomain.set(normalizeDomain(h.domain), at)
+      if (h.company_url) {
+        const looksLikeDomainOrUrl = /^https?:\/\//i.test(h.company_url) || h.company_url.includes('.')
+        if (looksLikeDomainOrUrl) {
+          const key = normalizeDomain(h.company_url)
+          if (!byDomain.has(key)) byDomain.set(key, at)
+        } else {
+          const key = normalizeName(h.company_url)
+          if (key && !byName.has(key)) byName.set(key, at)
+        }
+      }
+    }
+
+    return companies.map(c => {
+      const lastResearchedAt = (c.domain && byDomain.get(normalizeDomain(c.domain)))
+        || (c.name && byName.get(normalizeName(c.name)))
+        || null
+      return { ...c, alreadyResearched: !!lastResearchedAt, lastResearchedAt }
+    })
+  } catch (e) {
+    logger.warn('ExpleeDiscovery', 'already-researched annotation skipped', e instanceof Error ? e.message : String(e))
+    return companies
   }
 }

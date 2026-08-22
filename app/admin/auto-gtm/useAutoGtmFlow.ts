@@ -375,6 +375,15 @@ export function useAutoGtmFlow() {
       setStepState(resumeStep as FlowStep)
       setMaxStepReached(resumeStep as FlowStep)
     }
+    // Hand-off pre-fill from Company Discovery's "Continue to Decision
+    // Makers" link (?url=<domain-or-name>, no runId) — only applies to a
+    // genuinely fresh landing (no resume in progress), so it never fights
+    // with resumeFromRun's own state.
+    const handoffUrl = params.get('url')
+    if (!resumeRunId && handoffUrl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUrl(handoffUrl)
+    }
     setStepSynced(true)
     // resumeFromRun sets `resuming` itself (as its first line, before any
     // await) — no need to set it here too; see that function's own comment.
@@ -441,10 +450,21 @@ export function useAutoGtmFlow() {
     setPendingAction({})
     setRunId(null)
     try {
+      // A bare company name (no dot, not a URL) must go through as
+      // `companyName`, not `url` — test-analysis/route.ts only runs its
+      // Explee-first / search-based identity resolution on the
+      // `companyName` field; sending free text as `url` would just fail
+      // URL validation. `looksLikeUrlOrDomain` mirrors the same "has a dot,
+      // no spaces" shape company-discovery.ts's own input-shape guard uses.
+      const looksLikeUrlOrDomain = /^https?:\/\//i.test(urlNormalized) || /^[a-z0-9-]+(\.[a-z0-9-]+)+([/:?#].*)?$/i.test(urlNormalized)
       const res = await fetch('/api/admin/test-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlNormalized, mode, force: Boolean(opts.force) }),
+        body: JSON.stringify(
+          looksLikeUrlOrDomain
+            ? { url: urlNormalized, mode, force: Boolean(opts.force) }
+            : { companyName: urlNormalized, mode, force: Boolean(opts.force) }
+        ),
       })
       const data: RunResult = await res.json()
       setResult(data)

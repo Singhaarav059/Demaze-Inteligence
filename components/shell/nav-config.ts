@@ -27,7 +27,7 @@ import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIc
 export const NAV = [
   { href: '/admin/auto-gtm', label: 'Auto Flow', icon: AutoFlowIcon, hint: 'Start here: research a company, find who to contact, and prepare outreach, one guided flow' },
   { href: '/admin/wizard', label: 'Research', icon: ResearchIcon, hint: 'Research a single company, or upload a spreadsheet of many' },
-  { href: '/admin/company-discovery', label: 'Discover', icon: DiscoveryIcon, hint: 'Find new companies to target, given a description of who you sell to' },
+  { href: '/admin/company-discovery', label: 'Discover', icon: DiscoveryIcon, hint: 'Define your target market and let Demaze find companies that match' },
   { href: '/admin/outbound', label: 'Outbound Tools', icon: OutboundToolsIcon, hint: 'Manual controls: contacts, campaigns, warm-up, and vendor integrations' },
   { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: 'Past research runs you\'ve saved' },
 ] as const

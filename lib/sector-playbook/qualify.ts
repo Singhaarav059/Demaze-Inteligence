@@ -136,6 +136,30 @@ export function qualifyCompany(
               : [`${opts.decisionMakerCount} decision-maker candidate(s) found${opts.verifiedEmailCount ? `, ${opts.verifiedEmailCount} with a verified email` : ''}.`],
         }
 
+  return {
+    status: 'DRAFT',
+    classification,
+    playbook,
+    sectorFit,
+    companyFit,
+    opportunityEvidence,
+    contactability,
+    overall: buildOverallScore(sectorFit, companyFit, opportunityEvidence, contactability, classification.sector ? (playbook?.label ?? '') : 'outside target sectors'),
+    matchedOpportunities,
+  }
+}
+
+// Extracted (2026-08-22) so qualify-discovery.ts's lightweight-pipeline
+// scorer can share the exact same weighting/label formula instead of
+// re-deriving it — same 4-pillar weighted average, dropping contactability
+// entirely (not treating it as 0) whenever it isn't known yet.
+export function buildOverallScore(
+  sectorFit: ScoreWithReasons,
+  companyFit: ScoreWithReasons,
+  opportunityEvidence: ScoreWithReasons,
+  contactability: { score: number | null; reasons: string[] },
+  sectorLabel: string,
+): QualificationResult['overall'] {
   const weighted = [
     { score: sectorFit.score, weight: 0.3 },
     { score: companyFit.score, weight: 0.25 },
@@ -146,21 +170,11 @@ export function qualifyCompany(
   const overallScore = Math.round(weighted.reduce((s, w) => s + w.score * w.weight, 0) / totalWeight)
 
   const overallReasons = [
-    `Sector fit: ${scoreLabel(sectorFit.score)} (${classification.sector ? playbook?.label : 'outside target sectors'})`,
+    `Sector fit: ${scoreLabel(sectorFit.score)} (${sectorLabel})`,
     `Company fit: ${scoreLabel(companyFit.score)}`,
     `Opportunity evidence: ${scoreLabel(opportunityEvidence.score)}`,
     contactability.score !== null ? `Contactability: ${scoreLabel(contactability.score)}` : 'Contactability: not yet determined',
   ]
 
-  return {
-    status: 'DRAFT',
-    classification,
-    playbook,
-    sectorFit,
-    companyFit,
-    opportunityEvidence,
-    contactability,
-    overall: { score: overallScore, label: scoreLabel(overallScore), reasons: overallReasons },
-    matchedOpportunities,
-  }
+  return { score: overallScore, label: scoreLabel(overallScore), reasons: overallReasons }
 }

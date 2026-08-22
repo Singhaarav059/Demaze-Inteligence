@@ -3,45 +3,67 @@
 // ============================================================
 // Company Discovery Results — select, research, view report
 // ============================================================
-// Presentational results list for the redesigned Company Discovery page.
-// Renders whatever useCompanyDiscoverySearch's structured search surfaced
-// (real Explee firmographic fields — industry, employee count, HQ location,
-// founding year) and reuses its existing sequential "Research Selected"
-// loop unchanged: select rows -> research each with Demaze's own pipeline
-// -> expand to view the real report (Step1Research). No vendor name or
-// discovery-provider language appears anywhere in this file.
+// Presentational results list for Company Discovery. Renders whatever
+// useCompanyDiscoverySearch's structured search surfaced (real Explee
+// firmographic fields — industry, employee count, HQ, founding year,
+// revenue) as a Demaze workspace, not a database table, and reuses its
+// existing sequential "Research with Demaze" loop unchanged. No vendor
+// name or discovery-provider language appears anywhere in this file.
 // ============================================================
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { SearchX } from 'lucide-react'
+import { SearchX, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Step1Research } from '@/components/wizard/steps/Step1Research'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { CompanyResearchCard } from './CompanyResearchCard'
 import { staggerList, listItem, crossfade } from '@/lib/motion'
-import type { CompanyDiscoverySearch, CompanyStatus } from './useCompanyDiscoverySearch'
+import { formatRevenue, countryLabel } from './search-options'
+import type { CompanyDiscoverySearch, CompanyStatus, DiscoveredMatch } from './useCompanyDiscoverySearch'
 
 // Client-side only, no backend change — once a discovery run surfaces more
 // than this many companies, a text filter appears above the list so the
 // user isn't stuck scrolling/scanning a long flat list.
 const FILTER_THRESHOLD = 8
 
-export function CompanyMatchList({ search }: { search: CompanyDiscoverySearch }) {
+type SortKey = 'best_match' | 'size' | 'revenue'
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'best_match', label: 'Best match' },
+  { value: 'size', label: 'Company size' },
+  { value: 'revenue', label: 'Annual revenue' },
+]
+
+const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+function daysAgoLabel(iso: string): string {
+  const days = Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (days <= 0) return 'today'
+  return relativeTime.format(-days, 'day')
+}
+
+export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDiscoverySearch; onAdjustSearch?: () => void }) {
   const {
     companies, selectedCount, doneCount, running, progress, pausedReason, expandedId, setExpandedId,
     toggle, selectAll, selectNone, researchSelected, stopBatch, sufficiency,
+    hasMore, loadingMore, loadMore, totalAvailable,
   } = search
 
   const [filterText, setFilterText] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('best_match')
   const showFilter = companies.length > FILTER_THRESHOLD
+
   const visibleCompanies = useMemo(() => {
     const q = filterText.trim().toLowerCase()
-    if (!q) return companies
-    return companies.filter(c => c.match.name.toLowerCase().includes(q))
-  }, [companies, filterText])
+    const base = q ? companies.filter(c => c.match.name.toLowerCase().includes(q)) : companies
+    if (sortKey === 'best_match') return base
+    const key = sortKey === 'size' ? 'employeeCount' : 'revenueAnnual'
+    return [...base].sort((a, b) => (b.match[key] ?? -1) - (a.match[key] ?? -1))
+  }, [companies, filterText, sortKey])
 
   // Distinguish "haven't searched yet" (sufficiency still null, render
   // nothing) from "searched, zero real matches survived filtering" — the
@@ -52,18 +74,41 @@ export function CompanyMatchList({ search }: { search: CompanyDiscoverySearch })
     return (
       <EmptyState
         icon={SearchX}
-        title="No companies matched"
-        description="Try a broader industry, location, or employee range."
+        title="No matching companies found"
+        description="Try widening the company-size range, adding another headquarters region, or removing an advanced filter."
+        action={onAdjustSearch && <Button size="sm" variant="outline" onClick={onAdjustSearch}>Adjust search</Button>}
       />
     )
   }
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-foreground text-sm font-medium">
+            {totalAvailable > 0 ? totalAvailable.toLocaleString() : companies.length} compan{(totalAvailable || companies.length) === 1 ? 'y' : 'ies'} found
+          </p>
+          {totalAvailable > companies.length && (
+            <p className="text-muted-foreground/60 text-xs">Showing the best {companies.length} matches</p>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          {running ? (
+            <Button size="sm" variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={stopBatch}>
+              Stop after current
+            </Button>
+          ) : (
+            <Button size="sm" onClick={researchSelected} disabled={selectedCount === 0}>
+              {selectedCount === 0 ? 'No research action yet' : `Research with Demaze (${selectedCount})`}
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={selectAll}>Select all</Button>
         <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={selectNone}>Select none</Button>
-        <span className="text-muted-foreground text-xs">{selectedCount} of {companies.length} selected · {doneCount} researched</span>
+        <span className="text-muted-foreground text-xs">Selected: {selectedCount} · {doneCount} researched</span>
 
         {showFilter && (
           <Input
@@ -75,16 +120,16 @@ export function CompanyMatchList({ search }: { search: CompanyDiscoverySearch })
           />
         )}
 
-        <div className="ml-auto flex items-center gap-2">
-          {running ? (
-            <Button size="sm" variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={stopBatch}>
-              Stop after current
-            </Button>
-          ) : (
-            <Button size="sm" onClick={researchSelected} disabled={selectedCount === 0}>
-              Research with Demaze ({selectedCount})
-            </Button>
-          )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="text-muted-foreground/60 text-xs">Sort:</span>
+          <Select items={SORT_OPTIONS} value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+            <SelectTrigger className="h-7 w-auto min-w-[9rem] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -151,29 +196,36 @@ export function CompanyMatchList({ search }: { search: CompanyDiscoverySearch })
                     )}
                     {!match.domain && (
                       <Badge className="text-[10px] bg-signal-medium/10 text-signal-medium border border-signal-medium/30 gap-1">
-                        domain not confirmed
-                        <InfoTooltip>We couldn&rsquo;t confidently resolve a website for this company. It will still be researched by name only, but results may be thinner.</InfoTooltip>
+                        No domain on file
+                        <InfoTooltip>This company doesn&rsquo;t have a domain on record. It can still be researched by name, but results may be thinner.</InfoTooltip>
                       </Badge>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {match.industry && <MetaChip label="Industry" value={match.industry} />}
-                    {match.employeeCount != null && <MetaChip label="Employees" value={match.employeeCount.toLocaleString()} />}
-                    {match.hqLocation && <MetaChip label="HQ" value={match.hqLocation} />}
-                    {match.founded != null && <MetaChip label="Founded" value={String(match.founded)} />}
-                  </div>
+                  {match.industry && <p className="text-muted-foreground/80 text-xs">{match.industry}</p>}
+
+                  <p className="text-muted-foreground/70 text-xs">
+                    <CompanyMeta match={match} />
+                  </p>
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                  <StatusBadge status={status} />
-                  {status === 'done' && (
-                    <button
-                      onClick={() => setExpandedId(expandedId === company.id ? null : company.id)}
-                      className="text-muted-foreground hover:text-foreground/90 text-xs px-2 py-1 rounded border border-border hover:border-border transition-colors"
-                    >
-                      {expandedId === company.id ? 'Hide' : 'View report'}
-                    </button>
+                  <StatusBadge status={status} lastResearchedAt={match.lastResearchedAt} />
+                  {(status === 'done' || status === 'already_researched') && result && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setExpandedId(expandedId === company.id ? null : company.id)}
+                        className="text-muted-foreground hover:text-foreground/90 text-xs px-2 py-1 rounded border border-border hover:border-border transition-colors"
+                      >
+                        {expandedId === company.id ? 'Hide' : 'View report'}
+                      </button>
+                      <Link
+                        href={`/admin/auto-gtm?url=${encodeURIComponent(match.domain || match.name)}`}
+                        className="inline-flex items-center gap-1 text-primary hover:text-primary text-xs px-2 py-1 rounded border border-primary/40 hover:bg-primary/10 transition-colors"
+                      >
+                        Find decision makers <ArrowRight className="size-3" />
+                      </Link>
+                    </div>
                   )}
                 </div>
               </div>
@@ -194,7 +246,16 @@ export function CompanyMatchList({ search }: { search: CompanyDiscoverySearch })
                     className="overflow-hidden border-t border-border"
                   >
                     <div className="px-4 py-4">
-                      <Step1Research result={result} />
+                      <CompanyResearchCard
+                        result={result}
+                        firmographics={{
+                          industry: match.industry,
+                          employeeCount: match.employeeCount,
+                          hqLocation: match.hqLocation,
+                          founded: match.founded,
+                          revenueAnnual: match.revenueAnnual,
+                        }}
+                      />
                     </div>
                   </motion.div>
                 )}
@@ -207,17 +268,26 @@ export function CompanyMatchList({ search }: { search: CompanyDiscoverySearch })
       {showFilter && visibleCompanies.length === 0 && (
         <p className="text-muted-foreground/70 text-xs px-1">No companies match &ldquo;{filterText}&rdquo;.</p>
       )}
+
+      {hasMore && !filterText && (
+        <div className="flex justify-center pt-1">
+          <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? <><Spinner /> Loading…</> : 'Load more'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
-function MetaChip({ label, value }: { label: string; value: string }) {
-  return (
-    <Badge className="text-[10px] bg-accent text-foreground/80 border border-border gap-1 font-normal">
-      <span className="text-muted-foreground/70">{label}</span>
-      {value}
-    </Badge>
-  )
+function CompanyMeta({ match }: { match: DiscoveredMatch }) {
+  const parts: string[] = []
+  if (match.employeeCount != null) parts.push(`${match.employeeCount.toLocaleString()} employees`)
+  const hq = match.hqCountryCode ? countryLabel(match.hqCountryCode) : match.hqLocation
+  if (hq) parts.push(hq)
+  if (match.founded != null) parts.push(`Founded ${match.founded}`)
+  if (match.revenueAnnual != null) parts.push(`Revenue ${formatRevenue(match.revenueAnnual)}`)
+  return <>{parts.join(' · ')}</>
 }
 
 // Dot shape, not just color, so status still reads at a glance for anyone
@@ -227,13 +297,17 @@ function Dot({ className }: { className?: string }) {
   return <span className={`inline-block size-1.5 rounded-full ${className}`} />
 }
 
-function StatusBadge({ status }: { status: CompanyStatus }) {
+function StatusBadge({ status, lastResearchedAt }: { status: CompanyStatus; lastResearchedAt?: string | null }) {
   const map: Record<CompanyStatus, { label: string; className: string; dot: string }> = {
-    pending: { label: 'Pending', className: 'bg-accent text-muted-foreground', dot: 'bg-muted-foreground' },
+    not_researched: { label: 'Not researched', className: 'bg-accent text-muted-foreground', dot: 'bg-muted-foreground' },
+    already_researched: {
+      label: lastResearchedAt ? `Already researched · ${daysAgoLabel(lastResearchedAt)}` : 'Already researched',
+      className: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30',
+      dot: 'bg-signal-strong',
+    },
     running: { label: 'Researching…', className: 'bg-primary/10 text-primary border border-primary/40', dot: 'bg-primary' },
-    done: { label: 'Researched', className: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30', dot: 'bg-signal-strong' },
-    failed: { label: 'Failed', className: 'bg-destructive/10 text-destructive border border-destructive/40', dot: 'bg-destructive' },
-    skipped: { label: 'Skipped', className: 'bg-accent text-muted-foreground', dot: 'bg-muted-foreground' },
+    done: { label: 'Research complete', className: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30', dot: 'bg-signal-strong' },
+    failed: { label: 'Research failed', className: 'bg-destructive/10 text-destructive border border-destructive/40', dot: 'bg-destructive' },
   }
   const { label, className, dot } = map[status]
   return (

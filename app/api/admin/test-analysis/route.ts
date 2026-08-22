@@ -32,6 +32,7 @@ import {
 } from '@/lib/enrichment/web-enricher'
 import type { DiscoveredSource } from '@/lib/enrichment/discovery-engine'
 import { discoverCompanyWebsite, type WebsiteDiscoveryResult } from '@/lib/enrichment/website-discovery'
+import { lookupCompanyInExplee } from '@/lib/enrichment/explee-lookup'
 import { extractSignals, type ExtractorResult } from '@/lib/pipeline/evidence-extractor'
 import { clusterSignals } from '@/lib/pipeline/signal-clustering'
 import type { PrioritizedSource } from '@/lib/enrichment/source-prioritizer'
@@ -188,8 +189,13 @@ export async function POST(req: NextRequest) {
   let url = rawUrl
 
   if (!url && rawCompanyName) {
-    websiteDiscovery = await discoverCompanyWebsite(rawCompanyName)
-    logger.info('WebsiteDiscovery', `"${rawCompanyName}" -> status=${websiteDiscovery.status} domain=${websiteDiscovery.domain} confidence=${websiteDiscovery.confidence}`)
+    websiteDiscovery = await lookupCompanyInExplee(rawCompanyName)
+    if (websiteDiscovery) {
+      logger.info('WebsiteDiscovery', `"${rawCompanyName}" -> Explee match domain=${websiteDiscovery.domain}`)
+    } else {
+      websiteDiscovery = await discoverCompanyWebsite(rawCompanyName)
+      logger.info('WebsiteDiscovery', `"${rawCompanyName}" -> status=${websiteDiscovery.status} domain=${websiteDiscovery.domain} confidence=${websiteDiscovery.confidence}`)
+    }
     if (websiteDiscovery.status === 'confirmed' && websiteDiscovery.domain) {
       url = `https://${websiteDiscovery.domain}`
     }
