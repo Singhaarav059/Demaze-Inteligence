@@ -3,13 +3,20 @@
 // ============================================================
 // Replaces the abandoned multi-source company-universe experiment (GLEIF,
 // SEC EDGAR-as-a-discovery-source, Companies House, India MCA/data.gov.in,
-// OpenCorporates) — none of that code ever actually landed in this repo
-// (confirmed by a full-repo/all-branch grep before writing this file), so
-// there was nothing to delete. SEC EDGAR stays, unchanged, as a per-company
-// regulatory-filings ENRICHMENT source (lib/enrichment/sources/edgar-client.ts)
-// — a different job (context for a company already being researched) from
-// what this file does (surfacing NEW candidate companies), so it isn't part
-// of the "one provider" consolidation.
+// OpenCorporates, Bright Data) — that code lives on unmerged sibling
+// branches (claude/company-universe-validation-gnjx0z and local-only WIP
+// work found 2026-08-22), never on `main` and never on this branch, so
+// there is nothing to delete FROM this branch — see CLAUDE.md's 2026-08-22
+// entries for the corrected investigation history (an earlier version of
+// this comment claimed a full-repo/all-branch grep found nothing at all;
+// that grep ran before the company-universe-validation branch existed on
+// the remote, and never saw local-only uncommitted work on another
+// machine — both surfaced later the same day). SEC EDGAR stays, unchanged,
+// as a per-company regulatory-filings ENRICHMENT source
+// (lib/enrichment/sources/edgar-client.ts) — a different job (context for
+// a company already being researched) from what this file does (surfacing
+// NEW candidate companies), so it isn't part of the "one provider"
+// consolidation.
 //
 // Two real endpoints, confirmed against Coresignal's own docs before writing
 // any code (docs.coresignal.com — the egress proxy in this environment

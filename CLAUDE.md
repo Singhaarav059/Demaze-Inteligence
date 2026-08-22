@@ -5368,6 +5368,80 @@ field-name assumptions in `coresignal-client.ts`'s normalization logic
 against real data — see that file's header comment for exactly which
 assumptions are unverified.
 
+**Live smoke test attempted 2026-08-22, blocked by sandbox egress, not
+Coresignal.** With a real user-supplied `CORESIGNAL_API_KEY` in
+`.env.local`, `npm run coresignal:smoke-test` built and sent the correct
+request, but this cloud session's own network egress policy hard-blocks
+`api.coresignal.com` (`403: Host not in allowlist`) — the request never
+reached Coresignal's servers. Per this environment's own guidance, this is
+not something to route around; either the environment's egress allowlist
+needs `api.coresignal.com` added, or the same script needs to run from an
+unrestricted machine. Still genuinely unverified against real data.
+
+**CORRECTION 2026-08-22, same day — the investigation above was wrong
+about "nothing to remove," not because of a mistake in the grep, but
+because the grep ran before the real thing existed on the remote.** While
+debugging the egress block above, the user's local machine turned out to
+have an entire additional, mostly-uncommitted layer of work implementing
+exactly the "multi-source company-universe experiment" this session's
+original task described — it just wasn't reachable from this cloud
+session's GitHub view at investigation time. Re-investigated properly:
+- **`claude/company-universe-validation-gnjx0z`** (GitHub, unmerged into
+  `main`) is the real thing: `lib/company-universe/` with real provider
+  files for GLEIF, SEC EDGAR-as-a-discovery-source (`providers/sec-edgar.ts`
+  — distinct from and unrelated to the enrichment-only
+  `lib/enrichment/sources/edgar-client.ts` this session correctly left
+  alone), Companies House, and India MCA (OpenCorporates was already
+  removed on that same branch by its own later commit, "Remove
+  OpenCorporates from Company Universe; keep only 4 free/public sources").
+  Plus `lib/company-universe/{discovery,identity,ingestion,http-client,
+  types}.ts`, migration `026_company_universe.sql`, 2 new admin routes, a
+  benchmark comparison script, and ~1,600 lines of tests — a real,
+  substantial parallel discovery system.
+- The user's **local, uncommitted** working tree additionally had
+  `lib/enrichment/company-reaudit.ts`, `discovery-confidence.ts`,
+  `entity-classification.ts`, and 3 unapplied migrations
+  (`028_qualification_provenance.sql`/`029_qualification_evidence.sql`/
+  `030_company_registry_rls.sql`) — a further, even-later iteration on the
+  same theme, plus a separately-committed local `main` commit
+  ("Benchmark Bright Data as a secondary discovery + enrichment source")
+  never pushed to GitHub.
+- **None of this was ever merged into the shared `main`** — confirmed via
+  `git merge-base`: `company-universe-validation-gnjx0z` and this
+  session's own `coresignal-discovery-reset-rsup9a` branch share the exact
+  same base commit as `main`. So "removal" did not require surgical
+  deletion from shared history — this branch already represents the reset
+  target as-is; the actual action was simply confirming nothing from those
+  unmerged branches/commits gets adopted going forward. Re-verified via a
+  targeted grep (gleif/companies.house/india.mca/opencorporates/
+  company.universe/company_universe/brightdata) across `.ts`/`.tsx`/`.sql`/
+  `.json`/`.env*` on this branch: the only hit is this file's own header
+  comment explaining the decision — genuinely clean.
+- **One real, unrelated fix was bundled inside the unmerged branch and
+  worth rescuing on its own**: commit `7ca659e` ("Analyze pilot readiness
+  plan; flip suppression check to fail closed") — `isSuppressed()` used to
+  fail OPEN on a DB read error, in tension with the pilot-readiness plan's
+  own Rule 6 ("fail closed when suppression is uncertain"). Nothing to do
+  with company-universe; it happened to sit on the same branch's history.
+  Cherry-picked cleanly onto this branch (`git cherry-pick -x`, auto-merged
+  cleanly against this session's own CLAUDE.md edits, zero conflicts) —
+  touches `lib/outbound/sending/{suppression,campaign-limits,
+  provider-factory}.ts` and 3 test files, none of which this session's
+  Coresignal work overlaps.
+- The Bright Data commit and the local-only reaudit/discovery-confidence/
+  entity-classification/qualification-provenance work were deliberately
+  NOT pulled in — same "one provider, no second abstraction" scope this
+  whole reset exists to enforce. They remain wherever the user's local
+  machine left them (a `coresignal-plus-local` branch was asked for as a
+  safety-snapshot but its push status was never confirmed) — abandoned,
+  not merged, per the user's explicit instruction.
+
+**Re-verified after the cherry-pick**: `tsc --noEmit` clean, full suite
+**928/928** (926 + 2 new from the suppression fail-closed test file),
+`npm run build` clean, lint clean, and the residue grep above stayed
+clean. **Still not merged into `main`** — the user explicitly asked to
+hold off on that until reviewing this report.
+
 Items 1-3 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
 Discovery Engine) are all now complete with live verification.
 
