@@ -81,6 +81,28 @@ describe('buildMimeMessage', () => {
     expect(threaded).toContain('In-Reply-To: <orig@mail.gmail.com>')
     expect(threaded).toContain('References: <orig@mail.gmail.com>')
   })
+
+  // Deliverability audit fix (2026-08-20): Reply-To and List-Unsubscribe
+  // were both entirely absent before — no code path set them at all.
+  it('omits Reply-To when not provided, includes it when provided', () => {
+    const without = buildMimeMessage({ to: 'a@b.com', subject: 'S', bodyText: 'B' })
+    expect(without).not.toContain('Reply-To:')
+
+    const withReplyTo = buildMimeMessage({ to: 'a@b.com', subject: 'S', bodyText: 'B', replyTo: 'sender@example.com' })
+    expect(withReplyTo).toContain('Reply-To: sender@example.com')
+  })
+
+  it('omits List-Unsubscribe when not provided, includes both it and the RFC 8058 one-click header when provided', () => {
+    const without = buildMimeMessage({ to: 'a@b.com', subject: 'S', bodyText: 'B' })
+    expect(without).not.toContain('List-Unsubscribe')
+
+    const withHeader = buildMimeMessage({
+      to: 'a@b.com', subject: 'S', bodyText: 'B',
+      listUnsubscribe: '<mailto:me@example.com?subject=unsubscribe>, <https://app.example.com/api/unsubscribe/abc>',
+    })
+    expect(withHeader).toContain('List-Unsubscribe: <mailto:me@example.com?subject=unsubscribe>, <https://app.example.com/api/unsubscribe/abc>')
+    expect(withHeader).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click')
+  })
 })
 
 describe('buildAuthUrl', () => {
@@ -282,8 +304,8 @@ describe('sendGmailMessage', () => {
   // we never got Gmail's response, so we can't tell whether it actually
   // sent. Callers must treat this differently from a definite rejection.
   it('marks a timeout as ambiguous:true', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url, opts: any) => new Promise((_resolve, reject) => {
-      opts.signal.addEventListener('abort', () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, opts: RequestInit) => new Promise((_resolve, reject) => {
+      opts.signal!.addEventListener('abort', () => {
         const err = new Error('The operation was aborted')
         err.name = 'AbortError'
         reject(err)

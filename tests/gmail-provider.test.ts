@@ -87,6 +87,58 @@ describe('GmailSendingProvider.sendEmail', () => {
       expect.objectContaining({ threadId: 'thread-1', inReplyTo: '<orig@mail.gmail.com>', references: '<orig@mail.gmail.com>' })
     )
   })
+
+  // Deliverability audit fix (2026-08-20): before this, nothing set
+  // Reply-To or List-Unsubscribe on any send at all.
+  describe('replyTo / listUnsubscribe wiring', () => {
+    const CRED_WITH_EMAIL = { ...CRED, email: 'sender@gmail.com' }
+
+    it('sets replyTo to the connected account\'s own email', async () => {
+      vi.mocked(getGmailCredential).mockResolvedValue(CRED_WITH_EMAIL)
+      vi.mocked(refreshAccessToken).mockResolvedValue({ ok: true, accessToken: 'AT', expiresIn: 3600 })
+      vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'm', threadId: 't' })
+
+      await GmailSendingProvider.sendEmail(REQUEST)
+      expect(sendGmailMessage).toHaveBeenCalledWith(expect.objectContaining({ replyTo: 'sender@gmail.com' }))
+    })
+
+    it('builds a List-Unsubscribe header (mailto fallback) even without OUTBOUND_TRACKING_BASE_URL configured', async () => {
+      const original = process.env.OUTBOUND_TRACKING_BASE_URL
+      delete process.env.OUTBOUND_TRACKING_BASE_URL
+      try {
+        vi.mocked(getGmailCredential).mockResolvedValue(CRED_WITH_EMAIL)
+        vi.mocked(refreshAccessToken).mockResolvedValue({ ok: true, accessToken: 'AT', expiresIn: 3600 })
+        vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'm', threadId: 't' })
+
+        await GmailSendingProvider.sendEmail({ ...REQUEST, campaignContactId: 'cc-1' })
+        expect(sendGmailMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ listUnsubscribe: '<mailto:sender@gmail.com?subject=unsubscribe>' })
+        )
+      } finally {
+        if (original) process.env.OUTBOUND_TRACKING_BASE_URL = original
+      }
+    })
+
+    it('includes the https unsubscribe link alongside mailto when OUTBOUND_TRACKING_BASE_URL is configured', async () => {
+      const original = process.env.OUTBOUND_TRACKING_BASE_URL
+      process.env.OUTBOUND_TRACKING_BASE_URL = 'https://app.example.com'
+      try {
+        vi.mocked(getGmailCredential).mockResolvedValue(CRED_WITH_EMAIL)
+        vi.mocked(refreshAccessToken).mockResolvedValue({ ok: true, accessToken: 'AT', expiresIn: 3600 })
+        vi.mocked(sendGmailMessage).mockResolvedValue({ ok: true, messageId: 'm', threadId: 't' })
+
+        await GmailSendingProvider.sendEmail({ ...REQUEST, campaignContactId: 'cc-1' })
+        expect(sendGmailMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            listUnsubscribe: '<mailto:sender@gmail.com?subject=unsubscribe>, <https://app.example.com/api/unsubscribe/cc-1>',
+          })
+        )
+      } finally {
+        if (original) process.env.OUTBOUND_TRACKING_BASE_URL = original
+        else delete process.env.OUTBOUND_TRACKING_BASE_URL
+      }
+    })
+  })
 })
 
 describe('GmailSendingProvider — capability gaps reported honestly, not faked', () => {

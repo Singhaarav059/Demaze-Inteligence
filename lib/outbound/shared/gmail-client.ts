@@ -276,13 +276,23 @@ export function buildMimeMessage(params: {
   from?: string
   inReplyTo?: string
   references?: string
+  replyTo?: string
+  /** RFC 8058 header value, e.g. "<https://.../unsubscribe/id>" or "<mailto:...>, <https://...>" — never built here, caller supplies the full header value. */
+  listUnsubscribe?: string
 }): string {
   const headerLines = [
     `To: ${params.to}`,
     ...(params.from ? [`From: ${params.from}`] : []),
+    ...(params.replyTo ? [`Reply-To: ${params.replyTo}`] : []),
     `Subject: ${encodeSubjectHeader(params.subject)}`,
     ...(params.inReplyTo ? [`In-Reply-To: ${params.inReplyTo}`] : []),
     ...(params.references ? [`References: ${params.references}`] : []),
+    ...(params.listUnsubscribe ? [
+      `List-Unsubscribe: ${params.listUnsubscribe}`,
+      // RFC 8058 — tells a supporting mail client to POST with no
+      // confirmation UI, rather than opening the link in a browser tab.
+      'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
+    ] : []),
     'MIME-Version: 1.0',
   ]
 
@@ -353,6 +363,8 @@ export async function sendGmailMessage(
     threadId?: string
     inReplyTo?: string
     references?: string
+    replyTo?: string
+    listUnsubscribe?: string
   },
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<GmailSendResult> {

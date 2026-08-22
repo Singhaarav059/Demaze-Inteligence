@@ -5442,6 +5442,117 @@ session's GitHub view at investigation time. Re-investigated properly:
 clean. **Still not merged into `main`** — the user explicitly asked to
 hold off on that until reviewing this report.
 
+## RESOLVED 2026-08-22 (same day, later) — reconciled with a THIRD,
+## independent line of local work; archived, one unrelated fix rescued
+The correction above assumed `claude/company-universe-validation-gnjx0z`
+was the only other line of work. It wasn't. While chasing the sandbox's
+Coresignal egress block, the user's local machine turned out to be running
+a completely separate local Claude Code session on its own branch,
+descended from the SAME base commit (`e49161c`, identical to `main` and
+this branch) but with an entirely independent 3-commit history never
+built on top of `company-universe-validation-gnjx0z` at all:
+- `dacccef "Add global company discovery with persistent identity, sector
+  qualification, and dedup"` — a from-scratch custom crawler/discovery
+  engine (`lib/pipeline/smart-crawler.ts`, `direct-fetcher.ts`,
+  `html-extractor.ts`, `evidence-ledger.ts`, `lib/enrichment/search-router.ts`,
+  `discovery-funnel.ts`, its own `026_companies.sql` — a different,
+  colliding migration 026 than `company-universe-validation`'s own
+  `026_company_universe.sql`, confirming these two lines never coordinated
+  with each other). Not GLEIF/EDGAR/Companies-House/MCA at all — a third,
+  independent multi-source-shaped approach.
+- `3fe3d49 "Benchmark Bright Data as a secondary discovery + enrichment
+  source"` — already known from the local `git log` shown earlier.
+- `5a0f4cb "WIP: local uncommitted multi-source company-universe
+  experiment work"` — the safety-snapshot commit this session asked the
+  user to make of everything that had been sitting uncommitted (company-
+  reaudit.ts, discovery-confidence.ts, entity-classification.ts, 3 more
+  migrations, and — bundled in alongside all of that — two genuinely
+  unrelated pieces: a real one-click-unsubscribe compliance feature
+  (`app/api/unsubscribe/[campaignContactId]/route.ts` +
+  `027_unsubscribe_event.sql`, adding `'unsubscribed'` to
+  `outbound_campaign_events`' allowed types) and a Gmail deliverability
+  fix (real `Reply-To` + RFC 8058 `List-Unsubscribe`/
+  `List-Unsubscribe-Post` headers — before this, `buildMimeMessage()` set
+  neither header at all, a real gap found in "the deliverability audit,
+  2026-08-20" per the ported code's own comments).
+
+Pushed to GitHub as `coresignal-plus-local` (confirmed via
+`git ls-remote --heads origin` — this session had to re-check twice; the
+user's first `git push` attempt silently didn't reach GitHub, a second
+one from the local machine did). **User's explicit decision**: archive
+this whole line, continue only from this session's Coresignal branch —
+same "one provider, no second abstraction" call as the correction above,
+now applied a second time to a second, independently-discovered line of
+sprawl.
+
+**Archived, not merged, not deleted** — `coresignal-plus-local`,
+`claude/company-universe-validation-gnjx0z`, and
+`claude/analyze-new-md-file-53gho6` all remain on GitHub under their own
+names, permanently retrievable, just never adopted as the active line.
+
+**Rescued separately** (same "unrelated fix bundled into an abandoned
+branch, worth pulling out on its own" pattern as the suppression
+cherry-pick above) — unlike the suppression fix, this couldn't be a clean
+`git cherry-pick` (the unsubscribe/Gmail changes were bundled into one
+giant WIP commit alongside all the archived multi-source code, not their
+own atomic commit), so the exact resulting file content for just the
+affected files was pulled directly from `5a0f4cb` (`git show
+5a0f4cb:<path>`) and applied on top of this branch instead:
+- `app/api/unsubscribe/[campaignContactId]/route.ts` (new) + renumbered
+  `supabase/migrations/026_unsubscribe_event.sql` (was `027_` in the
+  archived line's own numbering — renumbered to fit this branch's actual
+  sequence, since this branch never had the colliding `026_companies.sql`/
+  `026_company_universe.sql` migrations from either archived line; the SQL
+  itself is unchanged, only the filename/header comment's migration number).
+- `lib/outbound/sending/providers/gmail.ts` + `lib/outbound/shared/
+  gmail-client.ts` (Reply-To + List-Unsubscribe/List-Unsubscribe-Post
+  wiring) + their already-written paired tests
+  (`tests/gmail-client.test.ts`, `tests/gmail-provider.test.ts`) — ported
+  as complete file contents (`git show 5a0f4cb:<path>`), safe because
+  neither file was touched by anything else on the archived line
+  (confirmed via `git show --stat` on all 3 of that line's commits before
+  copying) or by this session's own Coresignal work.
+- **Found and fixed one real pre-existing lint issue while porting**: the
+  ported `tests/gmail-client.test.ts` carried one `opts: any` parameter in
+  an unrelated, pre-existing test ("marks a timeout as ambiguous:true") —
+  present in that file since before either line of company-universe work
+  touched it, just never caught. Fixed to a real `RequestInit` type (with
+  a `!` on `.signal` — `RequestInit.signal` is nullable in TS's lib types,
+  always real content in this test) rather than leaving a lint regression
+  behind. Not part of the deliverability fix itself, fixed anyway since it
+  was blocking a clean lint on the file being ported.
+
+**Not ported, deliberately**: `tests/helpers/fake-supabase.ts`'s new
+`.lte()` filter method from the same WIP commit — checked and confirmed
+nothing in the unsubscribe/Gmail port actually calls `.lte()` (the
+unsubscribe route only uses `.eq()`/`.maybeSingle()`); that helper method
+exists to support the archived `company-qualification.ts`/`company-size.ts`
+code's own queries, so porting it here would be dead test infrastructure.
+
+**Open, not decided**: per the local session's own status report,
+migrations 027–030 (unsubscribe-event, qualification-provenance,
+qualification-evidence, company-registry-rls) were already run against
+the **live** Supabase database on the archived line's own numbering. This
+session's port keeps the unsubscribe schema change (harmless, additive,
+same content either way) but does NOT touch 028/029/030 — those tables/
+columns/RLS policies remain live in production, unused by anything on
+this branch, until the user decides whether to write a rollback migration
+or leave them as inert schema. Flagged, not acted on — a live-DB decision,
+not a code one.
+
+**Verified after the port**: `tsc --noEmit` clean, full suite **933/933**
+(928 + 5 new — the 2 already-written gmail-client tests + 3
+gmail-provider tests), `npm run build` clean (confirms
+`/api/unsubscribe/[campaignContactId]` registers correctly), lint clean,
+and a second residue grep (extended to also cover entity-classification/
+discovery-confidence/company-reaudit, the 3 new archived-line-specific
+terms) came back with only pre-existing false positives (an unrelated
+`discovery_confidence` field already used by the decision-maker-discovery
+feature, matched by the regex's own looseness — spot-checked directly,
+confirmed not real residue) plus this session's own explanatory comments.
+Still not merged into `main` — same "hold off until reviewed" instruction
+as before.
+
 Items 1-3 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
 Discovery Engine) are all now complete with live verification.
 
