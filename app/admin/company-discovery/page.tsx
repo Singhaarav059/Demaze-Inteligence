@@ -133,14 +133,8 @@ function CompanyDiscoveryInner() {
     icpSegment, setIcpSegment, excludeCompanyName, setExcludeCompanyName,
     searching, searchError, setSearchError, sufficiency, setSufficiency,
     discoveryReason, setDiscoveryReason, setCompanies, handleSearch,
-    handleCoresignalSearch, persistResult,
+    persistResult,
   } = search
-
-  // ── Coresignal firmographic search (industry/country/employee range) ──
-  const [csIndustry, setCsIndustry] = useState('')
-  const [csCountry, setCsCountry] = useState('')
-  const [csEmployeesMin, setCsEmployeesMin] = useState('')
-  const [csEmployeesMax, setCsEmployeesMax] = useState('')
 
   // ── Step 1: Research Demaze ──────────────────────────────────
   const [profileStatus, setProfileStatus] = useState<ProfileStatus>('idle')
@@ -456,58 +450,6 @@ function CompanyDiscoveryInner() {
                   />
                   <Button size="sm" variant="outline" className="border-border bg-card text-foreground/90 hover:bg-accent" onClick={() => handleSearch()} disabled={searching || !icpSegment.trim()}>
                     {searching ? <><Spinner /> Searching…</> : 'Find Companies for This Segment'}
-                  </Button>
-                </div>
-              </details>
-
-              <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground/70 hover:text-foreground/80">Search Coresignal by firmographics (industry, geography, size)</summary>
-                <div className="mt-3 space-y-2 max-w-md">
-                  <Input
-                    aria-label="Industry"
-                    value={csIndustry}
-                    onChange={(e) => setCsIndustry(e.target.value)}
-                    placeholder="Industry, e.g. Manufacturing"
-                    className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
-                  />
-                  <Input
-                    aria-label="Country"
-                    value={csCountry}
-                    onChange={(e) => setCsCountry(e.target.value)}
-                    placeholder="Country, e.g. India"
-                    className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Input
-                      aria-label="Minimum employees"
-                      type="number"
-                      value={csEmployeesMin}
-                      onChange={(e) => setCsEmployeesMin(e.target.value)}
-                      placeholder="Min employees"
-                      className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
-                    />
-                    <Input
-                      aria-label="Maximum employees"
-                      type="number"
-                      value={csEmployeesMax}
-                      onChange={(e) => setCsEmployeesMax(e.target.value)}
-                      placeholder="Max employees"
-                      className="bg-background border-border text-foreground placeholder:text-muted-foreground/60 text-sm"
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-border bg-card text-foreground/90 hover:bg-accent"
-                    disabled={searching || (!csIndustry.trim() && !csCountry.trim() && !csEmployeesMin.trim() && !csEmployeesMax.trim())}
-                    onClick={() => handleCoresignalSearch({
-                      industry: csIndustry.trim() || undefined,
-                      country: csCountry.trim() || undefined,
-                      employeesCountGte: csEmployeesMin.trim() ? Number(csEmployeesMin) : undefined,
-                      employeesCountLte: csEmployeesMax.trim() ? Number(csEmployeesMax) : undefined,
-                    })}
-                  >
-                    {searching ? <><Spinner /> Searching Coresignal…</> : 'Search Coresignal'}
                   </Button>
                 </div>
               </details>

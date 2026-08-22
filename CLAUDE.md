@@ -3405,6 +3405,66 @@ remains mandatory") and Section 17 stop conditions ("business decision
 required," "real email sending required") — not something to advance
 autonomously.
 
+## RESOLVED 2026-08-22 (later same day) — Coresignal removed entirely;
+## Explee is now the only external company/people data source under
+## consideration (nothing built yet)
+User decided to stop pursuing Coresignal (blocked on real account billing,
+see the entries above) and focus exclusively on Explee instead, with an
+explicit "do not add another provider, do not build a multi-provider
+abstraction" constraint — this is a removal-only session, no Explee code
+was written.
+
+**Removed**: `lib/enrichment/coresignal-discovery.ts`,
+`lib/enrichment/sources/coresignal-client.ts`,
+`app/api/admin/coresignal-discovery/route.ts` (whole route),
+`scripts/coresignal-smoke-test.ts`, `tests/coresignal-client.test.ts`,
+`tests/coresignal-discovery.test.ts`, the `coresignal:smoke-test` npm
+script, `CORESIGNAL_API_KEY`/`CORESIGNAL_API_BASE_URL` from `.env.example`
+(and the matching line from the untracked `.env.local`). In
+`lib/enrichment/company-discovery.ts`: dropped `CompanyMatch.source?:
+'search' | 'coresignal'` — confirmed via grep this field was set ONLY by
+the now-deleted `coresignal-discovery.ts` (the search-based
+`discoverCompanies()` path never set it, and no UI component read it), so
+it was dead weight with Coresignal gone, not a field worth keeping
+speculatively for Explee. In `app/admin/company-discovery/
+useCompanyDiscoverySearch.ts` and `page.tsx`: removed
+`CoresignalSearchFilters`, `handleCoresignalSearch()`, and the "Search
+Coresignal by firmographics" UI panel (industry/country/employee-range
+inputs + button) — the plain free-text segment search panel next to it
+(`handleSearch()`, unrelated, pre-existing) was untouched.
+
+**Retained, unchanged**: the entire existing Demaze pipeline — search-
+based `discoverCompanies()` in `company-discovery.ts` (extraction,
+`classifyCompanyRejection()`, domain resolution via
+`discoverCompanyWebsite()`), `filterAlreadyResearched()` (shared, still
+used by the plain `company-discovery` route), Competitor Discovery Engine,
+ICP Generator, Market Intelligence, sector-playbook qualification, all
+outbound/enrichment/outreach modules. None of these ever depended on
+Coresignal. GLEIF/SEC-EDGAR-as-discovery/Companies House/India MCA/
+OpenCorporates/Bright Data/Apollo remain exactly as they were before this
+session — archived on unmerged branches or already fully removed (Apollo),
+none touched or restored.
+
+**Verified**: repo-wide case-insensitive grep for "coresignal" now matches
+only this CLAUDE.md file's own historical narrative (expected, matches this
+file's own "append resolution notes, don't erase history" convention) —
+zero matches in any code, test, script, route, or env file. `tsc --noEmit`
+clean, full suite 908/908 passing (926 pre-existing − 22 deleted Coresignal
+tests = 904, but 4 net-new assertions landed on `main` between the last
+count and now, e.g. the suppression fail-closed work — 908 is the real,
+freshly-run count, not derived by arithmetic). `npm run build` clean,
+`/api/admin/coresignal-discovery` correctly absent from the route
+manifest, no other route affected.
+
+**Explee integration: not started.** This session was removal-only per
+the user's explicit instruction ("do not merge or add anything else until
+I give the next instruction") — no Explee client, route, types, or UI
+exist yet. Whichever future session builds it should follow the same
+single-clean-integration shape this repo already used for EDGAR/Prospeo/
+Coresignal (one client module, one discovery module, one route, additive
+to `company-discovery.ts`'s existing `CompanyMatch` shape) rather than
+reintroducing a provider-abstraction layer.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above
@@ -5377,6 +5437,21 @@ reached Coresignal's servers. Per this environment's own guidance, this is
 not something to route around; either the environment's egress allowlist
 needs `api.coresignal.com` added, or the same script needs to run from an
 unrestricted machine. Still genuinely unverified against real data.
+
+**Live smoke test re-attempted 2026-08-22, later same day — egress unblocked,
+real request reached Coresignal.** `npm run coresignal:smoke-test` (same
+Manufacturing/India/50-1000-employees query) completed in 3.3s and returned
+25 real candidate IDs from the search filter endpoint — confirms the search
+request shape (auth header, filter body field names) is correct against the
+real API. `collectCoresignalCompany()` then failed on every one of the 25
+IDs with `Coresignal API 402: {"detail":"Billing: Insufficient credits"}` —
+a real, informative billing error (not a 400/404), same "a plan-restriction
+error confirms the endpoint/request shape is right" reasoning this file
+already used for Apollo's People Match block. **Conclusion**: search is
+code-and-shape verified against real data; collect (and therefore full
+normalization into `CompanyMatch`) remains unverified until the account has
+credits. Re-run the smoke test once credits are added before trusting
+`coresignal-client.ts`'s response-field assumptions for the collect step.
 
 **CORRECTION 2026-08-22, same day — the investigation above was wrong
 about "nothing to remove," not because of a mistake in the grep, but
