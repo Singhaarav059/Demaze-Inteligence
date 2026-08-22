@@ -21,7 +21,13 @@ import type { TargetSector } from '../sector-playbook/types'
 // phrased as standalone search queries rather than content-matching
 // keywords — a signal word like "plant" is meant to match already-scraped
 // page text, not stand alone as a useful search query.
-const SECTOR_SEARCH_TERMS: Record<TargetSector, string[]> = {
+// Exported for reuse by benchmarks/brightdata-global-comparison.ts, which
+// needs the same per-sector vocabulary but composed against its own
+// controlled, explicit region set (not this file's own broader
+// REGION_QUALIFIERS rotation pool) — reusing the term list, not
+// duplicating it, per this codebase's "check what already exists first"
+// discipline.
+export const SECTOR_SEARCH_TERMS: Record<TargetSector, string[]> = {
   manufacturing: [
     'manufacturing company', 'industrial manufacturer', 'component manufacturer',
     'contract manufacturer', 'process manufacturer', 'equipment manufacturer',

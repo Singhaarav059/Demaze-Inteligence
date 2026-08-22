@@ -23,6 +23,16 @@ vi.mock('../lib/enrichment/website-discovery', () => ({
   discoverCompanyWebsite: vi.fn(async () => ({ status: 'not_found', domain: null, confidence: 'none', candidates: [], reason: 'mocked' })),
 }))
 
+// company-qualification.ts's assessCompanySize() now has a 3rd, LLM-backed
+// tier (added 2026-08-20) reached whenever snippet+homepage evidence both
+// stay 'unknown' — exactly this test file's fixtures (no domain, no stated
+// revenue). Mocked to always decline ("unknown"), matching this test
+// file's own "zero live network/API calls" discipline and preserving the
+// existing qualify-despite-unknown-size behavior these tests assert on.
+vi.mock('../lib/ai/provider-factory', () => ({
+  getCompletion: vi.fn(async () => ({ content: '{"scale":"unknown"}', model: 'test', providerName: 'test' })),
+}))
+
 import { discoverCompaniesUntil } from '../lib/enrichment/company-discovery'
 
 beforeEach(() => {

@@ -3550,6 +3550,197 @@ reproduce, not reliably forceable on demand; the fix targets the
 confirmed root cause (no retry on a confirmed-real failure class) rather
 than a hypothesis.
 
+## RESOLVED 2026-08-21 — qualification evidence persistence, genuine
+## re-audit reconfirmation, company_registry RLS fixed, knowledge-tier
+## measured (mega-cap/SME benchmarks)
+Follow-up to the 2026-08-20 qualification-provenance/re-audit work above.
+That session's own dry-run against the 259-262 real qualified rows found
+0 rows cleanly re-confirmed — root cause: `company_registry` never
+persisted the search-snippet evidence a sector/ICP-fit decision was based
+on, so re-audit's `sectorSignalMatch` was permanently hardcoded to
+`'no_evidence'`, capping every score below `QUALIFIED_THRESHOLD` (70) no
+matter how good the company actually was. This session closed that gap,
+made re-audit capable of real `STILL_QUALIFIED` outcomes, fixed
+`company_registry`'s missing RLS (the only table in the schema without
+it), and measured (not assumed) the AI-knowledge size tier's real recall/
+false-rejection behavior.
+
+**1. Evidence model.** Investigated what was already stored vs. discarded
+before writing any migration, per the governing task's own instruction.
+`qualifyCandidate()` (`lib/enrichment/company-qualification.ts`) was
+already computing a boolean sector-signal match and a `candidate.domain`
+string, then throwing both away — the richer `CompanyMatch` shape
+(`domain_confidence`, `source_urls`) discovery already had was never even
+passed in. Migration `029_qualification_evidence.sql` (applied live via
+Supabase MCP, not just drafted) adds exactly two new JSONB columns —
+`sector_evidence` and `domain_evidence` — not four. Geography was
+considered and explicitly NOT added: no code path in this qualification
+gate resolves or verifies a candidate's country today, so a
+`geography_evidence` column would sit permanently NULL — inventing a
+column with nothing to populate it violates "do not invent evidence
+retroactively," so it's a documented gap, not a column. ICP fit was also
+considered separately and folded into `sector_evidence` rather than given
+its own column, since sector-signal matching IS the only ICP-fit check
+this gate makes (a broader ICP criterion is a different, post-research
+module, `lib/enrichment/icp-generator.ts`) — a second column would just
+duplicate the first.
+- `SectorEvidence` (`lib/companies/identity.ts`): `{sector, matched,
+  matchedSignals, query, snippet}` — new `matchSectorSignalsDetailed()` in
+  `company-qualification.ts` (the existing `matchesSectorSignals()`
+  boolean wrapper now delegates to it) returns WHICH signal words matched,
+  not just pass/fail, so the stored snippet can be re-matched against a
+  future ruleset change.
+- `DomainEvidence`: `{domain, confidence, sourceUrls}` — `domainConfidence`/
+  `sourceUrls` added to `QualificationCandidate`, threaded through from
+  every real caller that already had them (`qualifyAndAnnotate`'s generic
+  constraint widened to accept `CompanyMatch`'s `domain_confidence`/
+  `source_urls`; `discoverCompaniesUntil`'s direct `qualifyCandidate()`
+  call in `company-discovery.ts` does the same) — no new discovery-side
+  computation, purely stopping an existing discard.
+- Both are computed once per `qualifyCandidate()` call and threaded into
+  EVERY `markQualified`/`markDisqualified` write from that point forward
+  (wrong-sector rejection, outside-size-range rejection, final qualified
+  path) — a rejection before the sector/domain checks ever ran (the
+  entity-type hard gate) honestly persists both as `null`, never
+  fabricated.
+
+**2. Re-audit.** `lib/enrichment/company-reaudit.ts` rewritten so a row
+WITH stored `sector_evidence` gets sector/ICP fit genuinely re-verified —
+`matchSectorSignalsDetailed()` re-run against the stored snippet under the
+CURRENT sector signal list, not just replayed — and domain confirmation is
+reused from stored `DomainEvidence`, falling back to the mere presence of
+`company_registry.canonical_domain` (only ever set from an
+already-confirmed domain — a legitimate reuse of an existing field, not a
+guess) for rows that predate migration 029. `ReAuditOutcome` renamed to
+match the governing task's own terminology: `'still_qualified'`
+(`'unchanged'` kept as a type-level alias), `'now_review'`,
+`'now_disqualified'`. New `ReAuditReasonCategory`
+(`'ENTITY_TYPE'|'SECTOR'|'SIZE'|'NONE'`) on every result — the
+disqualify-write path now maps this to the correct `RejectionReason`
+(`other`/`wrong_sector`/`outside_size_range`) instead of hardcoding
+`'outside_size_range'` for every disqualification regardless of actual
+cause, a real (if low-impact, since `rejection_reason` was diagnostic-only)
+bug fixed along the way. A row whose stored evidence positively
+CONTRADICTS the current ruleset (sector no longer matches) now correctly
+returns `now_disqualified`/`SECTOR`, not just a downgrade to review — the
+"if evidence positively contradicts qualification, NOW_DISQUALIFIED is
+correct" rule from the governing task, previously impossible to implement
+without stored evidence to contradict.
+New tests (`tests/company-qualification.test.ts` +3,
+`tests/company-reaudit.test.ts` +4): evidence persisted on a qualified row
+(sector+domain), sector_evidence with `matched:false` on a wrong-sector
+rejection, null evidence on an entity-type rejection (never ran), a row
+with real stored evidence reaching genuine `STILL_QUALIFIED`, a row whose
+stored evidence no longer matches becoming `NOW_DISQUALIFIED`/`SECTOR`, a
+legacy row with no stored evidence correctly staying `NOW_REVIEW` (not
+falsely `STILL_QUALIFIED`), and `reasonCategory` correctly distinguishing
+`ENTITY_TYPE` from `SIZE`. `tsc --noEmit` clean, full suite 1192/1192 (was
+1185/1185 going into this session).
+
+**3. RLS — fixed and live-verified, not just migrated.** Investigated the
+actual access model before touching anything, per the governing task's own
+instruction: grepped every `app/**` file for `createBrowserClient()` (the
+anon-key client, `lib/supabase/client.ts`) — zero callers anywhere in the
+app. Every real read/write of `company_registry` goes through an API route
+using `createServerClient()` (service-role key, always bypasses RLS
+regardless of policy). Confirmed via Supabase's own advisor that
+`company_registry` was the ONLY table in this entire schema created
+without RLS — every other table (companies, analyses, outbound_*,
+pipeline_test_runs, etc.) already had RLS ON with zero policies, the exact
+established convention (default-deny for anon/authenticated, service-role
+unaffected). Migration `030_company_registry_rls.sql` (applied live) is a
+single `ALTER TABLE company_registry ENABLE ROW LEVEL SECURITY;` — no
+policies added, matching every other table, since nothing needs
+anon/authenticated access to this table today. **Live-verified against the
+real REST API, not assumed**: anon key GET now returns `200 []` (empty,
+was real row data before) and anon key POST returns `401` with
+`"new row violates row-level security policy"`; service-role GET/POST
+(the exact mechanism every app route uses) both still succeed unchanged —
+confirmed via direct curl against `https://wkonxntvnihwbzynvuvz.supabase.co`
+with both keys, plus a throwaway insert/delete round-trip. Supabase's own
+security advisor confirmed the critical `rls_disabled_in_public` finding
+is gone post-migration, `company_registry` now shows only the same benign
+`rls_enabled_no_policy` INFO note every other table already carries.
+
+**4. Knowledge-tier measurement — new benchmark, not another blacklist.**
+Per the explicit "do not hardcode more mega-cap names" instruction, built
+`benchmarks/knowledge-tier-benchmark.ts` — calls
+`assessCompanySizeViaKnowledge()` directly (no search API cost) against
+two fixed fixture sets, benchmark-only, never referenced by production
+code: `MEGA_CAP_FIXTURES` (the governing task's own list — BMW, Audi,
+Mini, Porsche, Volvo, Jaguar, Land Rover, Maruti Suzuki, JCB, Tencent,
+Jacobs Solutions, Fluor, Murata Manufacturing, Murata Vietnam, Robert
+Bosch GmbH, O'Reilly Automotive, Lear, Bilfinger Tebodin — plus 8 more for
+sector/region spread) and `SME_FIXTURES` (12 realistic-but-synthetic
+mid-market names, same naming convention as this repo's own qualification
+tests — deliberately synthetic, not real obscure companies, since
+fabricating an assumption about a real company's true size would be worse
+than an honest synthetic name; a name the LLM has never seen is the purest
+test of over-rejection). **Live-run results**: mega-cap recall **100%
+(26/26)**, including every name this repo's own history had previously
+found the tier missing (Lear, Bilfinger Tebodin, BMW, etc. — all correctly
+`too_large` this run). SME false-rejection rate **8.3% (1/12)** — a real,
+not-swept-under-the-rug finding: the synthetic name "Northgate
+Marketplace" was rejected because the LLM matched it to a real chain
+("Northgate Gonzalez Market") by name resemblance, not genuine knowledge of
+the fictional company — a name-collision false positive, not a
+hallucination-from-nothing one, worth knowing about but not something this
+session's benchmark exists to fix (the prompt in
+`assessCompanySizeViaKnowledge()` was NOT touched — measuring, not
+tuning, per the governing task's explicit instruction). 38 calls total,
+avg 1755ms, ~$0.004. `sizeKnowledgeTierMetrics` instrumentation
+(pre-existing) reused unchanged; also wired into `reaudit-companies.ts`'s
+own CLI output (new `Knowledge-tier usage:` line) so a future full
+registry re-audit reports calls/latency/cost/rejection-rate/unknown-rate
+without needing a separate script.
+
+**5. Real dry-run re-audit against the live 259-row registry** (real
+Supabase + LLM quota, ~19 min wall time, background process — same
+"explicit dry-run-first" discipline as the original 2026-08-20 run;
+`REAUDIT_DRY_RUN` stayed at its default `true`, zero rows mutated,
+verified by re-querying `company_registry` status counts unchanged after).
+Result: **259 evaluated → 0 still_qualified, 102 now_review, 157
+now_disqualified** (142 SIZE + 15 ENTITY_TYPE). Every one of the 142 SIZE
+disqualifications resolved via the AI-knowledge tier specifically (0 via
+deterministic stored `size_evidence`) — spot-checked a large sample of the
+142 names by hand, every one is a genuine, correctly-identified mega-cap
+or a subsidiary of one (Bosch, Ford, Hyundai, Zalando, Costco, Meta, TSMC,
+Souq/Noon/Shopee/Lazada, etc.) — no false positives found in manual
+review. **0 `still_qualified` is the expected, honest outcome, not a
+regression or an unsolved bug**: every one of these 259 rows was qualified
+BEFORE migration 029 existed, so none of them have a stored
+`sector_evidence` record for the new re-audit logic to re-verify against —
+this session's own new unit tests (and the underlying mechanism) prove
+`STILL_QUALIFIED` is genuinely reachable once evidence exists; it just
+can't be reconstructed retroactively for rows that predate the fix,
+exactly as the governing task's own "do not invent evidence retroactively"
+instruction requires. All 102 `now_review` rows are rows with no stored
+sector evidence AND (per their printed reasons) size still 'unknown' even
+after the knowledge tier declined — an honest REVIEW, not a forced
+verdict either way. **Registry mutation was NOT applied** — this remains
+a dry run; the 157/102/0 breakdown above is a recommendation for a human
+to review, not something this session enacted.
+
+**Not done / real remaining risks, evidence-backed, not speculative**:
+(1) the 259 currently-`qualified` rows are STILL sitting on
+pre-evidence-persistence, pre-re-audit-fix status — nothing about them
+changed, since this session deliberately stayed dry-run-only per Priority
+3's explicit instruction; a human decision is needed on whether/how to act
+on the 157/102 breakdown above (e.g. apply the 142 knowledge-tier-based
+SIZE disqualifications with high confidence given the 0-false-positive
+manual spot-check, while treating the 102 REVIEW rows as needing fresh
+research rather than either auto-qualifying or auto-rejecting them); (2)
+the SME false-rejection finding (Northgate Marketplace, a name-collision
+false positive) is real and could recur for any synthetic or genuinely
+obscure company whose name resembles a real large brand — not fixed, only
+measured, per this session's explicit "measure, don't tune" scope; (3) no
+automated test exercises RLS itself (correctly — this repo's own tests
+never make live DB/network calls) — the RLS guarantee is proven only by
+this session's live curl verification against the real project, not by
+anything `npm test` will catch on a future regression; a future migration
+that accidentally re-disables RLS on this table would only be caught by
+re-running Supabase's advisor or a manual curl check, not CI.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above

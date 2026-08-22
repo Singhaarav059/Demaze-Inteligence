@@ -1,0 +1,470 @@
+{
+  "ranAt": "2026-08-20T09:07:42.570Z",
+  "queriesPerCell": 4,
+  "regions": [
+    "North America",
+    "South Asia",
+    "Europe + UK"
+  ],
+  "sectors": [
+    "manufacturing",
+    "automotive",
+    "ecommerce"
+  ],
+  "cells": [
+    {
+      "sector": "manufacturing",
+      "region": "North America",
+      "rawDiscovered": 64,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 10,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Boeing",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Boeing\")"
+        },
+        {
+          "name": "HP",
+          "reason": "too short to classify confidently"
+        },
+        {
+          "name": "Johnson & Johnson",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Johnson & Johnson\")"
+        },
+        {
+          "name": "The Boeing Company",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Boeing\")"
+        },
+        {
+          "name": "National Association of Manufacturers",
+          "reason": "trade association/industry body, not a company"
+        },
+        {
+          "name": "Cummins Inc.",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Cummins Inc\")"
+        },
+        {
+          "name": "Robert Bosch LLC",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Robert Bosch\")"
+        },
+        {
+          "name": "Magna International",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Magna International\")"
+        }
+      ]
+    },
+    {
+      "sector": "manufacturing",
+      "region": "South Asia",
+      "rawDiscovered": 13,
+      "funnel": {
+        "discovered": 7,
+        "duplicate": 6,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "South Asia Group",
+          "reason": "too large for Demaze's mid-market ICP (\"multinational conglomerate\" mentioned)"
+        },
+        {
+          "name": "Eastern Economic Corridor",
+          "reason": "government program/economic zone, not a company"
+        },
+        {
+          "name": "VSIP Industrial System",
+          "reason": "government program/economic zone, not a company"
+        },
+        {
+          "name": "Karawang Industrial Cluster",
+          "reason": "government program/economic zone, not a company"
+        },
+        {
+          "name": "Jurong Industrial Estate",
+          "reason": "government program/economic zone, not a company"
+        },
+        {
+          "name": "Batam Industrial Zone",
+          "reason": "government program/economic zone, not a company"
+        }
+      ]
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Europe + UK",
+      "rawDiscovered": 55,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 9,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Volkswagen",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Volkswagen\")"
+        },
+        {
+          "name": "Bosch",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Bosch\")"
+        },
+        {
+          "name": "Andritz AG",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Andritz\")"
+        },
+        {
+          "name": "VOLKSWAGEN AG",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Volkswagen\")"
+        },
+        {
+          "name": "ANDRITZ",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Andritz\")"
+        },
+        {
+          "name": "NSK Europe",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"NSK\")"
+        },
+        {
+          "name": "NSK",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"NSK\")"
+        },
+        {
+          "name": "Europe",
+          "reason": "bare industry-category or geography word, not a company name (likely a truncated listicle heading or region reference)"
+        }
+      ]
+    },
+    {
+      "sector": "automotive",
+      "region": "North America",
+      "rawDiscovered": 41,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 9,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Cummins Inc.",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Cummins Inc\")"
+        },
+        {
+          "name": "Robert Bosch LLC",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Robert Bosch\")"
+        },
+        {
+          "name": "Magna International",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Magna International\")"
+        },
+        {
+          "name": "AlliedSignal",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"AlliedSignal\")"
+        },
+        {
+          "name": "O'Reilly Automotive",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"O'Reilly Automotive\")"
+        },
+        {
+          "name": "General Motors Company",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"General Motors\")"
+        },
+        {
+          "name": "Continental Steel & Tube Co.",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Continental\")"
+        },
+        {
+          "name": "Bosch",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Bosch\")"
+        }
+      ]
+    },
+    {
+      "sector": "automotive",
+      "region": "South Asia",
+      "rawDiscovered": 51,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 1
+      },
+      "qualifiedCompanies": [
+        "Tye Soon Website"
+      ],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Denso",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Denso\")"
+        },
+        {
+          "name": "Mitsubishi Electric",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Mitsubishi\")"
+        },
+        {
+          "name": "NSK",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"NSK\")"
+        },
+        {
+          "name": "Aisin Seiki",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Aisin\")"
+        },
+        {
+          "name": "Kia Motors",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Kia\")"
+        },
+        {
+          "name": "Proton",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Proton\")"
+        },
+        {
+          "name": "Perodua",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Perodua\")"
+        },
+        {
+          "name": "Robert Bosch GmbH",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Robert Bosch\")"
+        }
+      ]
+    },
+    {
+      "sector": "automotive",
+      "region": "Europe + UK",
+      "rawDiscovered": 44,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 2,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "CLEPA",
+          "reason": "trade association/industry body, not a company"
+        },
+        {
+          "name": "BASF SE",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"BASF\")"
+        },
+        {
+          "name": "Robert Bosch GmbH",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Robert Bosch\")"
+        },
+        {
+          "name": "Continental AG",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Continental\")"
+        },
+        {
+          "name": "ThyssenKrupp AG",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"ThyssenKrupp\")"
+        },
+        {
+          "name": "NSK Europe",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"NSK\")"
+        },
+        {
+          "name": "NSK",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"NSK\")"
+        },
+        {
+          "name": "Bosch",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Bosch\")"
+        }
+      ]
+    },
+    {
+      "sector": "ecommerce",
+      "region": "North America",
+      "rawDiscovered": 76,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 10,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Amazon",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Amazon\")"
+        },
+        {
+          "name": "Walmart",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Walmart\")"
+        },
+        {
+          "name": "Costco",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Costco\")"
+        },
+        {
+          "name": "Etsy",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Etsy\")"
+        },
+        {
+          "name": "The Home Depot",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Home Depot\")"
+        },
+        {
+          "name": "Nike.",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Nike\")"
+        },
+        {
+          "name": "Glossier",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Glossier\")"
+        },
+        {
+          "name": "Warby Parker",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Warby Parker\")"
+        }
+      ]
+    },
+    {
+      "sector": "ecommerce",
+      "region": "South Asia",
+      "rawDiscovered": 62,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 9,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Shopee",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Shopee\")"
+        },
+        {
+          "name": "Lazada Group",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Lazada\")"
+        },
+        {
+          "name": "Tokopedia",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Tokopedia\")"
+        },
+        {
+          "name": "Alibaba",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Alibaba\")"
+        },
+        {
+          "name": "Lazada",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Lazada\")"
+        },
+        {
+          "name": "Flipkart",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Flipkart\")"
+        },
+        {
+          "name": "Amazon India",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Amazon\")"
+        },
+        {
+          "name": "Amazon",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Amazon\")"
+        }
+      ]
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Europe + UK",
+      "rawDiscovered": 62,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 2,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0,
+      "rejectedSample": [
+        {
+          "name": "Amazon. Amazon",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Amazon\")"
+        },
+        {
+          "name": "Amazon",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Amazon\")"
+        },
+        {
+          "name": "Amazon.com Inc.",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Amazon\")"
+        },
+        {
+          "name": "Zalando SE",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Zalando\")"
+        },
+        {
+          "name": "Nike",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Nike\")"
+        },
+        {
+          "name": "Zalando\n\nZalando",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Zalando\")"
+        },
+        {
+          "name": "Zalando",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Zalando\")"
+        },
+        {
+          "name": "Etsy",
+          "reason": "known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched \"Etsy\")"
+        }
+      ]
+    }
+  ],
+  "entityMismatches": 0
+}

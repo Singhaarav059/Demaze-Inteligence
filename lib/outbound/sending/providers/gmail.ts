@@ -66,7 +66,38 @@ function buildTrackingPixelHtml(bodyText: string, campaignContactId?: string): s
   const baseUrl = process.env.OUTBOUND_TRACKING_BASE_URL
   if (!campaignContactId || !baseUrl) return undefined
   const pixelUrl = `${baseUrl.replace(/\/+$/, '')}/api/track/open/${campaignContactId}`
-  return `${plainTextToHtml(bodyText)}\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;">`
+  const unsubscribeUrl = buildUnsubscribeUrl(campaignContactId)
+  const footer = unsubscribeUrl
+    ? `\n<p style="font-size:11px;color:#999;margin-top:24px;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a></p>`
+    : ''
+  return `${plainTextToHtml(bodyText)}${footer}\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;">`
+}
+
+// Real unsubscribe mechanism (production-hardening deliverability fix,
+// 2026-08-20) — reuses the same OUTBOUND_TRACKING_BASE_URL env var the
+// tracking pixel already requires (this app's one configured public origin
+// for background-tick-safe absolute URLs, see that var's own doc comment
+// in .env.example) rather than adding a second one for the same purpose.
+// See app/api/unsubscribe/[campaignContactId]/route.ts for what happens
+// when this URL is hit.
+function buildUnsubscribeUrl(campaignContactId?: string): string | undefined {
+  const baseUrl = process.env.OUTBOUND_TRACKING_BASE_URL
+  if (!campaignContactId || !baseUrl) return undefined
+  return `${baseUrl.replace(/\/+$/, '')}/api/unsubscribe/${campaignContactId}`
+}
+
+// List-Unsubscribe header value — RFC 8058 recommends an https: link (for
+// one-click POST support) alongside a mailto: fallback for clients that only
+// understand the older mailto-based form. No dedicated unsubscribe mailbox
+// exists in this app, so the mailto fallback points at the connected
+// sending account itself — a reply-based opt-out still reaches someone,
+// same as it would without this header at all.
+function buildListUnsubscribeHeader(campaignContactId: string | undefined, fromEmail: string | undefined): string | undefined {
+  const httpsUrl = buildUnsubscribeUrl(campaignContactId)
+  const parts: string[] = []
+  if (fromEmail) parts.push(`<mailto:${fromEmail}?subject=unsubscribe>`)
+  if (httpsUrl) parts.push(`<${httpsUrl}>`)
+  return parts.length > 0 ? parts.join(', ') : undefined
 }
 
 export const GmailSendingProvider: EmailSenderProvider = {
@@ -101,6 +132,12 @@ export const GmailSendingProvider: EmailSenderProvider = {
       threadId: request.threadId,
       inReplyTo: request.inReplyTo,
       references: request.inReplyTo,
+      // Reply-To the connected account itself — without this, nothing sets
+      // Reply-To at all (found in the deliverability audit); replies still
+      // worked before via Gmail's own default-to-From behavior, this just
+      // makes it explicit rather than implicit.
+      replyTo: cred.email,
+      listUnsubscribe: buildListUnsubscribeHeader(request.campaignContactId, cred.email),
     })
 
     if (!sent.ok) {

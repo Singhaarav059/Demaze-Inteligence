@@ -1,0 +1,2503 @@
+{
+  "ranAt": "2026-08-19T08:15:23.208Z",
+  "queriesPerCell": 4,
+  "regions": [
+    "North America",
+    "Canada",
+    "Europe + UK",
+    "Middle East",
+    "South Asia",
+    "Southeast Asia",
+    "Latin America",
+    "Australia + New Zealand"
+  ],
+  "sectors": [
+    "manufacturing",
+    "automotive",
+    "ecommerce"
+  ],
+  "cells": [
+    {
+      "sector": "manufacturing",
+      "region": "North America",
+      "source": "existing",
+      "rawDiscovered": 64,
+      "totalMentions": 82,
+      "duplicateRateWithinSource": 0.21951219512195122,
+      "megaCapRejected": 6,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 6,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 10,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Lear Corporation",
+        "RTX",
+        "Johnson",
+        "Lancaster Colony",
+        "Patrick",
+        "Pratt & Whitney",
+        "Airstream",
+        "Burt's Bees",
+        "California House",
+        "Gorilla Glue"
+      ],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "North America",
+      "source": "brightdata",
+      "rawDiscovered": 69,
+      "totalMentions": 84,
+      "duplicateRateWithinSource": 0.17857142857142858,
+      "megaCapRejected": 6,
+      "coarseSectorRejected": 7,
+      "coarseSizeRejected": 6,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 2
+      },
+      "requestsUsed": 5,
+      "companies": [
+        "Lear Corporation",
+        "Johnson",
+        "Lancaster Colony",
+        "Patrick",
+        "Manufacturing USA",
+        "Airstream",
+        "Burt's Bees",
+        "California House",
+        "Gorilla Glue",
+        "Heritage Bicycles"
+      ],
+      "qualifiedCompanies": [
+        "Manufacturing USA",
+        "Heritage Bicycles"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Canada",
+      "source": "existing",
+      "rawDiscovered": 38,
+      "totalMentions": 47,
+      "duplicateRateWithinSource": 0.19148936170212766,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 1,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Electronics",
+        "Automotive",
+        "Green Motor Power Company",
+        "Nova",
+        "Onward Manufacturing Company Ltd.",
+        "Ortal North America",
+        "Cisco Systems Canada Co.",
+        "Danone North America",
+        "3M Canada",
+        "A-N-D"
+      ],
+      "qualifiedCompanies": [
+        "Electronics",
+        "Green Motor Power Company",
+        "Nova",
+        "Onward Manufacturing Company Ltd.",
+        "Ortal North America",
+        "Cisco Systems Canada Co.",
+        "Danone North America",
+        "3M Canada",
+        "A-N-D"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Canada",
+      "source": "brightdata",
+      "rawDiscovered": 50,
+      "totalMentions": 75,
+      "duplicateRateWithinSource": 0.3333333333333333,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 8,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 2,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 8
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "George Weston",
+        "NOVAGOLD Resources",
+        "Imperial Oil",
+        "Suncor Energy",
+        "Inertia Product Development",
+        "Canada Plastics & Belting Inc",
+        "ATA",
+        "Advanced Test and Automation INC.",
+        "Cisco Systems Canada Co.",
+        "Danone North America"
+      ],
+      "qualifiedCompanies": [
+        "George Weston",
+        "NOVAGOLD Resources",
+        "Imperial Oil",
+        "Suncor Energy",
+        "Inertia Product Development",
+        "Canada Plastics & Belting Inc",
+        "ATA",
+        "Advanced Test and Automation INC."
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Europe + UK",
+      "source": "existing",
+      "rawDiscovered": 16,
+      "totalMentions": 23,
+      "duplicateRateWithinSource": 0.30434782608695654,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 10
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Semiconductor",
+        "RAILMARKET",
+        "Bosch",
+        "Steelcase",
+        "HOMAG",
+        "OKA",
+        "Hilleberg",
+        "Andritz AG",
+        "Bilfinger Tebodin",
+        "Equans"
+      ],
+      "qualifiedCompanies": [
+        "Semiconductor",
+        "RAILMARKET",
+        "Bosch",
+        "Steelcase",
+        "HOMAG",
+        "OKA",
+        "Hilleberg",
+        "Andritz AG",
+        "Bilfinger Tebodin",
+        "Equans"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Europe + UK",
+      "source": "brightdata",
+      "rawDiscovered": 30,
+      "totalMentions": 30,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 7,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 3,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 7
+      },
+      "requestsUsed": 5,
+      "companies": [
+        "RAILMARKET",
+        "Hilleberg",
+        "Bosch",
+        "Synermont",
+        "Bayerische Motoren",
+        "EECA",
+        "European Electronic component manufacturers association",
+        "Industrum Group",
+        "Adler Elektrotechnik DE",
+        "NSK Europe"
+      ],
+      "qualifiedCompanies": [
+        "Synermont",
+        "Bayerische Motoren",
+        "EECA",
+        "European Electronic component manufacturers association",
+        "Industrum Group",
+        "Adler Elektrotechnik DE",
+        "NSK Europe"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Middle East",
+      "source": "existing",
+      "rawDiscovered": 38,
+      "totalMentions": 55,
+      "duplicateRateWithinSource": 0.3090909090909091,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 5,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Oyak Renault",
+        "Nigerian Breweries PLC",
+        "Julphar",
+        "Genetco",
+        "Ducab Group",
+        "Elsewedy Electric Co S.A.E",
+        "İGSAŞ",
+        "Arçelik",
+        "Amentum",
+        "Aj Al Asmawi Group"
+      ],
+      "qualifiedCompanies": [
+        "Oyak Renault",
+        "Nigerian Breweries PLC",
+        "Julphar",
+        "Genetco",
+        "Ducab Group",
+        "Elsewedy Electric Co S.A.E",
+        "İGSAŞ",
+        "Arçelik",
+        "Aj Al Asmawi Group"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Middle East",
+      "source": "brightdata",
+      "rawDiscovered": 38,
+      "totalMentions": 39,
+      "duplicateRateWithinSource": 0.02564102564102564,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 3,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 1
+      },
+      "requestsUsed": 5,
+      "companies": [
+        "Gulf Center Cosmetics Mfg.",
+        "Oyak Renault",
+        "Nigerian Breweries PLC",
+        "Julphar",
+        "Genetco",
+        "Ducab Group",
+        "Elsewedy Electric Co S.A.E",
+        "İGSAŞ",
+        "Arçelik",
+        "Amentum"
+      ],
+      "qualifiedCompanies": [
+        "Gulf Center Cosmetics Mfg."
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "South Asia",
+      "source": "existing",
+      "rawDiscovered": 4,
+      "totalMentions": 4,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 3,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 3
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Align Manufacturing",
+        "Eastern Economic Corridor",
+        "Murata Manufacturing (Sarawak) Sdn. Bhd."
+      ],
+      "qualifiedCompanies": [
+        "Align Manufacturing",
+        "Eastern Economic Corridor",
+        "Murata Manufacturing (Sarawak) Sdn. Bhd."
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "South Asia",
+      "source": "brightdata",
+      "rawDiscovered": 9,
+      "totalMentions": 10,
+      "duplicateRateWithinSource": 0.1,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 9,
+        "duplicate": 2,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 7
+      },
+      "requestsUsed": 6,
+      "companies": [
+        "Murata Manufacturing (Sarawak) Sdn. Bhd.",
+        "Eastern Economic Corridor",
+        "Kingstec",
+        "Amber Enterprises India",
+        "Dixon Technologies",
+        "Gokaldas Exports",
+        "Nobel",
+        "Kolmar Korea",
+        "TSMC"
+      ],
+      "qualifiedCompanies": [
+        "Kingstec",
+        "Amber Enterprises India",
+        "Dixon Technologies",
+        "Gokaldas Exports",
+        "Nobel",
+        "Kolmar Korea",
+        "TSMC"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Southeast Asia",
+      "source": "existing",
+      "rawDiscovered": 1,
+      "totalMentions": 1,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 0,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Southeast Asia",
+      "source": "brightdata",
+      "rawDiscovered": 9,
+      "totalMentions": 9,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 8,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 1,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 1
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Deloitte"
+      ],
+      "qualifiedCompanies": [
+        "Deloitte"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Latin America",
+      "source": "existing",
+      "rawDiscovered": 24,
+      "totalMentions": 26,
+      "duplicateRateWithinSource": 0.07692307692307693,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 10
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Tecma",
+        "Thermo Fisher Scientific Inc.",
+        "Catalent, Inc.",
+        "Lonza Group AG",
+        "Boehringer",
+        "Mexico",
+        "Engranes de México",
+        "OSG Royco",
+        "Indaco Group",
+        "Macromaq"
+      ],
+      "qualifiedCompanies": [
+        "Tecma",
+        "Thermo Fisher Scientific Inc.",
+        "Catalent, Inc.",
+        "Lonza Group AG",
+        "Boehringer",
+        "Mexico",
+        "Engranes de México",
+        "OSG Royco",
+        "Indaco Group",
+        "Macromaq"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Latin America",
+      "source": "brightdata",
+      "rawDiscovered": 27,
+      "totalMentions": 28,
+      "duplicateRateWithinSource": 0.03571428571428571,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 2,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 10,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 6,
+      "companies": [
+        "Mexico",
+        "Tecma",
+        "Catalent, Inc.",
+        "Thermo Fisher Scientific Inc.",
+        "Lonza Group AG",
+        "Boehringer",
+        "Engranes de México",
+        "OSG Royco",
+        "Indaco Group",
+        "Macromaq"
+      ],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Australia + New Zealand",
+      "source": "existing",
+      "rawDiscovered": 14,
+      "totalMentions": 15,
+      "duplicateRateWithinSource": 0.06666666666666667,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 5,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 9,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 8
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "RML Machinery",
+        "SCHNEIDER ELECTRIC (NZ) LIMITED",
+        "NEXANS NEW ZEALAND LIMITED",
+        "Albany Electronic Components Ltd",
+        "BioSouth",
+        "M2 Manufacture",
+        "Linkeight Ltd",
+        "Anatomics",
+        "Cyclotek"
+      ],
+      "qualifiedCompanies": [
+        "RML Machinery",
+        "NEXANS NEW ZEALAND LIMITED",
+        "Albany Electronic Components Ltd",
+        "BioSouth",
+        "M2 Manufacture",
+        "Linkeight Ltd",
+        "Anatomics",
+        "Cyclotek"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "manufacturing",
+      "region": "Australia + New Zealand",
+      "source": "brightdata",
+      "rawDiscovered": 44,
+      "totalMentions": 56,
+      "duplicateRateWithinSource": 0.21428571428571427,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 4,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 1,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "M2 Manufacture",
+        "MACVAD Limited",
+        "Andfoods",
+        "Liquium",
+        "MARS Bioimaging",
+        "Wellumio",
+        "Agovor",
+        "Oji Fibre",
+        "Fonterra",
+        "Silver Fern Farms"
+      ],
+      "qualifiedCompanies": [
+        "MACVAD Limited",
+        "Andfoods",
+        "Liquium",
+        "MARS Bioimaging",
+        "Wellumio",
+        "Agovor",
+        "Oji Fibre",
+        "Fonterra",
+        "Silver Fern Farms"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "North America",
+      "source": "existing",
+      "rawDiscovered": 8,
+      "totalMentions": 15,
+      "duplicateRateWithinSource": 0.4666666666666667,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 7,
+        "duplicate": 2,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 4
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Bosch",
+        "Denso",
+        "ZF Friedrichshafen",
+        "Continental AG",
+        "CATL",
+        "Hyundai Mobis",
+        "Aisin"
+      ],
+      "qualifiedCompanies": [
+        "Denso",
+        "CATL",
+        "Hyundai Mobis",
+        "Aisin"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "North America",
+      "source": "brightdata",
+      "rawDiscovered": 39,
+      "totalMentions": 65,
+      "duplicateRateWithinSource": 0.4,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 3,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 6
+      },
+      "requestsUsed": 5,
+      "companies": [
+        "Bosch",
+        "Denso",
+        "O'Reilly Automotive",
+        "ZF Friedrichshafen",
+        "ACDelco",
+        "AlliedSignal",
+        "Allison Transmission",
+        "American Automotive Equipment",
+        "American Racing Equipment",
+        "Autolite"
+      ],
+      "qualifiedCompanies": [
+        "O'Reilly Automotive",
+        "AlliedSignal",
+        "Allison Transmission",
+        "American Automotive Equipment",
+        "American Racing Equipment",
+        "Autolite"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Canada",
+      "source": "existing",
+      "rawDiscovered": 34,
+      "totalMentions": 57,
+      "duplicateRateWithinSource": 0.40350877192982454,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 3,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 7
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Martinrea",
+        "Linamar",
+        "Magna",
+        "Denso Corporation",
+        "Ford",
+        "Bosch",
+        "Multimatic",
+        "Honda",
+        "Stellantis",
+        "Continental AG"
+      ],
+      "qualifiedCompanies": [
+        "Martinrea",
+        "Linamar",
+        "Magna",
+        "Ford",
+        "Multimatic",
+        "Honda",
+        "Stellantis"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Canada",
+      "source": "brightdata",
+      "rawDiscovered": 38,
+      "totalMentions": 60,
+      "duplicateRateWithinSource": 0.36666666666666664,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 7,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 5,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 4
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Linamar",
+        "Eberspaecher Vecture",
+        "Bosch",
+        "F&P Manufacturing",
+        "Ingersoll Axles",
+        "APMA",
+        "Martinrea",
+        "Denso",
+        "Continental AG",
+        "ZF Friedrichshafen"
+      ],
+      "qualifiedCompanies": [
+        "Eberspaecher Vecture",
+        "F&P Manufacturing",
+        "Ingersoll Axles",
+        "APMA"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Europe + UK",
+      "source": "existing",
+      "rawDiscovered": 44,
+      "totalMentions": 87,
+      "duplicateRateWithinSource": 0.4942528735632184,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 3,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 4,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 2,
+        "otherRejected": 0,
+        "qualified": 4
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Continental AG",
+        "ZF Friedrichshafen AG",
+        "Bosch",
+        "Denso",
+        "Magna",
+        "CLEPA",
+        "BASF SE",
+        "ThyssenKrupp AG",
+        "ZF Friedrichshafen",
+        "Hyundai"
+      ],
+      "qualifiedCompanies": [
+        "CLEPA",
+        "BASF SE",
+        "ThyssenKrupp AG",
+        "Hyundai"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Europe + UK",
+      "source": "brightdata",
+      "rawDiscovered": 41,
+      "totalMentions": 75,
+      "duplicateRateWithinSource": 0.4533333333333333,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 2,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 6,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 2,
+        "otherRejected": 0,
+        "qualified": 2
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Bosch",
+        "Continental AG",
+        "Denso",
+        "Magna",
+        "CLEPA",
+        "ZF Friedrichshafen",
+        "Hyundai",
+        "ZF Friedrichshafen AG",
+        "European Auto-Parts Exporters Limited",
+        "Continental"
+      ],
+      "qualifiedCompanies": [
+        "European Auto-Parts Exporters Limited",
+        "Continental"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Middle East",
+      "source": "existing",
+      "rawDiscovered": 26,
+      "totalMentions": 29,
+      "duplicateRateWithinSource": 0.10344827586206896,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 2,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 8
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Hyundai",
+        "Kia",
+        "Middle East auto spare parts",
+        "Asimco Global",
+        "Middle East Battery Co.",
+        "National Batteries Co.",
+        "Saudi",
+        "MEBCO",
+        "Battariat",
+        "The Yokohama Rubber Co. Ltd."
+      ],
+      "qualifiedCompanies": [
+        "Kia",
+        "Middle East auto spare parts",
+        "Asimco Global",
+        "Middle East Battery Co.",
+        "National Batteries Co.",
+        "Saudi",
+        "Battariat",
+        "The Yokohama Rubber Co. Ltd."
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Middle East",
+      "source": "brightdata",
+      "rawDiscovered": 34,
+      "totalMentions": 38,
+      "duplicateRateWithinSource": 0.10526315789473684,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 10,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Hyundai",
+        "Kia",
+        "Bosch",
+        "Asimco Global",
+        "Middle East Battery Co.",
+        "National Batteries Co.",
+        "Saudi",
+        "MEBCO",
+        "Battariat",
+        "The Yokohama Rubber Co. Ltd."
+      ],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "South Asia",
+      "source": "existing",
+      "rawDiscovered": 50,
+      "totalMentions": 56,
+      "duplicateRateWithinSource": 0.10714285714285714,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 3,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 7
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Denso",
+        "Hyundai Mobis Co.",
+        "Mazda",
+        "Aisin",
+        "Mitsubishi Electric",
+        "NSK",
+        "Aisin Seiki",
+        "Kia Motors",
+        "Proton",
+        "Perodua"
+      ],
+      "qualifiedCompanies": [
+        "Mazda",
+        "Mitsubishi Electric",
+        "NSK",
+        "Aisin Seiki",
+        "Kia Motors",
+        "Proton",
+        "Perodua"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "South Asia",
+      "source": "brightdata",
+      "rawDiscovered": 53,
+      "totalMentions": 63,
+      "duplicateRateWithinSource": 0.15873015873015872,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 9,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Denso",
+        "Mitsubishi Electric",
+        "NSK",
+        "Aisin Seiki",
+        "Kia Motors",
+        "Hyundai Mobis Co.",
+        "Hyundai",
+        "Aisin",
+        "ZF Friedrichshafen AG",
+        "Proton"
+      ],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Southeast Asia",
+      "source": "existing",
+      "rawDiscovered": 31,
+      "totalMentions": 37,
+      "duplicateRateWithinSource": 0.16216216216216217,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 5,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 5
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Mitsubishi Motors",
+        "Siam Motors",
+        "Aisin Takaoka Thailand",
+        "Ford",
+        "Mazda",
+        "Proton",
+        "Perodua",
+        "Thai Summit Group",
+        "Daihatsu",
+        "Honda"
+      ],
+      "qualifiedCompanies": [
+        "Mitsubishi Motors",
+        "Siam Motors",
+        "Aisin Takaoka Thailand",
+        "Thai Summit Group",
+        "Daihatsu"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Southeast Asia",
+      "source": "brightdata",
+      "rawDiscovered": 25,
+      "totalMentions": 34,
+      "duplicateRateWithinSource": 0.2647058823529412,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 2
+      },
+      "requestsUsed": 5,
+      "companies": [
+        "Thai Summit Group",
+        "Proton",
+        "Perodua",
+        "TA AUTOMOTIVE PARTS (THAILAND) CO., LTD.",
+        "Siam Motors",
+        "Aisin Takaoka Thailand",
+        "Denso",
+        "Aisin",
+        "Vinfast",
+        "Daihatsu"
+      ],
+      "qualifiedCompanies": [
+        "TA AUTOMOTIVE PARTS (THAILAND) CO., LTD.",
+        "Vinfast"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Latin America",
+      "source": "existing",
+      "rawDiscovered": 43,
+      "totalMentions": 46,
+      "duplicateRateWithinSource": 0.06521739130434782,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 15,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 2,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 2,
+        "otherRejected": 0,
+        "qualified": 6
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Iveco",
+        "Fras-le.",
+        "Bosch",
+        "Fiat-Stellantis",
+        "Mercedes-Benz Group",
+        "Daimler Truck",
+        "Ford",
+        "Renault/HORSE",
+        "Scania",
+        "TRATON"
+      ],
+      "qualifiedCompanies": [
+        "Iveco",
+        "Fras-le.",
+        "Fiat-Stellantis",
+        "Mercedes-Benz Group",
+        "Daimler Truck",
+        "Renault/HORSE"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Latin America",
+      "source": "brightdata",
+      "rawDiscovered": 26,
+      "totalMentions": 34,
+      "duplicateRateWithinSource": 0.23529411764705882,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 4,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 7,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 2
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Complete Auto Parts, S.A.",
+        "CAP",
+        "Fras-le.",
+        "Bosch",
+        "Denso",
+        "Continental AG",
+        "ZF Friedrichshafen",
+        "Lear Corporation",
+        "Iveco",
+        "Fiat-Stellantis"
+      ],
+      "qualifiedCompanies": [
+        "Complete Auto Parts, S.A.",
+        "CAP"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Australia + New Zealand",
+      "source": "existing",
+      "rawDiscovered": 33,
+      "totalMentions": 39,
+      "duplicateRateWithinSource": 0.15384615384615385,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 4,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 1,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Bapcor",
+        "Repco",
+        "Bosch",
+        "Ford New Zealand",
+        "MVD Auto Components",
+        "Ryco Group",
+        "Pro-Form",
+        "Indian Motorcycle International",
+        "Action Manufacturing",
+        "Carpart.com.au"
+      ],
+      "qualifiedCompanies": [
+        "Bapcor",
+        "Repco",
+        "Ford New Zealand",
+        "MVD Auto Components",
+        "Ryco Group",
+        "Pro-Form",
+        "Indian Motorcycle International",
+        "Action Manufacturing",
+        "Carpart.com.au"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "automotive",
+      "region": "Australia + New Zealand",
+      "source": "brightdata",
+      "rawDiscovered": 41,
+      "totalMentions": 47,
+      "duplicateRateWithinSource": 0.1276595744680851,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 5,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 2
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Bapcor Limited",
+        "Carpart.com.au",
+        "Ford New Zealand",
+        "MVD Auto Components",
+        "Ryco Group",
+        "Pro-Form",
+        "Indian Motorcycle International",
+        "Action Manufacturing",
+        "Autobarn",
+        "Autopro"
+      ],
+      "qualifiedCompanies": [
+        "Autobarn",
+        "Autopro"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "North America",
+      "source": "existing",
+      "rawDiscovered": 40,
+      "totalMentions": 51,
+      "duplicateRateWithinSource": 0.21568627450980393,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 2,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 8
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "General",
+        "Nike.",
+        "Shopify",
+        "Costco",
+        "Flutterwave, Inc.",
+        "Redo",
+        "GrubMarket",
+        "Quince",
+        "Instacart",
+        "Maplebear Inc."
+      ],
+      "qualifiedCompanies": [
+        "General",
+        "Nike.",
+        "Costco",
+        "Flutterwave, Inc.",
+        "Redo",
+        "GrubMarket",
+        "Quince",
+        "Maplebear Inc."
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "North America",
+      "source": "brightdata",
+      "rawDiscovered": 65,
+      "totalMentions": 87,
+      "duplicateRateWithinSource": 0.25287356321839083,
+      "megaCapRejected": 8,
+      "coarseSectorRejected": 4,
+      "coarseSizeRejected": 8,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 4,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 6
+      },
+      "requestsUsed": 6,
+      "companies": [
+        "eBay",
+        "Shopify",
+        "Etsy",
+        "Glossier",
+        "Warby Parker",
+        "Allbirds",
+        "Everlane",
+        "Angi",
+        "Flutterwave, Inc.",
+        "Redo"
+      ],
+      "qualifiedCompanies": [
+        "Etsy",
+        "Glossier",
+        "Warby Parker",
+        "Allbirds",
+        "Everlane",
+        "Angi"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Canada",
+      "source": "existing",
+      "rawDiscovered": 73,
+      "totalMentions": 80,
+      "duplicateRateWithinSource": 0.0875,
+      "megaCapRejected": 4,
+      "coarseSectorRejected": 21,
+      "coarseSizeRejected": 4,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 3,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 7
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Shopify",
+        "eBay",
+        "Kijiji",
+        "Etsy Canada",
+        "WooCommerce",
+        "The Generall Store",
+        "Costco",
+        "Canadian Tire",
+        "Best Buy",
+        "Home Depot"
+      ],
+      "qualifiedCompanies": [
+        "Kijiji",
+        "Etsy Canada",
+        "WooCommerce",
+        "The Generall Store",
+        "Canadian Tire",
+        "Best Buy",
+        "Home Depot"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Canada",
+      "source": "brightdata",
+      "rawDiscovered": 71,
+      "totalMentions": 79,
+      "duplicateRateWithinSource": 0.10126582278481013,
+      "megaCapRejected": 5,
+      "coarseSectorRejected": 24,
+      "coarseSizeRejected": 5,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 6,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 1,
+        "otherRejected": 0,
+        "qualified": 3
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Kijiji",
+        "Shopify",
+        "Costco",
+        "Canadian Tire",
+        "Best Buy",
+        "Home Depot",
+        "eCommerce Canada",
+        "BrainSpate",
+        "Ropstam Solutions Inc",
+        "Incrementors Web Solutions"
+      ],
+      "qualifiedCompanies": [
+        "eCommerce Canada",
+        "Ropstam Solutions Inc",
+        "Incrementors Web Solutions"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Europe + UK",
+      "source": "existing",
+      "rawDiscovered": 49,
+      "totalMentions": 54,
+      "duplicateRateWithinSource": 0.09259259259259259,
+      "megaCapRejected": 3,
+      "coarseSectorRejected": 6,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 1,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "The Global Pan-European Giants",
+        "eBay",
+        "Ozon",
+        "Wildberries",
+        "Yandex",
+        "M.Video",
+        "DNS-Shop",
+        "Vseinstrumenti",
+        "Citilink",
+        "Lamoda"
+      ],
+      "qualifiedCompanies": [
+        "The Global Pan-European Giants",
+        "Ozon",
+        "Wildberries",
+        "Yandex",
+        "M.Video",
+        "DNS-Shop",
+        "Vseinstrumenti",
+        "Citilink",
+        "Lamoda"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Europe + UK",
+      "source": "brightdata",
+      "rawDiscovered": 63,
+      "totalMentions": 90,
+      "duplicateRateWithinSource": 0.3,
+      "megaCapRejected": 4,
+      "coarseSectorRejected": 5,
+      "coarseSizeRejected": 4,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 1,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "eBay",
+        "Allegro",
+        "Zalando",
+        "Cdiscount",
+        "Bol",
+        "Temu",
+        "ASOS",
+        "Signifyd",
+        "Away",
+        "Riskified"
+      ],
+      "qualifiedCompanies": [
+        "Allegro",
+        "Zalando",
+        "Cdiscount",
+        "Bol",
+        "Temu",
+        "ASOS",
+        "Signifyd",
+        "Away",
+        "Riskified"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Middle East",
+      "source": "existing",
+      "rawDiscovered": 29,
+      "totalMentions": 31,
+      "duplicateRateWithinSource": 0.06451612903225806,
+      "megaCapRejected": 4,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 4,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 10
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Mumzworld",
+        "Instashop",
+        "Souq",
+        "Trendyol",
+        "Ounass.ae",
+        "Noon",
+        "Basharacare.com",
+        "Souq.com",
+        "Noon.com",
+        "Boutiqaat"
+      ],
+      "qualifiedCompanies": [
+        "Mumzworld",
+        "Instashop",
+        "Souq",
+        "Trendyol",
+        "Ounass.ae",
+        "Noon",
+        "Basharacare.com",
+        "Souq.com",
+        "Noon.com",
+        "Boutiqaat"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Middle East",
+      "source": "brightdata",
+      "rawDiscovered": 36,
+      "totalMentions": 41,
+      "duplicateRateWithinSource": 0.12195121951219512,
+      "megaCapRejected": 5,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 5,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 10,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Instashop",
+        "Trendyol",
+        "Mumzworld",
+        "Noon.com",
+        "Souq",
+        "Ounass.ae",
+        "Noon",
+        "Basharacare.com",
+        "Souq.com",
+        "Boutiqaat"
+      ],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "South Asia",
+      "source": "existing",
+      "rawDiscovered": 0,
+      "totalMentions": 0,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 0,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "South Asia",
+      "source": "brightdata",
+      "rawDiscovered": 35,
+      "totalMentions": 93,
+      "duplicateRateWithinSource": 0.6236559139784946,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 3,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 10
+      },
+      "requestsUsed": 5,
+      "companies": [
+        "Shopee",
+        "Lazada",
+        "Tokopedia",
+        "Blibli",
+        "Bukalapak",
+        "Zalora.Read",
+        "Zalora",
+        "Tiki",
+        "Sendo",
+        "Carousell"
+      ],
+      "qualifiedCompanies": [
+        "Shopee",
+        "Lazada",
+        "Tokopedia",
+        "Blibli",
+        "Bukalapak",
+        "Zalora.Read",
+        "Zalora",
+        "Tiki",
+        "Sendo",
+        "Carousell"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Southeast Asia",
+      "source": "existing",
+      "rawDiscovered": 14,
+      "totalMentions": 18,
+      "duplicateRateWithinSource": 0.2222222222222222,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 6,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 4
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "The Regional Market Leaders",
+        "Shopee",
+        "Lazada",
+        "Tokopedia",
+        "Blibli",
+        "Carousell",
+        "Mudah",
+        "Orami",
+        "Zalora.",
+        "Kyanon Digital"
+      ],
+      "qualifiedCompanies": [
+        "The Regional Market Leaders",
+        "Mudah",
+        "Orami",
+        "Kyanon Digital"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Southeast Asia",
+      "source": "brightdata",
+      "rawDiscovered": 38,
+      "totalMentions": 64,
+      "duplicateRateWithinSource": 0.40625,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 8,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 2
+      },
+      "requestsUsed": 6,
+      "companies": [
+        "Shopee",
+        "Lazada",
+        "Tokopedia",
+        "TikTok",
+        "Zalora.",
+        "Blibli",
+        "Carousell",
+        "Mudah",
+        "Orami",
+        "Sea Ltd"
+      ],
+      "qualifiedCompanies": [
+        "TikTok",
+        "Sea Ltd"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Latin America",
+      "source": "existing",
+      "rawDiscovered": 15,
+      "totalMentions": 29,
+      "duplicateRateWithinSource": 0.4827586206896552,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 1,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 9
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Mercado Libre",
+        "Magazine Luiza",
+        "Exito",
+        "Magalu",
+        "Falabella",
+        "Rappi",
+        "MercadoLibre",
+        "Temu",
+        "AliExpress",
+        "Yumari"
+      ],
+      "qualifiedCompanies": [
+        "Mercado Libre",
+        "Magazine Luiza",
+        "Exito",
+        "Magalu",
+        "Falabella",
+        "Rappi",
+        "MercadoLibre",
+        "AliExpress",
+        "Yumari"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Latin America",
+      "source": "brightdata",
+      "rawDiscovered": 19,
+      "totalMentions": 42,
+      "duplicateRateWithinSource": 0.5476190476190477,
+      "megaCapRejected": 2,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 2,
+      "funnel": {
+        "discovered": 10,
+        "duplicate": 7,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 3
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Mercado Libre",
+        "Magalu",
+        "Rappi",
+        "Americanas",
+        "VIA Varejo",
+        "Magazine Luiza",
+        "Exito",
+        "Falabella",
+        "MercadoLibre",
+        "PEMEX"
+      ],
+      "qualifiedCompanies": [
+        "Americanas",
+        "VIA Varejo",
+        "PEMEX"
+      ],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Australia + New Zealand",
+      "source": "existing",
+      "rawDiscovered": 0,
+      "totalMentions": 0,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 0,
+      "coarseSectorRejected": 0,
+      "coarseSizeRejected": 0,
+      "funnel": {
+        "discovered": 0,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 0
+      },
+      "requestsUsed": 4,
+      "companies": [],
+      "qualifiedCompanies": [],
+      "qualificationErrors": 0
+    },
+    {
+      "sector": "ecommerce",
+      "region": "Australia + New Zealand",
+      "source": "brightdata",
+      "rawDiscovered": 7,
+      "totalMentions": 7,
+      "duplicateRateWithinSource": 0,
+      "megaCapRejected": 1,
+      "coarseSectorRejected": 1,
+      "coarseSizeRejected": 1,
+      "funnel": {
+        "discovered": 5,
+        "duplicate": 0,
+        "alreadyResearched": 0,
+        "alreadyOutreached": 0,
+        "wrongSector": 0,
+        "outsideSize": 0,
+        "otherRejected": 0,
+        "qualified": 5
+      },
+      "requestsUsed": 4,
+      "companies": [
+        "Kogan",
+        "CountryRoad",
+        "CottonOn",
+        "DISSH",
+        "David's Bridal.Read"
+      ],
+      "qualifiedCompanies": [
+        "Kogan",
+        "CountryRoad",
+        "CottonOn",
+        "DISSH",
+        "David's Bridal.Read"
+      ],
+      "qualificationErrors": 0
+    }
+  ],
+  "overlapsByCell": {
+    "manufacturing:North America": {
+      "shared": [
+        "Lear Corporation",
+        "Johnson",
+        "Lancaster Colony",
+        "Patrick",
+        "Airstream",
+        "Burt's Bees",
+        "California House",
+        "Gorilla Glue"
+      ],
+      "existingOnly": [
+        "RTX",
+        "Pratt & Whitney"
+      ],
+      "brightdataOnly": [
+        "Manufacturing USA",
+        "Heritage Bicycles"
+      ]
+    },
+    "manufacturing:Canada": {
+      "shared": [
+        "Cisco Systems Canada Co.",
+        "Danone North America"
+      ],
+      "existingOnly": [
+        "Electronics",
+        "Automotive",
+        "Green Motor Power Company",
+        "Nova",
+        "Onward Manufacturing Company Ltd.",
+        "Ortal North America",
+        "3M Canada",
+        "A-N-D"
+      ],
+      "brightdataOnly": [
+        "George Weston",
+        "NOVAGOLD Resources",
+        "Imperial Oil",
+        "Suncor Energy",
+        "Inertia Product Development",
+        "Canada Plastics & Belting Inc",
+        "ATA",
+        "Advanced Test and Automation INC."
+      ]
+    },
+    "manufacturing:Europe + UK": {
+      "shared": [
+        "RAILMARKET",
+        "Bosch",
+        "Hilleberg"
+      ],
+      "existingOnly": [
+        "Semiconductor",
+        "Steelcase",
+        "HOMAG",
+        "OKA",
+        "Andritz AG",
+        "Bilfinger Tebodin",
+        "Equans"
+      ],
+      "brightdataOnly": [
+        "Synermont",
+        "Bayerische Motoren",
+        "EECA",
+        "European Electronic component manufacturers association",
+        "Industrum Group",
+        "Adler Elektrotechnik DE",
+        "NSK Europe"
+      ]
+    },
+    "manufacturing:Middle East": {
+      "shared": [
+        "Oyak Renault",
+        "Nigerian Breweries PLC",
+        "Julphar",
+        "Genetco",
+        "Ducab Group",
+        "Elsewedy Electric Co S.A.E",
+        "İGSAŞ",
+        "Arçelik",
+        "Amentum"
+      ],
+      "existingOnly": [
+        "Aj Al Asmawi Group"
+      ],
+      "brightdataOnly": [
+        "Gulf Center Cosmetics Mfg."
+      ]
+    },
+    "manufacturing:South Asia": {
+      "shared": [
+        "Eastern Economic Corridor",
+        "Murata Manufacturing (Sarawak) Sdn. Bhd."
+      ],
+      "existingOnly": [
+        "Align Manufacturing"
+      ],
+      "brightdataOnly": [
+        "Kingstec",
+        "Amber Enterprises India",
+        "Dixon Technologies",
+        "Gokaldas Exports",
+        "Nobel",
+        "Kolmar Korea",
+        "TSMC"
+      ]
+    },
+    "manufacturing:Southeast Asia": {
+      "shared": [],
+      "existingOnly": [],
+      "brightdataOnly": [
+        "Deloitte"
+      ]
+    },
+    "manufacturing:Latin America": {
+      "shared": [
+        "Tecma",
+        "Thermo Fisher Scientific Inc.",
+        "Catalent, Inc.",
+        "Lonza Group AG",
+        "Boehringer",
+        "Mexico",
+        "Engranes de México",
+        "OSG Royco",
+        "Indaco Group",
+        "Macromaq"
+      ],
+      "existingOnly": [],
+      "brightdataOnly": []
+    },
+    "manufacturing:Australia + New Zealand": {
+      "shared": [
+        "M2 Manufacture"
+      ],
+      "existingOnly": [
+        "RML Machinery",
+        "SCHNEIDER ELECTRIC (NZ) LIMITED",
+        "NEXANS NEW ZEALAND LIMITED",
+        "Albany Electronic Components Ltd",
+        "BioSouth",
+        "Linkeight Ltd",
+        "Anatomics",
+        "Cyclotek"
+      ],
+      "brightdataOnly": [
+        "MACVAD Limited",
+        "Andfoods",
+        "Liquium",
+        "MARS Bioimaging",
+        "Wellumio",
+        "Agovor",
+        "Oji Fibre",
+        "Fonterra",
+        "Silver Fern Farms"
+      ]
+    },
+    "automotive:North America": {
+      "shared": [
+        "Bosch",
+        "Denso",
+        "ZF Friedrichshafen"
+      ],
+      "existingOnly": [
+        "Continental AG",
+        "CATL",
+        "Hyundai Mobis",
+        "Aisin"
+      ],
+      "brightdataOnly": [
+        "O'Reilly Automotive",
+        "ACDelco",
+        "AlliedSignal",
+        "Allison Transmission",
+        "American Automotive Equipment",
+        "American Racing Equipment",
+        "Autolite"
+      ]
+    },
+    "automotive:Canada": {
+      "shared": [
+        "Martinrea",
+        "Linamar",
+        "Denso Corporation",
+        "Bosch",
+        "Continental AG"
+      ],
+      "existingOnly": [
+        "Magna",
+        "Ford",
+        "Multimatic",
+        "Honda",
+        "Stellantis"
+      ],
+      "brightdataOnly": [
+        "Eberspaecher Vecture",
+        "F&P Manufacturing",
+        "Ingersoll Axles",
+        "APMA",
+        "ZF Friedrichshafen"
+      ]
+    },
+    "automotive:Europe + UK": {
+      "shared": [
+        "Continental AG",
+        "ZF Friedrichshafen",
+        "Bosch",
+        "Denso",
+        "Magna",
+        "CLEPA",
+        "Hyundai"
+      ],
+      "existingOnly": [
+        "BASF SE",
+        "ThyssenKrupp AG"
+      ],
+      "brightdataOnly": [
+        "European Auto-Parts Exporters Limited",
+        "Continental"
+      ]
+    },
+    "automotive:Middle East": {
+      "shared": [
+        "Hyundai",
+        "Kia",
+        "Asimco Global",
+        "MEBCO",
+        "National Batteries Co.",
+        "Battariat",
+        "The Yokohama Rubber Co. Ltd."
+      ],
+      "existingOnly": [
+        "Middle East auto spare parts",
+        "Saudi"
+      ],
+      "brightdataOnly": [
+        "Bosch",
+        "Saudi"
+      ]
+    },
+    "automotive:South Asia": {
+      "shared": [
+        "Denso",
+        "Hyundai Mobis Co.",
+        "Aisin",
+        "Mitsubishi Electric",
+        "NSK",
+        "Aisin Seiki",
+        "Kia Motors",
+        "Proton"
+      ],
+      "existingOnly": [
+        "Mazda",
+        "Perodua"
+      ],
+      "brightdataOnly": [
+        "Hyundai",
+        "ZF Friedrichshafen AG"
+      ]
+    },
+    "automotive:Southeast Asia": {
+      "shared": [
+        "Siam Motors",
+        "Aisin Takaoka Thailand",
+        "Thai Summit Group",
+        "Daihatsu"
+      ],
+      "existingOnly": [
+        "Mitsubishi Motors",
+        "Ford",
+        "Mazda",
+        "Proton",
+        "Perodua",
+        "Honda"
+      ],
+      "brightdataOnly": [
+        "Proton",
+        "Perodua",
+        "TA AUTOMOTIVE PARTS (THAILAND) CO., LTD.",
+        "Denso",
+        "Aisin",
+        "Vinfast"
+      ]
+    },
+    "automotive:Latin America": {
+      "shared": [
+        "Iveco",
+        "Fras-le.",
+        "Bosch",
+        "Fiat-Stellantis"
+      ],
+      "existingOnly": [
+        "Mercedes-Benz Group",
+        "Daimler Truck",
+        "Ford",
+        "Renault/HORSE",
+        "Scania",
+        "TRATON"
+      ],
+      "brightdataOnly": [
+        "Complete Auto Parts, S.A.",
+        "CAP",
+        "Denso",
+        "Continental AG",
+        "ZF Friedrichshafen",
+        "Lear Corporation"
+      ]
+    },
+    "automotive:Australia + New Zealand": {
+      "shared": [
+        "Bapcor",
+        "Ford New Zealand",
+        "MVD Auto Components",
+        "Ryco Group",
+        "Pro-Form",
+        "Indian Motorcycle International",
+        "Action Manufacturing",
+        "Carpart.com.au"
+      ],
+      "existingOnly": [
+        "Repco",
+        "Bosch"
+      ],
+      "brightdataOnly": [
+        "Autobarn",
+        "Autopro"
+      ]
+    },
+    "ecommerce:North America": {
+      "shared": [
+        "Shopify",
+        "Flutterwave, Inc.",
+        "Redo"
+      ],
+      "existingOnly": [
+        "General",
+        "Nike.",
+        "Costco",
+        "GrubMarket",
+        "Quince",
+        "Instacart",
+        "Maplebear Inc."
+      ],
+      "brightdataOnly": [
+        "eBay",
+        "Etsy",
+        "Glossier",
+        "Warby Parker",
+        "Allbirds",
+        "Everlane",
+        "Angi"
+      ]
+    },
+    "ecommerce:Canada": {
+      "shared": [
+        "Shopify",
+        "Costco",
+        "Canadian Tire",
+        "Best Buy",
+        "Home Depot"
+      ],
+      "existingOnly": [
+        "eBay",
+        "Kijiji",
+        "Etsy Canada",
+        "WooCommerce",
+        "The Generall Store"
+      ],
+      "brightdataOnly": [
+        "Kijiji",
+        "eCommerce Canada",
+        "BrainSpate",
+        "Ropstam Solutions Inc",
+        "Incrementors Web Solutions"
+      ]
+    },
+    "ecommerce:Europe + UK": {
+      "shared": [
+        "eBay"
+      ],
+      "existingOnly": [
+        "The Global Pan-European Giants",
+        "Ozon",
+        "Wildberries",
+        "Yandex",
+        "M.Video",
+        "DNS-Shop",
+        "Vseinstrumenti",
+        "Citilink",
+        "Lamoda"
+      ],
+      "brightdataOnly": [
+        "Allegro",
+        "Zalando",
+        "Cdiscount",
+        "Bol",
+        "Temu",
+        "ASOS",
+        "Signifyd",
+        "Away",
+        "Riskified"
+      ]
+    },
+    "ecommerce:Middle East": {
+      "shared": [
+        "Mumzworld",
+        "Instashop",
+        "Souq",
+        "Trendyol",
+        "Ounass.ae",
+        "Noon",
+        "Basharacare.com",
+        "Souq.com",
+        "Noon.com",
+        "Boutiqaat"
+      ],
+      "existingOnly": [],
+      "brightdataOnly": []
+    },
+    "ecommerce:South Asia": {
+      "shared": [],
+      "existingOnly": [],
+      "brightdataOnly": [
+        "Shopee",
+        "Lazada",
+        "Tokopedia",
+        "Blibli",
+        "Bukalapak",
+        "Zalora.Read",
+        "Zalora",
+        "Tiki",
+        "Sendo",
+        "Carousell"
+      ]
+    },
+    "ecommerce:Southeast Asia": {
+      "shared": [
+        "Shopee",
+        "Lazada",
+        "Tokopedia",
+        "Blibli",
+        "Carousell",
+        "Mudah",
+        "Orami",
+        "Zalora."
+      ],
+      "existingOnly": [
+        "The Regional Market Leaders",
+        "Kyanon Digital"
+      ],
+      "brightdataOnly": [
+        "TikTok",
+        "Sea Ltd"
+      ]
+    },
+    "ecommerce:Latin America": {
+      "shared": [
+        "Mercado Libre",
+        "Magazine Luiza",
+        "Exito",
+        "Magalu",
+        "Falabella",
+        "Rappi",
+        "MercadoLibre"
+      ],
+      "existingOnly": [
+        "Temu",
+        "AliExpress",
+        "Yumari"
+      ],
+      "brightdataOnly": [
+        "Americanas",
+        "VIA Varejo",
+        "PEMEX"
+      ]
+    },
+    "ecommerce:Australia + New Zealand": {
+      "shared": [],
+      "existingOnly": [],
+      "brightdataOnly": [
+        "Kogan",
+        "CountryRoad",
+        "CottonOn",
+        "DISSH",
+        "David's Bridal.Read"
+      ]
+    }
+  },
+  "enrichmentSamples": [
+    {
+      "company": "Manufacturing USA",
+      "sector": "manufacturing",
+      "success": true,
+      "websiteMatch": false,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "Denso",
+      "sector": "automotive",
+      "success": true,
+      "websiteMatch": null,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    },
+    {
+      "company": "General",
+      "sector": "ecommerce",
+      "success": true,
+      "websiteMatch": null,
+      "fields": [
+        "name",
+        "about",
+        "industry",
+        "companySize",
+        "headquarters",
+        "followers",
+        "website"
+      ]
+    }
+  ]
+}

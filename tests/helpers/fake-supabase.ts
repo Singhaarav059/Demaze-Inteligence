@@ -77,6 +77,10 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: any }> {
     this.filters.push(r => r[col] >= val)
     return this
   }
+  lte(col: string, val: any) {
+    this.filters.push(r => r[col] <= val)
+    return this
+  }
   order(col: string, opts?: { ascending?: boolean }) {
     this.orderCol = col
     this.orderAscending = opts?.ascending ?? true

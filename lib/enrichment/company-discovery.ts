@@ -63,6 +63,7 @@ import { getCompletion } from '../ai/provider-factory'
 import type { TargetSector } from '../sector-playbook/types'
 import { generateQueryBatch } from './company-discovery-queries'
 import { matchesSectorSignals, qualifyCandidate } from './company-qualification'
+import { classifyEntityType, type EntityType } from './entity-classification'
 import {
   emptyFunnel, recordDiscovered, recordQualified, recordRejection,
   type DiscoveryFunnel,
@@ -114,8 +115,20 @@ export interface CompanyDiscoveryResult {
 
 const LEGAL_SUFFIXES = /\b(?:pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|corp\.?|corporation|co\.?)\b/gi
 
+// Real dedup gap found live 2026-08-19 (global benchmark audit): "Souq" and
+// "Souq.com" (and "Noon"/"Noon.com") surfaced as two separately-qualified
+// candidates for the same real company — normalizeName() stripped the "."
+// to a space, so "Souq.com" -> "souq com" and "Souq" -> "souq" never
+// collided as the same grouping key. Strip a trailing website-shaped TLD
+// suffix from the name BEFORE the rest of normalization runs, so both
+// forms collapse to one identity key. Deliberately narrow (a fixed TLD
+// list, not a generic "ends in 2-4 letters after a dot" regex, which would
+// wrongly eat real abbreviation-shaped company names like "Acme Inc.").
+const TRAILING_TLD_RE = /\.(?:com|net|org|io|co|in|us)$/i
+
 export function normalizeName(name: string): string {
   return name
+    .replace(TRAILING_TLD_RE, '')
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
     // \p{L}/\p{N} (Unicode letter/number), not \w — see website-discovery.ts's
@@ -123,6 +136,20 @@ export function normalizeName(name: string): string {
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// Real garbled-extraction bug found live 2026-08-19: PROPER_NOUN's char
+// class allows "." within a token, so a markdown link glued directly to
+// trailing CTA text with no space ("...Zalora.Read more") gets captured as
+// one candidate, "Zalora.Read" — a different identity key from the real
+// "Zalora" candidate found elsewhere, so both surfaced as separately-
+// qualified companies. Strip a trailing ".<CTA word>" fragment before the
+// name ever reaches grouping/dedup, so it collapses onto the real name
+// instead of becoming its own bogus candidate.
+const TRAILING_LINK_FRAGMENT_RE = /\.(?:Read|Learn|More|View|See|Details|Info)(?:\s.*)?$/i
+
+export function stripTrailingLinkFragment(name: string): string {
+  return name.replace(TRAILING_LINK_FRAGMENT_RE, '').trim()
 }
 
 // ── Input-shape guard ──────────────────────────────────────────────
@@ -147,50 +174,16 @@ export function looksLikeUrlOrDomain(input: string): boolean {
 
 // ── Rejection rules ───────────────────────────────────────────────
 
-const STOPWORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'for', 'top', 'best', 'list', 'guide',
-  'review', 'in', 'of', 'to', 'with', 'by', 'is', 'are', 'this', 'that',
-  'these', 'those', 'you', 'your', 'other', 'others',
-  // The trigger vocabulary itself — same "candidate whose entire name IS the
-  // trigger word" bug class found live in competitor-discovery.ts and
-  // icp-generator.ts (2026-07-15).
-  'companies', 'company', 'businesses', 'firms', 'players', 'vendors',
-])
-
-// Real false positive found live 2026-07-17: "Launched" was extracted as a
-// standalone candidate from a garbled e-commerce product-listing snippet
-// (capitalized because it started a sentence fragment, not because it's a
-// proper noun), survived classifyCompanyRejection() (it isn't a stopword or
-// directory name), then coincidentally resolved to a real but unrelated
-// domain (launchedglobal.in) via discoverCompanyWebsite()'s loose
-// single-word title-match rule — so the "confirm via domain resolution"
-// second line of defense didn't catch it either. A company name is a proper
-// noun; a bare capitalized common English verb/adjective almost never is.
-// Scoped to single-word (no-space) candidates only — multi-word candidates
-// like "Launched Global" are unaffected, since a common word combined with
-// another capitalized word is far more likely to be a real brand name.
-const COMMON_NON_COMPANY_WORDS = new Set([
-  'launched', 'featured', 'related', 'included', 'available', 'located',
-  'based', 'certified', 'approved', 'listed', 'updated', 'released',
-  'established', 'rated', 'ranked', 'reviewed', 'compared', 'recommended',
-  'trusted', 'verified', 'sponsored', 'presented', 'provided', 'offered',
-  'designed', 'manufactured', 'supplied', 'delivered', 'required', 'shown',
-])
-
-// Known directories/aggregators/review sites/news outlets/social networks —
-// a search RESULT from one of these can legitimately name real companies in
-// its snippet, but the site's own brand name must never be extracted AS a
-// discovered company. Same list class as competitor-discovery.ts's
-// NON_COMPETITOR_NAMES (not shared/imported — this codebase's existing
-// precedent duplicates these small per-file constant lists rather than
-// centralizing them, see website-discovery.ts/competitor-discovery.ts
-// history in docs/DECISIONS.md).
-const NON_COMPANY_NAMES = [
-  'G2', 'Capterra', 'TrustRadius', 'Crunchbase', 'SimilarWeb', 'Gartner',
-  'Wikipedia', 'LinkedIn', 'Glassdoor', 'Indeed', 'YouTube', 'Facebook',
-  'Twitter', 'Instagram', 'Reuters', 'Bloomberg', 'Forbes', 'BusinessWire',
-  'PRNewswire', 'Clutch', 'Google', 'Yelp', 'Medium', 'Quora', 'Reddit',
-]
+// STOPWORDS/COMMON_NON_COMPANY_WORDS/GENERIC_CATEGORY_OR_GEOGRAPHY_WORDS/
+// NON_COMPANY_NAMES/TRADE_ASSOCIATION_OR_GOV_NAMES/ORG_TYPE_KEYWORD_RE/
+// LISTICLE_HEADER_PHRASE_RE used to each live here as independent lists.
+// Moved into entity-classification.ts's classifyEntityType() (2026-08-20) —
+// same content, same "add the exact name/keyword that leaked live"
+// discipline, just organized under a real entity-type taxonomy
+// (GOVERNMENT/ASSOCIATION/NONPROFIT/MEDIA/DIRECTORY/GENERIC_TERM) instead
+// of standing alone as unrelated rejection checks. See that module's header
+// for why a blacklist is still fine as supplementary evidence, just not as
+// the whole architecture.
 
 // Real false positive found live 2026-08-19: "OpenAI" was extracted and
 // qualified as an e-commerce company from a real article
@@ -213,6 +206,16 @@ const NON_COMPANY_NAMES = [
 const AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES = [
   'OpenAI', 'Anthropic', 'xAI', 'Mistral AI', 'Cohere', 'Stability AI',
   'Perplexity', 'DeepSeek', 'Google DeepMind', 'Hugging Face',
+]
+
+// Same "real company, but never a manufacturing/automotive/ecommerce
+// sector OPERATOR" failure shape as the AI-platform list above — a Big 4/
+// top-tier consultancy gets name-dropped in "industry trends" listicles
+// ("Deloitte's 2026 manufacturing outlook...") right alongside real
+// operators. Found live 2026-08-19 (global benchmark audit): "Deloitte"
+// qualified as a manufacturing company.
+const CONSULTING_FIRM_NOT_SECTOR_OPERATOR_NAMES = [
+  'Deloitte', 'PwC', 'EY', 'KPMG', 'Accenture', 'McKinsey', 'BCG', 'Bain',
 ]
 
 // Real false positive found live 2026-08-19 (Bright Data benchmark run,
@@ -243,11 +246,37 @@ const KNOWN_MEGA_CAP_NAMES = [
   // "Johnson & Johnson" specifically, not bare "Johnson" — too generic,
   // would false-positive real SMEs like "Johnson Electric".
   'Rio Tinto', 'Unilever', 'Johnson & Johnson',
+  // Added 2026-08-19, global 48-cell benchmark audit (see
+  // benchmarks/analyze-global-benchmark.ts's qualification-problems
+  // section) — 37 automotive OEM/Tier-1 names and 21 e-commerce mega-cap/
+  // major-retailer names passed qualification unfiltered. Bare single-
+  // word forms accepted here (same tradeoff this list already makes for
+  // "Toyota"/"Amazon" above — a rare unrelated small business sharing one
+  // of these words is a smaller cost than letting a real automaker/
+  // retailer burn research quota).
+  'Denso', 'CATL', 'Hyundai', 'Aisin', 'Martinrea', 'Linamar', 'Magna',
+  'Ford', 'Multimatic', 'Honda', 'Stellantis', 'BASF', 'ThyssenKrupp',
+  'Continental', 'Kia', 'Yokohama Rubber', 'Mazda', 'Mitsubishi', 'NSK',
+  'Proton', 'Perodua', 'Daihatsu', 'Vinfast', 'Iveco', 'Mercedes-Benz',
+  'Daimler', 'Bapcor', 'Repco', "O'Reilly Automotive", 'AlliedSignal',
+  'Costco', 'Etsy', 'Home Depot', 'Best Buy', 'Canadian Tire', 'Zalando',
+  'ASOS', 'Temu', 'Shopee', 'Lazada', 'Tokopedia', 'Tiki', 'Noon', 'Souq',
+  'Warby Parker', 'Allbirds', 'Glossier', 'Nike',
+  'Bosch', 'Andritz', 'Thermo Fisher', 'Fonterra', 'George Weston',
+  'Imperial Oil', 'Suncor Energy', 'TSMC',
 ]
 
 // Returns a rejection reason, or null if the candidate survives. Order
 // matters for diagnostic quality, same discipline as the sibling modules'
 // classifyRejection()/classifySegmentRejection().
+// Entity-type classification (GOVERNMENT/ASSOCIATION/NONPROFIT/MEDIA/
+// DIRECTORY/GENERIC_TERM) now runs first, via entity-classification.ts —
+// see that module for why this is a real taxonomy, not another list. What
+// stays local: self-name exclusion (needs the caller's own company name,
+// not a property of the candidate alone), and the AI-platform/consulting-
+// firm/mega-cap checks — those candidates ARE entity type COMPANY, they're
+// just the wrong SECTOR FIT or the wrong SIZE for Demaze's mid-market ICP,
+// a qualification concern, not an entity-type one.
 export function classifyCompanyRejection(name: string, excludeCompanyNames: string[] | undefined): string | null {
   if (excludeCompanyNames) {
     for (const exclude of excludeCompanyNames) {
@@ -256,14 +285,18 @@ export function classifyCompanyRejection(name: string, excludeCompanyNames: stri
       }
     }
   }
-  for (const bad of NON_COMPANY_NAMES) {
-    if (new RegExp(`\\b${escapeRegex(bad)}\\b`, 'i').test(name)) {
-      return 'known directory/aggregator/news-outlet/social-network name, not a company'
-    }
+  const entity = classifyEntityType(name)
+  if (entity.type !== 'COMPANY') {
+    return entity.reason
   }
   for (const aiPlatform of AI_PLATFORM_NOT_SECTOR_OPERATOR_NAMES) {
     if (new RegExp(`\\b${escapeRegex(aiPlatform)}\\b`, 'i').test(name)) {
       return 'AI/foundation-model platform, not a manufacturing/automotive/ecommerce operator (commonly name-dropped in "AI is transforming X" listicles)'
+    }
+  }
+  for (const firm of CONSULTING_FIRM_NOT_SECTOR_OPERATOR_NAMES) {
+    if (new RegExp(`\\b${escapeRegex(firm)}\\b`, 'i').test(name)) {
+      return 'consulting/advisory firm, not a manufacturing/automotive/ecommerce operator (commonly name-dropped in "industry outlook" listicles)'
     }
   }
   for (const megaCap of KNOWN_MEGA_CAP_NAMES) {
@@ -271,18 +304,14 @@ export function classifyCompanyRejection(name: string, excludeCompanyNames: stri
       return `known global mega-cap/conglomerate, too large for Demaze's mid-market ICP (matched "${megaCap}")`
     }
   }
-  const normalized = normalizeName(name)
-  if (!normalized || normalized.length < 3) {
-    return 'too short/generic to be a real company name'
-  }
-  const words = normalized.split(' ').filter(Boolean)
-  if (words.every(w => STOPWORDS.has(w))) {
-    return 'generic/stopword phrase, not a company name'
-  }
-  if (words.length === 1 && COMMON_NON_COMPANY_WORDS.has(words[0])) {
-    return 'common English word (verb/adjective), not a company name'
-  }
   return null
+}
+
+/** Entity type alone, for callers that want the classification without the
+ * full rejection pipeline (e.g. the confidence scorer, which treats
+ * "UNKNOWN entity type" differently from "known non-company entity type"). */
+export function getEntityType(name: string): EntityType {
+  return classifyEntityType(name).type
 }
 
 // ── Candidate-name extraction (regex, no LLM) ────────────────────
@@ -692,7 +721,7 @@ export async function runDiscoveryCore(
       ...extractNumberedListCompanies(r.content),
       ...(llmNamesByResult?.[i] ?? []),
     ]
-    const namesInThisResult = new Set(names.map(n => n.trim()).filter(Boolean))
+    const namesInThisResult = new Set(names.map(n => stripTrailingLinkFragment(n.trim())).filter(Boolean))
 
     for (const name of namesInThisResult) {
       const key = normalizeName(name)
@@ -961,6 +990,8 @@ export async function discoverCompaniesUntil(
       const outcome = await qualifyCandidate(supabase, {
         name: candidate.name,
         domain: candidate.domain,
+        domainConfidence: candidate.domain_confidence ?? null,
+        sourceUrls: candidate.source_urls,
         snippets: [candidate.reason],
         discoverySource: candidate.discoverySource ?? null,
         discoveryQuery: candidate.discoveryQuery ?? options.refinement ?? sector,

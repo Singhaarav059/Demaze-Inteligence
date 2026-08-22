@@ -42,6 +42,20 @@ describe('normalizeCompanyName', () => {
   it('is Unicode-aware, not ASCII-only', () => {
     expect(normalizeCompanyName('Möller Group')).toBe('möller group')
   })
+
+  // Production-hardening task's own named example: "Noon" / "Noon.com" /
+  // "www.noon.com" / "https://noon.com/" must not become 4 separate
+  // identities. This function only ever receives a NAME (domain-shaped
+  // strings go through normalizeDomain instead), so the cases that matter
+  // here are the two NAME-shaped forms: "Noon" and "Noon.com".
+  it('strips a trailing website-shaped TLD so "X" and "X.com" resolve to the same normalized name', () => {
+    expect(normalizeCompanyName('Noon')).toBe(normalizeCompanyName('Noon.com'))
+    expect(normalizeCompanyName('Souq')).toBe(normalizeCompanyName('Souq.com'))
+  })
+
+  it('does not mangle a real company name with no TLD-shaped suffix', () => {
+    expect(normalizeCompanyName('Bharat Forge')).toBe('bharat forge')
+  })
 })
 
 describe('normalizeLinkedInUrl', () => {
@@ -103,6 +117,29 @@ describe('findExistingCompany — confidence order: domain > LinkedIn > name', (
     ])
     const found = await findExistingCompany(supa as any, buildIdentityKeys({ name: 'ABC Industries Ltd' }))
     expect(found?.id).toBe('c1')
+  })
+
+  // The end-to-end version of the "Noon" / "Noon.com" TLD-suffix test above —
+  // proves a bare "Noon.com" name (no domain field set, e.g. an upload row
+  // or a candidate whose domain resolution hasn't run yet) finds the SAME
+  // row as an already-registered "Noon" company, not a second one.
+  it('resolves a bare "X.com" name to an existing "X" row via the name fallback', async () => {
+    const supa = new FakeSupabase()
+    supa.seed('company_registry', [
+      { id: 'c1', canonical_domain: null, normalized_name: 'noon', linkedin_url_normalized: null, status: 'discovered', updated_at: '2026-01-01' },
+    ])
+    const found = await findExistingCompany(supa as any, buildIdentityKeys({ name: 'Noon.com' }))
+    expect(found?.id).toBe('c1')
+  })
+
+  it('does NOT merge two genuinely different companies that merely share a generic word', () => {
+    // Sanity check that the TLD fix doesn't overreach into fuzzy matching —
+    // findExistingCompany's name fallback is exact-match, not word-overlap,
+    // so "Noon Marketplace" (a different normalized name) is never silently
+    // treated as the same identity as "Noon" without a stronger signal
+    // (domain/LinkedIn). Prefer under-confidence: don't auto-merge on a
+    // partial name match.
+    expect(normalizeCompanyName('Noon')).not.toBe(normalizeCompanyName('Noon Marketplace'))
   })
 
   it('returns null for a genuinely new company', async () => {

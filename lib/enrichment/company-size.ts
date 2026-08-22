@@ -28,6 +28,7 @@
 // ============================================================
 
 import { fetchAndExtract } from '../pipeline/html-extractor'
+import { getCompletion } from '../ai/provider-factory'
 
 export type SizeMetric = 'revenue' | 'valuation' | 'market_cap' | 'employee_count'
 export type SizeVerdict = 'within_range' | 'too_large' | 'too_small' | 'unknown'
@@ -40,10 +41,18 @@ export interface SizeEvidence {
   sourceSnippet: string
 }
 
+export type SizeEvidenceSource = 'snippets' | 'homepage' | 'knowledge' | 'none'
+
 export interface SizeQualification {
   verdict: SizeVerdict
   evidence: SizeEvidence[]
   reason: string
+  /** Which tier actually resolved this verdict — see company_registry.size_evidence_source.
+   * Set by assessCompanySize()'s tier logic; assessCompanySizeFromText()
+   * defaults to 'snippets' since that's its typical caller (tier 1), but
+   * gets overridden to 'homepage' when the same function is reused for
+   * tier 2's homepage markdown. */
+  source: SizeEvidenceSource
 }
 
 // ponytail: one flat approximate rate, not a live FX lookup — same
@@ -164,7 +173,20 @@ export function assessCompanySizeFromText(snippets: string[]): SizeQualification
   const evidence = extractAllEvidence(snippets)
   const megaPhraseHit = MEGA_SCALE_PHRASE_RE.exec(text)?.[0] ?? null
   const { verdict, reason } = verdictFromEvidence(evidence, megaPhraseHit)
-  return { verdict, evidence, reason }
+  return { verdict, evidence, reason, source: 'snippets' }
+}
+
+// Re-derives a verdict from already-persisted SizeEvidence[] (e.g.
+// company_registry.size_evidence) with zero network/text-parsing — the
+// exact same threshold logic assessCompanySizeFromText() uses, just
+// skipping straight to the evidence-interpretation step. This is what lets
+// a re-audit re-validate a stored decision against CURRENT thresholds
+// (e.g. if TARGET_REVENUE_RANGE_CR_INR ever changes) without needing the
+// original snippet text, which company_registry never persisted. Exported
+// for lib/enrichment/company-reaudit.ts.
+export function verdictFromStoredEvidence(evidence: SizeEvidence[]): SizeQualification {
+  const { verdict, reason } = verdictFromEvidence(evidence, null)
+  return { verdict, evidence, reason, source: evidence.length > 0 ? 'snippets' : 'none' }
 }
 
 // Full assessment: snippet text first (free — no network); if that alone
@@ -172,17 +194,124 @@ export function assessCompanySizeFromText(snippets: string[]): SizeQualification
 // homepage fetch (G3/G4's fetchAndExtract — plain HTTP + cheerio/turndown,
 // never Firecrawl) is scanned with the same regexes before settling on
 // 'unknown'. This is the one place this module spends any I/O at all.
-export async function assessCompanySize(snippets: string[], domain?: string | null): Promise<SizeQualification> {
-  const fromSnippets = assessCompanySizeFromText(snippets)
-  if (fromSnippets.verdict !== 'unknown' || !domain) return fromSnippets
+// ── Tier 3: AI direct-knowledge check for well-known global companies ──
+// Real gap found live 2026-08-20 (fresh discovery benchmark, existing-
+// sources-only run): BMW, Audi, Mini, Porsche, Volvo, Jaguar, Land Rover,
+// Maruti Suzuki, JCB, Tencent, Jacobs Solutions, and Fluor all reached
+// 'qualified' in one 9-cell run — none had an explicit revenue/employee
+// figure in their search snippets (tiers 1-2 above both correctly stayed
+// 'unknown', by design — absence of evidence isn't itself disqualifying),
+// and none were in company-discovery.ts's KNOWN_MEGA_CAP_NAMES list.
+// Extending that list to cover these 12 names would only fix these exact
+// 12 — the same gap will recur for the next unlisted global brand, which is
+// exactly the "reactive blacklist" pattern this session's entity-
+// classification work was built to move away from.
+//
+// Same proven "has_knowledge, decline if unsure" discipline as
+// competitor-discovery.ts's discoverCompetitorsFromKnowledge() (2026-08-13)
+// — deliberately ASYMMETRIC: this tier can only ever push a verdict toward
+// 'too_large', never confirm 'within_range' or 'too_small'. A confident "I
+// recognize this as a global giant" claim from an LLM's parametric
+// knowledge is a much safer basis for a reject than a confident "this is
+// definitely a legitimate ₹50-500cr mid-market company" claim would be for
+// an accept — the false-positive cost of the former is a missed lead (same
+// as today's status quo for an unlisted mega-cap); the false-positive cost
+// of the latter would be inventing evidence for a company qualifying that
+// shouldn't. Only reached when tiers 1-2 both stay 'unknown' — the vast
+// majority of real SME candidates (which this tier correctly has no
+// confident opinion on) never trigger an extra LLM call at all.
+const KNOWLEDGE_TIMEOUT_MS = 10_000
 
+// ── Instrumentation (measure, don't assume — same "no hardcoded
+// conversion-rate assumption" discipline as discovery-funnel.ts, and the
+// same counter-object pattern as brightdata-client.ts's brightDataUsage/
+// resetBrightDataUsage()). A benchmark script calls resetSizeKnowledgeTierMetrics()
+// before a run, reads sizeKnowledgeTierMetrics after — see
+// benchmarks/measure-size-knowledge-tier.ts.
+export interface SizeKnowledgeTierMetrics {
+  calls: number
+  rejections: number   // scale === 'large'
+  unknowns: number     // scale === 'unknown' / decline / error
+  totalLatencyMs: number
+}
+
+export const sizeKnowledgeTierMetrics: SizeKnowledgeTierMetrics = { calls: 0, rejections: 0, unknowns: 0, totalLatencyMs: 0 }
+
+export function resetSizeKnowledgeTierMetrics(): void {
+  sizeKnowledgeTierMetrics.calls = 0
+  sizeKnowledgeTierMetrics.rejections = 0
+  sizeKnowledgeTierMetrics.unknowns = 0
+  sizeKnowledgeTierMetrics.totalLatencyMs = 0
+}
+
+interface KnowledgeSizeResponse {
+  scale?: unknown
+  reasoning?: unknown
+}
+
+function extractJson(raw: string): string {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+  const start = cleaned.indexOf('{')
+  const end = cleaned.lastIndexOf('}')
+  return start !== -1 && end > start ? cleaned.slice(start, end + 1) : cleaned
+}
+
+export async function assessCompanySizeViaKnowledge(companyName: string): Promise<SizeQualification> {
+  const systemPrompt = 'You are a precise company-scale classifier, not a knowledge base to guess with. You only answer when you have specific, confident knowledge.'
+  const userPrompt = `
+Company name: "${companyName}"
+
+Is this a large, globally well-known company — a multinational conglomerate, a household-name brand, or a company you are confident operates at a scale well beyond a small-to-mid-market business (annual revenue well above roughly $100M, or thousands of employees)?
+
+Only answer "large" if you have specific, confident knowledge that this exact company operates at that scale. If you do not recognize this company, or are not confident about its actual scale, answer "unknown" — do not guess based on the name alone.
+
+Return ONLY this JSON object, no other text:
+{"scale": "large" or "unknown", "reasoning": "1 short sentence"}
+`.trim()
+
+  sizeKnowledgeTierMetrics.calls++
+  const startedAt = Date.now()
   try {
-    const homepage = await fetchAndExtract(`https://${domain}`, 10_000)
-    if (!homepage.success || !homepage.markdown) return fromSnippets
-    const fromHomepage = assessCompanySizeFromText([homepage.markdown])
-    if (fromHomepage.verdict === 'unknown') return fromSnippets
-    return fromHomepage
-  } catch {
-    return fromSnippets
+    const response = await Promise.race([
+      getCompletion({ systemPrompt, userPrompt, maxTokens: 200, temperature: 0, jsonMode: true }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('AI direct-knowledge size check timeout')), KNOWLEDGE_TIMEOUT_MS)),
+    ])
+    sizeKnowledgeTierMetrics.totalLatencyMs += Date.now() - startedAt
+    const parsed = JSON.parse(extractJson(response.content)) as KnowledgeSizeResponse
+    if (parsed.scale === 'large') {
+      sizeKnowledgeTierMetrics.rejections++
+      const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : 'recognized as a large/multinational company'
+      return { verdict: 'too_large', evidence: [], reason: `AI direct-knowledge: ${reasoning} (no explicit size figure found in available content)`, source: 'knowledge' }
+    }
+    sizeKnowledgeTierMetrics.unknowns++
+    return { verdict: 'unknown', evidence: [], reason: 'no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal', source: 'knowledge' }
+  } catch (e) {
+    sizeKnowledgeTierMetrics.totalLatencyMs += Date.now() - startedAt
+    sizeKnowledgeTierMetrics.unknowns++
+    return { verdict: 'unknown', evidence: [], reason: `AI direct-knowledge size check unavailable: ${e instanceof Error ? e.message : String(e)}`, source: 'knowledge' }
   }
+}
+
+export async function assessCompanySize(snippets: string[], domain?: string | null, companyName?: string): Promise<SizeQualification> {
+  const fromSnippets = assessCompanySizeFromText(snippets)
+  if (fromSnippets.verdict !== 'unknown') return fromSnippets
+
+  if (domain) {
+    try {
+      const homepage = await fetchAndExtract(`https://${domain}`, 10_000)
+      if (homepage.success && homepage.markdown) {
+        const fromHomepage = assessCompanySizeFromText([homepage.markdown])
+        if (fromHomepage.verdict !== 'unknown') return { ...fromHomepage, source: 'homepage' }
+      }
+    } catch {
+      // fall through to the knowledge tier / snippets-only result below
+    }
+  }
+
+  if (companyName) {
+    const fromKnowledge = await assessCompanySizeViaKnowledge(companyName)
+    if (fromKnowledge.verdict !== 'unknown') return fromKnowledge
+  }
+
+  return fromSnippets.evidence.length > 0 ? fromSnippets : { ...fromSnippets, source: 'none' }
 }

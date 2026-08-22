@@ -20,9 +20,11 @@ import {
   parseLLMExtractionResponse,
   filterAlreadyResearched,
   normalizeDomain,
+  normalizeName,
   looksLikeUrlOrDomain,
   detectSizeMismatch,
   discoverCompanies,
+  stripTrailingLinkFragment,
   type CompanyDiscoveryCandidate,
   type CompanyMatch,
 } from '../lib/enrichment/company-discovery'
@@ -86,7 +88,10 @@ describe('classifyCompanyRejection — filtering rules', () => {
   it('rejects known directory/aggregator/social names', () => {
     expect(classifyCompanyRejection('G2', exclude)).toMatch(/directory/)
     expect(classifyCompanyRejection('Crunchbase', exclude)).toMatch(/directory/)
-    expect(classifyCompanyRejection('LinkedIn', exclude)).toMatch(/directory/)
+    // LinkedIn is a social network, entity-classified as MEDIA not
+    // DIRECTORY — see entity-classification.ts's split of the old single
+    // NON_COMPANY_NAMES list into DIRECTORY vs MEDIA.
+    expect(classifyCompanyRejection('LinkedIn', exclude)).toMatch(/news outlet\/social network/)
   })
 
   it('rejects too-short/generic names', () => {
@@ -133,6 +138,119 @@ describe('classifyCompanyRejection — filtering rules', () => {
   it('rejects Amazon for being a known mega-cap, not for being a non-operator', () => {
     expect(classifyCompanyRejection('Amazon', exclude)).toMatch(/mega-cap/)
     expect(classifyCompanyRejection('Amazon', exclude)).not.toMatch(/AI\/foundation-model platform/)
+  })
+})
+
+// 2026-08-19 — qualification-gate leaks found by the global 48-cell
+// benchmark audit (benchmarks/analyze-global-benchmark.ts). Every name here
+// is a real candidate that passed qualifyCandidate() in that run.
+describe('classifyCompanyRejection — 2026-08-19 global-benchmark leak fixes', () => {
+  it('rejects automotive OEM/Tier-1 mega-caps that leaked through', () => {
+    for (const name of ['Denso', 'Magna', 'Ford', 'Honda', 'Stellantis', 'Hyundai Mobis', 'Kia Motors', 'Mercedes-Benz Group', 'Daimler Truck']) {
+      expect(classifyCompanyRejection(name, undefined), name).toMatch(/mega-cap/)
+    }
+  })
+
+  it('rejects e-commerce mega-caps/major retailers that leaked through', () => {
+    for (const name of ['Costco', 'Etsy', 'Home Depot', 'Zalando', 'Temu', 'Shopee', 'Souq.com', 'Noon.com']) {
+      expect(classifyCompanyRejection(name, undefined), name).toMatch(/mega-cap/)
+    }
+  })
+
+  it('rejects trade associations by explicit name (acronym-shaped, no keyword to pattern-match)', () => {
+    expect(classifyCompanyRejection('CLEPA', undefined)).toMatch(/trade association/)
+    expect(classifyCompanyRejection('APMA', undefined)).toMatch(/trade association/)
+    expect(classifyCompanyRejection('EECA', undefined)).toMatch(/trade association/)
+    // "Manufacturing USA" / "Eastern Economic Corridor" are GOVERNMENT
+    // programs/economic zones, not trade associations — entity-
+    // classification.ts now distinguishes the two rather than lumping both
+    // under one "trade association/government program" reason string.
+    expect(classifyCompanyRejection('Manufacturing USA', undefined)).toMatch(/government program/)
+    expect(classifyCompanyRejection('Eastern Economic Corridor', undefined)).toMatch(/government program/)
+  })
+
+  it('rejects a trade association by its spelled-out org-type keyword, without needing the exact name listed', () => {
+    expect(classifyCompanyRejection('European Electronic component manufacturers association', undefined)).toMatch(/trade association/)
+    expect(classifyCompanyRejection('National Widget Manufacturers Federation', undefined)).toMatch(/trade association/)
+  })
+
+  it('does not reject a real company whose name happens to contain "corridor"/"institute"-adjacent words in an unrelated way', () => {
+    // Sanity: the keyword pattern is whole-word/phrase scoped, not a bare substring match.
+    expect(classifyCompanyRejection('Acme Manufacturing Co', undefined)).toBeNull()
+  })
+
+  it('rejects bare industry-category and geography words extracted as company names', () => {
+    for (const name of ['Electronics', 'Semiconductor', 'General', 'Mexico', 'Saudi', 'Nova']) {
+      expect(classifyCompanyRejection(name, undefined), name).toMatch(/bare industry-category or geography word/)
+    }
+  })
+
+  it('does not reject a real multi-word company name containing a geography word', () => {
+    expect(classifyCompanyRejection('Nova Chemicals', undefined)).toBeNull()
+    expect(classifyCompanyRejection('Mexico Manufacturing Co', undefined)).toBeNull()
+  })
+
+  it('rejects a Big 4/top-tier consulting firm name-dropped as if it were a sector operator', () => {
+    expect(classifyCompanyRejection('Deloitte', undefined)).toMatch(/consulting\/advisory firm/)
+    expect(classifyCompanyRejection('McKinsey', undefined)).toMatch(/consulting\/advisory firm/)
+  })
+
+  it('rejects a listicle section-header phrase extracted as a company name', () => {
+    expect(classifyCompanyRejection('The Global Pan-European Giants', undefined)).toMatch(/listicle section-header phrase/)
+    expect(classifyCompanyRejection('The Regional Market Leaders', undefined)).toMatch(/listicle section-header phrase/)
+  })
+
+  it('rejects TSMC as an unambiguous mega-cap', () => {
+    expect(classifyCompanyRejection('TSMC', undefined)).toMatch(/mega-cap/)
+  })
+})
+
+describe('stripTrailingLinkFragment — garbled markdown-link extraction (2026-08-19)', () => {
+  it('strips a trailing ".Read"/".Learn"/".More"-shaped link fragment', () => {
+    expect(stripTrailingLinkFragment('Zalora.Read')).toBe('Zalora')
+    expect(stripTrailingLinkFragment("David's Bridal.Read")).toBe("David's Bridal")
+    expect(stripTrailingLinkFragment('Acme Corp.Learn More')).toBe('Acme Corp')
+  })
+
+  it('leaves a real name with an internal period untouched', () => {
+    expect(stripTrailingLinkFragment('A-1 Fence Products')).toBe('A-1 Fence Products')
+    expect(stripTrailingLinkFragment('Acme Inc.')).toBe('Acme Inc.')
+  })
+})
+
+// Production-hardening task requirement: automated regression coverage for
+// non-English/diacritic company names in company-discovery.ts specifically
+// (CLAUDE.md documents this bug class being fixed in 5+ OTHER files —
+// website-discovery.ts, evidence-extractor.ts, competitor-discovery.ts,
+// icp-generator.ts — but this module's own normalizeName()/
+// classifyCompanyRejection() had no dedicated test proving it doesn't
+// regress the same way, only relying on the shared `\p{L}\p{N}` pattern
+// being correct by inspection).
+describe('normalizeName / classifyCompanyRejection — non-English/diacritic company names (2026-08-20)', () => {
+  it('preserves accented characters rather than mangling them to ASCII', () => {
+    expect(normalizeName('Möller Fahrzeugtechnik GmbH')).toBe('möller fahrzeugtechnik gmbh')
+    expect(normalizeName('Société Générale Manufacturing')).toBe('société générale manufacturing')
+  })
+
+  it('does not reject a real diacritic company name as generic/too-short/directory', () => {
+    expect(classifyCompanyRejection('Möller Fahrzeugtechnik', undefined)).toBeNull()
+    expect(classifyCompanyRejection('Société Générale Manufacturing', undefined)).toBeNull()
+    expect(classifyCompanyRejection('Café Manufaktur Bäckerei', undefined)).toBeNull()
+  })
+
+  it('the TLD-suffix strip still collapses a diacritic name and its ".com" form to one identity', () => {
+    expect(normalizeName('Möller')).toBe(normalizeName('Möller.com'))
+  })
+})
+
+describe('normalizeName — TLD-suffix stripping so "X" and "X.com" dedup together (2026-08-19)', () => {
+  it('normalizes a company name and its ".com" form to the same key', () => {
+    expect(normalizeName('Souq')).toBe(normalizeName('Souq.com'))
+    expect(normalizeName('Noon')).toBe(normalizeName('Noon.com'))
+  })
+
+  it('does not mangle a real company name with no TLD suffix', () => {
+    expect(normalizeName('Bharat Forge')).toBe('bharat forge')
   })
 })
 

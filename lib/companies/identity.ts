@@ -62,11 +62,80 @@ export interface CompanyRegistryRow {
   researched_at: string | null
   outreached_at: string | null
   updated_at: string
+  // Qualification provenance (migration 028, 2026-08-20) — see
+  // lib/enrichment/company-qualification.ts's QualificationProvenance for
+  // what populates these and CURRENT_QUALIFICATION_VERSION for the
+  // versioning scheme.
+  qualification_version: string | null
+  qualification_reason: string | null
+  qualification_confidence: 'QUALIFIED' | 'REVIEW' | 'REJECTED' | null
+  qualification_score: number | null
+  entity_type: string | null
+  entity_confidence: 'high' | 'medium' | 'low' | null
+  size_classification: string | null
+  size_confidence: 'high' | 'medium' | 'low' | null
+  size_evidence_source: 'snippets' | 'homepage' | 'knowledge' | 'none' | null
+  icp_fit: 'match' | 'no_evidence' | 'no_match' | null
+  icp_confidence: 'confirmed' | 'unconfirmed' | null
+  sector_evidence: SectorEvidence | null
+  domain_evidence: DomainEvidence | null
+}
+
+// Reproduces the sector/ICP-fit decision: sector-signal matching is the
+// ONLY ICP-fit check this qualification gate makes (see
+// matchSectorSignalsDetailed() in company-qualification.ts) — there is no
+// separate, broader ICP criterion at this stage (that's a different,
+// post-research module: lib/enrichment/icp-generator.ts). So one evidence
+// record covers both "sector" and "ICP fit" honestly, rather than a second
+// column that would just duplicate this one.
+export interface SectorEvidence {
+  sector: TargetSector
+  /** null when no snippet text was available to judge at all (mirrors the
+   * tri-state sectorTextMatches in qualifyCandidate()). */
+  matched: boolean | null
+  matchedSignals: string[]
+  query: string | null
+  /** The actual text evaluated (truncated) — stored so a future ruleset
+   * change can be re-run against it without needing a fresh search. */
+  snippet: string | null
+}
+
+export interface DomainEvidence {
+  domain: string
+  confidence: 'high' | 'medium' | null
+  sourceUrls: string[]
+}
+
+export interface QualificationProvenance {
+  qualification_version: string
+  qualification_reason: string
+  qualification_confidence: 'QUALIFIED' | 'REVIEW' | 'REJECTED'
+  qualification_score: number
+  entity_type: string
+  entity_confidence: 'high' | 'medium' | 'low'
+  size_classification: string
+  size_confidence: 'high' | 'medium' | 'low'
+  size_evidence_source: 'snippets' | 'homepage' | 'knowledge' | 'none'
+  icp_fit: 'match' | 'no_evidence' | 'no_match'
+  icp_confidence: 'confirmed' | 'unconfirmed'
+  sector_evidence: SectorEvidence | null
+  domain_evidence: DomainEvidence | null
 }
 
 // ── Normalization ────────────────────────────────────────────────
 
 const LEGAL_SUFFIXES = /\b(?:pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|corp\.?|corporation|co\.?)\b/gi
+
+// Same real bug, same fix, as company-discovery.ts's normalizeName()
+// (found live 2026-08-19, "Souq"/"Souq.com" and "Noon"/"Noon.com" each
+// qualifying as two separate companies) — but applied here too, since
+// THIS is the function company_registry's persistent identity resolution
+// actually uses. The discovery-time fix alone only dedupes within one
+// search run's in-memory grouping; a candidate arriving here later as a
+// bare "Noon.com" name (no domain field set) would otherwise still resolve
+// to a different normalized_name ("noon com") than an existing "Noon"
+// row's ("noon"), creating a second persistent row for the same company.
+const TRAILING_TLD_RE = /\.(?:com|net|org|io|co|in|us)$/i
 
 export function normalizeDomain(input: string): string {
   let s = input.trim().toLowerCase()
@@ -80,6 +149,7 @@ export function normalizeDomain(input: string): string {
 // 2026-07-24/2026-08-17 history) for accented company names.
 export function normalizeCompanyName(name: string): string {
   return name
+    .replace(TRAILING_TLD_RE, '')
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
@@ -233,17 +303,17 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-export async function markQualified(supabase: SupabaseClient, id: string): Promise<void> {
+export async function markQualified(supabase: SupabaseClient, id: string, provenance?: QualificationProvenance): Promise<void> {
   await supabase
     .from('company_registry')
-    .update({ status: 'qualified', qualified_at: nowIso(), rejection_reason: null, updated_at: nowIso() })
+    .update({ status: 'qualified', qualified_at: nowIso(), rejection_reason: null, updated_at: nowIso(), ...provenance })
     .eq('id', id)
 }
 
-export async function markDisqualified(supabase: SupabaseClient, id: string, reason: RejectionReason): Promise<void> {
+export async function markDisqualified(supabase: SupabaseClient, id: string, reason: RejectionReason, provenance?: QualificationProvenance): Promise<void> {
   await supabase
     .from('company_registry')
-    .update({ status: 'disqualified', rejection_reason: reason, updated_at: nowIso() })
+    .update({ status: 'disqualified', rejection_reason: reason, updated_at: nowIso(), ...provenance })
     .eq('id', id)
 }
 

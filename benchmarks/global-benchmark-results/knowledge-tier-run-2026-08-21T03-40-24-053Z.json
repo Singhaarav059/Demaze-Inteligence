@@ -1,0 +1,253 @@
+{
+  "ranAt": "2026-08-21T03:40:24.055Z",
+  "megaCap": {
+    "fixtures": 26,
+    "rejected": 26,
+    "unknown": 0,
+    "recallPct": 100,
+    "results": [
+      {
+        "name": "BMW",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: BMW is a globally renowned automotive manufacturer with tens of billions in annual revenue and over 100,000 employees. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Audi",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Audi is a major global luxury automotive manufacturer and a key subsidiary of the Volkswagen Group with tens of billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Mini",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Mini is a globally recognized automotive brand operating as a subsidiary of the multinational conglomerate BMW Group. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Porsche",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Porsche is a globally renowned luxury automotive manufacturer operating as a subsidiary of Volkswagen AG with billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Volvo",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Volvo is a major global automotive manufacturing corporation with tens of billions of dollars in revenue and over 100,000 employees. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Jaguar",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Jaguar is a globally recognized luxury automotive brand operating as part of Jaguar Land Rover, a major multinational manufacturer. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Land Rover",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Land Rover is a globally renowned luxury automotive brand operating as part of Jaguar Land Rover, generating billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Maruti Suzuki",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Maruti Suzuki is India's largest passenger car manufacturer, generating billions of dollars in revenue and employing thousands of people. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "JCB",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: JCB is a major global manufacturer of construction equipment with thousands of employees and billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Tencent",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Tencent is a massive public multinational technology conglomerate with tens of thousands of employees and tens of billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Jacobs Solutions",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Jacobs Solutions is a publicly traded, Fortune 500 engineering and professional services firm with tens of thousands of employees and billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Fluor",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Fluor Corporation is a major publicly traded engineering and construction multinational with billions in annual revenue and tens of thousands of employees. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Murata Manufacturing",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Murata Manufacturing is a major Japanese electronic components manufacturer with tens of thousands of employees and billions of dollars in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Murata Vietnam",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Murata Vietnam is a major manufacturing subsidiary of Murata Manufacturing Co., Ltd., a global electronic components leader with billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Robert Bosch GmbH",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Robert Bosch GmbH is a massive global engineering and technology conglomerate with tens of billions in annual revenue and hundreds of thousands of employees. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "O'Reilly Automotive",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: O'Reilly Automotive is a publicly traded Fortune 500 company and major auto parts retailer with thousands of stores and billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Lear",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Lear Corporation is a Fortune 500 multinational automotive technology company with tens of billions in annual revenue and over 100,000 employees globally. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Bilfinger Tebodin",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Bilfinger Tebodin is an industrial engineering and consulting firm with thousands of employees operating across Europe and the Middle East as part of the Bilfinger Group. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Samsung Electronics",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Samsung Electronics is a major multinational tech conglomerate with hundreds of billions in annual revenue and hundreds of thousands of employees. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Siemens AG",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Siemens AG is a major German multinational conglomerate with hundreds of thousands of employees and tens of billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Foxconn",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Foxconn is the world's largest contract electronics manufacturer, generating hundreds of billions in annual revenue with over one million employees globally. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Nestle",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Nestlé is a massive multinational food and beverage conglomerate with annual revenues exceeding $90 billion and hundreds of thousands of employees worldwide. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "JD.com",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: JD.com is a Fortune Global 500 e-commerce giant in China with hundreds of thousands of employees and tens of billions in annual revenue. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Reliance Retail",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Reliance Retail is India's largest retailer, operating thousands of stores with annual revenues exceeding tens of billions of dollars. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "SAIC Motor",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: SAIC Motor is one of the largest state-owned automotive manufacturers in China and a Fortune Global 500 company with hundreds of thousands of employees. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Schneider Electric",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Schneider Electric is a major multinational energy management and automation company with tens of billions in revenue and over 100,000 employees globally. (no explicit size figure found in available content)"
+      }
+    ]
+  },
+  "sme": {
+    "fixtures": 12,
+    "falselyRejected": 1,
+    "preserved": 11,
+    "falseRejectionRatePct": 8.333333333333332,
+    "results": [
+      {
+        "name": "Meridian Precision Components",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Alden Auto Components",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Northgate Marketplace",
+        "entityType": "COMPANY",
+        "verdict": "too_large",
+        "reasoning": "AI direct-knowledge: Northgate Gonzalez Market (Northgate Marketplace) is a major regional supermarket chain in California with thousands of employees and estimated annual revenues exceeding $1 billion. (no explicit size figure found in available content)"
+      },
+      {
+        "name": "Sundaram Forge Industries",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Volten Auto Parts GmbH",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Kestrel Retail Group",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Pacific Rim Fabrication Works",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Highland Drivetrain Systems",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Coral Bay Commerce Ltd",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Ironbridge Metal Works",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Delta Valley Auto Suppliers",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      },
+      {
+        "name": "Riverstone Retail Holdings",
+        "entityType": "COMPANY",
+        "verdict": "unknown",
+        "reasoning": "no revenue/valuation/market-cap/employee-count evidence found, and AI direct-knowledge check found no confident large-scale signal"
+      }
+    ]
+  },
+  "latency": {
+    "avgLatencyMs": 1755,
+    "totalMs": 66698,
+    "calls": 38,
+    "estimatedCostUsd": 0.00399
+  }
+}
