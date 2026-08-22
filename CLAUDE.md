@@ -5094,6 +5094,185 @@ or a similar case, confirm this fix holds against real search results too.
 **Company Discovery Engine (Phase 2 item 3) is now COMPLETE, including live
 verification.**
 
+## RESOLVED 2026-08-22 — Coresignal reset: company-universe multi-provider
+## experiment removed (nothing found to remove), one clean Coresignal
+## integration built as a second Company Discovery source
+User asked to reset company discovery around ONE data provider (Coresignal)
+and remove everything built for a "recent multi-source company-universe
+experiment" (GLEIF, SEC EDGAR-as-a-discovery-source, Companies House, India
+MCA/data.gov.in, OpenCorporates, and any provider-abstraction/registry
+machinery built for those). **Investigated first, per the task's own
+instruction, before removing or building anything**: a full-repo grep (all
+branches, code, and docs) for GLEIF/Companies House/OpenCorporates/MCA-as-
+a-discovery-provider/"company-universe"/"multi-source" found **zero
+matches anywhere**. The only registry-shaped code that exists at all is SEC
+EDGAR (`lib/enrichment/sources/edgar-client.ts`, RESOLVED 2026-08-04) — and
+that is a per-company REGULATORY-FILINGS ENRICHMENT source (context for a
+company already being researched, wired into
+`discoverAndFetchExternalSources()`), not a company-DISCOVERY source and not
+part of any multi-provider abstraction; it has nothing to do with
+`lib/enrichment/company-discovery.ts`'s candidate-search job. **Conclusion:
+there was nothing to remove.** The "multi-source company-universe
+experiment" this task describes never actually landed in this repository —
+confirmed, not assumed.
+
+Separately (unrelated to this task, discovered while investigating): Apollo
+(added 2026-08-14, four integration points per that session's own entry
+above) has ALSO already been fully removed from this codebase — no
+`apollo-client.ts`/`apollo.ts` provider files exist anywhere, and
+`CAPABILITY_KNOWN_PROVIDERS` in `lib/outbound/settings/types.ts` no longer
+lists `apollo` for any capability — evidently during the "Production
+hardening: Phases 1-10 and 12" commit, per `docs/production-hardening/
+phase9-apollo-decision.md`'s own recommendation not to pursue Apollo further
+(plan-blocked, Prospeo already covers the same ground). Not touched this
+session — out of scope, already done, listed here only so a future session
+doesn't waste time re-investigating it.
+
+**Built**: one clean, additive Coresignal integration, parallel to (not a
+replacement for) the existing search-engine-based `discoverCompanies()` in
+`company-discovery.ts` — that function, its UI, and `demaze-leads.ts`'s
+aggregation on top of it are all existing, working functionality and were
+left untouched per the task's own "preserve what's used by the existing
+research/qualification/enrichment/scraping/outreach/UI systems" instruction.
+
+- `lib/enrichment/sources/coresignal-client.ts` — raw HTTP client only:
+  `getCoresignalApiKey()` (flat `CORESIGNAL_API_KEY` env var, same pattern
+  as `edgar-client.ts`'s `SEC_EDGAR_USER_AGENT` — this is a discovery
+  SOURCE in `lib/enrichment/`, not an outbound send-capability, so it does
+  NOT go through the DB-backed `outbound_integrations` settings system;
+  that system is specifically for capabilities in
+  `lib/outbound/settings/types.ts`'s `OutboundCapability` union
+  (decision_maker_discovery/email_finder/enrichment/sending/warmup), and
+  company discovery isn't one of them), `searchCoresignalCompanyIds()`
+  (`POST company_base/search/filter`, paginated via `items_per_page`/
+  `x-next-page-after`), `collectCoresignalCompany()` (`GET
+  company_base/collect/{id}`, null on 404). Base Company API
+  (`company_base`) was chosen over the pricier Multi-source Company API
+  deliberately — it already exposes every field the target filters need
+  (industry/country/employees_count/founded_year), and the task's own
+  instruction is "smallest clean integration," not maximum data depth.
+  Retry wrapper (`fetchCoresignalWithRetry`) retries on 429 (honoring a
+  real `Retry-After` header) and 5xx with exponential backoff, up to 3
+  attempts; never retries other 4xx (wrong request/bad key won't succeed
+  on retry). `CoresignalApiError` carries the real HTTP status so callers
+  can distinguish "no match" (404 on collect) from "the API is broken."
+  **Endpoint/field shapes were confirmed against Coresignal's own indexed
+  documentation before writing any code** (search filter body fields —
+  `industry`/`country`/`employees_count_gte`/`_lte`/`founded_year_gte`/
+  `_lte`/`size`/`name`/`website`/`deleted`; collect response fields —
+  `id`/`name`/`industry`/`employees_count`/`headquarters_country[_parsed]`/
+  `size`/`website`/`founded`/`type`/`description`), same "research the real
+  API before building" discipline this file already documents for Prospeo/
+  Apollo/EDGAR — but a genuine limitation, stated plainly: this session's
+  network egress is blocked to `docs.coresignal.com` directly (confirmed —
+  `WebFetch` returned `EGRESS_BLOCKED`), so field/endpoint shapes came from
+  indexed documentation SNIPPETS via search, not a live doc browse. The
+  live smoke test below is what actually proves these shapes against the
+  real API, not the code comments alone — treat the client as
+  well-reasoned but not yet 100% field-verified until that live run
+  happens.
+- `lib/enrichment/coresignal-discovery.ts` — `discoverCompaniesFromCoresignal
+  (filters, excludeCompanyNames?, opts?)`: validates at least one real
+  filter is given (industry/country/employee range/founding-year
+  range/name — refuses to run an unbounded query), paginates search up to
+  a caller-requested `maxResults` (default 25, hard ceiling 100
+  regardless of what's requested, since each surviving ID costs one
+  additional `collect()` call), collects in bounded-concurrency batches of
+  5, then normalizes each record into the EXACT SAME `CompanyMatch` shape
+  `company-discovery.ts` already produces (gained one new optional field,
+  `source?: 'search' | 'coresignal'`, for provenance — see below) so both
+  discovery paths feed one identical downstream flow. Basic deterministic
+  filtering reuses `classifyCompanyRejection()` DIRECTLY (self-name/
+  directory/generic-term rejection — not reimplemented), plus new
+  Coresignal-specific checks: reject `deleted: true` records, reject
+  records with no name, dedupe within the batch by normalized domain/name.
+  Deliberately does NOT reuse `detectSizeMismatch()` (the OLD prose-regex
+  heuristic built for search-snippet text) — Coresignal gives STRUCTURED
+  `employees_count`, so size filtering happens at the SOURCE (the
+  `employees_count_gte`/`_lte` query filter itself), which is strictly
+  more reliable than regex-scanning prose for revenue/headcount mentions.
+  Deliberately does NOT call `discoverCompanyWebsite()` (the expensive
+  search+fetch domain-verification pass every OTHER discovery module in
+  this file uses) — Coresignal already returns a real recorded `website`
+  field per company, a stronger, structured claim than a guessed domain,
+  so a Coresignal match with a website is tagged `confidence: 'high'`
+  immediately (matches the same "a licensed structured-database hit is a
+  stronger claim than a snippet match" reasoning this file already used
+  for the now-removed Apollo integration's Organization Search path).
+  "Website verification/research" in the target architecture is the
+  EXISTING intelligence pipeline's own scrape stage — handing a
+  Coresignal-confirmed `domain` straight into `/api/admin/test-analysis`
+  IS that verification step; no separate manual verification pass was
+  built, per the task's explicit "pass candidates into the EXISTING
+  qualification and research pipeline rather than creating a second
+  qualification system" instruction.
+- New route `POST /api/admin/coresignal-discovery` — thin wrapper, same
+  shape as the existing `company-discovery/route.ts` including an
+  identical already-researched dedup block against `pipeline_test_runs`
+  (reusing `filterAlreadyResearched()` directly, duplicated at the route
+  layer rather than extracted into a shared I/O helper — matches this
+  file's own established precedent of small route-layer glue staying
+  local per route, and keeps `lib/enrichment/` modules Supabase-free per
+  `company-discovery.ts`'s own header comment).
+- UI: extended (not replaced) `/admin/company-discovery`'s existing
+  Step 3 "Manual / advanced" area with a second, sibling `<details>`
+  panel — "Search Coresignal by firmographics" (industry/country/min-max
+  employees inputs, a Search button). Wired through a new
+  `handleCoresignalSearch()` in the shared `useCompanyDiscoverySearch()`
+  hook, which populates the EXACT SAME `companies`/`sufficiency`/
+  `discoveryReason` state `handleSearch()` already does — so
+  `CompanyMatchList`'s existing "Research Selected" sequential loop
+  (already wired to `/api/admin/test-analysis`, already persisting to
+  run-history) works identically regardless of which discovery path
+  populated the list. No new qualification/research code, per the task's
+  explicit instruction not to build a second one.
+- `scripts/coresignal-smoke-test.ts` (+ `npm run coresignal:smoke-test`) —
+  the live integration test the task required. Runs a real, representative
+  Demaze ICP query (Manufacturing, India, 50-1000 employees — CLAUDE.md's
+  own confirmed target industries/geography, SME/mid-market scale) against
+  the real API when `CORESIGNAL_API_KEY` is configured; fails loudly (real
+  error, exit code 1) rather than fabricating success when it isn't.
+  Sanity-checked in this session (no key configured in this sandboxed
+  environment — confirmed via `.env.local` absence, not assumed) —
+  correctly printed `"CORESIGNAL_API_KEY is not set... nothing to test"`
+  and exited 1. **No live API call has been made against the real
+  Coresignal API in this session** — see "Live test result" in the
+  session's own report to the user for the exact status.
+- `.env.example` — `CORESIGNAL_API_KEY` (required for the integration) and
+  `CORESIGNAL_API_BASE_URL` (optional override, defaults to
+  `https://api.coresignal.com/cdapi/v2`).
+- New tests: `tests/coresignal-client.test.ts` (13 assertions — request
+  shape, apikey header, pagination cursor parsing, retry-on-429-honoring-
+  Retry-After, retry-on-5xx, no-retry-on-401, retries-exhausted throws,
+  collect's null-on-404 contract, collect throws on non-404 4xx) and
+  `tests/coresignal-discovery.test.ts` (12 assertions — missing-key/no-
+  filter guards, high-confidence normalization with a real website,
+  medium-confidence with no website, missing-name rejection, deleted-record
+  rejection, self-name exclusion via the reused `classifyCompanyRejection`,
+  within-batch domain dedup, search pagination, search-failure and
+  partial-collect-failure error surfacing, zero-results handling), both
+  mocking `global.fetch`/the client module directly — same precedent as
+  `tests/edgar-client.test.ts`/`tests/competitor-discovery-synthesis.test.ts`.
+
+**Explicitly NOT built, per the task's own scope boundary**: LinkedIn
+scraping, Google-search-as-a-Coresignal-fallback, a second data-provider
+abstraction, a homemade company database, decision-maker discovery, email
+discovery, or any outreach change. The existing search-engine-based
+`discoverCompanies()` path was left as-is (not removed, not merged into a
+shared abstraction with Coresignal) — the task asked for ONE new clean
+provider integration, not a unification of the two discovery paths.
+
+**Verified**: `tsc --noEmit` clean, full suite 926/926 (904 pre-existing +
+22 new), `npm run build` clean (new route `/api/admin/coresignal-discovery`
+correctly registered). **Live Coresignal smoke test: NOT run** — no
+`CORESIGNAL_API_KEY` was available in this sandboxed session (confirmed via
+`.env.local` absence). Whoever has a real key should run
+`npm run coresignal:smoke-test` (or the equivalent through
+`/admin/company-discovery`'s new Coresignal panel) before trusting the
+field-name assumptions in `coresignal-client.ts`'s normalization logic
+against real data — see that file's header comment for exactly which
+assumptions are unverified.
+
 Items 1-3 of Phase 2 (Competitor Discovery Engine, ICP Generator, Company
 Discovery Engine) are all now complete with live verification.
 

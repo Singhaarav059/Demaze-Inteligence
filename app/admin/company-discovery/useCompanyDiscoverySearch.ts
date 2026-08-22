@@ -36,6 +36,13 @@ export interface DiscoveredCompanyState {
   errorMessage?: string
 }
 
+export interface CoresignalSearchFilters {
+  industry?: string
+  country?: string
+  employeesCountGte?: number
+  employeesCountLte?: number
+}
+
 export function toDedupedCompany(match: DemazeMatch, idx: number): DedupedCompany {
   return {
     id: `discovered-${idx}-${match.name}`,
@@ -109,6 +116,48 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
       })))
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : 'Network error while searching')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // ── Coresignal search (geography/industry/size filters) ───────
+  // Same shape as handleSearch above, feeding the identical companies/
+  // sufficiency/discoveryReason state — CompanyMatchList and
+  // researchSelected() don't need to know or care which discovery path
+  // populated them, both already operate on the shared CompanyMatch shape.
+
+  async function handleCoresignalSearch(filters: CoresignalSearchFilters) {
+    setSearching(true)
+    setSearchError(null)
+    setSufficiency(null)
+    setDiscoveryReason(null)
+    setCompanies([])
+
+    try {
+      const res = await fetch('/api/admin/coresignal-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...filters, excludeCompanyName: excludeCompanyName.trim() || undefined }),
+      })
+      const data = await res.json()
+
+      if (!data.success) {
+        setSearchError(data.error ?? 'Coresignal discovery failed')
+        return
+      }
+
+      setSufficiency(data.sufficiency)
+      setDiscoveryReason(data.reason)
+      const matches: CompanyMatch[] = data.companies ?? []
+      setCompanies(matches.map((match, idx) => ({
+        company: toDedupedCompany(match, idx),
+        match: { ...match, segments: [filters.industry || 'Coresignal search'] },
+        selected: true,
+        status: 'pending' as CompanyStatus,
+      })))
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : 'Network error while searching Coresignal')
     } finally {
       setSearching(false)
     }
@@ -252,7 +301,7 @@ export function useCompanyDiscoverySearch(options?: UseCompanyDiscoverySearchOpt
     running, progress, pausedReason,
     expandedId, setExpandedId,
     selectedCount, doneCount,
-    handleSearch, toggle, selectAll, selectNone, updateCompany,
+    handleSearch, handleCoresignalSearch, toggle, selectAll, selectNone, updateCompany,
     persistResult, researchSelected, stopBatch,
   }
 }

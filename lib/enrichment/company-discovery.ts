@@ -60,6 +60,11 @@ export interface CompanyMatch {
   reason: string           // code-derived, built from the matched search snippet — never LLM-narrated
   confidence: CompanyMatchConfidence
   source_urls: string[]
+  // Provenance: which discovery path produced this candidate. Optional/
+  // absent means the original search-extraction path (this field didn't
+  // exist before Coresignal was added) — never assume a missing value means
+  // 'search', just don't rely on it for anything other than display.
+  source?: 'search' | 'coresignal'
 }
 
 export interface CompanyDiscoveryResult {
