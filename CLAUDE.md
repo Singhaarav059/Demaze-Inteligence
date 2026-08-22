@@ -3465,6 +3465,69 @@ Coresignal (one client module, one discovery module, one route, additive
 to `company-discovery.ts`'s existing `CompanyMatch` shape) rather than
 reintroducing a provider-abstraction layer.
 
+## BUILT 2026-08-22 (later same day) — Explee POC: one client, one route, raw
+## results in the existing company-discovery UI, nothing else
+Immediately after the Coresignal removal above, user asked to try Explee
+(explee.com) as the one external company/people data source, POC only:
+one search endpoint, 10-20 raw results shown for manual data-quality
+review, no DB migration, no bulk processing, no AI qualification changes,
+no contact enrichment yet. Read Explee's real OpenAPI schema
+(`https://api.explee.com/public/api/openapi.json`) before writing any
+code — auth is a single `X-API-Key` header (get a key at
+explee.com/api-keys), no OAuth. `POST /search/companies` takes `{filters:
+{definition, geo_include, size: {min,max}, ...~40 more fields}, page,
+page_size}` and returns `{companies: PublicCompanyResponse[], meta: {total,
+results_count, credits_charged, remaining_balance}}` — first 100 results
+free, 0.5 credits/company after. `PublicCompanyResponse` is rich (~60
+fields: domain, industry, NACE codes, geo/geo_city, size, founded,
+revenue_annual, funding_stage, traffic, technologies, emails, phones,
+social profiles, legal-entity data) — exactly the firmographic depth
+Coresignal was meant to provide, from a single vendor that ALSO covers
+people search/enrichment later (`/search/people`, `/enrich/email`) if this
+POC's company-search data proves good.
+
+**Built, POC-scoped only**:
+- `lib/enrichment/sources/explee-client.ts` — `searchExpleeCompanies()`,
+  flat `EXPLEE_API_KEY`/`EXPLEE_API_BASE_URL` env vars (same
+  no-DB-row pattern as `edgar-client.ts` — this is a discovery source, not
+  an `outbound_integrations` capability). `ExpleeCompanyFilters` only
+  exposes `definition`/`geo_include`/`size` for now (the real schema has
+  ~40 filter fields — add more only once this POC proves the data's worth
+  building on). No retry/backoff/caching — deliberately not built for a
+  POC, add if this becomes production.
+- `app/api/admin/explee-discovery/route.ts` — thin pass-through, no DB
+  dedup, no persistence, no research-pipeline hookup.
+- `app/admin/company-discovery/ExpleeSearchPanel.tsx` — a new,
+  self-contained panel (own state, not wired into
+  `useCompanyDiscoverySearch`/`CompanyMatchList` on purpose — no
+  selection, no "Research Selected", no dedup-against-history). Takes a
+  free-text `definition` + optional country codes, shows each result as a
+  compact normalized line (name/domain/industry/geo/size/founded/
+  description) with a "View raw" toggle that dumps the full JSON object
+  Explee returned — genuinely raw, not a re-derived shape, so data quality
+  can be judged directly. Rendered on `/admin/company-discovery` between
+  the existing Lead Discovery step and Research Selected list.
+- `tests/explee-client.test.ts` (3 assertions, mocked `global.fetch`, same
+  pattern as `tests/edgar-client.test.ts`): request shape/auth header,
+  `ExpleeApiError` surfacing the real `detail` on a non-2xx response,
+  missing-API-key guard.
+
+**Verified**: `tsc --noEmit` clean, full suite 911/911 (908 + 3 new).
+`npm run build` clean, `/api/admin/explee-discovery` registered.
+
+**Not done — explicitly out of scope for this POC, per the user's own
+instruction**: no live call has been made against the real Explee API yet
+(no `EXPLEE_API_KEY` in this environment) — that's the actual data-quality
+test this POC exists for, still pending. No DB migration, no dedup against
+`pipeline_test_runs`, no wiring into `discoverCompanies()`'s existing
+search/domain-resolution pipeline, no people/contact search
+(`/search/people`, `/enrich/email`), no outreach or AI-qualification
+changes. If the 10-20 raw results prove good, the next session should
+decide whether Explee results feed the SAME `CompanyMatch` pipeline
+`discoverCompanies()` already produces (reusing `filterAlreadyResearched()`
+and `CompanyMatchList`'s existing research flow, same shape Coresignal
+used before removal) rather than staying a separate raw-JSON-only panel.
+
 ## DO NOT WORK ON RIGHT NOW
 - More model changes
 - More classifier tweaking beyond the specific fixes listed above

@@ -47,6 +47,7 @@ import type { ICPSegment } from '@/lib/enrichment/icp-generator'
 import { DEMAZE_URL } from '@/lib/enrichment/demaze-leads'
 import { useCompanyDiscoverySearch, toDedupedCompany, type DemazeMatch } from './useCompanyDiscoverySearch'
 import { CompanyMatchList } from './CompanyMatchList'
+import { ExpleeSearchPanel } from './ExpleeSearchPanel'
 
 type ProfileStatus = 'idle' | 'checking' | 'needs_research' | 'researching' | 'ready' | 'error'
 
@@ -505,6 +506,8 @@ function CompanyDiscoveryInner() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ExpleeSearchPanel />
 
       {/* ── Step 5: Research Selected → Outreach ─────────────────── */}
       <CompanyMatchList search={search} demazeSegments={demazeSegments} />
