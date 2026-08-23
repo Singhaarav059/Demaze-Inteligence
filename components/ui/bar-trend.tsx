@@ -1,10 +1,10 @@
 // ============================================================
-// BarTrend — compact daily-activity bar chart
+// BarTrend - compact daily-activity bar chart
 // ============================================================
 // Same "no charting dependency" precedent as sparkline.tsx: plain inline
 // SVG, dark background, minimal axes. Callers gate render on real,
 // sufficient data via lib/analytics/daily-counts.ts's
-// hasSufficientTrendData() — this component renders whatever it's given.
+// hasSufficientTrendData() - this component renders whatever it's given.
 // ============================================================
 
 import { useId } from 'react'

@@ -11,6 +11,7 @@
 import { getActiveProviderName } from '@/lib/outbound/settings/provider-selection'
 import { MockDecisionMakerDiscoveryProvider } from './providers/mock'
 import { ProspeoDecisionMakerDiscoveryProvider } from './providers/prospeo'
+import { ExpleeDecisionMakerDiscoveryProvider } from './providers/explee'
 import { groundCandidates } from './grounding'
 import type {
   DecisionMakerDiscoveryProvider,
@@ -21,6 +22,7 @@ import type {
 const PROVIDERS: Record<string, DecisionMakerDiscoveryProvider> = {
   mock: MockDecisionMakerDiscoveryProvider,
   prospeo: ProspeoDecisionMakerDiscoveryProvider,
+  explee: ExpleeDecisionMakerDiscoveryProvider,
 }
 
 async function resolveProvider(): Promise<DecisionMakerDiscoveryProvider> {

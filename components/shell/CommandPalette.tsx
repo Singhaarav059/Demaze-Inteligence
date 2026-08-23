@@ -1,10 +1,10 @@
 'use client'
 
 // ============================================================
-// CommandPalette — Cmd+K / Ctrl+K quick-jump
+// CommandPalette - Cmd+K / Ctrl+K quick-jump
 // ============================================================
 // No routed detail views exist in this app to jump between (confirmed via
-// exploration — every "detail" is an inline accordion, not a route), so
+// exploration - every "detail" is an inline accordion, not a route), so
 // this is deliberately just a fast way to reach any top-level destination:
 // the 4 primary NAV entries plus the 4 pages pulled from main nav on
 // 2026-07-18 (SECONDARY_NAV) that would otherwise only be reachable by
@@ -12,7 +12,7 @@
 //
 // Focus/keyboard handling mirrors MobileNav.tsx's manual (no-library)
 // pattern: focus moves in on open, Escape closes, focus restores to
-// whatever was focused before opening. There's no Tab-trap here though —
+// whatever was focused before opening. There's no Tab-trap here though -
 // unlike the drawer, the only real focusable element while open is the
 // search input itself; result navigation is Up/Down/Enter on a listbox,
 // same convention any command palette uses.
@@ -49,11 +49,11 @@ export function CommandPalette() {
     )
   }, [query])
 
-  // Read inside the keydown handler via refs, not as effect deps — the
+  // Read inside the keydown handler via refs, not as effect deps - the
   // handler effect below only needs to (re)run when `open` toggles. Making
   // it depend on `results`/`activeIndex` directly (as an earlier version
   // did) meant every keystroke tore down and re-ran the effect, and its
-  // cleanup unconditionally called restoreFocusRef.current?.focus() —
+  // cleanup unconditionally called restoreFocusRef.current?.focus() -
   // yanking focus back to the trigger button on every single character
   // typed, not just on real close.
   const resultsRef = useRef(results)
@@ -63,7 +63,7 @@ export function CommandPalette() {
     activeIndexRef.current = activeIndex
   }, [results, activeIndex])
 
-  // Global Cmd+K / Ctrl+K toggle — always listening, not just while open.
+  // Global Cmd+K / Ctrl+K toggle - always listening, not just while open.
   // Also listens for a plain custom event so the TopBar's visible "⌘K"
   // button (for anyone who doesn't know the shortcut exists) can open the
   // same palette without prop-drilling open state through the layout.
@@ -96,7 +96,7 @@ export function CommandPalette() {
     router.push(item.href)
   }
 
-  // Focus in on open, restore on close — same discipline as MobileNav.tsx.
+  // Focus in on open, restore on close - same discipline as MobileNav.tsx.
   useEffect(() => {
     if (!open) return
     restoreFocusRef.current = document.activeElement as HTMLElement | null

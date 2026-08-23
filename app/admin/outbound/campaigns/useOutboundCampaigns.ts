@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// useOutboundCampaigns — state + actions for the Campaigns page
+// useOutboundCampaigns - state + actions for the Campaigns page
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react'
@@ -14,7 +14,7 @@ export interface Campaign {
   status: 'draft' | 'active' | 'paused' | 'completed'
   sender_provider: string
   created_at: string
-  // Campaign Settings (migration 020) — all nullable/defaulted, see that
+  // Campaign Settings (migration 020) - all nullable/defaulted, see that
   // migration's own header for the "unset = unrestricted/use global" contract.
   daily_send_limit?: number | null
   send_window_start?: number | null
@@ -198,7 +198,7 @@ export function useOutboundCampaigns() {
     [selectedCampaignId, loadEvents]
   )
 
-  // Free, poll-on-demand reply detection — see check-replies/route.ts's
+  // Free, poll-on-demand reply detection - see check-replies/route.ts's
   // header for why this has to be a manual action rather than a timer (this
   // app has no background scheduler). Only does anything useful when Gmail
   // is the active sending provider; the route itself reports that plainly
@@ -223,7 +223,7 @@ export function useOutboundCampaigns() {
       } else {
         toast.info(`No new replies or bounces (checked ${data.checked})`)
       }
-      // Surfaced even alongside a success/newReplies toast above — a
+      // Surfaced even alongside a success/newReplies toast above - a
       // partial failure (e.g. one contact's reply detected but not
       // recorded) shouldn't be hidden behind an otherwise-good-looking
       // summary. See check-replies/route.ts's 2026-07-29 fix.
@@ -239,7 +239,7 @@ export function useOutboundCampaigns() {
     }
   }, [selectedCampaignId, loadCampaignContacts, loadEvents])
 
-  // Follow-up scheduling (2026-07-29) — see followup-schedule.ts and
+  // Follow-up scheduling (2026-07-29) - see followup-schedule.ts and
   // process-followups/route.ts's headers for why this is on-demand too:
   // this app has no background scheduler, so "scheduled" means "computed
   // as due and sent whenever someone clicks this," same shape as

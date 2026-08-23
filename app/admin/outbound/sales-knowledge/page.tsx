@@ -1,15 +1,15 @@
 'use client'
 
 // ============================================================
-// Sales Knowledge — /admin/outbound/sales-knowledge
+// Sales Knowledge - /admin/outbound/sales-knowledge
 // ============================================================
 // The admin-editable "sales playbook": Target Industries, Problems We
 // Solve, Demaze Capabilities, and Case Studies. One page with 4 tabs
-// (not 4 separate routes) — matches the "simple, not overwhelming"
+// (not 4 separate routes) - matches the "simple, not overwhelming"
 // requirement and this repo's single-page-multi-tab precedent
 // (/admin/outbound/integrations is the closest analog). Feeds
 // lib/sales-knowledge/matcher.ts, which turns a completed research run
-// into a Sales Intelligence recommendation — this used to be surfaced on
+// into a Sales Intelligence recommendation - this used to be surfaced on
 // a "Sales Strategy" step in Auto Flow, removed 2026-08-13 because Auto
 // Flow shouldn't encode unapproved sales positioning before the official
 // sector playbook arrives (see CLAUDE.md's Sales Intelligence section).
@@ -18,7 +18,7 @@
 //
 // Cross-reference fields (a Problem's industry_tags, a Capability's
 // slug referenced by a Problem) are plain comma-separated tag inputs,
-// not a hidden FK picker — a non-technical admin can type "manufacturing,
+// not a hidden FK picker - a non-technical admin can type "manufacturing,
 // automotive" directly. Referential integrity on these tags is app-level
 // only (same as demaze-proof-points.ts's industry_tags/capability_tags
 // convention this table was seeded from).
@@ -106,7 +106,7 @@ function RowFooter({
               open={confirmingDelete}
               onOpenChange={setConfirmingDelete}
               title="Remove this entry?"
-              description="It's deactivated, not deleted — you can reactivate it later, and past Sales Intelligence recommendations that reference it are unaffected."
+              description="It's deactivated, not deleted - you can reactivate it later, and past Sales Intelligence recommendations that reference it are unaffected."
               confirmLabel="Remove"
               onConfirm={() => {
                 setConfirmingDelete(false)
@@ -531,8 +531,8 @@ function CaseStudyFields({ draft, setDraft }: { draft: CaseStudyDraft; setDraft:
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="named_client">Named client — may be named directly in outreach</SelectItem>
-            <SelectItem value="composite_illustrative">Composite / illustrative — must stay anonymized</SelectItem>
+            <SelectItem value="named_client">Named client - may be named directly in outreach</SelectItem>
+            <SelectItem value="composite_illustrative">Composite / illustrative - must stay anonymized</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -651,8 +651,8 @@ export default function SalesKnowledgePage() {
 
       <GuideNote>
         <p>
-          This is Demaze's own sales playbook — what we sell, who we sell it to, and the proof we have.
-          It&apos;s not currently used by Auto Flow — that wiring was removed until an official,
+          This is Demaze's own sales playbook - what we sell, who we sell it to, and the proof we have.
+          It&apos;s not currently used by Auto Flow - that wiring was removed until an official,
           approved sector playbook is ready. Editing anything here is safe to do ahead of that: it has
           no effect on Auto Flow today.
         </p>

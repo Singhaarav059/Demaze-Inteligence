@@ -1,15 +1,15 @@
 'use client'
 
 // ============================================================
-// StageProgress — honest "still working" indicator for long calls
+// StageProgress - honest "still working" indicator for long calls
 // ============================================================
 // Research and decision-maker discovery are each a single awaited API call
 // with no streaming/SSE backend, so there's no real sub-stage signal to
-// report — and this app's whole design philosophy (evidence_sufficiency,
+// report - and this app's whole design philosophy (evidence_sufficiency,
 // "no forced opportunities") is to never fabricate confidence that doesn't
 // exist. So this renders base-ui's genuinely INDETERMINATE progress bar
 // (accurate: "working, duration unknown") plus a reassurance label that
-// cycles through hedged, plausible-activity text on elapsed-time bands —
+// cycles through hedged, plausible-activity text on elapsed-time bands -
 // framed as likely current activity, never asserted as fact.
 // ============================================================
 
@@ -35,7 +35,7 @@ export function StageProgress({
 
   useEffect(() => {
     if (!active) {
-      // Reset for the next activation — this component returns null right
+      // Reset for the next activation - this component returns null right
       // below while inactive, so this never causes a visible cascading
       // render; it just avoids a stale elapsed value flashing on reactivation.
       // eslint-disable-next-line react-hooks/set-state-in-effect

@@ -1,13 +1,13 @@
 'use client'
 
 // ============================================================
-// ScrollProgressBar — thin whole-page scroll indicator
+// ScrollProgressBar - thin whole-page scroll indicator
 // ============================================================
 // Orientation aid for a long, now scrollytelling-heavy landing page: a
 // 2px bar under the sticky header that fills left-to-right with overall
 // scroll progress. Plain `useScroll()` (no target) tracks window/document
 // scroll directly. A light spring smooths the fill without adding the
-// kind of continuous motion prefers-reduced-motion cares about — but we
+// kind of continuous motion prefers-reduced-motion cares about - but we
 // still collapse it to the raw (unsprung) value when reduced motion is
 // set, same discipline as every other scroll-linked value in this file.
 // ============================================================

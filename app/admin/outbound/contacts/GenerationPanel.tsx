@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// GenerationPanel — Subject Lines / Email / Follow-ups for one contact
+// GenerationPanel - Subject Lines / Email / Follow-ups for one contact
 // ============================================================
 // Self-contained: fetches its own outbound_generated_content row on mount,
 // and owns the generate/approve/edit/regenerate actions for this contact.
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { humanizeText } from '@/lib/text/humanize'
 
 interface EmailDraft {
   hook: string
@@ -102,7 +103,7 @@ export function GenerationPanel({ contactId }: { contactId: string }) {
         body: JSON.stringify({ selected_subject_line: subject }),
       })
     } catch {
-      // non-fatal — selection stays local even if the save fails
+      // non-fatal - selection stays local even if the save fails
     }
   }
 
@@ -227,7 +228,7 @@ export function GenerationPanel({ contactId }: { contactId: string }) {
                         : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
                     }`}
                   >
-                    {subject}
+                    {humanizeText(subject)}
                   </button>
                 </li>
               ))}
@@ -269,7 +270,7 @@ export function GenerationPanel({ contactId }: { contactId: string }) {
                 </>
               ) : (
                 <>
-                  <p className="text-xs text-foreground whitespace-pre-wrap">{generated.email_draft.fullText}</p>
+                  <p className="text-xs text-foreground whitespace-pre-wrap">{humanizeText(generated.email_draft.fullText)}</p>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={startEditing}>Edit</Button>
                     <Button size="sm" disabled={generated.status === 'approved'} onClick={handleApprove}>
@@ -306,8 +307,8 @@ export function GenerationPanel({ contactId }: { contactId: string }) {
                     <span className="text-xs font-medium text-foreground">Follow-up {f.sequence}: {f.angle}</span>
                     <Badge variant={urgencyBadgeVariant(f.urgency)}>{f.urgency}</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground/70">Subject: {f.subject}</p>
-                  <p className="text-xs text-foreground whitespace-pre-wrap">{f.body}</p>
+                  <p className="text-xs text-muted-foreground/70">Subject: {humanizeText(f.subject)}</p>
+                  <p className="text-xs text-foreground whitespace-pre-wrap">{humanizeText(f.body)}</p>
                 </div>
               ))}
             </div>

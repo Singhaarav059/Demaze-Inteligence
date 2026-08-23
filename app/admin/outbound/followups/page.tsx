@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// Follow-up Control Panel — /admin/outbound/followups
+// Follow-up Control Panel - /admin/outbound/followups
 // ============================================================
 // Session 2 of the "Outreach Control Center" build. Per-contact view of
 // every campaign_contact still owed a follow-up: what's due and when,
@@ -11,7 +11,7 @@
 // (replacing the old hardcoded 3/4/7-day intervals).
 //
 // Send Now can trigger a REAL send once a real sending provider (e.g.
-// Gmail) is active — same standing rule as Campaigns page's Send Queued/
+// Gmail) is active - same standing rule as Campaigns page's Send Queued/
 // Process Follow-ups (CLAUDE.md's per-batch confirmation requirement), so
 // it's gated behind the same ConfirmDialog + real-provider-aware copy.
 // Stop Remaining isn't a send, but is a one-way door (no "resume" action),
@@ -55,13 +55,13 @@ function formatDue(dueAt: string | null, overdue: boolean) {
   return days === 0 ? 'Due today' : `Due in ${days}d`
 }
 
-// Groups the flat, due-soonest-sorted row list into one folder per company —
+// Groups the flat, due-soonest-sorted row list into one folder per company -
 // requested directly (2026-08-04): with multiple contacts across several
 // companies all owed follow-ups, the flat list made it hard to see "what's
 // outstanding for company X" without scanning every row. Groups themselves
 // stay sorted by their most urgent row (overdue groups first, then soonest
 // due) so the page still answers "what needs attention first" at a glance
-// even collapsed — the same promise the old flat list's sort order made.
+// even collapsed - the same promise the old flat list's sort order made.
 // Row order within a group is preserved exactly as the API returned it.
 function groupByCompany(rows: FollowupRow[]): CompanyGroup[] {
   const byCompany = new Map<string, FollowupRow[]>()
@@ -110,7 +110,7 @@ export default function FollowupPanelPage() {
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
   const [runningEngineTick, setRunningEngineTick] = useState(false)
   const [engineTickSummary, setEngineTickSummary] = useState<FollowupEngineTickSummary | null>(null)
-  // Collapsed by default — "folder" you open, not a pre-expanded list; see
+  // Collapsed by default - "folder" you open, not a pre-expanded list; see
   // groupByCompany()'s header comment for why.
   const [openCompanies, setOpenCompanies] = useState<Set<string>>(new Set())
 
@@ -156,9 +156,9 @@ export default function FollowupPanelPage() {
       }
       setEngineTickSummary(data.summary)
       toast.success(
-        `Tick complete — ${data.summary.sent} sent, ${data.summary.contactsEligible} eligible, ${data.summary.cancelledByReply} cancelled by reply`
+        `Tick complete - ${data.summary.sent} sent, ${data.summary.contactsEligible} eligible, ${data.summary.cancelledByReply} cancelled by reply`
       )
-      if (data.summary.errors?.length) toast.warning(`${data.summary.errors.length} error(s) during tick — see summary below`)
+      if (data.summary.errors?.length) toast.warning(`${data.summary.errors.length} error(s) during tick - see summary below`)
     } catch {
       toast.error('Could not reach the follow-up engine API')
     } finally {
@@ -232,7 +232,7 @@ export default function FollowupPanelPage() {
             <h3 className="text-xs font-medium text-foreground">Automatic Follow-Up Engine</h3>
             <p className="text-xs text-muted-foreground/70">
               When enabled, checks replies then auto-sends any follow-up that&apos;s past the cadence above{' '}
-              <strong>and</strong> confirmed unopened — no click needed. Run a tick manually here to verify it behaves
+              <strong>and</strong> confirmed unopened - no click needed. Run a tick manually here to verify it behaves
               correctly before turning on the autonomous scheduler (<code>FOLLOWUP_ENGINE_ENABLED</code>).
             </p>
             <Button size="sm" variant="outline" disabled={runningEngineTick} onClick={handleRunEngineTick}>
@@ -328,7 +328,7 @@ export default function FollowupPanelPage() {
 
                           {row.draftBody === null ? (
                             <p className="text-xs text-muted-foreground/60 italic">
-                              No generated follow-up copy yet for this step — generate it on the Contacts page first.
+                              No generated follow-up copy yet for this step - generate it on the Contacts page first.
                             </p>
                           ) : (
                             <div className="space-y-1.5">
@@ -400,7 +400,7 @@ export default function FollowupPanelPage() {
             ? `No further follow-ups will be sent to ${pendingAction.row.personName}. This can't be undone from this page.`
             : `Sends Step ${pendingAction?.row.sequence} to ${pendingAction?.row.personName} right now, regardless of the cadence schedule. ${
                 isRealSendingProvider
-                  ? `This is a REAL send via ${sendingProviderName} — a real email will go out.`
+                  ? `This is a REAL send via ${sendingProviderName} - a real email will go out.`
                   : 'Mock sending only, no real email goes out yet.'
               }`
         }

@@ -1,21 +1,21 @@
 'use client'
 
 // ============================================================
-// BottomTabBar — native-app-style bottom tab navigation, mobile only.
+// BottomTabBar - native-app-style bottom tab navigation, mobile only.
 // ============================================================
 // Replaces MobileNav's hamburger+drawer as the primary way to move between
-// the primary NAV sections on a phone (2026-08-04 mobile pass — "make the
+// the primary NAV sections on a phone (2026-08-04 mobile pass - "make the
 // admin product feel like an app"; Home added later, grid-cols tracks
 // NAV.length). A persistent bottom tab bar, not a drawer you have to open,
 // is the single most recognizable native-app navigation pattern (iOS Tab
-// Bar / Android Bottom Navigation) — MobileNav's drawer pattern is more
+// Bar / Android Bottom Navigation) - MobileNav's drawer pattern is more
 // "mobile website" than "app". SECONDARY_NAV (Overview, Contacts,
 // Campaigns, etc.) still goes through TopBar's existing "More tools"
-// dropdown — this bar is only for the primary NAV entries, same scope
+// dropdown - this bar is only for the primary NAV entries, same scope
 // MobileNav used to cover.
 //
 // pb-safe (env(safe-area-inset-bottom)) keeps tab labels clear of the iOS
-// home-indicator gesture area — see app/globals.css and the viewport-fit=
+// home-indicator gesture area - see app/globals.css and the viewport-fit=
 // cover viewport export in app/layout.tsx that makes the env() value real.
 // ============================================================
 
@@ -24,7 +24,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { NAV, isNavActive } from './nav-config'
 
-// Tab-bar-specific short labels — nav-config.ts's canonical labels (used by
+// Tab-bar-specific short labels - nav-config.ts's canonical labels (used by
 // Sidebar/TopBar/command palette) stay unchanged; "Outbound Tools" alone
 // doesn't fit a 5-way bottom tab without wrapping or truncating awkwardly.
 const SHORT_LABEL: Record<string, string> = {

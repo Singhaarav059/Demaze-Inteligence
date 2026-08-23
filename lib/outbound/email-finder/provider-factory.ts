@@ -10,11 +10,13 @@
 import { getActiveProviderName } from '@/lib/outbound/settings/provider-selection'
 import { MockEmailFinderProvider } from './providers/mock'
 import { ProspeoEmailFinderProvider } from './providers/prospeo'
+import { ExpleeEmailFinderProvider } from './providers/explee'
 import type { EmailFinderProvider, EmailFinderRequest, EmailFinderResult } from './types'
 
 const PROVIDERS: Record<string, EmailFinderProvider> = {
   mock: MockEmailFinderProvider,
   prospeo: ProspeoEmailFinderProvider,
+  explee: ExpleeEmailFinderProvider,
 }
 
 async function resolveProvider(): Promise<EmailFinderProvider> {

@@ -5,7 +5,7 @@ import Link from 'next/link'
 // ============================================================
 // Next.js App Router convention: shown for any unmatched route. Root-level
 // (not nested under app/admin/layout.tsx), so it applies its own dark-theme
-// wrapper directly, same self-contained pattern as app/page.tsx — there was
+// wrapper directly, same self-contained pattern as app/page.tsx - there was
 // no not-found.tsx anywhere before this (2026-07-19 addition, Track 2).
 // ============================================================
 

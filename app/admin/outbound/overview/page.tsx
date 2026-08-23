@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// Outbound Overview — /admin/outbound/overview
+// Outbound Overview - /admin/outbound/overview
 // ============================================================
 // Session 1 of the "Outreach Control Center" build: cross-campaign
 // aggregate stats (total sent/queued/replied/bounced/follow-ups pending)
 // plus one searchable, filterable table of every email ever queued/sent
-// across every campaign — the thing the per-campaign Campaigns page
+// across every campaign - the thing the per-campaign Campaigns page
 // deliberately doesn't show. Read-only; sending/pausing/replying/follow-up
 // actions still live on the Campaigns page (linked from each row here).
 // Later sessions add: real reply content, per-contact follow-up control,
@@ -94,7 +94,7 @@ export default function OutboundOverviewPage() {
         const data = await res.json()
         if (data.success) setCampaigns(data.campaigns.map((c: CampaignOption) => ({ id: c.id, name: c.name })))
       } catch {
-        // non-fatal — the campaign filter just stays empty
+        // non-fatal - the campaign filter just stays empty
       }
     })()
   }, [])
@@ -106,12 +106,12 @@ export default function OutboundOverviewPage() {
         const data = await res.json()
         if (data.success) setSentTimestamps(data.sentTimestamps)
       } catch {
-        // non-fatal — the sparkline just stays hidden, same as insufficient data
+        // non-fatal - the sparkline just stays hidden, same as insufficient data
       }
     })()
   }, [])
 
-  // Real data only (redesign brief Section 24) — the sparkline renders
+  // Real data only (redesign brief Section 24) - the sparkline renders
   // exclusively when there's enough genuine send activity to read as a
   // trend, never a near-empty placeholder chart.
   const dailySends = sentTimestamps ? computeDailyCounts(sentTimestamps, 14) : null
@@ -141,7 +141,7 @@ export default function OutboundOverviewPage() {
 
       <GuideNote>
         <p>
-          Read-only — the aggregate stats and full email table across every campaign, which the
+          Read-only - the aggregate stats and full email table across every campaign, which the
           per-campaign Campaigns page deliberately doesn&apos;t show. Click a row&apos;s campaign name to
           jump there for sending, pausing, or follow-up actions.
         </p>
@@ -165,7 +165,7 @@ export default function OutboundOverviewPage() {
           <MetricTile icon={Ban} label="Bounced" value={stats.bounced} />
           <MetricTile icon={Clock} label="Follow-ups Pending" value={stats.followupPending} sub={`${stats.followupDueNow} due now`} />
           <MetricTile icon={Mail} label="All Contacted Statuses" value={Object.keys(stats.byStatus).length} sub="distinct statuses in use" />
-          {/* Secondary signals — not the primary business metric (Pilot Readiness Plan D4) */}
+          {/* Secondary signals - not the primary business metric (Pilot Readiness Plan D4) */}
           <MetricTile icon={Eye} label="Opened" value={stats.opened} />
           <MetricTile icon={UserX} label="Unsubscribed" value={stats.unsubscribed} />
         </div>
@@ -252,7 +252,7 @@ export default function OutboundOverviewPage() {
                   {emails.map(row => (
                     <tr key={row.id} className="border-b border-border/50 last:border-0">
                       <td className="py-2 pr-3">
-                        <div className="text-foreground">{row.outbound_contacts?.person_name ?? '—'}</div>
+                        <div className="text-foreground">{row.outbound_contacts?.person_name ?? '-'}</div>
                         <div className="text-muted-foreground/60">
                           {row.outbound_contacts?.company_name}
                           {row.outbound_contacts?.email ? ` · ${row.outbound_contacts.email}` : ''}
@@ -263,11 +263,11 @@ export default function OutboundOverviewPage() {
                           href={`/admin/outbound/campaigns?campaign=${row.campaign_id}`}
                           className="text-foreground hover:text-primary transition-colors"
                         >
-                          {row.outbound_campaigns?.name ?? '—'}
+                          {row.outbound_campaigns?.name ?? '-'}
                         </Link>
                       </td>
                       <td className="py-2 pr-3 max-w-48 truncate text-muted-foreground">
-                        {row.outbound_generated_content?.selected_subject_line ?? '—'}
+                        {row.outbound_generated_content?.selected_subject_line ?? '-'}
                       </td>
                       <td className="py-2 pr-3">
                         <StatusDot tone={statusTone(row.status)} label={statusLabel(row.status)} />

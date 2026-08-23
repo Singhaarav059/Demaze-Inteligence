@@ -1,12 +1,12 @@
 import { cn } from '@/lib/utils'
 
 // ============================================================
-// StatusDot — same subtle dot+label visual language as
+// StatusDot - same subtle dot+label visual language as
 // components/ui/intel-status.tsx, generalized to arbitrary status
 // vocabularies (campaign status, send status, event type) that don't
 // map onto IntelStatus's fixed research-status kind union. Local to the
 // outbound section (shared by Campaigns/Overview/Followups) rather than
-// promoted to components/ui — same "duplication over cross-module
+// promoted to components/ui - same "duplication over cross-module
 // coupling for small helpers" precedent already used elsewhere in this repo.
 // ============================================================
 

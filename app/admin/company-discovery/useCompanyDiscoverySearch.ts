@@ -2,10 +2,10 @@
 // Company Discovery search + sequential-research hook
 // ============================================================
 // Owns: structured search against /api/admin/explee-discovery (the only
-// company-discovery data source — see explee-client.ts), and the existing
+// company-discovery data source - see explee-client.ts), and the existing
 // sequential "research the selected companies with Demaze's own pipeline"
 // loop. Explee is an implementation detail of handleSearch()'s network call
-// only — everything this hook returns (CompanyMatch-shaped results,
+// only - everything this hook returns (CompanyMatch-shaped results,
 // sufficiency, reason strings) is vendor-neutral.
 // ============================================================
 
@@ -21,7 +21,7 @@ import { EMPLOYEE_RANGES, REVENUE_RANGES, sectorDefinition, type SectorOption } 
 export type CompanyStatus = 'not_researched' | 'already_researched' | 'running' | 'done' | 'failed'
 
 // CompanyMatch plus the real Explee firmographic fields the results list
-// renders (employee count, HQ location, industry, founding year, revenue) —
+// renders (employee count, HQ location, industry, founding year, revenue) -
 // nothing here is invented, all of it comes straight off ExpleeCompany.
 export interface DiscoveredMatch extends CompanyMatch {
   industry?: string | null
@@ -32,7 +32,7 @@ export interface DiscoveredMatch extends CompanyMatch {
   revenueAnnual?: number | null
   lastResearchedAt?: string | null
   // True when a prior result exists AND was produced by this same page's
-  // research call (operation='company_signals_research') — see
+  // research call (operation='company_signals_research') - see
   // explee-discovery/route.ts's annotateAlreadyResearched. Only then can
   // viewStoredResult() below actually fetch something back; a company
   // researched only via the separate deep pipeline still shows
@@ -61,7 +61,7 @@ export function toDedupedCompany(match: DiscoveredMatch, idx: number): DedupedCo
 
 export interface DiscoverySearchFilters {
   sector?: SectorOption
-  // Final, resolved ISO 3166-1 alpha-2 codes — the page merges its region
+  // Final, resolved ISO 3166-1 alpha-2 codes - the page merges its region
   // buttons (India/Europe/America) and any individually-picked "more
   // locations" countries into this one list before calling handleSearch.
   countries?: string[]
@@ -74,7 +74,7 @@ export interface DiscoverySearchFilters {
   presenceKeys?: string[]
   excludeKeywords?: string[]
   // Deep-link escape hatch for ResearchCard's "Find companies in this
-  // segment →" link — bypasses the sector enum with a raw free-text
+  // segment →" link - bypasses the sector enum with a raw free-text
   // definition, and excludes the one company the segment came from.
   definitionOverride?: string
   excludeCompanyName?: string
@@ -172,7 +172,7 @@ export function useCompanyDiscoverySearch() {
 
   // ── Search ──────────────────────────────────────────────────
   // Returns the matches found (empty + count -1 on error) so the caller can
-  // save a real segment snapshot — never fabricated data, and never reliant
+  // save a real segment snapshot - never fabricated data, and never reliant
   // on stale `companies` state (this return value reflects the fresh result
   // synchronously, before React has re-rendered).
 
@@ -210,7 +210,7 @@ export function useCompanyDiscoverySearch() {
     setTotalAvailable(total)
     setDiscoveryReason(
       matches.length > 0
-        ? `${matches.length} compan${matches.length === 1 ? 'y' : 'ies'} found${total > matches.length ? ` — showing the best ${matches.length}` : ''}.`
+        ? `${matches.length} compan${matches.length === 1 ? 'y' : 'ies'} found${total > matches.length ? ` - showing the best ${matches.length}` : ''}.`
         : 'No companies matched these criteria. Try a broader location or employee range.'
     )
     setCompanies(matches.map((match, idx) => ({
@@ -222,7 +222,7 @@ export function useCompanyDiscoverySearch() {
     return { count: matches.length, matches, total }
   }
 
-  // ── Load more — same filters, next page, appended ────────────
+  // ── Load more - same filters, next page, appended ────────────
 
   async function loadMore() {
     if (!lastRequestBody.current || loadingMore) return
@@ -295,10 +295,10 @@ export function useCompanyDiscoverySearch() {
     }
   }
 
-  // ── Sequential research loop — one company at a time, by design ────
+  // ── Sequential research loop - one company at a time, by design ────
   // Calls the Demaze intelligence layer (one grounded search call per
   // company, see lib/research/company-signals.ts) instead of the full
-  // scrape pipeline — Explee already supplied the company record, so this
+  // scrape pipeline - Explee already supplied the company record, so this
   // step only needs to find recent public signals, not re-derive who the
   // company is. The route persists its own run-history row.
 

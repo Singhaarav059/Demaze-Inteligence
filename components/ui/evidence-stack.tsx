@@ -2,11 +2,11 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ============================================================
-// EvidenceStack — Demaze's core "why does it think this?" primitive.
+// EvidenceStack - Demaze's core "why does it think this?" primitive.
 // Evidence (fact, sourced) -> Inference (what it implies) ->
 // Opportunity (Demaze service it points to). Any row may be omitted
 // (e.g. an opportunity with no distinct inference beyond the evidence
-// itself) — never render a placeholder for a row with nothing real to say.
+// itself) - never render a placeholder for a row with nothing real to say.
 // ============================================================
 
 type EvidenceRowKind = 'fact' | 'inference' | 'opportunity'
@@ -17,7 +17,7 @@ const KIND_LABEL: Record<EvidenceRowKind, string> = {
   opportunity: 'OPPORTUNITY',
 }
 
-// Tailwind's compiler needs static class strings — a template-built
+// Tailwind's compiler needs static class strings - a template-built
 // `bg-[var(--color-evidence-${kind})]` would never be picked up, so each
 // kind gets its own literal class here instead.
 const KIND_DOT: Record<EvidenceRowKind, string> = {
@@ -78,7 +78,7 @@ export function EvidenceStack({
   )
 }
 
-// Compact source attribution row — replaces raw URL dumps.
+// Compact source attribution row - replaces raw URL dumps.
 // icon defaults to a generic external-link glyph via the caller.
 export function SourceRow({
   icon: Icon,

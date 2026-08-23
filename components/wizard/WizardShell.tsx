@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// WizardShell — Research-only result display.
+// WizardShell - Research-only result display.
 // ============================================================
 // Used to cascade through 4 staged sections (Research, Competitors,
 // ICP, Find Companies) mirroring Explee's multi-stage choreography.
 // Competitors/ICP/Company-Discovery have moved to the separate
-// "Discover" workflow (app/admin/company-discovery) — Research now does
+// "Discover" workflow (app/admin/company-discovery) - Research now does
 // exactly one thing (single-company or batch report), so the staged-reveal
 // stepper had nothing left to stage. Simplified to a direct render of the
 // one remaining section.
@@ -27,7 +27,7 @@ export function WizardShell({
   const hasAnalysis = Boolean(result?.success && result.analysisResult && !result.parseError)
 
   // A network/fetch-throw failure (as opposed to a { success: false } API
-  // response) never produces a `result` at all — only `error` gets set. The
+  // response) never produces a `result` at all - only `error` gets set. The
   // original `!result && !running` guard missed this case entirely, so the
   // error banner below was built but never mounted; the button just went
   // back to idle with zero explanation (2026-07-19 fix).

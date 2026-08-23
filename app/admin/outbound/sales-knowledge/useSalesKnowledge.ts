@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// useSalesKnowledge — loads + mutates all 4 Sales Knowledge lists
+// useSalesKnowledge - loads + mutates all 4 Sales Knowledge lists
 // ============================================================
 // Same dedicated-hook-file pattern as useOutboundContacts.ts /
 // useOutboundCampaigns.ts. Fetches ?include_inactive=1 so the admin CRUD
-// page can show and re-activate a soft-deleted row — matcher/generation
+// page can show and re-activate a soft-deleted row - matcher/generation
 // code elsewhere always reads active-only (the default with no query param).
 // ============================================================
 

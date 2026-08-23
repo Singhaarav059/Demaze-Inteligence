@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// LandingMobileNav — hamburger + slide-in drawer for the public
+// LandingMobileNav - hamburger + slide-in drawer for the public
 // landing page's in-page section links, < md screens only.
 // ============================================================
 // The landing page header hides its anchor nav below md (the primary
@@ -9,7 +9,7 @@
 // a mobile visitor can jump to "How it works" / "What you get" /
 // "Research areas" without manually scrolling. Mirrors MobileNav.tsx's
 // accessible-drawer pattern (focus trap, Escape, focus restore, portal to
-// body) rather than a new one-off — same discipline, much smaller drawer
+// body) rather than a new one-off - same discipline, much smaller drawer
 // content (plain anchor links, no route/active-state logic needed since
 // there's no client-side routing between sections).
 // ============================================================

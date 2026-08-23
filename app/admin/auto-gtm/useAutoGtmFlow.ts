@@ -1,23 +1,23 @@
 'use client'
 
 // ============================================================
-// useAutoGtmFlow — state + actions for the Auto Flow guided page
+// useAutoGtmFlow - state + actions for the Auto Flow guided page
 // ============================================================
 // One prospect company, one continuous session: Research -> Contacts (auto
 // decision-maker discovery + enrich) -> Email (auto-drafted outreach +
 // send). Calls the same
-// API routes every other page in this app already uses — no new backend
+// API routes every other page in this app already uses - no new backend
 // logic, this hook only orchestrates existing ones across steps instead of
 // losing state at a page boundary. Current step + runId sync to the URL
 // query string so a mid-flow refresh resumes instead of starting over.
 //
 // Deliberately reads/writes the URL via window.location + router.replace()
-// instead of next/navigation's useSearchParams() — that hook requires
+// instead of next/navigation's useSearchParams() - that hook requires
 // wrapping the page in <Suspense>, which reproduced a real, page-specific
 // Next.js 16 dev/Turbopack bug here (the Suspense streaming "reveal" script
 // never ran, leaving the whole page's real content permanently stuck inside
 // a hidden `<div id="S:0" style="display:none">` server-streaming
-// placeholder — confirmed via direct DOM inspection, reproducible on a
+// placeholder - confirmed via direct DOM inspection, reproducible on a
 // fresh browser session, and confirmed absent on every other page in this
 // app that doesn't use useSearchParams()). The initial state always matches
 // SSR output (step 1, no runId) to avoid any hydration mismatch; the actual
@@ -27,11 +27,11 @@
 // RECURRED 2026-07-19 via a different trigger: adding app/admin/loading.tsx
 // (a route-transition loading shell, unrelated to this file) broke this
 // page the same way, because Next.js App Router automatically wraps a
-// loading.tsx's whole route subtree in <Suspense> — same underlying
+// loading.tsx's whole route subtree in <Suspense> - same underlying
 // Turbopack bug, different source of the Suspense boundary. Fixed by
 // removing that file rather than by touching this one. See CLAUDE.md's
 // Track 2 entry for the full repro. Moral: ANY Suspense boundary anywhere
-// above this page in the tree can retrigger this — not just
+// above this page in the tree can retrigger this - not just
 // useSearchParams().
 // ============================================================
 
@@ -52,7 +52,7 @@ export type BatchCompanyStatus = 'pending' | 'researching' | 'discovering' | 'do
 type ContactActionKind = 'find-email' | 'delete'
 interface SendOutcomeDetail {
   // 'ambiguous' (Phase A) / 'blocked' (Phase B) match the real outcome
-  // statuses send/route.ts can now return — both fall through to the
+  // statuses send/route.ts can now return - both fall through to the
   // generic toast.warning(reason) branch below, same as 'failed'/'skipped'.
   status: 'sent' | 'skipped' | 'failed' | 'ambiguous' | 'blocked'
   reason?: string
@@ -84,17 +84,17 @@ export function useAutoGtmFlow() {
   // Flips true once the URL has been read client-side (see the effect
   // below). page.tsx doesn't mount its AnimatePresence-wrapped step content
   // until this is true, specifically so a resumed run (`?step=4&runId=...`)
-  // never even briefly mounts step 1's content — see that effect's own
+  // never even briefly mounts step 1's content - see that effect's own
   // comment for why a naive fix (useLayoutEffect) made this worse, not better.
   const [stepSynced, setStepSynced] = useState(false)
-  // Highest step this session has ever reached — drives which StepIndicator
+  // Highest step this session has ever reached - drives which StepIndicator
   // pills are clickable. Only ever increases; going "back" via setStep()
   // does not shrink it, so the flow can always jump forward again too.
   const [maxStepReached, setMaxStepReached] = useState<FlowStep>(1)
   const [url, setUrl] = useState('')
   const [mode, setMode] = useState<AnalysisMode>('full')
   const [researching, setResearching] = useState(false)
-  // Set only while a force-fresh (clear-cache) research call is in flight —
+  // Set only while a force-fresh (clear-cache) research call is in flight -
   // purely a label flag for the "Clear Cache & Re-Research" button below,
   // same "researching" state otherwise drives both buttons' disabled state.
   const [forcingFresh, setForcingFresh] = useState(false)
@@ -108,7 +108,7 @@ export function useAutoGtmFlow() {
   const [sendingSelected, setSendingSelected] = useState(false)
   const [campaignContactStatus, setCampaignContactStatus] = useState<Record<string, SendOutcomeDetail>>({})
   // Was hardcoded '(mock)' in every send toast regardless of the actually-
-  // active sending provider — misleading once a real vendor (e.g. Gmail) is
+  // active sending provider - misleading once a real vendor (e.g. Gmail) is
   // connected. Same fetch-and-check pattern as OutreachStep's own badge.
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
 
@@ -149,7 +149,7 @@ export function useAutoGtmFlow() {
     router.replace(`/admin/auto-gtm?${params.toString()}`)
   }
 
-  // Explicit "start over" — the URL carries step/runId by design so a
+  // Explicit "start over" - the URL carries step/runId by design so a
   // mid-flow refresh resumes (see file header), which means a dev-server
   // restart alone never clears it either (that's a client-side browser
   // concern, not a server one). This is the one deliberate way to actually
@@ -181,7 +181,7 @@ export function useAutoGtmFlow() {
     router.replace('/admin/auto-gtm')
   }, [router])
 
-  // Reloads contacts + campaign/send state for a given run id — extracted
+  // Reloads contacts + campaign/send state for a given run id - extracted
   // out of resumeFromRun (2026-08-10) so runResearch() can reuse the exact
   // same restoration logic when re-researching a domain that already has a
   // tracked pipeline entry, WITHOUT also overwriting result/url/runId the
@@ -195,36 +195,36 @@ export function useAutoGtmFlow() {
       setContacts(contactsData.contacts)
       resumedContactIds = (contactsData.contacts as Array<{ id: string }>).map(c => c.id)
       // Contacts already exist for this run, so decision-maker selection
-      // (step 2) is already done — unlock at least step 3 (Contact Info)
+      // (step 2) is already done - unlock at least step 3 (Contact Info)
       // regardless of which step the URL opened at (e.g. a Resume link from
       // Run History always opens at step 2, since History has no cheap way
       // to know how far a given run actually got without fetching this same
       // data). This only ever widens which StepIndicator pills are
-      // clickable — it never changes which step's content is shown first.
+      // clickable - it never changes which step's content is shown first.
       if (contactsData.contacts.length > 0) {
         setMaxStepReached(prev => (prev < 3 ? 3 : prev))
       }
     }
 
-    // Restore campaign/send state too (2026-07-19 fix) — without this, a
+    // Restore campaign/send state too (2026-07-19 fix) - without this, a
     // mid-flow refresh at the Outreach & Send step loses campaignId, and
     // ensureCampaignId() would then create a BRAND NEW campaign on the
     // next Send click. Since send status is scoped per-campaign, that new
-    // campaign's contacts all start 'queued' again — re-sending to
+    // campaign's contacts all start 'queued' again - re-sending to
     // contacts that were already sent under the original campaign.
     //
     // FIXED (2026-08-05): this used to look up
-    // `?source_run_id=${id}` against outbound_campaigns — works for a
+    // `?source_run_id=${id}` against outbound_campaigns - works for a
     // single-company campaign (which has source_run_id set), but silently
     // finds NOTHING for a batch-originated company, since batch mode
     // creates one SHARED campaign for the whole batch with
     // source_run_id: null. That meant resuming into a batch-originated
-    // company never restored campaignId/campaignContactStatus at all —
+    // company never restored campaignId/campaignContactStatus at all -
     // already-sent contacts would show as unsent, and clicking Send again
     // would create a genuinely duplicate campaign for contacts that
     // already had one. Fixed by looking up the campaign via THIS
     // company's own contacts instead (?contact_ids=...,  a new filter on
-    // the same route) — outbound_contacts.source_run_id is reliably set
+    // the same route) - outbound_contacts.source_run_id is reliably set
     // per-company for both single and batch-created contacts, and any of
     // those contacts' own outbound_campaign_contacts.campaign_id points at
     // whichever campaign (dedicated or shared) they were actually
@@ -239,12 +239,12 @@ export function useAutoGtmFlow() {
       : null
     if (existingCampaign) {
       // FIXED (2026-08-12, 6-step restructure): a campaign row is now
-      // created EARLY — the moment step 4 (Campaign & Outreach) is opened,
+      // created EARLY - the moment step 4 (Campaign & Outreach) is opened,
       // by CampaignSettingsPanel's ensureCampaignId() call, so settings have
       // something real to save against before any send happens. That means
       // the campaign existing no longer implies a send was ever attempted
       // (it used to, back when ensureCampaignId() was only ever called
-      // lazily from the send action itself) — so this now checks whether
+      // lazily from the send action itself) - so this now checks whether
       // any contact was actually ENQUEUED (a real signal Review & Send's
       // "Confirm & Send" writes, campaign settings alone never do) before
       // deciding how far to widen maxStepReached.
@@ -254,19 +254,19 @@ export function useAutoGtmFlow() {
       if (campaignContactsData.success) {
         const rows = campaignContactsData.contacts as Array<{ contact_id: string; status: string }>
         if (rows.length > 0) {
-          // At least one contact was enqueued — Review & Send ran at least
+          // At least one contact was enqueued - Review & Send ran at least
           // once, so Track & Follow Up (step 6) is a valid landing spot too.
           setMaxStepReached(prev => (prev < 6 ? 6 : prev))
         } else {
           // Campaign settings were opened/saved but nothing was ever
-          // enqueued to send — only Review & Send (step 5) is reachable,
+          // enqueued to send - only Review & Send (step 5) is reachable,
           // not Track & Follow Up (it would just show "nothing sent yet").
           setMaxStepReached(prev => (prev < 5 ? 5 : prev))
         }
         const restored: Record<string, SendOutcomeDetail> = {}
         for (const row of rows) {
           // 'queued' means never sent (or skipped/failed and still
-          // retry-eligible) — leave it absent so the contact still shows
+          // retry-eligible) - leave it absent so the contact still shows
           // as sendable. Anything past 'queued' means it went out.
           if (row.status !== 'queued') restored[row.contact_id] = { status: 'sent' }
         }
@@ -276,31 +276,31 @@ export function useAutoGtmFlow() {
   }, [])
 
   // True while any of restoreContactsAndCampaign()'s callers are still
-  // mid-flight — resumeFromRun() (regardless of which caller triggered it:
+  // mid-flight - resumeFromRun() (regardless of which caller triggered it:
   // the URL-driven mount-time resume, or CompanyPipelineList's "Resume"
   // button), AND runResearch()'s own re-research-an-existing-run branch
   // (added later, same race). Exists to close a real race found live
   // (2026-08-12): CampaignSettingsPanel eagerly calls ensureCampaignId() the
   // moment it mounts (needed so campaign settings have something real to
-  // save against before any send happens) — but campaignId can still be
+  // save against before any send happens) - but campaignId can still be
   // null in local state well after a resumed run's REAL existing campaign
   // has already been restored server-side, right up until
   // restoreContactsAndCampaign's own fetches finish. Without this gate,
   // ensureCampaignId() would create a genuinely duplicate, orphaned campaign
-  // (confirmed live TWICE while building this fix — first via the URL-mount
-  // path, then again via this exact button — both times two rows named
+  // (confirmed live TWICE while building this fix - first via the URL-mount
+  // path, then again via this exact button - both times two rows named
   // " - Auto Flow" with no source_run_id).
   //
   // SAME RACE, SECOND VICTIM, found live again later (audit follow-up): the
   // Decision Makers auto-pilot commit effect in page.tsx (step 2 -> 3) has
   // its own `flow.contacts.length === 0` check gating whether to
-  // auto-commit found candidates as contacts — reading that BEFORE
+  // auto-commit found candidates as contacts - reading that BEFORE
   // restoreContactsAndCampaign's contacts fetch resolves gives a false
   // "nothing exists yet" and auto-commits real duplicates. Confirmed live:
   // created 25 duplicate/unreviewed contacts for a real run once the
   // decision-maker search cache started actually working (P1 fix) made
   // DecisionMakerFinder's own cache-restore resolve fast enough to win this
-  // race consistently — previously a real several-second Prospeo search
+  // race consistently - previously a real several-second Prospeo search
   // gave this fetch enough of a head start that the race rarely fired.
   // page.tsx's effect now also gates on `!resuming`, same flag, same fix
   // shape as the ensureCampaignId case above.
@@ -314,11 +314,11 @@ export function useAutoGtmFlow() {
   const resumeFromRun = useCallback(async (id: string) => {
     setResuming(true)
     try {
-      // Fetch this one run directly by id — NOT the `?limit=50` list route.
+      // Fetch this one run directly by id - NOT the `?limit=50` list route.
       // FIXED (2026-08-10): this used to fetch the 50 most-recent runs and
       // find() this id client-side, so resuming into any run older than the
       // most recent 50 silently failed (the try/catch below swallowed it,
-      // leaving the flow stuck at step 1 with no error shown — "Resume is
+      // leaving the flow stuck at step 1 with no error shown - "Resume is
       // best-effort" was masking a real bug, not just genuine unavailability).
       // The dedicated detail route already exists (used by run-history's own
       // "View Report" action) and returns the exact same row shape this
@@ -332,7 +332,7 @@ export function useAutoGtmFlow() {
       setUrl(run.company_url)
       setResult({ success: true, domain: run.domain, analysisResult: run.final_result })
       // Resuming always presents a focused, single-company view of this one
-      // run — regardless of whether it was originally researched solo or as
+      // run - regardless of whether it was originally researched solo or as
       // part of a larger batch (batch's own progress state is pure React
       // state, never persisted, so there's nothing to reconstruct there
       // anyway; see restoreContactsAndCampaign's own campaign-lookup comment
@@ -340,21 +340,21 @@ export function useAutoGtmFlow() {
       setInputMode('single')
       await restoreContactsAndCampaign(run.id)
     } catch {
-      // Resume is best-effort — a failed resume just leaves the flow at step 1.
+      // Resume is best-effort - a failed resume just leaves the flow at step 1.
     } finally {
       setResuming(false)
     }
   }, [restoreContactsAndCampaign])
 
   // Resume from a saved run if the URL already has one (e.g. mid-flow refresh).
-  // Read client-side only, after mount — see the file header for why this
+  // Read client-side only, after mount - see the file header for why this
   // avoids next/navigation's useSearchParams()/<Suspense>.
   //
   // stepSynced (2026-07-19, Phase A motion pass): the step-content block in
   // page.tsx now animates transitions via AnimatePresence keyed on `step`.
   // A naive fix tried useLayoutEffect here to correct `step` before the
   // browser's first paint (avoiding a visible step-1-content-flashes-then-
-  // corrects flicker on every resumed run) — that made things WORSE, not
+  // corrects flicker on every resumed run) - that made things WORSE, not
   // better: changing the AnimatePresence key inside a pre-paint layout
   // effect gave framer-motion no real frame to animate from, and its exit
   // transition got permanently stuck, leaving step 1's markup stuck on
@@ -363,7 +363,7 @@ export function useAutoGtmFlow() {
   // useEffect (safe, standard timing) and fixed the flicker a different
   // way instead: page.tsx doesn't mount the AnimatePresence step-content
   // block at all until `stepSynced` is true, so a resumed run's step-1
-  // content is never mounted in the first place — nothing to flicker away
+  // content is never mounted in the first place - nothing to flicker away
   // from, and no key transition for AnimatePresence to get stuck on.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -376,7 +376,7 @@ export function useAutoGtmFlow() {
       setMaxStepReached(resumeStep as FlowStep)
     }
     // Hand-off pre-fill from Company Discovery's "Continue to Decision
-    // Makers" link (?url=<domain-or-name>, no runId) — only applies to a
+    // Makers" link (?url=<domain-or-name>, no runId) - only applies to a
     // genuinely fresh landing (no resume in progress), so it never fights
     // with resumeFromRun's own state.
     const handoffUrl = params.get('url')
@@ -386,14 +386,14 @@ export function useAutoGtmFlow() {
     }
     setStepSynced(true)
     // resumeFromRun sets `resuming` itself (as its first line, before any
-    // await) — no need to set it here too; see that function's own comment.
+    // await) - no need to set it here too; see that function's own comment.
     if (resumeRunId) void resumeFromRun(resumeRunId)
   }, [resumeFromRun])
 
   const companyName = result?.domain ? deriveCompanyName(result.domain, result.analysisResult) : ''
   const domain = result?.domain ?? ''
 
-  // DRAFT sector-playbook qualification (lib/sector-playbook) — pure, sync,
+  // DRAFT sector-playbook qualification (lib/sector-playbook) - pure, sync,
   // no network call, so this is just a memoized derivation over whatever
   // research/contacts are already loaded, recomputed as decision-maker
   // discovery adds contacts (contactability score improves with real data
@@ -402,7 +402,7 @@ export function useAutoGtmFlow() {
     () =>
       result?.analysisResult
         ? qualifyCompany(result.analysisResult, {
-            // Only pass a real count once at least one contact exists —
+            // Only pass a real count once at least one contact exists -
             // contacts.length === 0 is ambiguous between "discovery hasn't
             // run yet" and "ran, found nobody," and qualify.ts treats those
             // very differently (null/"not yet determined" vs. a real low
@@ -414,7 +414,7 @@ export function useAutoGtmFlow() {
     [result?.analysisResult, contacts.length]
   )
 
-  // Master Plan Phase 5, Step 5.5 (confidence gate) — reuses
+  // Master Plan Phase 5, Step 5.5 (confidence gate) - reuses
   // auditResearchQuality()'s existing, already-computed output (see
   // lib/pipeline/research-quality.ts) rather than duplicating its logic.
   // That function itself stays purely informational; this is just the
@@ -430,7 +430,7 @@ export function useAutoGtmFlow() {
   )
 
   // opts.force clears any cached scrape for this URL server-side and
-  // researches fresh — the one-button "clear cache & rescrape" option
+  // researches fresh - the one-button "clear cache & rescrape" option
   // rendered next to Research on Step 1. Normal Research (force omitted)
   // reuses a cached scrape when one exists, same as before.
   const runResearch = useCallback(async (opts: { force?: boolean } = {}) => {
@@ -441,7 +441,7 @@ export function useAutoGtmFlow() {
     setError(null)
     setResult(null)
     // Starting a fresh research call means a new company (single mode is
-    // strictly one company at a time) — clear anything left over from a
+    // strictly one company at a time) - clear anything left over from a
     // prior company in this same session so it doesn't bleed into the new
     // one (mixed-company contact list, a stale disabled Campaign button, etc).
     setContacts([])
@@ -451,7 +451,7 @@ export function useAutoGtmFlow() {
     setRunId(null)
     try {
       // A bare company name (no dot, not a URL) must go through as
-      // `companyName`, not `url` — test-analysis/route.ts only runs its
+      // `companyName`, not `url` - test-analysis/route.ts only runs its
       // Explee-first / search-based identity resolution on the
       // `companyName` field; sending free text as `url` would just fail
       // URL validation. `looksLikeUrlOrDomain` mirrors the same "has a dot,
@@ -474,12 +474,12 @@ export function useAutoGtmFlow() {
       }
 
       // Before saving, check whether this domain already has a tracked
-      // pipeline entry (contacts/a campaign attached — the exact set
+      // pipeline entry (contacts/a campaign attached - the exact set
       // /api/admin/outbound/pipeline surfaces as "Sent Companies" on this
       // page). FIXED (2026-08-10): every research call used to unconditionally
       // insert a brand-new pipeline_test_runs row, so re-researching a
       // company you'd already sent to left a second, disconnected entry
-      // behind in that list — same domain, same company, no relation to the
+      // behind in that list - same domain, same company, no relation to the
       // original run's contacts/campaign. If a match is found, that SAME
       // run is updated in place (PATCH) instead of inserting a new one; a
       // domain with no existing pipeline entry (first-time research, or a
@@ -494,7 +494,7 @@ export function useAutoGtmFlow() {
             existingRunId = pipelineData.companies[0].runId
           }
         } catch {
-          // Best-effort — falls through to the normal insert path below.
+          // Best-effort - falls through to the normal insert path below.
         }
       }
 
@@ -536,7 +536,7 @@ export function useAutoGtmFlow() {
       const saveData = await saveRes.json()
       if (saveData.success) {
         const resolvedRunId = existingRunId ?? saveData.id
-        // Land on step 1 with the result visible — page.tsx's auto-pilot
+        // Land on step 1 with the result visible - page.tsx's auto-pilot
         // effect (2026-08-13) watches `hasResearch` and advances to step 2
         // itself once this result lands, so this no longer needs to wait
         // for a manual Continue click; the ResearchCard is still briefly on
@@ -547,16 +547,16 @@ export function useAutoGtmFlow() {
         params.set('runId', resolvedRunId)
         router.replace(`/admin/auto-gtm?${params.toString()}`)
         if (existingRunId) {
-          // Re-researching a company already in the pipeline — reload its
+          // Re-researching a company already in the pipeline - reload its
           // existing contacts/campaign state so decision-maker discovery
           // (step 2) doesn't re-run from scratch and create duplicate
           // outbound_contacts rows for people already found under this run.
           //
           // FIXED (audit follow-up, live-caught): setRunId() above already
           // fired, so page.tsx's auto-pilot can advance to step 2 and mount
-          // DecisionMakerFinder while flow.contacts is still stale/empty —
+          // DecisionMakerFinder while flow.contacts is still stale/empty -
           // if its own cache-restore resolves fast (a real risk once the
-          // decision-maker search cache actually works — see the P1 fix
+          // decision-maker search cache actually works - see the P1 fix
           // this follows), the step2->3 effect's `flow.contacts.length ===
           // 0` check reads that stale emptiness as "nothing exists yet" and
           // auto-commits every cached candidate as a genuine duplicate.
@@ -564,7 +564,7 @@ export function useAutoGtmFlow() {
           // contacts for a real run during verification. `resuming` (see
           // resumeFromRun below, the flag this same class of race was
           // already fixed with once for ensureCampaignId) now also gates
-          // that effect — set here too so this second call site gets the
+          // that effect - set here too so this second call site gets the
           // same protection, not just the URL/Resume-button path.
           setResuming(true)
           try {
@@ -641,7 +641,7 @@ export function useAutoGtmFlow() {
 
   // ── Batch upload: sequential research -> auto decision-maker discovery,
   // one company at a time (same "sequential by design" discipline as
-  // Wizard's researchSelected() — quota-bound, not a UX preference). Every
+  // Wizard's researchSelected() - quota-bound, not a UX preference). Every
   // found candidate is auto-added as a contact (the review checkpoint is
   // AFTER discovery, not per-candidate during the batch) so the user can
   // review the whole batch's contacts together in steps 3-5. ──
@@ -719,7 +719,7 @@ export function useAutoGtmFlow() {
             // Discovery + per-candidate persistence are isolated from the
             // outer catch on purpose: research (the expensive, quota-bound
             // step) already succeeded, so a network hiccup finding/adding
-            // decision-makers should not mark this company 'failed' — that
+            // decision-makers should not mark this company 'failed' - that
             // would re-queue it for retry, re-running research for nothing
             // and re-adding any candidates that already persisted fine,
             // since outbound_contacts has no uniqueness constraint to guard
@@ -732,7 +732,7 @@ export function useAutoGtmFlow() {
                 body: JSON.stringify({
                   companyName: resolvedCompanyName,
                   domain: resolvedDomain,
-                  // Grounding input (2026-07-18 fix) — the company's own
+                  // Grounding input (2026-07-18 fix) - the company's own
                   // already-extracted leadership evidence from this same
                   // research call, so a batch-mode vendor candidate gets the
                   // same website cross-check single-mode gets via
@@ -777,7 +777,7 @@ export function useAutoGtmFlow() {
               }
             } catch {
               // Discovery itself failing just means 0 contacts for this
-              // company — research still succeeded, so it's still 'done'.
+              // company - research still succeeded, so it's still 'done'.
             }
             updateBatchCompany(item.company.id, { status: 'done', contactsFound })
           } else {
@@ -842,7 +842,7 @@ export function useAutoGtmFlow() {
     }
   }, [])
 
-  // Outreach & Send's last-moment recipient-email edit — the auto-found
+  // Outreach & Send's last-moment recipient-email edit - the auto-found
   // email isn't always the one the user wants to send to. Returns
   // true/false so the caller (OutreachStep) knows whether to also save its
   // draft edits.
@@ -867,7 +867,7 @@ export function useAutoGtmFlow() {
   }, [])
 
   // Lazily creates the underlying campaign the first time anything is sent
-  // — "campaign" is deliberately never surfaced as a concept in the guided
+  // - "campaign" is deliberately never surfaced as a concept in the guided
   // flow's UI/copy, it's just the existing sending infrastructure this hook
   // drives under the hood, same as before.
   //
@@ -877,17 +877,17 @@ export function useAutoGtmFlow() {
   //      restored the run's REAL existing campaignId (closed by the
   //      `resuming` gate in CampaignSettingsPanel, see that state's comment).
   //   2. This function itself has no protection against being called TWICE
-  //      concurrently — confirmed live: on a genuinely fresh (non-resumed)
+  //      concurrently - confirmed live: on a genuinely fresh (non-resumed)
   //      step 4 mount, React StrictMode's dev-mode double-effect-invocation
   //      called this function twice in the same tick, both readings of
   //      `campaignId` were still null (neither POST had resolved yet), and
   //      two real campaigns got created for the same run, ~9ms apart.
   // Two independent guards now, since they close different gaps:
-  //   (a) An in-flight-promise ref — a second concurrent call while a
+  //   (a) An in-flight-promise ref - a second concurrent call while a
   //       create is already pending awaits the SAME promise instead of
   //       firing a second POST. Closes the StrictMode double-invoke case.
   //   (b) A server-side existing-campaign check (by source_run_id, single
-  //       mode only) before ever creating — closes any race where two calls
+  //       mode only) before ever creating - closes any race where two calls
   //       happen far enough apart that (a) doesn't help (its promise has
   //       already resolved and cleared) but campaignId prop still hasn't
   //       propagated back to this specific caller yet.
@@ -909,7 +909,7 @@ export function useAutoGtmFlow() {
               return existing.id
             }
           } catch {
-            // Falls through to create below — same fail-open discipline as
+            // Falls through to create below - same fail-open discipline as
             // every other best-effort lookup in this file.
           }
         }
@@ -942,7 +942,7 @@ export function useAutoGtmFlow() {
     return promise
   }, [campaignId, inputMode, batchCompanies, companyName, runId])
 
-  // Enqueues the given contact ids and sends whatever is queued — the send
+  // Enqueues the given contact ids and sends whatever is queued - the send
   // route only ever touches rows still 'queued', so calling this repeatedly
   // (e.g. Send Email on one contact, then Send Selected on others later) is
   // safe and never double-sends. Shared by sendOneContact/
@@ -956,7 +956,7 @@ export function useAutoGtmFlow() {
       const cId = await ensureCampaignId()
       if (!cId) return []
 
-      // Wrapped in try/catch (2026-07-19 fix) — this makes 3 sequential
+      // Wrapped in try/catch (2026-07-19 fix) - this makes 3 sequential
       // fetches with no error handling of its own; a network failure on any
       // of them used to become an unhandled promise rejection, silently
       // stopping the spinner with zero explanation to the user.
@@ -972,7 +972,7 @@ export function useAutoGtmFlow() {
           return []
         }
 
-        // contact_ids scopes this send to exactly the requested contacts —
+        // contact_ids scopes this send to exactly the requested contacts -
         // see send/route.ts's 2026-07-28 fix. Without this, sendOneContact()
         // would fan out to every other still-queued contact in the campaign.
         const sendRes = await fetch(`/api/admin/outbound/campaigns/${cId}/send`, {
@@ -1034,7 +1034,7 @@ export function useAutoGtmFlow() {
     [enqueueAndSend, sendingProviderName]
   )
 
-  // Replaces the old "Send All" — Outreach & Send now defaults to nothing
+  // Replaces the old "Send All" - Outreach & Send now defaults to nothing
   // selected and requires an explicit checkbox pick, so this always takes
   // an explicit contact-id list rather than reaching for every contact.
   const sendSelectedContacts = useCallback(async (contactIds: string[]) => {
@@ -1046,7 +1046,7 @@ export function useAutoGtmFlow() {
     try {
       const outcomes = await enqueueAndSend(contactIds)
       // An empty result here means enqueueAndSend already failed and shown
-      // its own toast.error — showing "0 sent, 0 skipped, 0 failed" as a
+      // its own toast.error - showing "0 sent, 0 skipped, 0 failed" as a
       // success toast on top of that would be misleading (2026-07-19 fix).
       if (outcomes.length === 0) return
       const sent = outcomes.filter(o => o.status === 'sent').length

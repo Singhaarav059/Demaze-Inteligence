@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// Select — dropdown picker, replaces the native <select>
+// Select - dropdown picker, replaces the native <select>
 // ============================================================
 // Wraps @base-ui/react/select, same "thin styled wrapper over a base-ui
 // primitive" pattern as tooltip.tsx / alert-dialog.tsx. Added 2026-07-31 to
 // fix a real, reported legibility bug: a plain native <select>'s popup list
-// is rendered by the OS, not by our CSS — on Windows Chrome specifically it
+// is rendered by the OS, not by our CSS - on Windows Chrome specifically it
 // ignored this app's `color-scheme: dark` (confirmed: computed style on the
 // <select> itself was correctly "dark", but the native popup still painted
 // a white background with barely-visible text). Popup here is a normal

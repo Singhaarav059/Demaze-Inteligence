@@ -5,7 +5,7 @@
 // ============================================================
 // Next.js App Router convention: catches a render-time throw anywhere
 // under app/admin/ that isn't already handled by a try/catch. Nested
-// inside app/admin/layout.tsx, so Sidebar/TopBar stay mounted — only the
+// inside app/admin/layout.tsx, so Sidebar/TopBar stay mounted - only the
 // page content below them is replaced by this fallback. Before this file
 // existed, a render throw anywhere in the admin app had no boundary at
 // all and fell through to Next.js's generic root-level handling, which

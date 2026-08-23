@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// OutreachStep — Auto Flow step 4, "Campaign & Outreach"
+// OutreachStep - Auto Flow step 4, "Campaign & Outreach"
 // ============================================================
 // Drafts each contact's outreach email automatically (subject lines -> pick
 // the first -> full email -> follow-up sequence), then lets you review,
-// edit, switch subject, and regenerate — plus the campaign's own settings
+// edit, switch subject, and regenerate - plus the campaign's own settings
 // (name, sending account, daily limit, send window, follow-up cadence
 // override) via CampaignSettingsPanel. Master-detail layout (contact list
 // left, full draft right) carried over unchanged from the prior merged
@@ -13,7 +13,7 @@
 //
 // RESTRUCTURED (2026-08-12, 5→6 step split): sending itself moved OUT of
 // this step entirely, into the new Review & Send step (ReviewSendStep.tsx)
-// — this step now only prepares content and settings, never sends. That's
+// - this step now only prepares content and settings, never sends. That's
 // why there's no ConfirmDialog, no campaignContactStatus, no Send button
 // here anymore; drafting/regenerate/switch-subject/edit logic is otherwise
 // unchanged from before the split.
@@ -26,24 +26,27 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
-import { Skeleton } from '@/components/ui/skeleton'
 import { InfoTooltip } from '@/components/ui/tooltip'
+import { Progress, ProgressTrack, ProgressIndicator } from '@/components/ui/progress'
 import { TypewriterText } from '@/components/ui/typewriter-text'
+import { humanizeText } from '@/lib/text/humanize'
 import { expandCollapse } from '@/lib/motion'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 import { CampaignSettingsPanel } from './CampaignSettingsPanel'
 
-// Shown in place of the eventual email body while drafting is in flight —
-// gives the multi-stage ~30-90s wait a sense of progress instead of a
-// frozen spinner line.
-function DraftSkeleton() {
+// Real, stage-driven progress (not a guessed skeleton) - each contact's
+// draft is 3 sequential calls (subjects -> email -> follow-ups), and
+// draftingStage already tells us exactly which one is in flight, so this
+// shows a genuine fraction instead of faking content with gray bars.
+const DRAFT_STAGE_PERCENT: Record<DraftStage, number> = { subjects: 33, email: 66, followups: 90 }
+
+function DraftProgress({ stage }: { stage: DraftStage | null }) {
   return (
-    <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
-      <Skeleton className="h-3 w-1/3" />
-      <Skeleton className="h-3 w-full" />
-      <Skeleton className="h-3 w-5/6" />
-      <Skeleton className="h-3 w-2/3" />
-    </div>
+    <Progress value={DRAFT_STAGE_PERCENT[stage ?? 'subjects']} className="w-full">
+      <ProgressTrack>
+        <ProgressIndicator />
+      </ProgressTrack>
+    </Progress>
   )
 }
 
@@ -97,7 +100,7 @@ function urgencyBadgeVariant(urgency: FollowupDraft['urgency']) {
 }
 
 // Signal-strength color scale (matches ResearchCard.tsx's own confidenceClass()
-// — same visual language, duplicated locally per this repo's own
+// - same visual language, duplicated locally per this repo's own
 // "duplication over cross-module coupling for small helpers" convention).
 function relevanceBadgeClass(confidence: 'high' | 'medium' | 'low') {
   if (confidence === 'high') return 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
@@ -150,17 +153,17 @@ async function autoDraft(contactId: string, onStage: (stage: DraftStage) => void
 }
 
 // Retries a contact's automatic draft when it comes back without an
-// email_draft — the AI provider chain (lib/ai/provider-factory.ts) has its
+// email_draft - the AI provider chain (lib/ai/provider-factory.ts) has its
 // own documented history of transient 429/timeout failures under concurrent
 // load (see that file's comments), and DRAFT_CONCURRENCY below means several
 // contacts' worth of calls can genuinely overlap. A contact that fails here
 // used to be marked "no draft" permanently (drafts[id] = null pins it out of
 // the missing[] retry set for the rest of this pass) even though clicking
-// "Draft Email" on it manually moments later — with the concurrent load
-// gone — reliably succeeds. Retrying automatically closes that gap instead
+// "Draft Email" on it manually moments later - with the concurrent load
+// gone - reliably succeeds. Retrying automatically closes that gap instead
 // of silently leaving a fraction of the batch undrafted. Backoff is
 // deliberately short relative to the ~30-90s a single attempt already takes
-// — this is about outlasting a momentary rate-limit window, not a long
+// - this is about outlasting a momentary rate-limit window, not a long
 // exponential-backoff scheme.
 const AUTO_DRAFT_RETRY_DELAYS_MS = [4000, 10000]
 
@@ -217,19 +220,19 @@ export function OutreachStep({
   contacts: OutboundContact[]
   campaignId: string | null
   ensureCampaignId: () => Promise<string | null>
-  // True while a resumed run is still being restored — see
+  // True while a resumed run is still being restored - see
   // useAutoGtmFlow.ts's `resuming` state for the duplicate-campaign race
   // this closes. Threaded straight through to CampaignSettingsPanel.
   resuming: boolean
   defaultCampaignName: string
   updateContactEmail: (contactId: string, email: string) => Promise<boolean>
   // Set when arriving here via Review & Send's "Edit" action on a specific
-  // contact — preselects that contact's draft in the detail pane instead of
+  // contact - preselects that contact's draft in the detail pane instead of
   // defaulting to the first contact in the list.
   initialActiveContactId?: string | null
   // Fires every time the automatic drafting pass over the current contact
   // set finishes (whether it drafted 0 or many, and regardless of any
-  // per-contact failures) — Auto Flow uses this as the trigger to
+  // per-contact failures) - Auto Flow uses this as the trigger to
   // auto-advance past this step with no manual "Continue" click
   // (2026-08-13 automation). Not fired on a manual per-contact
   // Regenerate/Draft Email/switch-subject action, only the on-mount
@@ -237,14 +240,14 @@ export function OutreachStep({
   onDraftingSettled?: () => void
 }) {
   // Contacts with no email can't be drafted for without burning AI credits
-  // on content that has nowhere to go — discard them before this step ever
+  // on content that has nowhere to go - discard them before this step ever
   // sees them, rather than showing them with a disabled/fallback state.
   // Scoped to this step's own rendering only (the full contact list,
   // including no-email ones, is still what earlier steps and the flow's own
   // contact-count summary read from).
   const contacts = useMemo(() => allContacts.filter(c => c.email), [allContacts])
   const [drafts, setDrafts] = useState<Record<string, GeneratedContent | null>>({})
-  // Per-contact, not a single shared value — drafting now runs for several
+  // Per-contact, not a single shared value - drafting now runs for several
   // contacts at once (see DRAFT_CONCURRENCY below), so both need to be
   // keyed by contact id rather than tracking "the one contact currently
   // drafting."
@@ -282,8 +285,8 @@ export function OutreachStep({
   }
 
   // How many contacts draft at once. Each contact's own 3 calls
-  // (subjects -> email -> followups) are inherently sequential — one
-  // depends on the previous one's output — but different contacts don't
+  // (subjects -> email -> followups) are inherently sequential - one
+  // depends on the previous one's output - but different contacts don't
   // depend on each other, so this pool runs several contacts' sequences
   // in parallel instead of the whole list one contact at a time. Capped
   // (not Promise.all over everything) so a large batch doesn't fire dozens
@@ -339,7 +342,7 @@ export function OutreachStep({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void draftMissing()
     // Deliberately keyed on the joined contact-id list, not `contacts`/
-    // `draftMissing` — this should only re-run when the set of contacts
+    // `draftMissing` - this should only re-run when the set of contacts
     // actually changes, not on every drafts-state update draftMissing itself causes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts.map(c => c.id).join(',')])
@@ -404,8 +407,8 @@ export function OutreachStep({
     const generated = drafts[contact.id]
     setEditDraft({
       email: contact.email ?? '',
-      subject: generated?.selected_subject_line ?? '',
-      body: generated?.email_draft?.fullText ?? '',
+      subject: humanizeText(generated?.selected_subject_line ?? ''),
+      body: humanizeText(generated?.email_draft?.fullText ?? ''),
     })
     setEditingContactId(contact.id)
   }
@@ -475,7 +478,7 @@ export function OutreachStep({
         cancelEditing()
       }
       // Leave the edit form open with whatever succeeded still applied
-      // locally if one of the two saves failed — the failing call already
+      // locally if one of the two saves failed - the failing call already
       // showed its own toast.error, and closing here would silently discard
       // the other, still-unsaved edit too.
     } finally {
@@ -496,11 +499,11 @@ export function OutreachStep({
             Campaign & Outreach
             <InfoTooltip>
               Each draft is a real AI call and can take a minute or two per contact, this isn&apos;t stuck, it&apos;s
-              thinking. Nothing is sent from this screen — review and send happens on the next step.
+              thinking. Nothing is sent from this screen - review and send happens on the next step.
             </InfoTooltip>
           </h2>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            Drafted automatically below. Edit, switch subject, or regenerate — sending happens on the next step.
+            Drafted automatically below. Edit, switch subject, or regenerate - sending happens on the next step.
           </p>
         </div>
         {contacts.length > 0 && (
@@ -522,7 +525,7 @@ export function OutreachStep({
         <p className="text-xs text-muted-foreground/60 py-4">No contacts to draft for.</p>
       ) : (
         <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col md:flex-row">
-          {/* Left: compact contact list — click a row to preview its draft on the right */}
+          {/* Left: compact contact list - click a row to preview its draft on the right */}
           <div className="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-border">
             <div className="max-h-[560px] overflow-y-auto divide-y divide-border/60">
               {contacts.map(contact => {
@@ -637,14 +640,14 @@ export function OutreachStep({
                   </div>
 
                   {isDrafting && !generated?.email_draft && (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <p role="status" aria-live="polite" className="text-xs text-muted-foreground flex items-center gap-2">
                         <Spinner className="size-3.5" />
                         {draftingStage === 'email' && 'Drafting the email…'}
                         {draftingStage === 'followups' && 'Writing follow-ups…'}
                         {(draftingStage === 'subjects' || draftingStage === null) && 'Writing subject lines…'}
                       </p>
-                      <DraftSkeleton />
+                      <DraftProgress stage={draftingStage} />
                     </div>
                   )}
 
@@ -711,7 +714,7 @@ export function OutreachStep({
                               To <span className="text-foreground">{contact.email}</span>
                             </div>
                             <div className="text-xs text-muted-foreground/70">
-                              Subject <span className="text-foreground font-medium">{generated.selected_subject_line}</span>
+                              Subject <span className="text-foreground font-medium">{humanizeText(generated.selected_subject_line)}</span>
                             </div>
                             {generated.email_draft.personalizationCheck?.isGeneric ? (
                               <Badge
@@ -719,7 +722,7 @@ export function OutreachStep({
                                 className="text-[10px] border-signal-weak/40 bg-signal-weak/10 text-signal-weak"
                                 title={generated.email_draft.personalizationCheck.reason}
                               >
-                                Generic personalization — review before sending
+                                Generic personalization - review before sending
                               </Badge>
                             ) : generated.email_draft.personalizationCheck?.referencesRealEvidence ? (
                               <Badge
@@ -731,7 +734,7 @@ export function OutreachStep({
                             ) : null}
                           </div>
                           <p className="text-xs text-foreground whitespace-pre-wrap px-3 py-3">
-                            <TypewriterText text={generated.email_draft.fullText} />
+                            <TypewriterText text={humanizeText(generated.email_draft.fullText)} />
                           </p>
                           <div className="border-t border-border/60 px-3 py-2">
                             <Button size="sm" variant="outline" onClick={() => startEditing(contact)}>
@@ -776,7 +779,7 @@ export function OutreachStep({
                                       onClick={() => switchSubject(contact.id, s)}
                                       className="w-full text-left text-xs rounded-md px-2 py-1.5 border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
                                     >
-                                      {s}
+                                      {humanizeText(s)}
                                     </button>
                                   </li>
                                 ))}
@@ -797,8 +800,8 @@ export function OutreachStep({
                                         {f.urgency}
                                       </Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground/70">Subject: {f.subject}</p>
-                                    <p className="text-xs text-foreground whitespace-pre-wrap">{f.body}</p>
+                                    <p className="text-xs text-muted-foreground/70">Subject: {humanizeText(f.subject)}</p>
+                                    <p className="text-xs text-foreground whitespace-pre-wrap">{humanizeText(f.body)}</p>
                                   </div>
                                 ))}
                               </div>

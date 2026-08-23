@@ -1,13 +1,18 @@
 // One-off icon generator — not part of the app's runtime or build. Renders
-// the PWA app icons (public/icons/) as an SVG matching BrandMark's exact
-// gradient ("D" chip on primary→primary-hover) rasterized to PNG via
-// sharp, which is already a project dependency (Next.js image
+// the PWA app icons (public/icons/) as a gradient backdrop (primary→
+// primary-hover) with the real Demaze logo mark (public/brand/
+// demaze-mark.png, the same asset BrandMark.tsx renders) composited on top
+// via sharp, which is already a project dependency (Next.js image
 // optimization). Colors are converted from the theme's OKLCH values
 // (app/globals.css --primary / --primary-hover) to sRGB hex via the
-// standard OKLab reference conversion, so the icon matches the real brand
-// color exactly rather than an eyeballed approximation. Re-run manually
-// (`node scripts/generate-app-icons.mjs`) if the theme's primary color
-// ever changes.
+// standard OKLab reference conversion, so the backdrop matches the real
+// brand color exactly rather than an eyeballed approximation. Re-run
+// manually (`node scripts/generate-app-icons.mjs`) if the theme's primary
+// color ever changes, or if public/brand/demaze-mark.png is replaced.
+//
+// Previously drew an SVG "D" glyph instead of a real logo (no brand asset
+// was available yet) - replaced 2026-08-23 once the real mark was pulled
+// from demazetech.com, same swap BrandMark.tsx itself got.
 
 import sharp from 'sharp'
 import { mkdirSync } from 'node:fs'
@@ -48,14 +53,13 @@ const primary = oklchToHex(0.64, 0.19, 277)
 const primaryHover = oklchToHex(0.72, 0.16, 277)
 console.log(`[icons] primary=${primary} primaryHover=${primaryHover}`)
 
-function iconSvg(size, { maskableSafeArea = false } = {}) {
+function backdropSvg(size, { maskableSafeArea = false } = {}) {
   // Maskable icons need real content kept within an ~80% "safe zone" circle
-  // (Android can crop to a circle/squircle/etc.) — shrink the chip and
-  // center it rather than filling edge-to-edge for those variants.
+  // (Android can crop to a circle/squircle/etc.) — a plain full-bleed fill
+  // behind it, rather than the rounded gradient chip the other variants use.
   const pad = maskableSafeArea ? size * 0.1 : 0
   const inner = size - pad * 2
   const radius = maskableSafeArea ? inner * 0.22 : size * 0.22
-  const fontSize = inner * 0.52
   return `
 <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -66,10 +70,10 @@ function iconSvg(size, { maskableSafeArea = false } = {}) {
   </defs>
   ${maskableSafeArea ? `<rect width="${size}" height="${size}" fill="${primary}"/>` : ''}
   <rect x="${pad}" y="${pad}" width="${inner}" height="${inner}" rx="${radius}" fill="url(#g)"/>
-  <text x="${size / 2}" y="${size / 2}" font-family="Arial, Helvetica, sans-serif" font-weight="700"
-        font-size="${fontSize}" fill="#ffffff" text-anchor="middle" dominant-baseline="central">D</text>
 </svg>`.trim()
 }
+
+const markPath = join(__dirname, '..', 'public', 'brand', 'demaze-mark.png')
 
 const targets = [
   { name: 'icon-192.png', size: 192 },
@@ -79,7 +83,26 @@ const targets = [
 ]
 
 for (const t of targets) {
-  const svg = iconSvg(t.size, { maskableSafeArea: t.maskableSafeArea })
-  await sharp(Buffer.from(svg)).png().toFile(join(outDir, t.name))
+  const backdrop = backdropSvg(t.size, { maskableSafeArea: t.maskableSafeArea })
+  // Mark sized to ~55% of the icon (same rough proportion the old "D"
+  // glyph's fontSize used). Recolored to solid white via a 'dest-in'
+  // composite (a solid white square, masked down to the mark's own alpha
+  // shape) so it reads clearly against the primary-color backdrop instead
+  // of blending into it - the source mark is itself a blue gradient, close
+  // in hue to the backdrop.
+  const markSize = Math.round(t.size * 0.55)
+  const markAlpha = await sharp(markPath)
+    .resize(markSize, markSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer()
+  const whiteMark = await sharp({
+    create: { width: markSize, height: markSize, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },
+  })
+    .composite([{ input: markAlpha, blend: 'dest-in' }])
+    .png()
+    .toBuffer()
+  await sharp(Buffer.from(backdrop))
+    .composite([{ input: whiteMark, gravity: 'center' }])
+    .png()
+    .toFile(join(outDir, t.name))
   console.log(`[icons] wrote ${t.name}`)
 }

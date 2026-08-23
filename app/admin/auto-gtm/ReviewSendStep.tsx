@@ -1,23 +1,23 @@
 'use client'
 
 // ============================================================
-// ReviewSendStep — Auto Flow step 5, "Review & Send"
+// ReviewSendStep - Auto Flow step 5, "Review & Send"
 // ============================================================
-// New step (2026-08-12, 5→6 restructure) — the ONE place in Auto Flow that
+// New step (2026-08-12, 5→6 restructure) - the ONE place in Auto Flow that
 // actually sends. Everything here is read/classify-only until the final
 // "Confirm & Send" action: counts (ready / missing email / suppressed /
 // already sent), a per-contact list with Preview/Edit/Remove, then one
-// explicit confirmation before anything goes out — reuses
+// explicit confirmation before anything goes out - reuses
 // useAutoGtmFlow's existing sendOneContact/sendSelectedContacts (already
 // idempotent, already enqueue-then-send) rather than duplicating send logic.
 //
 // Classification comes from the shared lib/outbound/sending/
-// campaign-review.ts (via GET campaigns/[id]/review) — the SAME classifier
+// campaign-review.ts (via GET campaigns/[id]/review) - the SAME classifier
 // the step-6 dashboard's "Queued" segment uses, so the two screens can
 // never disagree about what's ready to send.
 //
 // "Remove" before Confirm & Send is mostly a LOCAL exclude (nothing has
-// been enqueued yet at this point in the flow — enqueue happens as part of
+// been enqueued yet at this point in the flow - enqueue happens as part of
 // Confirm & Send itself), tracked in excludedIds. It only calls the real
 // DELETE .../contacts/[contactId] route for the rarer case where this
 // contact already has a leftover 'queued' campaign_contacts row from an
@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { InfoTooltip } from '@/components/ui/tooltip'
+import { humanizeText } from '@/lib/text/humanize'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   ConfirmDialog,
@@ -63,18 +64,18 @@ interface ReviewRow {
   suppressionReason?: 'bounced' | 'unsubscribed' | 'manual'
   campaignContactId?: string
   campaignContactStatus?: string
-  // Informational only — see campaign-review.ts's own comment on this
+  // Informational only - see campaign-review.ts's own comment on this
   // field. A 'low' value never changes `status`, it's shown as an
   // additional badge on an otherwise-'ready' row.
   emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
-  // Informational only, same discipline as emailConfidence above — see
+  // Informational only, same discipline as emailConfidence above - see
   // campaign-review.ts's comment. 'conflict'/'not_found' never changes
   // `status`, it's surfaced as an additional badge + a confirm-dialog
   // warning (Master Plan Phase 5, Step 5.4).
   discoveryGroundingStatus?: 'confirmed' | 'conflict' | 'not_found' | null
   discoveryGroundingReason?: string | null
   // Only set when status === 'blocked' (Phase B safety policy, non-
-  // overridable — see campaign-review.ts).
+  // overridable - see campaign-review.ts).
   blockReason?: 'invalid_email_format' | 'company_identity_mismatch' | 'unsupported_claim'
 }
 
@@ -95,7 +96,7 @@ interface CampaignInfo {
 }
 
 // Maps each real review outcome onto IntelStatus's shared status
-// vocabulary/dot color — same classifier output as before
+// vocabulary/dot color - same classifier output as before
 // (campaign-review.ts), only the rendering primitive changed.
 const STATUS_META: Record<ContactReviewStatus, { label: string; status: IntelStatusKind }> = {
   ready: { label: 'Ready', status: 'complete' },
@@ -148,7 +149,7 @@ export function ReviewSendStep({
   qualification: QualificationResult | null
   // Count of items_flagged from lib/pipeline/research-quality.ts's
   // auditResearchQuality() for this company's research (Master Plan Phase 5,
-  // Step 5.5 — confidence gate). That function is informational-only and
+  // Step 5.5 - confidence gate). That function is informational-only and
   // never gates anything itself; this is the send-time surface for it. Null
   // when no research is loaded yet.
   researchQualityFlagged?: number | null
@@ -198,7 +199,7 @@ export function ReviewSendStep({
 
   useEffect(() => {
     // Intentional fetch-on-mount/on-dependency-change, not a derived-state
-    // anti-pattern — same precedent as this codebase's other self-fetching
+    // anti-pattern - same precedent as this codebase's other self-fetching
     // step components.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
@@ -222,7 +223,7 @@ export function ReviewSendStep({
 
   // A row's live status can move past 'ready' during THIS session (a
   // per-contact "Send Email" click below) even though the last /review
-  // fetch hasn't re-run — campaignContactStatus (from useAutoGtmFlow,
+  // fetch hasn't re-run - campaignContactStatus (from useAutoGtmFlow,
   // updated immediately after every send) is the more current source for
   // "already sent," checked first.
   const rowsWithLiveStatus = useMemo(() => {
@@ -348,7 +349,7 @@ export function ReviewSendStep({
                     <Badge
                       variant="secondary"
                       className="text-[10px]"
-                      title="This email was found with low confidence — consider double-checking it before sending."
+                      title="This email was found with low confidence - consider double-checking it before sending."
                     >
                       Unverified email
                     </Badge>
@@ -363,7 +364,7 @@ export function ReviewSendStep({
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground/70 truncate">{row.email ?? row.reason ?? '—'}</p>
+                <p className="text-xs text-muted-foreground/70 truncate">{row.email ?? row.reason ?? '-'}</p>
                 {row.status !== 'ready' && row.reason && row.email && (
                   <p className="text-xs text-muted-foreground/60">{row.reason}</p>
                 )}
@@ -407,14 +408,14 @@ export function ReviewSendStep({
           {groundingIssueCount > 0 && (
             <p>
               {groundingIssueCount} contact{groundingIssueCount === 1 ? '' : 's'} ready to send could not be fully
-              confirmed against this company's own website — review the "Company conflict" / "Not on company site"
+              confirmed against this company's own website - review the "Company conflict" / "Not on company site"
               badge{groundingIssueCount === 1 ? '' : 's'} above before sending.
             </p>
           )}
           {!!researchQualityFlagged && (
             <p>
               {researchQualityFlagged} item{researchQualityFlagged === 1 ? '' : 's'} in this company's research were
-              flagged for lower confidence — review the Research step before sending.
+              flagged for lower confidence - review the Research step before sending.
             </p>
           )}
         </div>
@@ -424,7 +425,7 @@ export function ReviewSendStep({
         <p className="text-xs text-muted-foreground/70">
           {readyRows.length === 0
             ? 'Nothing ready to send yet.'
-            : `${readyRows.length} email${readyRows.length === 1 ? '' : 's'} will be sent${isRealSendingProvider ? ' — this is a real send.' : ' (demo mode).'}`}
+            : `${readyRows.length} email${readyRows.length === 1 ? '' : 's'} will be sent${isRealSendingProvider ? ' - this is a real send.' : ' (demo mode).'}`}
         </p>
         <Button size="lg" disabled={readyRows.length === 0 || sendingSelected} onClick={() => setPendingConfirm(true)}>
           {sendingSelected ? <Spinner className="size-3.5" /> : null}
@@ -436,7 +437,7 @@ export function ReviewSendStep({
         open={pendingConfirm}
         onOpenChange={open => { if (!open) setPendingConfirm(false) }}
         title="Send this campaign?"
-        description={`You are about to send ${readyRows.length} email${readyRows.length === 1 ? '' : 's'} from ${isRealSendingProvider ? sendingProviderName : 'the demo (mock) sending account'}. Follow-ups will be scheduled according to this campaign's rules. Emails will stop automatically when configured stop conditions are met (a reply, a bounce, or suppression). ${isRealSendingProvider ? 'This is a REAL send — real emails will go out.' : 'Mock sending only, no real email goes out yet.'}${groundingIssueCount > 0 ? ` WARNING: ${groundingIssueCount} contact${groundingIssueCount === 1 ? '' : 's'} could not be fully confirmed against this company's own website.` : ''}`}
+        description={`You are about to send ${readyRows.length} email${readyRows.length === 1 ? '' : 's'} from ${isRealSendingProvider ? sendingProviderName : 'the demo (mock) sending account'}. Follow-ups will be scheduled according to this campaign's rules. Emails will stop automatically when configured stop conditions are met (a reply, a bounce, or suppression). ${isRealSendingProvider ? 'This is a REAL send - real emails will go out.' : 'Mock sending only, no real email goes out yet.'}${groundingIssueCount > 0 ? ` WARNING: ${groundingIssueCount} contact${groundingIssueCount === 1 ? '' : 's'} could not be fully confirmed against this company's own website.` : ''}`}
         confirmLabel="Confirm & Send"
         loading={sendingSelected}
         onConfirm={() => void handleConfirmSend()}
@@ -446,15 +447,15 @@ export function ReviewSendStep({
         <AlertDialogPortal>
           <AlertDialogBackdrop />
           <AlertDialogPopup className="max-w-lg">
-            <AlertDialogTitle>Preview — {preview?.personName}</AlertDialogTitle>
+            <AlertDialogTitle>Preview: {preview?.personName}</AlertDialogTitle>
             <AlertDialogDescription>
               {preview?.loading ? 'Loading…' : preview?.notFound ? 'No drafted email found for this contact yet.' : 'Read-only preview of the exact email that will be sent.'}
             </AlertDialogDescription>
             {preview && !preview.loading && !preview.notFound && (
               <div className="mt-3 space-y-2">
-                <div className="text-xs text-muted-foreground/70">Subject: <span className="text-foreground font-medium">{preview.subject}</span></div>
+                <div className="text-xs text-muted-foreground/70">Subject: <span className="text-foreground font-medium">{humanizeText(preview.subject)}</span></div>
                 <div className="rounded border border-input bg-muted/30 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap max-h-72 overflow-y-auto">
-                  {preview.body}
+                  {humanizeText(preview.body)}
                 </div>
               </div>
             )}

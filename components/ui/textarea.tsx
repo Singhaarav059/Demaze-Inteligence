@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-// Same styling discipline as input.tsx, just multi-line — no existing
+// Same styling discipline as input.tsx, just multi-line - no existing
 // component covered this before Sales Knowledge needed multi-line fields
 // (description/challenge/positioning).
 function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {

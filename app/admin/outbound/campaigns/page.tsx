@@ -1,10 +1,10 @@
 'use client'
 
 // ============================================================
-// Outbound Campaigns — /admin/outbound/campaigns
+// Outbound Campaigns - /admin/outbound/campaigns
 // ============================================================
 // Create a campaign -> enqueue contacts already added on the Contacts page
-// -> Send (mock provider only — no real email is delivered). Sending
+// -> Send (mock provider only - no real email is delivered). Sending
 // requires each enqueued contact to already have a generated email
 // (Contacts page's Generate panel); contacts missing one are skipped, not
 // silently marked sent.
@@ -35,7 +35,7 @@ import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 import { StatusDot, type StatusTone } from '../StatusDot'
 
 // Both Send Queued and Process Follow-ups can trigger a REAL send once a
-// real sending provider (e.g. Gmail) is active — see CLAUDE.md's standing
+// real sending provider (e.g. Gmail) is active - see CLAUDE.md's standing
 // rule that sending real email always requires explicit per-batch
 // confirmation, and docs/DECISIONS.md's 2026-07-29 incident note on this
 // exact page's sibling (OutreachStep.tsx, Auto Flow's merged Outreach &
@@ -77,7 +77,7 @@ function OutboundCampaignsPageInner() {
   // Lets the Overview page's unified email table link straight to the
   // campaign a given row belongs to (?campaign=<id>) instead of leaving the
   // admin to find it in the dropdown themselves. Only applied once, on
-  // mount — doesn't fight the dropdown if the admin picks a different
+  // mount - doesn't fight the dropdown if the admin picks a different
   // campaign afterward.
   const searchParams = useSearchParams()
   const campaignFromUrl = searchParams.get('campaign')
@@ -116,7 +116,7 @@ function OutboundCampaignsPageInner() {
   const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
 
   // Real counts derived from the selected campaign's already-fetched
-  // contacts — per-campaign send/reply counts aren't returned by the
+  // contacts - per-campaign send/reply counts aren't returned by the
   // campaigns list endpoint itself (would need one extra fetch per
   // campaign to show on every card), so the campaign list below only ever
   // shows what it actually has (name/status/provider/created date); real
@@ -132,7 +132,7 @@ function OutboundCampaignsPageInner() {
     return { total: campaignContacts.length, sent, replied, bounced, queued }
   }, [campaignContacts])
 
-  // Real "Performance over time" — bucketed from this campaign's own
+  // Real "Performance over time" - bucketed from this campaign's own
   // already-fetched event timeline (real occurred_at timestamps), never a
   // separate fetch. Gated the same way every other trend in this app is.
   const sentTrend = useMemo(() => {
@@ -152,7 +152,7 @@ function OutboundCampaignsPageInner() {
       const data = await res.json()
       if (data.success) setAvailableContacts(data.contacts)
     } catch {
-      // non-fatal — the enqueue picker just stays empty
+      // non-fatal - the enqueue picker just stays empty
     }
   }, [])
 
@@ -206,7 +206,7 @@ function OutboundCampaignsPageInner() {
       <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
         <p>
-          This is the manual/debug version of sending — most of the time you&apos;ll create and send a
+          This is the manual/debug version of sending - most of the time you&apos;ll create and send a
           campaign from Auto Flow instead, right after preparing outreach. Come here to inspect a
           queue, pause/resume, or trigger a send by hand.
         </p>
@@ -214,13 +214,13 @@ function OutboundCampaignsPageInner() {
           {isRealSendingProvider ? (
             <>
               <strong>Live sending:</strong> the active provider is <strong>{sendingProviderName}</strong>{' '}
-              — real email goes out from here, gated by the confirmation dialog on every send.
+              - real email goes out from here, gated by the confirmation dialog on every send.
             </>
           ) : (
             <>
               <strong>Test/demo mode:</strong> no real email is delivered here yet. Sending is built
               to go straight through your own connected Gmail account (OAuth, no per-email vendor
-              fee, no Smartlead/Instantly needed) — connect it in{' '}
+              fee, no Smartlead/Instantly needed) - connect it in{' '}
               <a href="/admin/outbound/integrations" className="underline underline-offset-2 hover:text-foreground">
                 Integrations
               </a>{' '}
@@ -284,7 +284,7 @@ function OutboundCampaignsPageInner() {
 
       {selectedCampaign && (
         <>
-          {/* Funnel: Contacts -> Queued -> Sent -> Replied — the real, only
+          {/* Funnel: Contacts -> Queued -> Sent -> Replied - the real, only
               hierarchy this data model has (no separate "prospects" stage
               exists upstream of an enqueued campaign contact). */}
           <div className="flex items-center gap-1 overflow-x-auto sm:gap-2">
@@ -358,12 +358,12 @@ function OutboundCampaignsPageInner() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground/60">
-                Free, on-demand only — this checks Gmail threads when you click it, not
+                Free, on-demand only - this checks Gmail threads when you click it, not
                 automatically. Only works while Gmail is the active sending provider.
               </p>
               <p className="text-xs text-muted-foreground/60">
                 Process Follow-ups sends whichever follow-up in each contact&apos;s sequence
-                is due (3/4/7 days apart) and skips anyone who already replied — also
+                is due (3/4/7 days apart) and skips anyone who already replied - also
                 on-demand, click it rather than waiting for a timer.
               </p>
             </CardContent>
@@ -455,12 +455,12 @@ function OutboundCampaignsPageInner() {
           pendingAction === 'followups'
             ? `Sends whichever follow-up is due for each contact in this campaign and cancels any whose thread already has a reply. ${
                 isRealSendingProvider
-                  ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
+                  ? `This is a REAL send via ${sendingProviderName} - real emails will go out.`
                   : 'Mock sending only, no real email goes out yet.'
               }`
             : `Sends the drafted email to every queued contact in this campaign. ${
                 isRealSendingProvider
-                  ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
+                  ? `This is a REAL send via ${sendingProviderName} - real emails will go out.`
                   : 'Mock sending only, no real email goes out yet.'
               }`
         }

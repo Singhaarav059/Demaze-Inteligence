@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// Sidebar — primary app navigation for the internal SDR tool
+// Sidebar - primary app navigation for the internal SDR tool
 // ============================================================
 
 import Link from 'next/link'
@@ -25,12 +25,12 @@ function SubLink({ href, label, icon: Icon, hint, active }: (typeof SECONDARY_NA
             aria-current={active ? 'page' : undefined}
             className={cn(
               'flex items-center gap-2.5 rounded-md py-[6px] pl-6 pr-2.5 text-[12px] transition-colors',
-              active ? 'bg-accent text-foreground' : 'text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground',
+              active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
             )}
           />
         }
       >
-        <Icon className={cn('size-3.5 shrink-0', active ? 'text-primary' : 'text-muted-foreground/60')} />
+        <Icon className={cn('size-3.5 shrink-0', active ? 'text-primary' : 'text-muted-foreground/80')} />
         <span>{label}</span>
       </TooltipTrigger>
       <TooltipContent>{hint}</TooltipContent>
@@ -40,7 +40,7 @@ function SubLink({ href, label, icon: Icon, hint, active }: (typeof SECONDARY_NA
 
 export function Sidebar() {
   const pathname = usePathname()
-  // The Outbound group is a dropdown, not a direct link — clicking it
+  // The Outbound group is a dropdown, not a direct link - clicking it
   // toggles visibility of every SECONDARY_NAV tool (Overview, Contacts,
   // Campaigns, Follow-ups, Sales Knowledge, Suppression, Warm-Up,
   // Integrations) inline, instead of requiring a click into the
@@ -60,13 +60,13 @@ export function Sidebar() {
         <BrandMark size="sm" glow />
         <span className="flex flex-col leading-none">
           <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Demaze</span>
-          <span className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+          <span className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Intelligence Workspace
           </span>
         </span>
       </Link>
 
-      {/* Nav — grouped into Workspace / Outbound / System (see NAV_GROUPS),
+      {/* Nav - grouped into Workspace / Outbound / System (see NAV_GROUPS),
           a quiet workspace-selection feel rather than a glowing active state. */}
       <LayoutGroup id="sidebar-nav">
         <nav aria-label="Workspace" className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
@@ -75,7 +75,7 @@ export function Sidebar() {
             if (items.length === 0) return null
             return (
               <div key={group.label}>
-                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
+                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   {group.label}
                 </p>
                 <div className="space-y-0.5">
@@ -104,8 +104,8 @@ export function Sidebar() {
                                   transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                                 />
                               )}
-                              <Icon className={cn('relative size-4 shrink-0', outboundSectionActive ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground')} />
-                              <span className={cn('relative flex-1 text-left font-medium', outboundSectionActive && 'text-foreground')}>{label}</span>
+                              <Icon className={cn('relative size-4 shrink-0', outboundSectionActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                              <span className={cn('relative flex-1 text-left font-medium', outboundSectionActive ? 'text-foreground' : 'text-sidebar-foreground')}>{label}</span>
                               <ChevronDown className={cn('relative size-3.5 shrink-0 text-muted-foreground/60 transition-transform', outboundOpen && 'rotate-180')} />
                             </TooltipTrigger>
                             <TooltipContent>{hint}</TooltipContent>
@@ -152,8 +152,8 @@ export function Sidebar() {
                               transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                             />
                           )}
-                          <Icon className={cn('relative size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground')} />
-                          <span className={cn('relative font-medium', active && 'text-foreground')}>{label}</span>
+                          <Icon className={cn('relative size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                          <span className={cn('relative font-medium', active ? 'text-foreground' : 'text-sidebar-foreground')}>{label}</span>
                         </TooltipTrigger>
                         <TooltipContent>{hint}</TooltipContent>
                       </Tooltip>
@@ -170,7 +170,7 @@ export function Sidebar() {
       <div className="border-t border-sidebar-border px-3 py-3">
         <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
           <DotIcon className="size-1.5 text-signal-strong" />
-          <span className="text-[11px] font-medium text-muted-foreground/70">Internal · Dev</span>
+          <span className="text-[11px] font-medium text-muted-foreground">Internal · Dev</span>
         </div>
       </div>
     </aside>

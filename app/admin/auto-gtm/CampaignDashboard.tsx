@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// CampaignDashboard — actionable stat cards (step 6, "Track & Follow Up")
+// CampaignDashboard - actionable stat cards (step 6, "Track & Follow Up")
 // ============================================================
 // Per explicit user feedback: this must NOT be just a row of counts.
 // Clicking any card immediately reveals the underlying contacts for that
 // segment, with segment-specific detail pulled from data this app already
-// records — a reply timestamp + thread link, the actual bounce reason, who
+// records - a reply timestamp + thread link, the actual bounce reason, who
 // a follow-up is scheduled for and when, why a sequence stopped, the real
 // suppression reason. No new data source: everything here comes from the
 // campaign_contacts rows and campaign_events already fetched by
@@ -91,9 +91,9 @@ export function CampaignDashboard({
     { key: 'total', label: 'Total', icon: Users },
     { key: 'queued', label: 'Queued', icon: Clock },
     { key: 'sent', label: 'Sent', icon: Send },
-    { key: 'opened', label: 'Opened', icon: Eye, tone: 'strong', tooltip: 'Open detected via a tracking image — not a guarantee the message was read. Images may be blocked, or prefetched by the provider before a human opens it.' },
+    { key: 'opened', label: 'Opened', icon: Eye, tone: 'strong', tooltip: 'Open detected via a tracking image - not a guarantee the message was read. Images may be blocked, or prefetched by the provider before a human opens it.' },
     { key: 'replied', label: 'Replied', icon: MessageSquareReply, tone: 'strong' },
-    { key: 'bounced', label: 'Bounced', icon: AlertTriangle, tone: 'destructive', tooltip: "Gmail's bounce detection doesn't distinguish hard vs. soft bounces — every bounce is treated the same way and the address is suppressed either way." },
+    { key: 'bounced', label: 'Bounced', icon: AlertTriangle, tone: 'destructive', tooltip: "Gmail's bounce detection doesn't distinguish hard vs. soft bounces - every bounce is treated the same way and the address is suppressed either way." },
     { key: 'followups_scheduled', label: 'Follow-ups scheduled', icon: CalendarClock, tone: 'medium' },
     { key: 'stopped', label: 'Stopped', icon: PauseCircle },
     { key: 'suppressed', label: 'Suppressed', icon: ShieldOff, tone: 'destructive' },
@@ -103,7 +103,7 @@ export function CampaignDashboard({
 
   return (
     <div className="space-y-3">
-      <div role="group" aria-label="Campaign status — select a card to see the contacts behind it" className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+      <div role="group" aria-label="Campaign status - select a card to see the contacts behind it" className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
         {cards.map(c => {
           const isActive = selected === c.key
           const count = buckets[c.key].length
@@ -168,14 +168,14 @@ export function CampaignDashboard({
                   <div className="shrink-0 text-right text-muted-foreground/70 max-w-[55%]">
                     {selected === 'sent' && (() => {
                       const e = latestEvent(events, row.id, 'sent')
-                      return e ? formatTimestamp(e.occurred_at) : '—'
+                      return e ? formatTimestamp(e.occurred_at) : '-'
                     })()}
                     {selected === 'opened' && row.openedAt && formatTimestamp(row.openedAt)}
                     {selected === 'replied' && (() => {
                       const e = latestEvent(events, row.id, 'replied')
                       return (
                         <span className="flex flex-col items-end gap-0.5">
-                          {e ? formatTimestamp(e.occurred_at) : '—'}
+                          {e ? formatTimestamp(e.occurred_at) : '-'}
                           {sendingProviderName === 'gmail' && row.providerMessageId && (
                             <a
                               href={`https://mail.google.com/mail/u/0/#all/${row.providerMessageId}`}
@@ -195,16 +195,16 @@ export function CampaignDashboard({
                       return <span className="block max-w-[220px] truncate">{typeof from === 'string' && from ? from : 'Bounce detected'}</span>
                     })()}
                     {selected === 'followups_scheduled' && row.nextFollowupDueAt && (
-                      <span>Step {nextFollowupSequence(row.status)} — {formatDue(row.nextFollowupDueAt)}</span>
+                      <span>Step {nextFollowupSequence(row.status)} - {formatDue(row.nextFollowupDueAt)}</span>
                     )}
                     {selected === 'stopped' && (() => {
                       const e = latestEvent(events, row.id, 'followup_stopped')
                       const manual = e?.detail?.source === 'manual_admin_action'
-                      return <span>{manual ? 'Manually stopped' : 'Stopped'}{e ? ` — ${formatTimestamp(e.occurred_at)}` : ''}</span>
+                      return <span>{manual ? 'Manually stopped' : 'Stopped'}{e ? ` - ${formatTimestamp(e.occurred_at)}` : ''}</span>
                     })()}
                     {selected === 'suppressed' && row.suppression && (
                       <span className="block max-w-[220px] truncate">
-                        {row.suppression.reason}{row.suppression.detail ? ` — ${row.suppression.detail}` : ''}
+                        {row.suppression.reason}{row.suppression.detail ? ` - ${row.suppression.detail}` : ''}
                       </span>
                     )}
                     {selected === 'queued' && (

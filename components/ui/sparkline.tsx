@@ -1,15 +1,15 @@
 'use client'
 
 // ============================================================
-// Sparkline — a compact, subtle trend line
+// Sparkline - a compact, subtle trend line
 // ============================================================
 // Per the redesign brief's chart-style guidance: compact, dark background,
 // thin lines, minimal axes, no gridlines, tooltip on hover. Plain inline
-// SVG, no charting dependency — the data shape is tiny (a handful of daily
+// SVG, no charting dependency - the data shape is tiny (a handful of daily
 // buckets), a real charting library would be pure overhead here.
 //
 // Callers are responsible for gating render on real, sufficient data via
-// lib/analytics/daily-counts.ts's hasSufficientTrendData() — this component
+// lib/analytics/daily-counts.ts's hasSufficientTrendData() - this component
 // renders whatever it's given, it does not itself decide "is this enough
 // data to show."
 // ============================================================

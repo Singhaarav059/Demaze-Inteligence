@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// Research Card — shared result display (the SDR-facing hero)
+// Research Card - shared result display (the SDR-facing hero)
 // ============================================================
 // Rendered by intelligence-lab (hero) + run-history + batch.
 // Maps analysisResult onto the locked 5-field output schema:
@@ -15,7 +15,7 @@
 //
 // Sections below are exported individually so the wizard flow
 // (components/wizard/steps/*) can regroup them into staged
-// steps without duplicating markup — ResearchCard itself stays
+// steps without duplicating markup - ResearchCard itself stays
 // a flat composer for its existing call sites (intelligence-lab
 // hero, batch-upload, company-discovery expanded row).
 // ============================================================
@@ -67,7 +67,7 @@ import type { RunResult } from './_types'
 const str = (v: unknown) => (v != null && v !== '' ? String(v) : null)
 
 // The LLM sometimes answers a field with an honest "I don't know" instead
-// of omitting it (e.g. headquarters_location: "Not stated") — that's a
+// of omitting it (e.g. headquarters_location: "Not stated") - that's a
 // non-answer, not a fact, and showing it verbatim in the facts line reads
 // as real data. Filter it out at the source rather than special-casing
 // every consumer.
@@ -77,7 +77,7 @@ const realStr = (v: unknown) => {
   return s && !PLACEHOLDER_VALUE.test(s.trim()) ? s : null
 }
 
-// Compact "source reference" chip — domain + external-link affordance. Never
+// Compact "source reference" chip - domain + external-link affordance. Never
 // labeled "verified"; this pipeline doesn't mechanically verify sources, it
 // just cites where a claim was found. Reused by Competitors/Target Segments/
 // Market Intelligence, the three sections that already carry source_urls.
@@ -106,7 +106,7 @@ function SourceLinks({ urls }: { urls?: string[] }) {
   )
 }
 
-// Shared FACT vs DEMAZE READ tag — only ever reflects a real claim_type/source
+// Shared FACT vs DEMAZE READ tag - only ever reflects a real claim_type/source
 // field already on the data (see hard constraint: never fabricate this
 // distinction). 'observed'/'deterministic'/'llm_verified' read as an
 // observed fact; 'inferred'/'llm_inferred' read as Demaze's own read on it.
@@ -137,7 +137,7 @@ function DownloadIcon({ className }: { className?: string }) {
 // `collapsible` is used for the report's secondary/supporting sections
 // (Business Profile, Competitors, Target Segments, Market Intelligence,
 // Research Quality) so the report reads as a scannable panel instead of a
-// wall of text — the primary sales-facing sections (hero, fit, why-Demaze,
+// wall of text - the primary sales-facing sections (hero, fit, why-Demaze,
 // signals, pain points/opportunities, personalization, outreach draft) stay
 // uncollapsible. Collapsed by default; each section still independently
 // decides whether it renders at all (its own "only render when there's
@@ -194,7 +194,7 @@ function Section({
 }
 
 // Joins an array of possibly-null JSX fragments with a " · " separator,
-// skipping nulls — shared by CompetitorsSection/TargetSegmentsSection's
+// skipping nulls - shared by CompetitorsSection/TargetSegmentsSection's
 // meta lines below.
 function joinWithDot(parts: Array<ReactNode | false | null | undefined>): ReactNode[] {
   const present = parts.filter(Boolean) as ReactNode[]
@@ -269,12 +269,12 @@ export interface ResearchHeroProps {
   opportunitiesCount: number
   facts: Array<{ label: string; value: string }>
   // When available (a saved/cached run), shown as "Researched Xh ago" next
-  // to the status dot instead of a bare "Research complete" — real data
+  // to the status dot instead of a bare "Research complete" - real data
   // only, from RunResult.cachedAt, never fabricated.
   lastResearchedAt?: string
 }
 
-// Small relative-time formatter — mirrors intelligence-lab/page.tsx's own
+// Small relative-time formatter - mirrors intelligence-lab/page.tsx's own
 // local timeAgo(), duplicated per this codebase's small-helper-per-file
 // convention rather than extracted into a shared util for one caller.
 function timeAgo(iso: string): string {
@@ -340,7 +340,7 @@ export function ResearchHero({
 }
 
 // Scored labels only ever come from scorer.ts's shared scoreLabel()
-// ('Strong' | 'Good' | 'Moderate' | 'Weak') — same tone scale used by
+// ('Strong' | 'Good' | 'Moderate' | 'Weak') - same tone scale used by
 // evidenceBadge/confidenceClass below, just keyed off this specific label
 // set instead of a raw 'high'/'medium' confidence string.
 function scoredLabelTone(label?: string): string {
@@ -361,12 +361,12 @@ function SummaryCard({ label, value, sub, tone }: { label: string; value: string
   )
 }
 
-// Top summary row — company_fit ("is this a good lead for Demaze"),
+// Top summary row - company_fit ("is this a good lead for Demaze"),
 // automation_opportunity, why_now (urgency), and the existing confidence
 // field. All four are scored deterministically upstream (lib/pipeline/
-// scorer.ts) and already flow into the API response — previously only
+// scorer.ts) and already flow into the API response - previously only
 // ever rendered in intelligence-lab's raw debug Inspector (ScoreRow), not
-// on this shared card. Renders nothing (not a row of "—" placeholders) if
+// on this shared card. Renders nothing (not a row of "-" placeholders) if
 // none of the four scores are present, e.g. a run from before this scoring
 // pass existed.
 export function FitSummaryRow({
@@ -424,10 +424,10 @@ export interface SignalItem {
   evidence?: unknown
 }
 
-// Detected Signals — the deterministic evidence layer under Pain
+// Detected Signals - the deterministic evidence layer under Pain
 // Points/Opportunities (lib/pipeline SIGNAL_PATTERNS), each backed by a
 // real quote from the company's own scraped/enriched content. Previously
-// only ever shown in intelligence-lab's debug Inspector — never on the
+// only ever shown in intelligence-lab's debug Inspector - never on the
 // SDR-facing report itself. Same "only render when there's something
 // real" discipline as every other additive section here.
 export function SignalsSection({ signals }: { signals: SignalItem[] }) {
@@ -469,7 +469,7 @@ export interface OpportunityItem {
   category?: unknown
   service_line?: unknown
   relevance?: unknown
-  // Real fields on the normalized opportunity (normalize.ts) — the verbatim
+  // Real fields on the normalized opportunity (normalize.ts) - the verbatim
   // fact this opportunity is grounded in, and (for llm_inferred entries with
   // no literal quote) the stated reasoning basis. Used to drive the
   // Evidence -> Inference -> Opportunity chain below.
@@ -487,11 +487,11 @@ export interface PainPointItem {
 
 // Master Plan Phase 4/10.4: "never present inference as fact." source/
 // claim_type already exist on every opportunity (normalize.ts) but were
-// never surfaced here — this is a pure read of already-present data, no
+// never surfaced here - this is a pure read of already-present data, no
 // new plumbing. 'deterministic' (regex-matched real content) and
 // 'llm_verified' (quote-verified against real content) both read as
 // Confirmed; 'llm_inferred' (reasoning, no literal quote) reads as
-// Reasonable inference — matches this repo's own evidence_id discipline
+// Reasonable inference - matches this repo's own evidence_id discipline
 // (see normalize.ts's stableEvidenceId).
 // Kept as a thin wrapper around the shared ClaimTag for existing callers
 // that pass the looser OpportunityItem shape.
@@ -509,7 +509,7 @@ export function PainPointsAndOpportunitiesSection({
   aiSynthesisFailed,
 }: {
   painPoints: string[]
-  // Optional — when present (and non-empty), each pain point renders as an
+  // Optional - when present (and non-empty), each pain point renders as an
   // evidence-graded assessment card (confidence + Fact/Demaze-read tag +
   // evidence quote + reasoning) instead of a flat bullet. Falls back to the
   // plain `painPoints` list when omitted, so existing callers that only pass
@@ -578,7 +578,7 @@ export function PainPointsAndOpportunitiesSection({
               const relevance = str(o.relevance)
               // Evidence -> Inference -> Opportunity chain, only when there's
               // real fact-level grounding (a verbatim quote or stated observed
-              // basis) to anchor it — never label reasoning-only content as
+              // basis) to anchor it - never label reasoning-only content as
               // EVIDENCE (hard rule: don't present inference as observed fact).
               const factText = str(o.evidence) ?? str(o.observed_basis)
               const inferenceText = str(o.inferred_from)
@@ -649,7 +649,7 @@ export function PainPointsAndOpportunitiesSection({
   )
 }
 
-// Business Profile (2026-07-16 rebuild) — structured "what does this
+// Business Profile (2026-07-16 rebuild) - structured "what does this
 // company actually do" (services/problems solved/ideal customers/industries
 // served/target company size/market positioning/technical capabilities/
 // business outcomes), see lib/pipeline/business-profile.ts. This is the
@@ -707,7 +707,7 @@ export function BusinessProfileSection({ profile }: { profile?: CompanyBusinessP
   )
 }
 
-// Competitors (Phase 2 item 1) — additive to the locked 5-field schema
+// Competitors (Phase 2 item 1) - additive to the locked 5-field schema
 // above, same "only render when there's something real" discipline as
 // Recent News: an empty/insufficient result shows no section at all
 // rather than a "no competitors found" message.
@@ -774,7 +774,7 @@ export function CompetitorsSection({ competitors }: { competitors: CompetitorPro
   )
 }
 
-// Target Customer Segments (ICP Generator, Phase 2 item 2) — who THIS
+// Target Customer Segments (ICP Generator, Phase 2 item 2) - who THIS
 // company sells to, not company_fit (that's a separate score of how well
 // this company fits Demaze's own ICP). Same "only render when there's
 // something real" discipline as Competitors above.
@@ -869,10 +869,10 @@ export function TargetSegmentsSection({
   )
 }
 
-// Market Intelligence (Phase 2 item 6) — industry-level trends/growth
+// Market Intelligence (Phase 2 item 6) - industry-level trends/growth
 // indicators/challenges/shifts for the sector the researched company
 // operates in. Pure passthrough (no LLM narration layer, see
-// lib/enrichment/market-intelligence.ts header) — each item is rendered
+// lib/enrichment/market-intelligence.ts header) - each item is rendered
 // as-extracted. Same "only render when there's something real" discipline
 // as Competitors/Target Customer Segments.
 export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] }) {
@@ -908,11 +908,11 @@ export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] 
   )
 }
 
-// Research Quality (Phase 2 item 4) — a per-item confidence audit
+// Research Quality (Phase 2 item 4) - a per-item confidence audit
 // cross-checking whether an item's stated confidence is actually justified
 // by its evidence. Informational only, never gates or suppresses anything
 // above it. Same "only render when there's something real" discipline as
-// Competitors/Target Customer Segments — an audit with zero flags shows no
+// Competitors/Target Customer Segments - an audit with zero flags shows no
 // section at all.
 export function ResearchQualitySection({ quality }: { quality?: ResearchQualityAudit }) {
   if (!quality || (quality.items_flagged ?? 0) === 0) return null
@@ -962,11 +962,11 @@ export function PersonalizationSummarySection({
   openingAngle: string
   whatToSell: string
   whyNow: string
-  // Master Plan Step 10.2 — "why this problem"/"why now" as distinct
+  // Master Plan Step 10.2 - "why this problem"/"why now" as distinct
   // questions from "what to sell". Sourced from outreach_intelligence
   // (getOutreachIntelligence()'s why_contact/likely_problem), previously
   // only rendered in intelligence-lab/page.tsx's own separate debug-tab
-  // section — never in this shared component, which is what batch-upload,
+  // section - never in this shared component, which is what batch-upload,
   // run-history, and Auto Flow resume actually use. Optional/additive:
   // absent on any run predating these fields.
   whyContact?: string
@@ -1017,12 +1017,12 @@ export function PersonalizationSummarySection({
   )
 }
 
-// Why Demaze Should Care — evidence-graded reasons this company is worth
+// Why Demaze Should Care - evidence-graded reasons this company is worth
 // pursuing (lib/pipeline's why_demaze: signal + a real evidence quote +
 // evidence_tier + business_implication + recommended_service, each
 // independently confidence-graded). This has existed and been populated
 // since the narrative prompt shipped, but was only ever rendered in
-// intelligence-lab's debug Inspector tab (MaybeWhyDemaze/WhyDemazeCard) —
+// intelligence-lab's debug Inspector tab (MaybeWhyDemaze/WhyDemazeCard) -
 // invisible on every SDR-facing surface (Auto Flow, run-history, batch,
 // company-discovery) that renders ResearchCard instead. Ported here with
 // the same content/fields, restyled to this file's Section/confidenceClass
@@ -1117,11 +1117,11 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-// Outreach Draft (2026-07-16) — literal LinkedIn connection note / first
+// Outreach Draft (2026-07-16) - literal LinkedIn connection note / first
 // message / follow-up drafts grounded in a matched Demaze proof point
 // (lib/knowledge/demaze-proof-points.ts). Drafting only, a rep reviews and
 // sends manually. Same "only render when there's something real" discipline
-// as Competitors/Target Customer Segments — no drafts, no section.
+// as Competitors/Target Customer Segments - no drafts, no section.
 export function OutreachDraftSection({
   draft,
   matchedProofPoint,
@@ -1176,14 +1176,14 @@ export function OutreachDraftSection({
 }
 
 // ============================================================
-// ResearchCard — flat composer, unchanged output for existing
+// ResearchCard - flat composer, unchanged output for existing
 // call sites (intelligence-lab hero, batch-upload, company-discovery
 // expanded row).
 // ============================================================
 
 // Pure derivation of every field ResearchCard's sections need, lifted out
 // so the wizard steps (components/wizard/steps/*) can compute the same
-// data from a RunResult without duplicating this logic — each step just
+// data from a RunResult without duplicating this logic - each step just
 // calls this once and renders its subset of the returned fields.
 export function getResearchCardData(result: RunResult) {
   const a = result.analysisResult as Record<string, unknown> | undefined
@@ -1295,7 +1295,7 @@ export function getResearchCardData(result: RunResult) {
     confidence,
     signalCount,
     signals,
-    // RunResult.cachedAt — real "when this run's scrape was cached" timestamp,
+    // RunResult.cachedAt - real "when this run's scrape was cached" timestamp,
     // used to show "Researched Xh ago" in the header when available.
     lastResearchedAt: result.cachedAt,
     recentActivity,
@@ -1330,7 +1330,7 @@ export function getResearchCardData(result: RunResult) {
 export type ResearchCardData = NonNullable<ReturnType<typeof getResearchCardData>>
 
 // ============================================================
-// ResearchCard — flat composer, unchanged output for existing
+// ResearchCard - flat composer, unchanged output for existing
 // call sites (intelligence-lab hero, batch-upload, company-discovery
 // expanded row).
 // ============================================================
@@ -1363,7 +1363,7 @@ export function ResearchCard({ result }: { result: RunResult }) {
 
   const hasPersonalization = Boolean(whyContact || likelyProblem || whyNow || whatToSell || openingAngle)
 
-  // Jump-to-section rail — every entry points at a section that actually
+  // Jump-to-section rail - every entry points at a section that actually
   // renders content below (sections already self-hide when empty; gating
   // on the same real data here keeps the rail free of dead links, never a
   // fabricated "Decision Makers"/"Sources" entry this component has no

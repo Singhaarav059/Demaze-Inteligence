@@ -1,14 +1,14 @@
 'use client'
 
 // ============================================================
-// ContactTimeline — per-contact expandable event history (step 6)
+// ContactTimeline - per-contact expandable event history (step 6)
 // ============================================================
-// "Everything about one contact" — the counterpart to CampaignDashboard.tsx
+// "Everything about one contact" - the counterpart to CampaignDashboard.tsx
 // ("everything about one segment across all contacts"). Both render the
 // exact same already-fetched campaign_events, just sliced differently, via
 // the shared describeEvent()/formatTimestamp() from EventLabels.ts.
 //
-// Deliberately does NOT show a "Delivered" event — Gmail's API gives no
+// Deliberately does NOT show a "Delivered" event - Gmail's API gives no
 // separate delivery confirmation beyond accepted-for-send, and inventing
 // one would violate this app's "don't fake tracking" rule (see CLAUDE.md).
 // "Sent" is the strongest real confirmed signal shown.
@@ -21,7 +21,7 @@ import { describeEvent, formatTimestamp, type CampaignEvent } from './EventLabel
 
 // Same signal-strength/destructive semantic split used throughout Auto Flow
 // (see OutreachStep.tsx's relevanceBadgeClass, TrackFollowUpStep's
-// StatusBadge) — a good outcome is green, a problem is red, everything else
+// StatusBadge) - a good outcome is green, a problem is red, everything else
 // is a neutral marker.
 function eventDotClass(eventType: string): string {
   if (eventType === 'replied' || eventType === 'opened') return 'bg-signal-strong'

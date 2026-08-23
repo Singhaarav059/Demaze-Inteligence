@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// HowItWorksScrolly — pinned scroll-driven step sequence
+// HowItWorksScrolly - pinned scroll-driven step sequence
 // ============================================================
 // Desktop/tablet (sm+): a tall (180vh) scroll region with a sticky h-screen
 // inner panel. As the user scrolls through it, each of the 3 steps
-// cross-fades/scales in based on scroll progress within the region —
+// cross-fades/scales in based on scroll progress within the region -
 // classic scrollytelling ("pin and animate through" rather than "reveal
 // and move on"). Deliberately hardcoded for exactly 3 steps: calling
 // useTransform per-step inside a .map() would violate rules-of-hooks
@@ -18,7 +18,7 @@
 //
 // Reduced-motion: MotionConfig's ancestor `reducedMotion="user"` (see
 // MotionConfigProvider) only flattens `animate`/`whileInView`-driven
-// transitions, not raw scroll-linked `useTransform` values — so this
+// transitions, not raw scroll-linked `useTransform` values - so this
 // component checks `useReducedMotion()` itself and, when set, renders the
 // same static stacked layout as mobile instead of pinning+animating.
 // ============================================================
@@ -130,12 +130,12 @@ export function HowItWorksScrolly({ steps }: { steps: [HowItWorksStep, HowItWork
 
   return (
     <>
-      {/* Mobile fallback — no pinning, no scroll-linked motion */}
+      {/* Mobile fallback - no pinning, no scroll-linked motion */}
       <div className="max-w-5xl mx-auto px-6">
         <StaticSteps steps={steps} />
       </div>
 
-      {/* Desktop/tablet — pinned scrollytelling */}
+      {/* Desktop/tablet - pinned scrollytelling */}
       <div ref={sectionRef} className="hidden sm:block relative h-[180vh]">
         <div className="sticky top-0 h-screen flex items-center overflow-hidden">
           <div className="relative w-full max-w-2xl mx-auto h-64">

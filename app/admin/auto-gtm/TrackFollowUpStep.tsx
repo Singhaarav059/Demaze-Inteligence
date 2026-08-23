@@ -1,31 +1,31 @@
 'use client'
 
 // ============================================================
-// TrackFollowUpStep — Auto Flow's "Track & Follow Up" step (step 6)
+// TrackFollowUpStep - Auto Flow's "Track & Follow Up" step (step 6)
 // ============================================================
 // Shows THIS company's contacts (the ones just sent to in step 4) with
-// their real send/open/reply status and manual follow-up actions —
+// their real send/open/reply status and manual follow-up actions -
 // continuing the flow past send instead of leaving it as a dead end. No new
 // backend logic: reuses the same routes the standalone Follow-ups/Campaigns
 // pages already use (POST .../send-now, .../stop, .../check-replies).
 //
-// Self-contained, same pattern as OutreachStep/ContactInfoStep — fetches
+// Self-contained, same pattern as OutreachStep/ContactInfoStep - fetches
 // and owns its own data rather than growing useAutoGtmFlow's central state.
 //
-// Scoping note: `campaignId` is not always dedicated to this one company —
+// Scoping note: `campaignId` is not always dedicated to this one company -
 // a batch-originated company shares ONE campaign with every other company
 // in that batch (see useAutoGtmFlow.ts's resumeFromRun fix). This step
 // filters the campaign's contacts down to just the ones in the `contacts`
 // prop (already correctly scoped to this company) before rendering, rather
 // than assuming every row in the campaign belongs here. The same scoping
-// applies to the bulk "Send All Due" action below — it passes this
+// applies to the bulk "Send All Due" action below - it passes this
 // company's contact_ids to process-followups so it never touches another
 // company's contacts sharing the same campaign.
 //
 // Preview/edit-before-send (added after the initial build, closing the
 // "clicking Send Follow-up Now fires blind" gap): clicking Send Follow-up
-// Now no longer sends immediately — it opens a dialog showing the actual
-// subject (computed, not editable — see followup-schedule.ts's
+// Now no longer sends immediately - it opens a dialog showing the actual
+// subject (computed, not editable - see followup-schedule.ts's
 // buildFollowupSubject comment on why Gmail threading requires the
 // original subject verbatim) and the drafted body (editable). An edited
 // body is saved via the existing generated-content PATCH route (the same
@@ -75,7 +75,7 @@ interface TrackedContact {
   outbound_contacts: { person_name: string; email: string | null; company_name: string } | null
 }
 
-// Local shape, deliberately duplicated rather than imported — same
+// Local shape, deliberately duplicated rather than imported - same
 // duplication-over-sharing convention OutreachStep.tsx's own FollowupDraft/
 // GeneratedContent interfaces already use. Only the fields this dialog
 // actually reads are declared; the real row (outbound_generated_content)
@@ -110,7 +110,7 @@ function timeAgo(iso: string): string {
 }
 
 function formatDue(dueAt: string | null): string {
-  if (!dueAt) return '—'
+  if (!dueAt) return '-'
   const ms = new Date(dueAt).getTime() - Date.now()
   const days = Math.round(Math.abs(ms) / (24 * 60 * 60 * 1000))
   if (ms <= 0) return days === 0 ? 'Due today' : `Overdue by ${days}d`
@@ -118,7 +118,7 @@ function formatDue(dueAt: string | null): string {
 }
 
 // Maps each real campaign-contact status onto IntelStatus's shared status
-// vocabulary/dot color instead of an ad hoc colored Badge — same underlying
+// vocabulary/dot color instead of an ad hoc colored Badge - same underlying
 // status string, only the rendering primitive changed.
 const STATUS_INTEL: Record<string, { status: IntelStatusKind; label: string }> = {
   queued: { status: 'not_researched', label: 'Not sent yet' },
@@ -156,7 +156,7 @@ export function TrackFollowUpStep({
   const [bulkSending, setBulkSending] = useState(false)
   const [sendingProviderName, setSendingProviderName] = useState<string | null>(null)
   // "Now," snapshotted once per rows load (see loadRows below) rather than
-  // called inline inside the dueRows memo — see that memo's own comment.
+  // called inline inside the dueRows memo - see that memo's own comment.
   const [nowMs, setNowMs] = useState<number | null>(null)
 
   const loadRows = useCallback(async () => {
@@ -178,7 +178,7 @@ export function TrackFollowUpStep({
       if (data.success) {
         setRows((data.contacts as TrackedContact[]).filter(cc => contactIds.has(cc.contact_id)))
         // Snapshotted alongside rows (not in a separate effect that would
-        // just call setState synchronously on every rows change) — see the
+        // just call setState synchronously on every rows change) - see the
         // comment on the dueRows memo below for why this can't be Date.now()
         // called directly inside that memo instead.
         setNowMs(Date.now())
@@ -186,7 +186,7 @@ export function TrackFollowUpStep({
         toast.error(data.error ?? 'Failed to load tracking data')
       }
       // A campaign shared with other companies (batch mode) has events for
-      // those other companies' contacts too — the dashboard/timeline below
+      // those other companies' contacts too - the dashboard/timeline below
       // only ever look up events by THIS company's own campaign_contact_id
       // values (present in `rows`), so unfiltered events are harmless here,
       // same scoping discipline this file's own header already documents
@@ -201,7 +201,7 @@ export function TrackFollowUpStep({
 
   useEffect(() => {
     // Intentional fetch-on-mount/on-campaign-change, not a derived-state
-    // anti-pattern — same precedent as this codebase's other self-fetching
+    // anti-pattern - same precedent as this codebase's other self-fetching
     // step components (e.g. CompanyPipelineList.tsx).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRows()
@@ -242,7 +242,7 @@ export function TrackFollowUpStep({
   )
 
   // Contacts whose next follow-up is BOTH eligible and past the configured
-  // cadence right now — the target set for "Send All Due". Deliberately
+  // cadence right now - the target set for "Send All Due". Deliberately
   // narrower than "eligible" (nextFollowupSequence !== null): a contact that's
   // eligible but not yet due should only be sent via the per-row preview
   // dialog (an explicit early/force send), never swept up by the bulk action.
@@ -270,8 +270,8 @@ export function TrackFollowUpStep({
       }
       const outcome = data.outcome?.status
       if (outcome === 'sent') toast.success('Follow-up sent')
-      else if (outcome === 'cancelled_reply') toast.warning('Not sent — this contact already replied')
-      else if (outcome === 'cancelled_bounce') toast.warning('Not sent — this address bounced')
+      else if (outcome === 'cancelled_reply') toast.warning('Not sent - this contact already replied')
+      else if (outcome === 'cancelled_bounce') toast.warning('Not sent - this address bounced')
       else toast.warning(data.outcome?.reason ?? `Could not send: ${outcome}`)
       await loadRows()
     } catch {
@@ -409,7 +409,7 @@ export function TrackFollowUpStep({
         return
       }
       toast.success(
-        data.message ?? `Checked ${data.checked ?? 0} — ${data.newReplies ?? 0} new repl${data.newReplies === 1 ? 'y' : 'ies'}, ${data.newBounces ?? 0} bounce(s)`
+        data.message ?? `Checked ${data.checked ?? 0} - ${data.newReplies ?? 0} new repl${data.newReplies === 1 ? 'y' : 'ies'}, ${data.newBounces ?? 0} bounce(s)`
       )
       if (data.errors?.length) toast.warning(`${data.errors.length} error(s) while checking replies`)
       await loadRows()
@@ -422,7 +422,7 @@ export function TrackFollowUpStep({
 
   // Not campaignId nullity anymore (a campaign row now exists eagerly from
   // the moment step 4's settings panel opens, see useAutoGtmFlow.ts's
-  // 2026-08-12 restructure note) — "nothing sent yet" is now a real
+  // 2026-08-12 restructure note) - "nothing sent yet" is now a real
   // question about whether any contact rows were ever enqueued, answered
   // once loading finishes rather than assumed from campaignId alone.
   if (!campaignId || (!loading && rows.length === 0)) {
@@ -445,8 +445,8 @@ export function TrackFollowUpStep({
             sendingProviderName={sendingProviderName}
           />
           <p className="text-xs text-muted-foreground/50">
-            Click any card above to see the contacts behind it. Some recipient-side actions — the recipient
-            blocking your address or marking the email as spam — aren&apos;t exposed by Gmail's API and aren&apos;t
+            Click any card above to see the contacts behind it. Some recipient-side actions - the recipient
+            blocking your address or marking the email as spam - aren&apos;t exposed by Gmail's API and aren&apos;t
             shown here; only what this app can actually observe (sent, open detected, replied, bounced) is.
           </p>
         </>
@@ -504,7 +504,7 @@ export function TrackFollowUpStep({
                         {row.opened_at ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
                         {row.opened_at ? `Open detected ${timeAgo(row.opened_at)}` : 'No open detected yet'}
                         <InfoTooltip>
-                          Open detected means the recipient's email client loaded a tracking image — it doesn't
+                          Open detected means the recipient's email client loaded a tracking image - it doesn't
                           guarantee the message was read. Images may be blocked, or prefetched by the provider
                           before a human opens it.
                         </InfoTooltip>
@@ -571,7 +571,7 @@ export function TrackFollowUpStep({
         title="Send all due follow-ups?"
         description={`Sends the next follow-up to ${dueRows.length} contact${dueRows.length === 1 ? '' : 's'} whose cadence is due right now. ${
           isRealSendingProvider
-            ? `This is a REAL send via ${sendingProviderName} — real emails will go out.`
+            ? `This is a REAL send via ${sendingProviderName} - real emails will go out.`
             : 'Mock sending only, no real email goes out yet.'
         }`}
         confirmLabel="Send All Due"
@@ -579,7 +579,7 @@ export function TrackFollowUpStep({
         onConfirm={() => { void handleSendAllDue().then(() => setPendingBulkSend(false)) }}
       />
 
-      {/* Preview/edit-before-send dialog — a wider custom popup (not
+      {/* Preview/edit-before-send dialog - a wider custom popup (not
           ConfirmDialog, whose description is text-only) since this needs an
           editable textarea. Always mounted with open bound to `preview !==
           null` so base-ui's close transition can play, same convention as
@@ -595,9 +595,9 @@ export function TrackFollowUpStep({
               {preview?.loading
                 ? 'Loading the drafted follow-up…'
                 : preview?.notFound
-                  ? 'No follow-up content has been generated for this step yet — go to Outreach & Send to generate it first.'
+                  ? 'No follow-up content has been generated for this step yet - go to Outreach & Send to generate it first.'
                   : isRealSendingProvider
-                    ? `This is a REAL send via ${sendingProviderName} — review before sending.`
+                    ? `This is a REAL send via ${sendingProviderName} - review before sending.`
                     : 'Mock sending only, no real email goes out yet.'}
             </AlertDialogDescription>
 
@@ -605,7 +605,7 @@ export function TrackFollowUpStep({
               <div className="mt-3 space-y-2">
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground/70">
-                    Subject <span className="text-muted-foreground/50">(fixed — required to keep this in the same email thread)</span>
+                    Subject <span className="text-muted-foreground/50">(fixed - required to keep this in the same email thread)</span>
                   </div>
                   <div className="w-full rounded border border-input bg-muted/40 px-2 py-1.5 text-xs text-foreground">
                     {preview.subjectPreview}

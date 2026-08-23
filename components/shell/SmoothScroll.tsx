@@ -1,9 +1,9 @@
 'use client'
 
 // ============================================================
-// SmoothScroll — Lenis smooth scrolling for the public landing page
+// SmoothScroll - Lenis smooth scrolling for the public landing page
 // ============================================================
-// Scoped to app/page.tsx only, not the root layout — /admin routes have
+// Scoped to app/page.tsx only, not the root layout - /admin routes have
 // data tables, sticky headers, and dropdown/modal scroll containers that
 // a global scroll-hijack could interfere with. Respects prefers-reduced-
 // motion the same way MotionConfigProvider does for framer-motion: skip

@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// Landing-page icons — same thin-stroke inline-SVG convention as
+// Landing-page icons - same thin-stroke inline-SVG convention as
 // nav-icons.tsx (Linear-like 1.5px strokes, currentColor), scoped
 // separately since these illustrate marketing/research-area concepts
 // rather than app navigation. Replaces emoji on the public landing

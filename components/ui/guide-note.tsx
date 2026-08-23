@@ -1,5 +1,5 @@
 // ============================================================
-// GuideNote — small explanatory callout ("what is this page for,
+// GuideNote - small explanatory callout ("what is this page for,
 // when should I use it"), used across the /admin/outbound section
 // so every tool leads with the same visually-distinct guidance
 // block instead of a plain muted paragraph.

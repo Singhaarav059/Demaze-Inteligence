@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// AlertDialog — confirm-before-action dialog
+// AlertDialog - confirm-before-action dialog
 // ============================================================
 // Wraps @base-ui/react/alert-dialog, same "thin styled wrapper over a
 // base-ui primitive" pattern as tooltip.tsx. Added 2026-07-19 (Track 4 of
@@ -9,7 +9,7 @@
 // incurring actions (Send Email/Send All in Auto Flow, Decision-Maker
 // Discovery, delete actions) previously had either zero confirmation or a
 // native window.confirm() with no visual consistency with the rest of the
-// app. ConfirmDialog below is the primary export most call sites want — a
+// app. ConfirmDialog below is the primary export most call sites want - a
 // single controlled component for the common "are you sure?" case, so
 // callers don't have to compose the primitives themselves every time.
 // ============================================================
@@ -81,10 +81,10 @@ function AlertDialogDescription({ className, ...props }: AlertDialogPrimitive.De
   )
 }
 
-// ── ConfirmDialog — the component almost every call site actually wants ──
+// ── ConfirmDialog - the component almost every call site actually wants ──
 // Fully controlled (open/onOpenChange) so it can be triggered from an
 // existing button's onClick handler rather than requiring a dedicated
-// <AlertDialog.Trigger> wrapper — most cost-incurring actions in this app
+// <AlertDialog.Trigger> wrapper - most cost-incurring actions in this app
 // already have their own button with its own loading/disabled state.
 export function ConfirmDialog({
   open,

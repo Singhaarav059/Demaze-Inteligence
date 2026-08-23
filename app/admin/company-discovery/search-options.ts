@@ -1,15 +1,15 @@
 // ============================================================
-// Company Discovery — structured search filter options
+// Company Discovery - structured search filter options
 // ============================================================
 // Pure constants/mappers for the search form. Explee is the only discovery
-// source behind this page (see lib/enrichment/sources/explee-client.ts) —
+// source behind this page (see lib/enrichment/sources/explee-client.ts) -
 // nothing here exposes that; every option maps to a real, verified field on
 // Explee's PublicCompaniesFilters (checked directly against Explee's own
 // OpenAPI schema before adding any of these).
 // ============================================================
 
 // The 3 sectors Demaze is actively targeting (CLAUDE.md's confirmed target
-// industries + the sector playbook) — not a generic industry list.
+// industries + the sector playbook) - not a generic industry list.
 export const SECTOR_OPTIONS = ['Manufacturing', 'Automotive', 'E-commerce'] as const
 export type SectorOption = (typeof SECTOR_OPTIONS)[number]
 
@@ -56,7 +56,7 @@ export const REVENUE_RANGES: RangeOption[] = [
 
 // Primary HQ picks (spec: keep the main screen to 3 broad choices, not a
 // country list). Each maps to a curated set of real ISO 3166-1 alpha-2
-// codes — Explee's own geo_include format — so "Europe"/"America" are a
+// codes - Explee's own geo_include format - so "Europe"/"America" are a
 // Demaze-defined grouping over real, verified country codes, not invented
 // geography. Individual countries live in "More locations" below.
 export interface RegionOption {
@@ -74,10 +74,10 @@ export const REGION_OPTIONS: RegionOption[] = [
   { key: 'america', label: 'America', countries: ['US', 'CA', 'MX', 'BR', 'AR', 'CL', 'CO'] },
 ]
 
-// ISO 3166-1 alpha-2 codes only (a stable, essentially-static list) —
+// ISO 3166-1 alpha-2 codes only (a stable, essentially-static list) -
 // labels come from the native Intl.DisplayNames API, not hand-typed.
 // `Intl.supportedValuesOf('region')` looks like the more "native" way to
-// get this list, but real engines (V8/Node — confirmed live, not assumed)
+// get this list, but real engines (V8/Node - confirmed live, not assumed)
 // throw `RangeError: Invalid key : region`; "region" was dropped from
 // supportedValuesOf's key set before shipping, so it isn't usable.
 const ISO_3166_1_ALPHA_2 = [
@@ -127,7 +127,7 @@ export function countryLabel(code: string): string {
   return allCountryOptions().find(c => c.code === code)?.label ?? code
 }
 
-// Maps directly to Explee's is_* boolean filters — verified names.
+// Maps directly to Explee's is_* boolean filters - verified names.
 export const COMPANY_TYPE_FILTERS: { key: string; label: string }[] = [
   { key: 'isB2b', label: 'B2B' },
   { key: 'isTech', label: 'Technology' },
@@ -138,7 +138,7 @@ export const COMPANY_TYPE_FILTERS: { key: string; label: string }[] = [
   { key: 'isMerchant', label: 'Merchant' },
 ]
 
-// Maps directly to Explee's has_* boolean filters — verified names.
+// Maps directly to Explee's has_* boolean filters - verified names.
 export const PRESENCE_FILTERS: { key: string; label: string }[] = [
   { key: 'hasLinkedinPage', label: 'Has LinkedIn page' },
   { key: 'hasEmployeesOnLinkedin', label: 'Has employees on LinkedIn' },

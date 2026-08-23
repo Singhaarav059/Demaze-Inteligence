@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// TiltCard — subtle cursor-driven 3D tilt on hover
+// TiltCard - subtle cursor-driven 3D tilt on hover
 // ============================================================
 // Wraps card content and rotates it a few degrees toward the cursor on
-// hover, springing flat on leave — same "give it presence, not gimmick"
+// hover, springing flat on leave - same "give it presence, not gimmick"
 // restraint as MagneticButton (max rotation kept small). Pointer-fine +
-// !reduced-motion only, identical guard to MagneticButton/CursorGlow —
+// !reduced-motion only, identical guard to MagneticButton/CursorGlow -
 // meaningless on touch, and reduced-motion users get a static card.
 // ============================================================
 

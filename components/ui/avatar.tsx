@@ -1,8 +1,8 @@
 // ============================================================
-// Avatar — deterministic-colored initials circle
+// Avatar - deterministic-colored initials circle
 // ============================================================
 // No photo/avatar URL field exists anywhere in the data model (decision-
-// maker candidates, contacts, discovered companies) — this is initials-only
+// maker candidates, contacts, discovered companies) - this is initials-only
 // by design, not a "for now" stand-in for a photo prop.
 // ============================================================
 
@@ -33,10 +33,14 @@ export function Avatar({
   name,
   size = 'sm',
   className,
+  ringColorVar,
 }: {
   name: string
   size?: keyof typeof SIZE_CLASSES
   className?: string
+  /** Opt-in ring (e.g. a fit-strength color) so a list of avatars is
+   *  scannable by that signal instead of by hash-derived, meaningless color. */
+  ringColorVar?: string
 }) {
   return (
     <div
@@ -45,7 +49,10 @@ export function Avatar({
         SIZE_CLASSES[size],
         className
       )}
-      style={{ backgroundColor: colorFor(name) }}
+      style={{
+        backgroundColor: colorFor(name),
+        boxShadow: ringColorVar ? `0 0 0 2px ${ringColorVar}` : undefined,
+      }}
       aria-hidden="true"
     >
       {initialsOf(name)}

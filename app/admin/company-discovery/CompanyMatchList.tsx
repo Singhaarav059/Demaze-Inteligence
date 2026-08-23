@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// Company Discovery Results — select, research, view report
+// Company Discovery Results - select, research, view report
 // ============================================================
 // Presentational results list for Company Discovery. Renders whatever
 // useCompanyDiscoverySearch's structured search surfaced (real Explee
-// firmographic fields — industry, employee count, HQ, founding year,
+// firmographic fields - industry, employee count, HQ, founding year,
 // revenue) as a Demaze workspace, not a database table, and reuses its
 // existing sequential "Research with Demaze" loop unchanged. No vendor
 // name or discovery-provider language appears anywhere in this file.
@@ -29,7 +29,7 @@ import { staggerList, listItem } from '@/lib/motion'
 import { formatRevenue, countryLabel } from './search-options'
 import type { CompanyDiscoverySearch, CompanyStatus, DiscoveredMatch } from './useCompanyDiscoverySearch'
 
-// Client-side only, no backend change — once a discovery run surfaces more
+// Client-side only, no backend change - once a discovery run surfaces more
 // than this many companies, a text filter appears above the list so the
 // user isn't stuck scrolling/scanning a long flat list.
 const FILTER_THRESHOLD = 8
@@ -57,7 +57,7 @@ function daysAgoLabel(iso: string): string {
 }
 
 // CompanyStatus (this page's own research-loop state) -> IntelStatusKind
-// (the shared status vocabulary) — 'running' has no 1:1 name match, and
+// (the shared status vocabulary) - 'running' has no 1:1 name match, and
 // 'already_researched' carries an optional "N days ago" label override.
 function toIntelStatus(status: CompanyStatus, lastResearchedAt?: string | null): { status: IntelStatusKind; label?: string } {
   if (status === 'running') return { status: 'researching' }
@@ -94,7 +94,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
   }, [companies, filterText, sortKey, statusFilter])
 
   // Distinguish "haven't searched yet" (sufficiency still null, render
-  // nothing) from "searched, zero real matches survived filtering" — the
+  // nothing) from "searched, zero real matches survived filtering" - the
   // latter used to also render nothing, silently discarding real search
   // effort with no feedback at all.
   if (companies.length === 0 && sufficiency === null) return null
@@ -281,7 +281,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                       ) : status === 'already_researched' && match.hasStoredResult ? (
                         // Result exists (a prior visit to this page researched
                         // this company) but hasn't been fetched into state yet
-                        // — see useCompanyDiscoverySearch.ts's viewStoredResult().
+                        // - see useCompanyDiscoverySearch.ts's viewStoredResult().
                         <button
                           onClick={async () => { await viewStoredResult(company.id); setExpandedId(company.id) }}
                           disabled={viewingId === company.id}

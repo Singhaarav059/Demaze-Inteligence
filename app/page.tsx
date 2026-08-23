@@ -127,7 +127,7 @@ export default function Home() {
   // Scrollspy: highlight whichever section's anchor the user has scrolled
   // to, so the nav reflects where you are on the page (not just where you
   // can jump to). rootMargin carves a thin band near vertical-center of
-  // the viewport — a section only counts "active" once it's genuinely in
+  // the viewport - a section only counts "active" once it's genuinely in
   // the reading area, not the instant its top edge appears at the bottom.
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function Home() {
 
       <ScrollProgressBar />
 
-      {/* Skip link — visually hidden until focused, so keyboard users don't
+      {/* Skip link - visually hidden until focused, so keyboard users don't
           have to tab through the header nav on every page load. */}
       <a
         href="#main-content"
@@ -239,11 +239,11 @@ export default function Home() {
             style={{ y: heroContentY, opacity: heroOpacity }}
             className="relative max-w-4xl mx-auto text-center space-y-8"
           >
-            {/* Staged entrance on first load — badge, headline, subhead, CTAs
+            {/* Staged entrance on first load - badge, headline, subhead, CTAs
                 reveal in sequence rather than the hero appearing fully-formed.
                 `initial`/`animate` (mount-triggered, not scroll-triggered) is
                 independent of this wrapper's own scroll-linked `opacity`
-                above — each nested element's own opacity compounds with its
+                above - each nested element's own opacity compounds with its
                 ancestor's, no property conflict. MotionConfig's ancestor
                 reducedMotion="user" (see MotionConfigProvider) collapses
                 these to their end state instantly, no manual gating needed. */}
@@ -325,7 +325,7 @@ export default function Home() {
 
         {/* How it works */}
         <section id="how-it-works" className="relative py-24 sm:py-0">
-          {/* Subtle ambient glow — same restrained "primary color, low
+          {/* Subtle ambient glow - same restrained "primary color, low
               opacity, blurred" treatment as the hero, reused here rather
               than a new decorative pattern, so long sections of flat
               background don't feel like an abrupt stack. Kept faint per

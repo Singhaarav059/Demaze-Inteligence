@@ -1,14 +1,14 @@
 'use client'
 
 // ============================================================
-// Outbound Contacts — /admin/outbound/contacts
+// Outbound Contacts - /admin/outbound/contacts
 // ============================================================
 // Pick a researched company (from run history) -> manually add contacts
 // (person_name is always user-supplied, never auto-discovered) -> per-
 // contact Find Email / Enrich / Outreach actions. Decision-Maker
-// Discovery is a separate, explicit action (DecisionMakerFinder) — it
+// Discovery is a separate, explicit action (DecisionMakerFinder) - it
 // surfaces candidates for review, nothing is added as a contact until
-// selected. Email validation was removed (2026-07-19) — mock-only
+// selected. Email validation was removed (2026-07-19) - mock-only
 // capability, no real vendor decision made.
 // ============================================================
 
@@ -32,7 +32,7 @@ import { DecisionMakerFinder } from './DecisionMakerFinder'
 
 // Maps the saved run's leadership_contacts (evidence-extractor.ts shape,
 // name/title/statedPortfolio/sourceUrl/confidence) down to the {name, title}
-// shape DecisionMakerFinder's grounding step needs — same boundary-mapping
+// shape DecisionMakerFinder's grounding step needs - same boundary-mapping
 // discipline as the live API route (see decision-makers/discover/route.ts).
 function toLeadershipContactInputs(finalResult: Record<string, unknown> | null | undefined) {
   if (!finalResult) return undefined
@@ -87,7 +87,7 @@ export default function OutboundContactsPage() {
         <p>
           Pick a researched company, then add contacts. Manually typing in a name (from Sales
           Navigator, a lead list, etc.) stays the default path. <strong>Decision-Maker Discovery</strong>{' '}
-          below is a separate, explicit action — it surfaces candidates for you to review, and
+          below is a separate, explicit action - it surfaces candidates for you to review, and
           nothing is added as a contact until you select it.
         </p>
       </GuideNote>

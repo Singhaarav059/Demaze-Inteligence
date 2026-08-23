@@ -1,26 +1,26 @@
 'use client'
 
 // ============================================================
-// Run History — /admin/run-history
+// Run History - /admin/run-history
 // ============================================================
 // Redesigned into an activity workspace (redesign brief Section 23):
 // tabs for All / Research / Discovery / Outreach, each backed by real,
-// already-persisted event data — no fabricated activity types.
+// already-persisted event data - no fabricated activity types.
 //
-// - Research tab: unchanged — pipeline_test_runs, as report-style cards
+// - Research tab: unchanged - pipeline_test_runs, as report-style cards
 //   (company, industry, generated date, signals, top opportunity, top
 //   outreach angle). Clicking a row / "View Report" expands the same
 //   Step1Research report used elsewhere in the app.
 // - Discovery tab: outbound_contacts rows with discovery_source =
-//   'decision_maker_discovery' (migration 010) — i.e. real "Decision maker
+//   'decision_maker_discovery' (migration 010) - i.e. real "Decision maker
 //   found" events. Company-discovery CANDIDATE events (the ICP -> matching
-//   companies search results) are never persisted as their own log —
+//   companies search results) are never persisted as their own log -
 //   they're ephemeral until a candidate is explicitly researched, at which
-//   point they become a normal Research-tab run — so there is no separate
+//   point they become a normal Research-tab run - so there is no separate
 //   "companies discovered" event to show here; this tab is honestly scoped
 //   to what's actually real.
 // - Outreach tab: outbound_campaign_contacts rows (via the existing
-//   /api/admin/outbound/overview endpoint) — real send/reply/bounce status
+//   /api/admin/outbound/overview endpoint) - real send/reply/bounce status
 //   per contact, with real updated_at timestamps.
 // - All tab: the three real sources above, merged and sorted chronologically.
 // ============================================================
@@ -28,7 +28,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { History, UserSearch, Send } from 'lucide-react'
+import { History, UserSearch, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,7 +56,7 @@ function formatDate(iso: string): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()} ${d.getFullYear()}`
 }
 
-// Relative-day bucket label for the "All" activity timeline — local calendar
+// Relative-day bucket label for the "All" activity timeline - local calendar
 // day, not a 24h rolling window (matches how a person actually thinks about
 // "today"/"yesterday"). Falls back to formatDate() for anything older.
 function relativeDayLabel(iso: string): string {
@@ -92,7 +92,7 @@ interface Run {
 }
 
 // Reconstruct a minimal RunResult from a persisted run row so the shared
-// getResearchCardData()/Step1Research report renderer can be reused as-is —
+// getResearchCardData()/Step1Research report renderer can be reused as-is -
 // analysisResult is the only field either of those actually reads.
 function toRunResult(run: Run): RunResult {
   return {
@@ -102,7 +102,7 @@ function toRunResult(run: Run): RunResult {
   }
 }
 
-// Discovery tab — outbound_contacts rows sourced from real decision-maker
+// Discovery tab - outbound_contacts rows sourced from real decision-maker
 // discovery (migration 010's discovery_source column), never manually-typed
 // contacts. Fields kept to exactly what GET /api/admin/outbound/contacts
 // already returns.
@@ -117,7 +117,7 @@ interface DiscoveryContact {
   created_at: string
 }
 
-// Outreach tab — reuses the exact row shape GET /api/admin/outbound/overview
+// Outreach tab - reuses the exact row shape GET /api/admin/outbound/overview
 // already returns for its own "Emails" table.
 interface OutreachEmail {
   id: string
@@ -146,7 +146,7 @@ function runIntelStatus(run: Run): IntelStatusKind {
   return 'needs_review'
 }
 
-// A single point in the merged "All" timeline — one shape covering all
+// A single point in the merged "All" timeline - one shape covering all
 // three real event sources, so they can be sorted and rendered uniformly.
 interface ActivityItem {
   key: string
@@ -165,12 +165,22 @@ export default function RunHistoryPage() {
   const [expandedDetail, setExpandedDetail] = useState<Record<string, unknown> | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [opFilter, setOpFilter] = useState<string>('all')
+  // Arrived via a link from Home's fit-distribution donut (?fit=Strong) -
+  // read once on mount via window.location.search rather than
+  // useSearchParams(), same Suspense-boundary avoidance this app already
+  // documents for /admin/auto-gtm (see useAutoGtmFlow.ts's header comment).
+  const [fitFilter, setFitFilter] = useState<string | null>(null)
+  useEffect(() => {
+    const fit = new URLSearchParams(window.location.search).get('fit')
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (fit) setFitFilter(fit)
+  }, [])
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'company'>('newest')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  // Discovery + Outreach tabs — fetched once, independent of the Research
+  // Discovery + Outreach tabs - fetched once, independent of the Research
   // tab's opFilter/sort, since they're a different real data source.
   const [discoveryContacts, setDiscoveryContacts] = useState<DiscoveryContact[]>([])
   const [discoveryLoading, setDiscoveryLoading] = useState(true)
@@ -216,7 +226,7 @@ export default function RunHistoryPage() {
           )
         }
       } catch {
-        // non-fatal — the Discovery tab just shows its empty state
+        // non-fatal - the Discovery tab just shows its empty state
       } finally {
         setDiscoveryLoading(false)
       }
@@ -229,7 +239,7 @@ export default function RunHistoryPage() {
         const data = await res.json()
         if (data.success) setOutreachEmails(data.emails)
       } catch {
-        // non-fatal — the Outreach tab just shows its empty state
+        // non-fatal - the Outreach tab just shows its empty state
       } finally {
         setOutreachLoading(false)
       }
@@ -282,12 +292,23 @@ export default function RunHistoryPage() {
     }
   }
 
-  // Client-side only — the API already returns everything opFilter asked
+  // Client-side only - the API already returns everything opFilter asked
   // for, so no new fetch/route is needed for this. Sorts by domain (not the
   // fancier report-derived company name) to avoid re-running
   // getResearchCardData() a second time just for a sort key.
+  // Comma-separated so Home's "High-Fit Companies" tile (Strong + Good, per
+  // HIGH_FIT_LABELS there) can link here with both tiers active at once,
+  // not just a single fit label.
+  const fitFilterLabels = fitFilter ? fitFilter.split(',') : null
   const filteredRuns = useMemo(() => {
-    const list = [...runs]
+    const labels = fitFilter ? fitFilter.split(',') : null
+    let list = labels
+      ? runs.filter(r => {
+          const label = getResearchCardData(toRunResult(r))?.companyFit?.label
+          return label && labels.includes(label)
+        })
+      : [...runs]
+    list = [...list]
     if (sortBy === 'oldest') {
       list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     } else if (sortBy === 'company') {
@@ -296,10 +317,10 @@ export default function RunHistoryPage() {
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     }
     return list
-  }, [runs, sortBy])
+  }, [runs, sortBy, fitFilter])
 
   // Groups the Research tab into Today / Yesterday / <date> timeline
-  // sections — only when chronologically sorted; an alphabetical company
+  // sections - only when chronologically sorted; an alphabetical company
   // sort can't produce contiguous day groups, so that view stays a flat
   // list instead of relabeling out-of-order groups.
   const groupedRuns = useMemo(() => {
@@ -314,13 +335,13 @@ export default function RunHistoryPage() {
     return groups
   }, [filteredRuns, sortBy])
 
-  // Research volume over time (redesign brief Section 24) — real data only:
+  // Research volume over time (redesign brief Section 24) - real data only:
   // computed from the already-fetched runs, gated on genuine sufficiency so
   // an account with only a handful of runs never sees a near-empty chart.
   const researchDaily = useMemo(() => computeDailyCounts(runs.map(r => r.created_at), 14), [runs])
   const showResearchTrend = hasSufficientTrendData(researchDaily)
 
-  // "All" tab — the three real event sources merged into one chronological
+  // "All" tab - the three real event sources merged into one chronological
   // feed. Purely a client-side merge of already-fetched arrays; no new data
   // source, no fabricated event types.
   const allActivity = useMemo<ActivityItem[]>(() => {
@@ -331,7 +352,7 @@ export default function RunHistoryPage() {
         key: `research-${r.id}`,
         ts: r.created_at,
         kind: 'research',
-        title: `Company researched — ${cardData?.companyName ?? r.domain ?? r.company_url}`,
+        title: `Company researched - ${cardData?.companyName ?? r.domain ?? r.company_url}`,
         subtitle: formatDate(r.created_at),
       })
     }
@@ -340,7 +361,7 @@ export default function RunHistoryPage() {
         key: `discovery-${c.id}`,
         ts: c.created_at,
         kind: 'discovery',
-        title: `Decision maker found — ${c.person_name}${c.title_hint ? `, ${c.title_hint}` : ''}`,
+        title: `Decision maker found - ${c.person_name}${c.title_hint ? `, ${c.title_hint}` : ''}`,
         subtitle: `${c.company_name} · ${formatDate(c.created_at)}`,
       })
     }
@@ -349,14 +370,14 @@ export default function RunHistoryPage() {
         key: `outreach-${e.id}`,
         ts: e.updated_at,
         kind: 'outreach',
-        title: `Outreach ${outreachStatusLabel(e.status).toLowerCase()} — ${e.outbound_contacts?.person_name ?? 'Unknown contact'}`,
-        subtitle: `${e.outbound_contacts?.company_name ?? '—'} · ${formatDate(e.updated_at)}`,
+        title: `Outreach ${outreachStatusLabel(e.status).toLowerCase()} - ${e.outbound_contacts?.person_name ?? 'Unknown contact'}`,
+        subtitle: `${e.outbound_contacts?.company_name ?? '-'} · ${formatDate(e.updated_at)}`,
       })
     }
     return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
   }, [runs, discoveryContacts, outreachEmails])
 
-  // Groups the same sorted list into Today / Yesterday / <date> sections —
+  // Groups the same sorted list into Today / Yesterday / <date> sections -
   // pure client-side bucketing of already-sorted real timestamps, no new
   // data source.
   const groupedActivity = useMemo(() => {
@@ -480,6 +501,16 @@ export default function RunHistoryPage() {
               {loading ? <Spinner className="size-3.5" /> : null}
               Refresh
             </Button>
+            {fitFilter && (
+              <button
+                type="button"
+                onClick={() => { setFitFilter(null); router.replace('/admin/run-history') }}
+                className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/15"
+              >
+                Fit: {fitFilterLabels?.join(', ')}
+                <X className="size-3" />
+              </button>
+            )}
           </div>
 
           {loading && (
@@ -492,7 +523,11 @@ export default function RunHistoryPage() {
             </div>
           )}
 
-          {!loading && filteredRuns.length === 0 && (
+          {!loading && filteredRuns.length === 0 && fitFilter && (
+            <EmptyState icon={History} title={`No runs with "${fitFilterLabels?.join(', ')}" fit`} className="border-none py-6" />
+          )}
+
+          {!loading && filteredRuns.length === 0 && !fitFilter && (
             <EmptyState
               icon={History}
               title="No runs yet"
@@ -524,7 +559,7 @@ export default function RunHistoryPage() {
                           .filter(Boolean)
                           .join(' · ')
                       : ''
-                    // Short, real outcome summary line — no fabricated
+                    // Short, real outcome summary line - no fabricated
                     // detail, only fields already on getResearchCardData().
                     const outcomeSummary = cardData
                       ? [
@@ -540,12 +575,12 @@ export default function RunHistoryPage() {
 
                     return (
                       <div key={run.id} className="group">
-                        {/* Row — click-anywhere is a mouse convenience only; the
+                        {/* Row - click-anywhere is a mouse convenience only; the
                             "View Report" button is the real, keyboard-accessible
                             control for this action. This div previously claimed
                             role="button"/tabIndex={0} without an onKeyDown
                             handler, so keyboard users could Tab to it but never
-                            activate it — and it already wraps other real buttons
+                            activate it - and it already wraps other real buttons
                             (View Report, Delete), which is invalid to nest inside
                             an actual <button> anyway (2026-07-19 fix). */}
                         <div
@@ -571,10 +606,10 @@ export default function RunHistoryPage() {
                               </p>
                             </div>
 
-                            {/* Actions — subtle by default, brought to full
+                            {/* Actions - subtle by default, brought to full
                                 emphasis on hover/keyboard-focus (opacity, not
                                 display:none, so they stay tabbable and visible
-                                on touch devices — no discoverability loss vs.
+                                on touch devices - no discoverability loss vs.
                                 the always-visible buttons this replaces). */}
                             <div className="flex items-center gap-1.5 flex-shrink-0 opacity-70 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                               <Button
@@ -588,9 +623,9 @@ export default function RunHistoryPage() {
                               {/* Only offered when there's a real analysis result
                                   to build contacts/outreach on top of (cardData is
                                   null for scraper-only runs or a run that failed
-                                  before producing a result) — never for an
+                                  before producing a result) - never for an
                                   incomplete run. Always opens at step 2 (Decision
-                                  Makers — Auto Flow's step numbering, see
+                                  Makers - Auto Flow's step numbering, see
                                   StepIndicator.tsx; a "Sales Strategy" step
                                   briefly sat at step 2 between 2026-08-13 and its
                                   removal the same week, which is why this used to
@@ -619,7 +654,7 @@ export default function RunHistoryPage() {
                               >
                                 {deletingId === run.id ? '…' : '🗑'}
                               </button>
-                              {/* Expand indicator — purely decorative, the state
+                              {/* Expand indicator - purely decorative, the state
                                   it conveys is already in the "View
                                   Report"/"Hide Report" button text above. */}
                               <span className="text-muted-foreground/70 text-xs flex-shrink-0" aria-hidden="true">
@@ -746,7 +781,7 @@ export default function RunHistoryPage() {
                     <p className="text-muted-foreground/70 text-xs truncate">
                       {e.outbound_contacts?.company_name}
                       {e.outbound_campaigns?.name ? ` · ${e.outbound_campaigns.name}` : ''}
-                      {e.outbound_generated_content?.selected_subject_line ? ` · "${e.outbound_generated_content.selected_subject_line}"` : ''}
+                      {e.outbound_generated_content?.selected_subject_line ? ` · "${humanizeText(e.outbound_generated_content.selected_subject_line)}"` : ''}
                     </p>
                   </div>
                   <span className="text-muted-foreground/60 text-xs flex-shrink-0">{formatDate(e.updated_at)}</span>

@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// Pilot Review — /admin/outbound/pilot-review
+// Pilot Review - /admin/outbound/pilot-review
 // ============================================================
 // Post-Hardening Pilot Readiness Plan, Phase F2 (human quality review).
 // "Before sending, manually inspect every pilot contact. Confirm: right
 // company, right problem, right evidence, right stakeholder." This is
-// exactly that checkpoint — read-only research data plus a persisted
+// exactly that checkpoint - read-only research data plus a persisted
 // approve/reject/needs-work decision per company (GET/PATCH
 // /api/admin/outbound/pilot-review), gating nothing automatically: outreach
 // generation and sending stay behind their own existing checks regardless
@@ -144,7 +144,7 @@ function ReviewCard({
         </div>
       )}
       {!company.topOpportunity && (
-        <p className="text-xs text-muted-foreground/60 italic">No opportunity surfaced — genuinely thin evidence, not a display gap.</p>
+        <p className="text-xs text-muted-foreground/60 italic">No opportunity surfaced - genuinely thin evidence, not a display gap.</p>
       )}
 
       <div>
@@ -156,7 +156,7 @@ function ReviewCard({
             {company.contacts.map((c, i) => (
               <li key={i} className="text-xs text-foreground/80 flex items-center gap-1.5 flex-wrap">
                 <span className="font-medium">{c.personName ?? 'Unnamed'}</span>
-                {c.titleHint && <span className="text-muted-foreground">— {c.titleHint}</span>}
+                {c.titleHint && <span className="text-muted-foreground">- {c.titleHint}</span>}
                 {c.confidence && <span className="text-muted-foreground/60">({c.confidence})</span>}
                 {c.groundingStatus === 'conflict' && (
                   <Badge className="text-[9px] bg-destructive/10 text-destructive border border-destructive/40">identity conflict</Badge>
@@ -252,7 +252,7 @@ export default function PilotReviewPage() {
       <GuideNote>
         <p>
           Confirm for each: right company, right problem, right evidence, right stakeholder. This
-          is a temporary validation step for the pilot, not the final operating model — nothing
+          is a temporary validation step for the pilot, not the final operating model - nothing
           here auto-sends or auto-generates outreach; it only records your decision.
         </p>
       </GuideNote>
@@ -275,7 +275,7 @@ export default function PilotReviewPage() {
         <EmptyState
           icon={CheckCircle2}
           title="No pilot batch to review yet"
-          description="This fills in once a batch of pilot companies has been researched — nothing has been tagged as a pilot run yet."
+          description="This fills in once a batch of pilot companies has been researched - nothing has been tagged as a pilot run yet."
         />
       ) : (
         <div className="rounded-lg border border-border bg-card p-4">

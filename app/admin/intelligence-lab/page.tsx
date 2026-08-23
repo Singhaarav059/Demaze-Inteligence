@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// Intelligence Lab — /admin/intelligence-lab
+// Intelligence Lab - /admin/intelligence-lab
 // ============================================================
 
 import { useState, useCallback, type ReactNode, type ReactElement } from 'react'
@@ -75,7 +75,7 @@ export default function IntelligenceLab() {
   const [activePageIdx, setActivePageIdx] = useState(0)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
 
-  // Scrape cache — survives between Test Scraper and Test Analysis in same session
+  // Scrape cache - survives between Test Scraper and Test Analysis in same session
   const [scrapeCache, setScrapeCache] = useState<ScrapeCache | null>(null)
   const [clearingCache, setClearingCache] = useState(false)
 
@@ -83,7 +83,7 @@ export default function IntelligenceLab() {
   const [compareA, setCompareA] = useState<RunResult | null>(null)
   const [compareB, setCompareB] = useState<RunResult | null>(null)
 
-  // ── API call helper (no auth headers — auth bypassed in dev) ─
+  // ── API call helper (no auth headers - auth bypassed in dev) ─
 
   const callApi = useCallback(async (endpoint: string, body: Record<string, unknown>) => {
     const res = await fetch(endpoint, {
@@ -397,7 +397,7 @@ export default function IntelligenceLab() {
             </div>
           )}
 
-          {/* ── Inspector (engineer surfaces, collapsed) — TOP ─── */}
+          {/* ── Inspector (engineer surfaces, collapsed) - TOP ─── */}
           <details className="group rounded-xl border border-border bg-card/40">
             <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground select-none">
               <span className="flex items-center gap-2">
@@ -698,9 +698,9 @@ function AnalysisViewer({ data, extractorResult }: {
   const [showEvidence, setShowEvidence] = useState(false)
 
   // Route non-empty display text through humanizeText so AI-ism dashes/filler
-  // are stripped everywhere in this viewer; keep '—' as the empty placeholder.
+  // are stripped everywhere in this viewer; keep '-' as the empty placeholder.
   const s = (val: unknown) => (val != null && val !== '' ? humanizeText(val) : 'N/A')
-  // Verbatim source quotes must never be humanized — keep them exactly as
+  // Verbatim source quotes must never be humanized - keep them exactly as
   // scraped, same rule brief-html.ts's export appendix already follows.
   const raw = (val: unknown) => (val == null ? '' : String(val))
   const n = (val: unknown): number => (typeof val === 'number' ? val : 0)
@@ -1822,7 +1822,7 @@ function DebugPanel({
   const serviceEvidenceDebug = result.analysisResult ? getServiceEvidenceDebug(result.analysisResult) : undefined
   return (
     <div className="space-y-3">
-      {/* Evidence & Opportunity Debug — added 2026-07-24. Answers "why did
+      {/* Evidence & Opportunity Debug - added 2026-07-24. Answers "why did
           this run come back with 0 pain points / 0 opportunities" without
           needing a live re-run: shows exactly which of the 4 insufficientEvidence
           conditions fired, and the per-service evidence trail (including
@@ -1842,7 +1842,7 @@ function DebugPanel({
           <CardContent className="px-4 pb-4 space-y-3">
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground/70">
-                Insufficient-evidence gate — all 4 must be true to suppress pain_points/opportunities:
+                Insufficient-evidence gate - all 4 must be true to suppress pain_points/opportunities:
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(serviceEvidenceDebug.insufficient_evidence?.conditions ?? {}).map(([k, v]) => (

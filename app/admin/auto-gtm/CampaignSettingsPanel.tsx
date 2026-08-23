@@ -1,26 +1,26 @@
 'use client'
 
 // ============================================================
-// CampaignSettingsPanel — Auto Flow step 4's "Campaign Settings"
+// CampaignSettingsPanel - Auto Flow step 4's "Campaign Settings"
 // ============================================================
 // UX redesign (2026-08-17) over the same persisted fields as before
 // (migration 020: name, daily_send_limit, send_window_start/end, timezone,
-// interval_1/2/3_days) and the same GET/PATCH /campaigns/[id] route — no
+// interval_1/2/3_days) and the same GET/PATCH /campaigns/[id] route - no
 // backend, schema, or send-behavior change. Just a friendlier presentation:
 // - "Sending strategy" (Conservative/Balanced/Faster) is three preset
 //   values for the SAME daily_send_limit field the raw number input still
-//   edits under Advanced — no new column, no new concept.
+//   edits under Advanced - no new column, no new concept.
 // - The follow-up timeline is a rendering of the same interval_1/2/3_days
 //   (or the global default when unset) as a plain-English sequence.
 // - "Always-on protections" restates the same fixed, non-configurable stop
 //   conditions the send route already enforces (reply / bounce /
-//   suppression / removal) — see send/route.ts's own header comment.
+//   suppression / removal) - see send/route.ts's own header comment.
 // - Campaign Summary is a plain-English readout of current form state,
 //   computed client-side, not a new stored field.
 //
 // "Sending account" reads the real connected Gmail address from
 // outbound_integrations.config.email the same way
-// /admin/outbound/integrations/page.tsx already derives it — not a new
+// /admin/outbound/integrations/page.tsx already derives it - not a new
 // lookup.
 // ============================================================
 
@@ -43,7 +43,7 @@ const HOUR_OPTIONS = [
   ...Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: `${String(h).padStart(2, '0')}:00` })),
 ]
 
-// A short, common-case list rather than every IANA zone — keeps the select
+// A short, common-case list rather than every IANA zone - keeps the select
 // scannable. 'UTC' first since it's the safe/neutral default this app uses
 // everywhere else it stores a timezone-agnostic timestamp.
 const COMMON_TIMEZONES = [
@@ -54,7 +54,7 @@ const COMMON_TIMEZONES = [
   'Australia/Sydney',
 ]
 
-// Preset values for the existing daily_send_limit field — not a new
+// Preset values for the existing daily_send_limit field - not a new
 // backend concept, just three sensible numbers for the field the raw
 // "Maximum emails per day" input under Advanced already edits. A lower
 // daily cap genuinely does spread sends over more days (skipped-for-today
@@ -106,7 +106,7 @@ export function CampaignSettingsPanel({
   campaignId: string | null
   ensureCampaignId: () => Promise<string | null>
   // True while a resumed run's existing campaign (if any) is still being
-  // restored — see useAutoGtmFlow.ts's `resuming` state. Found live
+  // restored - see useAutoGtmFlow.ts's `resuming` state. Found live
   // (2026-08-12): calling ensureCampaignId() before this settles created
   // real duplicate, orphaned campaigns (two rows named " - Auto Flow" with
   // no source_run_id) because campaignId was still null in local state even
@@ -129,7 +129,7 @@ export function CampaignSettingsPanel({
         const data = await res.json()
         if (data.success && Array.isArray(data.intervals)) setGlobalIntervals(data.intervals)
       } catch {
-        // Keep the [3,4,7] default — same fail-open discipline as the
+        // Keep the [3,4,7] default - same fail-open discipline as the
         // server-side getFollowupIntervals() this mirrors.
       }
       try {
@@ -148,7 +148,7 @@ export function CampaignSettingsPanel({
 
   useEffect(() => {
     // While a resumed run is still being restored, campaignId being null
-    // here does NOT mean no campaign exists yet — it means
+    // here does NOT mean no campaign exists yet - it means
     // restoreContactsAndCampaign hasn't finished checking. Do nothing this
     // pass; the effect re-runs once `resuming` flips false (see the prop's
     // own header comment for the duplicate-campaign bug this closes).
@@ -184,7 +184,7 @@ export function CampaignSettingsPanel({
       }
     })()
     // Deliberately depends on `resuming` (not an empty array) so it can
-    // re-run once resuming flips false — everything else (campaignId,
+    // re-run once resuming flips false - everything else (campaignId,
     // ensureCampaignId, defaultCampaignName) is read fresh from the
     // enclosing closure each time this fires, which is what we want: a
     // single real attempt, gated on resume state being settled, not a
@@ -202,7 +202,7 @@ export function CampaignSettingsPanel({
   }, [settings, allIntervalsSet, globalIntervals])
 
   const sendingLabel = sendingAccount
-    ? sendingAccount.email ?? (sendingAccount.isReal ? sendingAccount.provider : 'your demo (mock) account — no real email will send')
+    ? sendingAccount.email ?? (sendingAccount.isReal ? sendingAccount.provider : 'your demo (mock) account - no real email will send')
     : 'your connected account'
 
   const windowText = settings && settings.windowStart !== '__none__' && settings.windowEnd !== '__none__'
@@ -297,7 +297,7 @@ export function CampaignSettingsPanel({
                   ? sendingAccount.email
                     ? <><CheckCircle2 className="inline size-3.5 mr-1 text-signal-strong align-[-2px]" />{sendingAccount.email}</>
                     : sendingAccount.isReal
-                      ? <>Connected — <span className="font-medium">{sendingAccount.provider}</span></>
+                      ? <>Connected - <span className="font-medium">{sendingAccount.provider}</span></>
                       : 'Demo mode (no real sending account connected yet)'
                   : 'Checking…'}
                 {' '}
@@ -348,8 +348,8 @@ export function CampaignSettingsPanel({
             {activeStrategy === null && (
               <p className="text-xs text-muted-foreground/60">
                 {settings.dailyLimit.trim() === ''
-                  ? 'No sending speed chosen yet — sending is currently unlimited. Pick a speed above, or set a custom limit under Advanced settings.'
-                  : `Using a custom limit (${settings.dailyLimit}/day) — set under Advanced settings.`}
+                  ? 'No sending speed chosen yet - sending is currently unlimited. Pick a speed above, or set a custom limit under Advanced settings.'
+                  : `Using a custom limit (${settings.dailyLimit}/day) - set under Advanced settings.`}
               </p>
             )}
 
@@ -414,7 +414,7 @@ export function CampaignSettingsPanel({
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground/60">
-                  Emails outside this window are held, not sent late — they go out the next time sending runs
+                  Emails outside this window are held, not sent late - they go out the next time sending runs
                   during this window, in the time zone above.
                 </p>
               </div>

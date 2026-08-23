@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// DecisionMakerFinder — search for candidate decision-makers by title,
+// DecisionMakerFinder - search for candidate decision-makers by title,
 // review, and add selected ones as real contacts.
 // ============================================================
 // Extracted out of contacts/page.tsx so it's reusable by the Auto Flow
-// guided-flow page (app/admin/auto-gtm) as well. Fully self-contained —
+// guided-flow page (app/admin/auto-gtm) as well. Fully self-contained -
 // takes only the company identity it needs, calls the discovery + contact-
 // creation APIs directly, and reports each newly-created contact back to
 // the caller via onContactAdded rather than depending on any shared hook.
@@ -33,7 +33,7 @@ import { classifyRoleCategory, ROLE_CATEGORY_LABELS, type RoleCategory } from '@
 import type { DecisionMakerCandidate, LeadershipContactInput } from '@/lib/outbound/decision-maker-discovery/types'
 import type { OutboundContact } from './useOutboundContacts'
 
-// Hedged as "likely current activity" — same honesty discipline as
+// Hedged as "likely current activity" - same honesty discipline as
 // auto-gtm/page.tsx's RESEARCH_STAGES, see stage-progress.tsx's header
 // comment for why this isn't a real measured percentage.
 const DISCOVERY_STAGES: ProgressStage[] = [
@@ -43,7 +43,7 @@ const DISCOVERY_STAGES: ProgressStage[] = [
 ]
 
 // Placeholder rows shown while a search is in flight, so the layout doesn't
-// jump from "nothing" to "content" — same pattern as company-discovery/
+// jump from "nothing" to "content" - same pattern as company-discovery/
 // page.tsx's CompanyRowSkeletons.
 function CandidateRowSkeletons() {
   return (
@@ -61,14 +61,14 @@ function CandidateRowSkeletons() {
 }
 
 // Imperative handle so a parent step (Auto Flow) can trigger "add whatever
-// is currently checked" itself — e.g. from its own "Continue" button —
+// is currently checked" itself - e.g. from its own "Continue" button -
 // instead of requiring a separate "Add Selected as Contacts" click here.
 export interface DecisionMakerFinderHandle {
   commitSelected: () => Promise<void>
 }
 
 // Signal-strength color scale (matches ResearchCard.tsx's own confidenceClass()
-// — same visual language, duplicated locally per this repo's own
+// - same visual language, duplicated locally per this repo's own
 // "duplication over cross-module coupling for small helpers" convention
 // rather than importing across the intelligence-lab/outbound boundary).
 function confidenceBadgeClass(confidence: 'high' | 'medium' | 'low') {
@@ -89,10 +89,10 @@ function groundingIcon(status: 'confirmed' | 'conflict' | 'not_found') {
   return HelpCircle
 }
 
-// PersonCard — one candidate decision-maker, rendered as a clear person card
+// PersonCard - one candidate decision-maker, rendered as a clear person card
 // instead of a plain checkbox label row (visual-only redesign). Every field
 // shown comes straight from DecisionMakerCandidate/the caller's own already-
-// computed helpers (relevanceReasonFor, isRecommendedCandidate, grounding) —
+// computed helpers (relevanceReasonFor, isRecommendedCandidate, grounding) -
 // nothing here invents a reasoning line, confidence score, or availability
 // flag that isn't already present on the real candidate. Kept local to this
 // file (single consumer) rather than promoted to components/ui/.
@@ -182,13 +182,13 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   sourceRunId: string
   onContactAdded: (contact: OutboundContact) => void
   // When true, searches automatically on mount using the default target
-  // titles below — no click needed. Used by Auto Flow so decision-maker
+  // titles below - no click needed. Used by Auto Flow so decision-maker
   // discovery happens without the user asking for it; the search box stays
   // here so they can still adjust titles and re-run by hand if they want to.
   autoStart?: boolean
   // When true, the target-titles input collapses behind an "Adjust titles"
   // toggle instead of always showing, and the "Add Selected as Contacts"
-  // button is hidden — used by the Auto Flow guided flow's Decision Makers
+  // button is hidden - used by the Auto Flow guided flow's Decision Makers
   // step, which wants "search runs automatically, user just selects, and
   // the flow's own Continue button commits the selection" (via the
   // commitSelected imperative handle above) instead of a separate add step.
@@ -198,34 +198,34 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // parent (Auto Flow) can enable/disable its own Continue button without
   // duplicating selection state here.
   onSelectionChange?: (count: number) => void
-  // Fires once a discovery attempt has settled — either a cache restore, or
-  // a live search's success/failure — regardless of outcome. Auto Flow uses
+  // Fires once a discovery attempt has settled - either a cache restore, or
+  // a live search's success/failure - regardless of outcome. Auto Flow uses
   // this as the trigger to auto-commit and auto-advance past this step with
   // no manual "Continue" click (2026-08-13 automation).
   onDiscoveryComplete?: () => void
   // Named leadership individuals already extracted from the company's own
   // scraped site (lib/pipeline/evidence-extractor.ts's leadershipContacts).
-  // Optional — when provided, every returned candidate is cross-checked
+  // Optional - when provided, every returned candidate is cross-checked
   // against it server side and gets a "Confirmed on website" / "Conflicts
   // with website" / "Not on website" badge (2026-07-18 grounding fix). Auto
   // Flow passes this from the live run's extractorResult; the standalone
   // Contacts page passes it via getLeadershipContacts() on the saved run's
-  // final_result (2026-07-19 fix — leadership_contacts is now a real
+  // final_result (2026-07-19 fix - leadership_contacts is now a real
   // top-level NormalizedAnalysis field, see normalize.ts). Only genuinely
-  // omitted for a run saved before that field existed — those still show
+  // omitted for a run saved before that field existed - those still show
   // candidates ungrounded rather than erroring.
   leadershipContacts?: LeadershipContactInput[]
-  // Full pipeline research output for this company, when available — used
+  // Full pipeline research output for this company, when available - used
   // ONLY to recommend which titles to search for (operational pain -> VP
   // Operations/COO, tech pain -> CTO/CIO, sales/marketing pain -> CRO/VP
-  // Sales), never to discover or rank WHO the contact is. Optional — omit
+  // Sales), never to discover or rank WHO the contact is. Optional - omit
   // to fall back to the generic DEFAULT_TARGET_TITLES with no recommendation
   // section shown, same as before this existed.
   analysisResult?: Record<string, unknown> | null
   // Sales Intelligence's recommended_roles (active override, else the
-  // matcher's recommendation) — a second, additive source of "recommended"
+  // matcher's recommendation) - a second, additive source of "recommended"
   // titles alongside role-recommendation.ts's own research-derived groups
-  // above. Purely a client-side "N found / M recommended" display/filter —
+  // above. Purely a client-side "N found / M recommended" display/filter -
   // never triggers a new search or affects who Prospeo returns.
   recommendedRoles?: string[]
 }>(function DecisionMakerFinder({
@@ -253,20 +253,20 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   const [showTitlesInput, setShowTitlesInput] = useState(!compact)
   // Auto Flow's autoStart fires handleDiscover() the instant this component
   // mounts (once a cache lookup has confirmed there's nothing to restore),
-  // no manual click or confirmation required — this is a deliberate product
+  // no manual click or confirmation required - this is a deliberate product
   // decision (2026-07-31): the user explicitly asked for decision-maker
   // search to run automatically rather than waiting on a "Search" click,
   // reversing the 2026-07-19 confirm-dialog gate that used to sit here. That
   // gate existed because a real vendor (Prospeo) spends paid credits per
-  // search — that cost is now accepted as the price of a fully automatic
+  // search - that cost is now accepted as the price of a fully automatic
   // flow rather than guarded per-run. If this needs to be revisited, the
   // isPaidProvider check + ConfirmDialog this replaced are in git history.
-  // True once the initial cache lookup (below) has resolved either way —
+  // True once the initial cache lookup (below) has resolved either way -
   // gates the "Adjust titles"/candidate-list UI from flashing empty before
   // a cached search has had a chance to populate it.
   const [checkingCache, setCheckingCache] = useState(true)
 
-  // Recommended title groups from this company's own research — pure,
+  // Recommended title groups from this company's own research - pure,
   // synchronous, no network call. Falls back to a single group holding
   // DEFAULT_TARGET_TITLES with an honest "no specific signal" reason when
   // analysisResult is absent or nothing matched (see role-recommendation.ts).
@@ -276,7 +276,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   // Merges role-recommendation.ts's research-derived titles with Sales
   // Intelligence's own recommended_roles (when available) into one set used
   // only to flag which already-returned candidates are "recommended" for
-  // this specific opportunity — union, not override, since both are
+  // this specific opportunity - union, not override, since both are
   // legitimate independent signals and more data doesn't hurt here.
   const recommendedTitleSet = useMemo(() => {
     const fromGroups = recommendedGroups.filter(g => g.fromResearch).flatMap(g => g.titles)
@@ -290,7 +290,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
     return Array.from(recommendedTitleSet).some(rt => t.includes(rt) || rt.includes(t))
   }
 
-  // Plain-English "why this contact" line (spec section 18) — only ever
+  // Plain-English "why this contact" line (spec section 18) - only ever
   // reuses recommendTitlesFromResearch()'s own already-computed reason text
   // for whichever research-derived group this candidate's title matched,
   // never invents new copy. Returns null (rendered as nothing) when the
@@ -305,12 +305,12 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
   }
 
   // Runs once on mount, regardless of autoStart: first checks for an
-  // already-cached search for this run (migration 015) — a cache hit
+  // already-cached search for this run (migration 015) - a cache hit
   // restores the exact prior candidate list with nothing re-spent, and
   // skips auto-searching entirely. Only on a cache MISS does autoStart's
   // immediate search kick in. This replaces the old effect, which
-  // unconditionally re-ran a real (often paid) search on every remount —
-  // a page refresh, or navigating away from and back to this step — since
+  // unconditionally re-ran a real (often paid) search on every remount -
+  // a page refresh, or navigating away from and back to this step - since
   // hasAutoStarted was only ever component-local state, never persisted.
   useEffect(() => {
     if (hasAutoStarted) return
@@ -335,7 +335,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           setSelectedCandidates(new Set(cached.candidates.map((_, i) => i)))
           if (cached.targetTitles?.length) setTargetTitlesInput(cached.targetTitles.join(', '))
           onDiscoveryComplete?.()
-          return // cache hit — restored, nothing to search
+          return // cache hit - restored, nothing to search
         }
       } catch {
         // Cache lookup failing just means we fall through below, same as a
@@ -372,7 +372,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           targetTitles: titles.length ? titles : undefined,
           leadershipContacts: leadershipContacts?.length ? leadershipContacts : undefined,
           // Lets the route cache this result (migration 015) so a later
-          // remount restores it instead of re-searching — see this
+          // remount restores it instead of re-searching - see this
           // component's own mount effect above.
           sourceRunId,
         }),
@@ -390,7 +390,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
       }
       setCandidates(result.candidates)
       setCandidatesProvider(result.providerUsed)
-      // Pre-select everything found — "the user simply selects who they
+      // Pre-select everything found - "the user simply selects who they
       // want to contact" reads more naturally as "uncheck who you don't
       // want" than starting from an empty list every search.
       setSelectedCandidates(new Set(result.candidates.map((_, i) => i)))
@@ -549,7 +549,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
               ? indexed
               : indexed.filter(({ candidate }) => classifyRoleCategory(candidate.title) === roleCategoryFilter)
           // Defaults to recommended-only when any exist and the user hasn't
-          // asked to see everything — today's behavior (show everything) is
+          // asked to see everything - today's behavior (show everything) is
           // preserved whenever nothing is recommended.
           const visible =
             recommendedCount > 0 && !showAllCandidates

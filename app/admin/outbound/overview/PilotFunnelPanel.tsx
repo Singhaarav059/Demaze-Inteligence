@@ -1,13 +1,13 @@
 'use client'
 
 // ============================================================
-// Pilot Funnel Panel — /admin/outbound/overview
+// Pilot Funnel Panel - /admin/outbound/overview
 // ============================================================
 // Post-Hardening Pilot Readiness Plan, Phase D5: "if the existing UI can
 // display these metrics without major redesign, add a focused pilot view.
 // Do not build a new analytics platform." Folded into the existing
 // Overview page (no new nav entry, no new page) rather than a standalone
-// dashboard — reads GET /api/admin/outbound/pilot-funnel, which does all
+// dashboard - reads GET /api/admin/outbound/pilot-funnel, which does all
 // the aggregation; this component only renders it.
 // ============================================================
 
@@ -110,7 +110,7 @@ export function PilotFunnelPanel() {
           setLoaded(true)
         }
       } catch {
-        // non-fatal — panel just stays empty, no toast for a collapsed-by-default section
+        // non-fatal - panel just stays empty, no toast for a collapsed-by-default section
       } finally {
         setLoading(false)
       }
@@ -127,7 +127,7 @@ export function PilotFunnelPanel() {
           {open ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
           <Funnel className="size-4 text-muted-foreground" />
           <span className="text-sm font-semibold text-foreground">Pilot Funnel</span>
-          <span className="text-xs text-muted-foreground">— company research → send → outcome, across every researched company</span>
+          <span className="text-xs text-muted-foreground">- company research → send → outcome, across every researched company</span>
         </button>
 
         {open && (
@@ -148,7 +148,7 @@ export function PilotFunnelPanel() {
 
             {!loading && funnel && funnel.companiesEntered > 0 && (
               <>
-                {/* Stepped funnel — small flat tiles chained by a chevron, not a wall
+                {/* Stepped funnel - small flat tiles chained by a chevron, not a wall
                     of charts. Real stage counts only, from the funnel API. */}
                 <div className="flex flex-wrap items-stretch gap-1.5">
                   {FUNNEL_STAGES.map(({ key, label }, i) => (

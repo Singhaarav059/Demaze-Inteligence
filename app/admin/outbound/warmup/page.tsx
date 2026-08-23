@@ -1,17 +1,17 @@
 'use client'
 
 // ============================================================
-// Email Warm-Up — /admin/outbound/warmup
+// Email Warm-Up - /admin/outbound/warmup
 // ============================================================
 // Two kinds of mailbox card now (2026-08-04, real warmup engine):
-//   - Manual (typed address, no OAuth) — unchanged from before: mock-
+//   - Manual (typed address, no OAuth) - unchanged from before: mock-
 //     computed health from elapsed time since started_at, not a real test.
-//   - OAuth Connected (via "Connect a Gmail mailbox") — a real pool member.
+//   - OAuth Connected (via "Connect a Gmail mailbox") - a real pool member.
 //     lib/outbound/warmup/engine/run-tick.ts actually sends/opens/spam-
 //     rescues/replies between connected mailboxes and writes real metrics;
 //     this page just reads what the engine already recorded, plus a
 //     "Run Tick Now" button that calls the engine on demand (works whether
-//     or not the autonomous scheduler is enabled — see instrumentation.ts).
+//     or not the autonomous scheduler is enabled - see instrumentation.ts).
 // ============================================================
 
 import { Suspense, useEffect, useState } from 'react'
@@ -48,7 +48,7 @@ interface Mailbox {
   started_at: string | null
   oauth_connected: boolean
   // Was OAuth-connected once, then disconnected via the Disconnect button
-  // — distinct from a plain manual/mock-only entry that was never real.
+  // - distinct from a plain manual/mock-only entry that was never real.
   disconnected: boolean
   live_status: LiveStatus | null
 }
@@ -94,7 +94,7 @@ function ActivityRow({ activity }: { activity: ExchangeActivity }) {
     detail = 'Failed to send'
     tone = 'warning'
   } else if (activity.status === 'sent') {
-    detail = "Sent — hasn't been checked yet"
+    detail = "Sent - hasn't been checked yet"
   } else if (activity.rescuedFromSpam) {
     detail = 'Landed in spam, then rescued back to the inbox'
     tone = 'success'
@@ -155,7 +155,7 @@ function MailboxCard({
         toast.error(data.error ?? 'Failed to disconnect mailbox')
         return
       }
-      toast.success(`Disconnected ${mailbox.mailbox_address} — warm-up history kept, reconnect any time`)
+      toast.success(`Disconnected ${mailbox.mailbox_address} - warm-up history kept, reconnect any time`)
       setDisconnectOpen(false)
       onDisconnected()
     } catch {
@@ -237,7 +237,7 @@ function MailboxCard({
           </>
         ) : mailbox.oauth_connected ? (
           <p className="text-xs text-muted-foreground/60 italic">
-            Connected, no real activity recorded yet — run a tick (needs at least 2 connected mailboxes) or wait for the
+            Connected, no real activity recorded yet - run a tick (needs at least 2 connected mailboxes) or wait for the
             autonomous scheduler if it&apos;s enabled.
           </p>
         ) : mailbox.disconnected ? (
@@ -248,7 +248,7 @@ function MailboxCard({
 
         {mailbox.disconnected && (
           <p className="text-xs text-muted-foreground/60">
-            Access revoked — this mailbox is no longer part of the warm-up pool. Use &quot;Connect a Gmail mailbox&quot;
+            Access revoked - this mailbox is no longer part of the warm-up pool. Use &quot;Connect a Gmail mailbox&quot;
             above with the same address to reconnect and resume.
           </p>
         )}
@@ -267,7 +267,7 @@ function MailboxCard({
               <div className="mt-2 space-y-1.5">
                 {activity && activity.length > 0 && (
                   <p className="text-[11px] text-muted-foreground/60">
-                    Test emails your connected mailboxes send each other automatically to build sender trust — not
+                    Test emails your connected mailboxes send each other automatically to build sender trust - not
                     sent to real prospects.
                   </p>
                 )}
@@ -301,7 +301,7 @@ function MailboxCard({
           open={disconnectOpen}
           onOpenChange={setDisconnectOpen}
           title={`Disconnect ${mailbox.mailbox_address}?`}
-          description="Revokes this app's access to the mailbox and stops it from sending or receiving warm-up emails. Its warm-up ramp progress and history are kept — reconnecting later resumes where it left off."
+          description="Revokes this app's access to the mailbox and stops it from sending or receiving warm-up emails. Its warm-up ramp progress and history are kept - reconnecting later resumes where it left off."
           confirmLabel="Disconnect"
           destructive
           loading={disconnecting}
@@ -322,7 +322,7 @@ function OutboundWarmupPageInner() {
   const [ticking, setTicking] = useState(false)
 
   // Same "toast once, strip query params" pattern as the Integrations
-  // page's ?gmail_oauth= handling — a top-level browser navigation (the
+  // page's ?gmail_oauth= handling - a top-level browser navigation (the
   // OAuth callback) can't use a fetch()-based success/error response, so
   // it round-trips the outcome through the redirect URL instead.
   useEffect(() => {
@@ -388,9 +388,9 @@ function OutboundWarmupPageInner() {
       }
       const s = data.summary
       toast.success(
-        `Tick complete — ${s.newExchangesSent} sent, ${s.exchangesProcessed} processed, ${s.rescuedFromSpam} rescued from spam, ${s.repliesSent} replies`
+        `Tick complete - ${s.newExchangesSent} sent, ${s.exchangesProcessed} processed, ${s.rescuedFromSpam} rescued from spam, ${s.repliesSent} replies`
       )
-      if (s.errors?.length) toast.warning(`${s.errors.length} error(s) during tick — see server logs`)
+      if (s.errors?.length) toast.warning(`${s.errors.length} error(s) during tick - see server logs`)
       await loadMailboxes()
     } catch {
       toast.error('Could not reach the warm-up engine API')
@@ -413,7 +413,7 @@ function OutboundWarmupPageInner() {
       <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
         <p>
-          <strong>Manually-added mailboxes</strong> stay mock-simulated — health is computed from elapsed time, not a
+          <strong>Manually-added mailboxes</strong> stay mock-simulated - health is computed from elapsed time, not a
           real inbox test. <strong>OAuth-connected mailboxes</strong> are real: they actually send, open, rescue from
           spam, and reply to each other. The engine needs at least 2 connected mailboxes to do anything, and works
           better with 3+. Honest caveat: a small pool of your own accounts is real signal, but has far less scale and
@@ -462,7 +462,7 @@ function OutboundWarmupPageInner() {
         <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-3">
           {connectedCount < 2 && connectedCount > 0 && (
             <p className="text-xs text-signal-medium">
-              Only {connectedCount} connected mailbox — connect at least one more for the engine to have anyone to
+              Only {connectedCount} connected mailbox - connect at least one more for the engine to have anyone to
               send to.
             </p>
           )}

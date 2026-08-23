@@ -1,16 +1,19 @@
 // ============================================================
-// BrandMark — the indigo/violet "D" chip, single source of truth.
-// Was copy-pasted identically across Sidebar, TopBar, MobileNav,
-// and the public landing page header/footer; consolidated here so
-// the brand gradient only ever needs to change in one place.
+// BrandMark - the real Demaze chevron mark, single source of truth.
+// Was a generic gradient "D" chip built for this app before a real brand
+// asset was available; replaced 2026-08-23 with the actual logo mark
+// (public/brand/demaze-mark.png), pulled directly from demazetech.com at
+// the user's own request, so the admin tool matches the real Demaze brand
+// instead of an invented placeholder.
 // ============================================================
 
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 const SIZE = {
-  xs: { box: 'size-5', radius: 'rounded-md', text: 'text-[10px]' },
-  sm: { box: 'size-6', radius: 'rounded-md', text: 'text-xs' },
-  md: { box: 'size-7', radius: 'rounded-lg', text: 'text-sm' },
+  xs: 20,
+  sm: 24,
+  md: 28,
 } as const
 
 export function BrandMark({
@@ -19,23 +22,19 @@ export function BrandMark({
   className,
 }: {
   size?: keyof typeof SIZE
-  /** Subtle drop shadow — used only where the mark sits on its own (Sidebar). */
+  /** Subtle drop shadow - used only where the mark sits on its own (Sidebar). */
   glow?: boolean
   className?: string
 }) {
-  const s = SIZE[size]
+  const px = SIZE[size]
   return (
-    <span
-      className={cn(
-        'grid place-items-center bg-gradient-to-br from-primary to-primary-hover font-semibold text-white',
-        s.box,
-        s.radius,
-        s.text,
-        glow && 'shadow-sm shadow-primary/40',
-        className,
-      )}
-    >
-      D
-    </span>
+    <Image
+      src="/brand/demaze-mark.png"
+      alt="Demaze"
+      width={px}
+      height={px}
+      priority
+      className={cn('shrink-0 object-contain', glow && 'drop-shadow-[0_0_6px_var(--primary)]', className)}
+    />
   )
 }

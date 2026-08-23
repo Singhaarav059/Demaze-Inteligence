@@ -1,24 +1,24 @@
 'use client'
 
 // ============================================================
-// Suppression List — /admin/outbound/suppression
+// Suppression List - /admin/outbound/suppression
 // ============================================================
 // Session 3 of the "Outreach Control Center" build. One list, one
-// mechanism ("never send to this address again"), regardless of why —
+// mechanism ("never send to this address again"), regardless of why -
 // bounced/unsubscribed/manual are all the same underlying exclusion,
 // enforced at the one real chokepoint every send already goes through
 // (lib/outbound/sending/provider-factory.ts's sendEmail()), so an address
 // added here is protected across every campaign, not just the one it came
 // from.
 //
-// 'bounced' entries are added automatically — a real Gmail delivery-failure
+// 'bounced' entries are added automatically - a real Gmail delivery-failure
 // notice detected while checking replies (check-replies/route.ts) or right
 // before sending a scheduled follow-up (process-followup.ts) adds the
 // address here itself; there is no "mark as bounced" button on this page.
 // 'unsubscribed'/'manual' are the two reasons an admin can add here by
-// hand — e.g. a prospect replies "please remove me" and the reply itself
+// hand - e.g. a prospect replies "please remove me" and the reply itself
 // isn't parsed for that (no NLP/keyword matching over reply content is
-// planned — see the reply tracker's own scope notes once it exists), an
+// planned - see the reply tracker's own scope notes once it exists), an
 // SDR reads it and adds the address here manually.
 // ============================================================
 
@@ -74,7 +74,7 @@ export default function SuppressionListPage() {
       <div>
         <h2 className="text-base font-semibold text-foreground">Suppression List</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Bounced, unsubscribed, and manually excluded addresses — never sent to again.
+          Bounced, unsubscribed, and manually excluded addresses - never sent to again.
         </p>
       </div>
 

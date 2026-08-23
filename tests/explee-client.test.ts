@@ -1,93 +1,107 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { searchExpleeCompanies, ExpleeApiError } from '@/lib/enrichment/sources/explee-client'
+// ============================================================
+// Explee — low-level outbound-capability client tests
+// (real client, mocked global.fetch)
+// ============================================================
+// See tests/explee-providers.test.ts for the Decision-Maker Discovery /
+// Email Finder provider tests — those mock this client module entirely.
+// ============================================================
 
-describe('explee-client', () => {
-  const originalFetch = global.fetch
-  const originalKey = process.env.EXPLEE_API_KEY
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { callExpleeSearchPeople, callExpleeEnrichEmail } from '@/lib/outbound/shared/explee-client'
 
+describe('callExpleeSearchPeople', () => {
   beforeEach(() => {
-    process.env.EXPLEE_API_KEY = 'test-key'
-  })
-  afterEach(() => {
-    global.fetch = originalFetch
-    process.env.EXPLEE_API_KEY = originalKey
+    vi.restoreAllMocks()
   })
 
-  it('sends the X-API-Key header and correct request body', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
+  it('returns ok:true with the parsed body on a 200 response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ companies: [{ name: 'Acme' }], meta: { total: 1, results_count: 1, credits_charged: 0, remaining_balance: 100 } }),
-    })
-    global.fetch = fetchMock as unknown as typeof fetch
+      json: async () => ({ people: [{ first_name: 'Jane', last_name: 'Doe' }], meta: { total: 1, credits_charged: 0 } }),
+    }))
 
-    const result = await searchExpleeCompanies({ definition: 'manufacturing company in india' }, 20)
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.explee.com/public/api/v1/search/companies',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'X-API-Key': 'test-key' }),
-      }),
-    )
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    expect(body).toEqual({ filters: { definition: 'manufacturing company in india' }, page: 1, page_size: 20 })
-    expect(result.companies).toHaveLength(1)
-    expect(result.meta.total).toBe(1)
+    const result = await callExpleeSearchPeople('key', { people_filters: { job_titles: ['CEO'] } })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.people?.[0].first_name).toBe('Jane')
   })
 
-  it('defaults location_hq to true whenever geo_include is set, to avoid matching on customer/traffic location instead of headquarters', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ companies: [], meta: { total: 0, results_count: 0, credits_charged: 0, remaining_balance: 100 } }),
-    })
-    global.fetch = fetchMock as unknown as typeof fetch
-
-    await searchExpleeCompanies({ definition: 'manufacturing company', geo_include: ['IN'] })
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    expect(body.filters).toEqual({ definition: 'manufacturing company', geo_include: ['IN'], location_hq: true })
-  })
-
-  it('throws ExpleeApiError with the real detail on a non-2xx response', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+  it('returns ok:false with the real detail on a non-2xx response (unlike Prospeo, a non-2xx IS a real error)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 402,
-      json: async () => ({ detail: 'Insufficient credit balance' }),
-    }) as unknown as typeof fetch
+      json: async () => ({ detail: 'Insufficient credits' }),
+    }))
 
-    await expect(searchExpleeCompanies({ definition: 'x' })).rejects.toThrow(ExpleeApiError)
-    await expect(searchExpleeCompanies({ definition: 'x' })).rejects.toThrow('Insufficient credit balance')
+    const result = await callExpleeSearchPeople('key', { people_filters: { job_titles: ['CEO'] } })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('Insufficient credits')
   })
 
-  it('throws when EXPLEE_API_KEY is not set', async () => {
-    delete process.env.EXPLEE_API_KEY
-    await expect(searchExpleeCompanies({ definition: 'x' })).rejects.toThrow('EXPLEE_API_KEY is not set')
+  it('returns ok:false with an HTTP status fallback when a non-2xx response has no detail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => { throw new Error('not json') },
+    }))
+
+    const result = await callExpleeSearchPeople('key', { people_filters: { job_titles: ['CEO'] } })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('HTTP 500')
   })
 
-  it('sends revenue/founded/boolean filters and the requested page through untouched', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
+  it('never throws — resolves ok:false on a network failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNRESET')))
+
+    const result = await callExpleeSearchPeople('key', { people_filters: { job_titles: ['CEO'] } })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('ECONNRESET')
+  })
+
+  it('sends the API key in the X-API-Key header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ people: [] }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await callExpleeSearchPeople('secret-key-123', { people_filters: { job_titles: ['CEO'] } })
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.headers['X-API-Key']).toBe('secret-key-123')
+  })
+})
+
+describe('callExpleeEnrichEmail', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('returns ok:true with email + confidence_score on a 200 response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ companies: [], meta: { total: 0, results_count: 0, credits_charged: 0, remaining_balance: 100 } }),
-    })
-    global.fetch = fetchMock as unknown as typeof fetch
+      json: async () => ({ email: 'jane@acme.com', confidence_score: 0.9, source: 'pattern', meta: { credits_charged: 1.5 } }),
+    }))
 
-    await searchExpleeCompanies({
-      definition: 'manufacturing company',
-      revenue_annual: { min: 1_000_000, max: 9_999_999 },
-      founded: { min: 2010, max: 2023 },
-      is_b2b: true,
-      is_tech: true,
-      has_public_emails: true,
-    }, 20, 2)
+    const result = await callExpleeEnrichEmail('key', { first_name: 'Jane', last_name: 'Doe', company_domain: 'acme.com' })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.email).toBe('jane@acme.com')
+  })
 
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
-    expect(body.page).toBe(2)
-    expect(body.filters.revenue_annual).toEqual({ min: 1_000_000, max: 9_999_999 })
-    expect(body.filters.founded).toEqual({ min: 2010, max: 2023 })
-    expect(body.filters.is_b2b).toBe(true)
-    expect(body.filters.is_tech).toBe(true)
-    expect(body.filters.has_public_emails).toBe(true)
+  it('returns ok:false with the real detail on a non-2xx response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ detail: 'Invalid API key' }),
+    }))
+
+    const result = await callExpleeEnrichEmail('key', { first_name: 'Jane', last_name: 'Doe', company_domain: 'acme.com' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('Invalid API key')
+  })
+
+  it('never throws — resolves ok:false on a network failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('timeout')))
+
+    const result = await callExpleeEnrichEmail('key', { first_name: 'Jane', last_name: 'Doe', company_domain: 'acme.com' })
+    expect(result.ok).toBe(false)
   })
 })

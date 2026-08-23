@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// TopBar — slim context bar above the page content
+// TopBar - slim context bar above the page content
 // ============================================================
 
 import Link from 'next/link'
@@ -19,7 +19,7 @@ import {
 export function TopBar() {
   const pathname = usePathname()
   const router = useRouter()
-  // Exact match first, then longest-prefix startsWith — same active-detection
+  // Exact match first, then longest-prefix startsWith - same active-detection
   // shape as Sidebar.tsx, needed now that /admin/outbound has real sub-pages
   // (previously every NAV entry was a single page, so exact match alone
   // was enough).
@@ -31,7 +31,7 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-5 backdrop-blur">
       <div className="flex items-center gap-2 text-sm">
-        {/* Mobile brand (sidebar hidden < md — BottomTabBar covers primary
+        {/* Mobile brand (sidebar hidden < md - BottomTabBar covers primary
             nav on mobile instead, so there's no hamburger trigger here
             anymore, just the brand mark). */}
         <Link href="/admin" className="flex items-center gap-2 md:hidden">
@@ -51,7 +51,7 @@ export function TopBar() {
         )}
       </div>
 
-      {/* Centered jump-to-page trigger — opens the same CommandPalette as
+      {/* Centered jump-to-page trigger - opens the same CommandPalette as
           ⌘K. Styled as a wide search bar per the visual reference, but the
           copy stays honest: this jumps between the app's existing pages,
           it is not a full-text search over companies/people (no such index
@@ -87,7 +87,7 @@ export function TopBar() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        {/* Hidden on the narrowest phones — with BottomTabBar covering
+        {/* Hidden on the narrowest phones - with BottomTabBar covering
             primary nav now, TopBar's mobile row only has real room for the
             brand mark + section label + the two buttons above. */}
         <span className="hidden shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline-block">

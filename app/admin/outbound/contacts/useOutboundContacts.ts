@@ -1,12 +1,12 @@
 'use client'
 
 // ============================================================
-// useOutboundContacts — state + actions for the Contacts page
+// useOutboundContacts - state + actions for the Contacts page
 // ============================================================
 // Modeled on useCompanyDiscoverySearch.ts's per-item status convention.
 // Holds the run picker state, the loaded contact list for the selected
 // run, and the add-contact / find-email / enrich / delete actions. Email
-// validation was removed (2026-07-19) — it was mock-only, no real vendor
+// validation was removed (2026-07-19) - it was mock-only, no real vendor
 // wired up. Decision-Maker Discovery lives in its own component
 // (DecisionMakerFinder.tsx) since it's also reused by the Auto Flow guided
 // flow, which doesn't use this hook at all.
@@ -40,7 +40,7 @@ export interface OutboundContact {
   discovery_source: 'manual' | 'decision_maker_discovery'
   discovery_confidence: 'high' | 'medium' | 'low' | null
   discovery_provider: string | null
-  // Website-grounding result at add time (migration 023) — see
+  // Website-grounding result at add time (migration 023) - see
   // lib/outbound/decision-maker-discovery/grounding.ts. Null for manual
   // contacts, ungrounded candidates, or any contact added before this
   // column existed.

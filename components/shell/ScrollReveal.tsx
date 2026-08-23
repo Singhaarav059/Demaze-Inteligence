@@ -1,17 +1,17 @@
 'use client'
 
 // ============================================================
-// ScrollReveal — fade/slide-in-on-scroll for the public landing page
+// ScrollReveal - fade/slide-in-on-scroll for the public landing page
 // ============================================================
 // Thin motion.div wrapper: fades and slides an element up the first time
-// it enters the viewport, then leaves it alone (`once: true` — never
+// it enters the viewport, then leaves it alone (`once: true` - never
 // re-triggers on scroll-back, avoids a distracting flicker on a long page).
 // Reduced-motion is handled by the MotionConfig `reducedMotion="user"`
 // ancestor (see MotionConfigProvider) rather than here, same as every
-// other framer-motion usage in this codebase — no per-component opt-in.
+// other framer-motion usage in this codebase - no per-component opt-in.
 //
 // Optional `parallax` prop adds a continuous scroll-linked y-offset on TOP
-// of the one-shot reveal — the two don't fight over the same property
+// of the one-shot reveal - the two don't fight over the same property
 // because the reveal only ever animates `opacity` (not `y`) when parallax
 // is active; `y` is driven exclusively by the scroll-linked MotionValue in
 // that case. `useTransform`/`useScroll` are raw scroll-linked values, not

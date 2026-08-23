@@ -3,10 +3,10 @@ import { cn } from '@/lib/utils'
 import { Sparkline, type SparklinePoint } from '@/components/ui/sparkline'
 
 // ============================================================
-// MetricTile — compact metric display, extracted from the workspace
+// MetricTile - compact metric display, extracted from the workspace
 // overview page's inline MetricCard so Discover/Outbound/History can
 // share one metric look instead of each inventing a card. Dense, not
-// a giant padded card — a label row, a big number, an optional delta
+// a giant padded card - a label row, a big number, an optional delta
 // chip, an optional trend. trend/delta must be real computed data (see
 // lib/analytics/daily-counts.ts); never pass a fabricated series/number.
 // ============================================================

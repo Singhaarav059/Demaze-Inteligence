@@ -1,8 +1,8 @@
 'use client'
 
-// Step 1 — Research. Bundles the core company brief plus the audit/summary
+// Step 1 - Research. Bundles the core company brief plus the audit/summary
 // sections that close out the report (Research Quality, Personalization
-// Summary) — these are informational tail content, not separate pipeline
+// Summary) - these are informational tail content, not separate pipeline
 // stages, so they belong at the end of step 1 rather than implying a 5th
 // or 6th step that doesn't exist in this wizard's scope.
 

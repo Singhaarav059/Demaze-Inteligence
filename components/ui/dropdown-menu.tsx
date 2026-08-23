@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// DropdownMenu — small popover menu of links/actions
+// DropdownMenu - small popover menu of links/actions
 // ============================================================
 // Wraps @base-ui/react/menu, same "thin styled wrapper over a base-ui
 // primitive" pattern as tooltip.tsx/alert-dialog.tsx. Added for the TopBar
-// "More" menu (surfacing the outbound pages pulled from main nav) — kept
+// "More" menu (surfacing the outbound pages pulled from main nav) - kept
 // generic so any future trigger+item list can reuse it instead of hand-
 // rolling another popover.
 // ============================================================
@@ -50,7 +50,7 @@ function DropdownMenuContent({
   )
 }
 
-// Client-navigable item — composes onto next/link so navigation stays a
+// Client-navigable item - composes onto next/link so navigation stays a
 // client-side transition rather than a full page reload.
 function DropdownMenuLinkItem({
   className,

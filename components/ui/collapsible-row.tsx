@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// CollapsibleRow — a Card whose body collapses behind a clickable
+// CollapsibleRow - a Card whose body collapses behind a clickable
 // summary header, expanding on demand instead of always showing every
 // field/control. Generalizes the chevron-toggle pattern already
 // hand-rolled per-page in this app (followups/page.tsx's company-group
@@ -24,11 +24,11 @@ export function CollapsibleRow({
   onOpenChange,
   className,
 }: {
-  // Always-visible header content — caller owns layout (title, badges,
+  // Always-visible header content - caller owns layout (title, badges,
   // key stat). Rendered inside a full-width button, so avoid nesting
   // interactive elements (buttons/links/inputs) inside it.
   summary: React.ReactNode
-  // Body content — only mounted while open.
+  // Body content - only mounted while open.
   children: React.ReactNode
   defaultOpen?: boolean
   // Uncontrolled by default (internal useState seeded from defaultOpen).

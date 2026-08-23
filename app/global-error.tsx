@@ -4,9 +4,9 @@
 // Root global error boundary
 // ============================================================
 // Next.js App Router convention: the ONLY error boundary that can catch a
-// throw in the root layout itself (app/layout.tsx) — every other error.tsx
+// throw in the root layout itself (app/layout.tsx) - every other error.tsx
 // is nested inside a layout and can't catch a failure in that layout.
-// Because of that, this file must render its own <html>/<body> — it fully
+// Because of that, this file must render its own <html>/<body> - it fully
 // replaces the root layout when active, there is nothing above it to fall
 // back on. Plain inline styles only (Tailwind/globals.css may not have
 // loaded if the failure happened that early). No not-found.tsx/error.tsx

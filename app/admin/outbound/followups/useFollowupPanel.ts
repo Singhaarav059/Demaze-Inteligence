@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// useFollowupPanel — state + actions for the Follow-up Control Panel
+// useFollowupPanel - state + actions for the Follow-up Control Panel
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react'
@@ -91,7 +91,7 @@ export function useFollowupPanel() {
       }
       const outcome = data.outcome
       if (outcome.status === 'sent') toast.success('Follow-up sent')
-      else if (outcome.status === 'cancelled_reply') toast.info('Not sent — this contact already replied')
+      else if (outcome.status === 'cancelled_reply') toast.info('Not sent - this contact already replied')
       else if (outcome.status === 'failed') toast.error(outcome.reason ?? 'Send failed')
       else toast.warning(outcome.reason ?? `Not sent (${outcome.status})`)
       await load()

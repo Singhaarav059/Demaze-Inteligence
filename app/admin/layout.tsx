@@ -1,5 +1,5 @@
 // ============================================================
-// Admin Layout — app shell (sidebar + top bar)
+// Admin Layout - app shell (sidebar + top bar)
 // Forces the refined-dark theme for the whole internal tool.
 // (auth removed during build phase)
 // ============================================================
@@ -16,7 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <MotionConfigProvider>
     <div className="dark">
       <div className="min-h-screen bg-background text-foreground">
-        {/* Skip link — visually hidden until focused, so keyboard users don't
+        {/* Skip link - visually hidden until focused, so keyboard users don't
             have to tab through the full sidebar nav on every page load. */}
         <a
           href="#main-content"
@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex min-h-screen flex-col md:pl-60">
           <TopBar />
           {/* Clears BottomTabBar's fixed height (its own min-h-14 = 3.5rem)
-              plus its safe-area inset on mobile — arbitrary-value syntax,
+              plus its safe-area inset on mobile - arbitrary-value syntax,
               not a named @utility, see the note in globals.css for why.
               md:pb-0 resets it once the tab bar itself is hidden (md:hidden)
               and the desktop Sidebar takes over navigation instead. */}

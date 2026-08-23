@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 // ============================================================
-// IntelStatus — one consistent status vocabulary used everywhere a
+// IntelStatus - one consistent status vocabulary used everywhere a
 // company/contact/campaign's research or send state is shown, instead
 // of ad hoc colored pills per page. Subtle dot + label, not a loud badge.
 // ============================================================

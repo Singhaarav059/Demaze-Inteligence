@@ -1,11 +1,11 @@
 'use client'
 
 // ============================================================
-// ContactInfoRow — read-only contact-info status card for Auto Flow's
+// ContactInfoRow - read-only contact-info status card for Auto Flow's
 // Contact Information step
 // ============================================================
 // Deliberately has zero action buttons for the discovery itself (no Find
-// Email / Enrich / Validate) — email/LinkedIn lookup happens automatically
+// Email / Enrich / Validate) - email/LinkedIn lookup happens automatically
 // via ContactInfoStep's effect before this ever renders a result, this
 // component only displays whatever the contact row currently holds. The one
 // action here (Remove) is an undo/escape hatch, not a trigger for more
@@ -91,7 +91,7 @@ export function ContactInfoRow({
               {contact.email_confidence}
             </Badge>
             {contact.email_confidence === 'low' && (
-              <span className="text-[10px] text-signal-medium">Needs verification — consider double-checking before sending.</span>
+              <span className="text-[10px] text-signal-medium">Needs verification - consider double-checking before sending.</span>
             )}
           </div>
         ) : contact.email_finder_status === 'error' ? (

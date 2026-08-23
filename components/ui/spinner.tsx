@@ -1,4 +1,4 @@
-// Single source of truth — was independently duplicated in wizard/page.tsx
+// Single source of truth - was independently duplicated in wizard/page.tsx
 // and intelligence-lab/page.tsx (identical markup, no shared import).
 export function Spinner({ className = '' }: { className?: string }) {
   return (

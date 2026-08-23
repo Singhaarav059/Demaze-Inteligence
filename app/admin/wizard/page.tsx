@@ -1,22 +1,22 @@
 'use client'
 
 // ============================================================
-// Wizard — /admin/wizard
+// Wizard - /admin/wizard
 // ============================================================
 // Research does exactly one thing: research a single company (or a batch
 // of companies from an uploaded lead list) and produce the 5-field
 // outreach-ready report (Step1Research). Competitors, Target Segments
 // (ICP), and Company Discovery are a separate "Discover" workflow
-// (app/admin/company-discovery) — they used to cascade inside this same
+// (app/admin/company-discovery) - they used to cascade inside this same
 // flow via WizardShell's staged reveal, but have been removed from
 // Research entirely.
 //
 // Two input modes, toggled at the top:
-//   - Single: URL input. Research always runs at full depth — there is one
+//   - Single: URL input. Research always runs at full depth - there is one
 //     research mode, not a user-facing lightweight/full toggle.
 //   - Batch: upload a lead-list file (xlsx/csv/docx/pdf), ported from the
 //     now-removed standalone /admin/batch-upload page. Parsing/dedup/
-//     quota-pause logic stays in lib/batch/* (reused, not duplicated) —
+//     quota-pause logic stays in lib/batch/* (reused, not duplicated) -
 //     only the UI/state moved here. Each completed batch result renders
 //     via Step1Research (not the fuller ResearchCard, which still carries
 //     Competitors/ICP/Market-Intel sections that don't belong in Research).
@@ -63,7 +63,7 @@ function StatusBadge({ status }: { status: CompanyStatus }) {
   return <Badge className={`text-[10px] flex-shrink-0 ${className}`}>{label}</Badge>
 }
 
-// Small relative-time formatter for the "last researched" status label —
+// Small relative-time formatter for the "last researched" status label -
 // mirrors intelligence-lab/page.tsx's own local timeAgo(), duplicated
 // rather than shared per this codebase's small-helper-per-file convention.
 function timeAgo(iso: string): string {
@@ -82,7 +82,7 @@ export default function WizardPage() {
   useSlashFocus(urlInputRef)
 
   // ── Single-URL mode state ─────────────────────────────────────
-  // Research mode is always 'full' — there is exactly one research depth,
+  // Research mode is always 'full' - there is exactly one research depth,
   // not a user-facing implementation detail to choose between.
   const [url, setUrl] = useState('')
   const [running, setRunning] = useState(false)
@@ -143,7 +143,7 @@ export default function WizardPage() {
   }, [url])
 
   // opts.force clears any cached scrape for this URL server-side and
-  // scrapes fresh — the one-button "clear cache & rescrape" option next to
+  // scrapes fresh - the one-button "clear cache & rescrape" option next to
   // Research below. Normal Research (force omitted) reuses a cached scrape
   // when one exists, same as before.
   async function run(opts: { force?: boolean } = {}) {
@@ -260,7 +260,7 @@ export default function WizardPage() {
         }),
       })
     } catch (e) {
-      // Persist failures are non-fatal to the batch — the result is still
+      // Persist failures are non-fatal to the batch - the result is still
       // shown in this session, just not saved to history. Same "display
       // unaffected" principle as the single-URL flow.
       console.warn('[Wizard] Failed to persist batch result:', e)
@@ -268,7 +268,7 @@ export default function WizardPage() {
     }
   }
 
-  // ── Batch mode: sequential research loop — one company at a time, by design ──
+  // ── Batch mode: sequential research loop - one company at a time, by design ──
 
   async function researchSelected() {
     const queue = companies.filter(c => c.selected && c.status !== 'done')
@@ -305,7 +305,7 @@ export default function WizardPage() {
           errorMessage: data.success ? undefined : (data.error ?? 'Unknown error'),
         })
 
-        // Persist as-you-go — regardless of success/failure, so failed
+        // Persist as-you-go - regardless of success/failure, so failed
         // attempts are visible in history too, not just silently dropped.
         await persistBatchResult(item.company, data)
 
@@ -404,7 +404,7 @@ export default function WizardPage() {
               </p>
 
               {/* Once a result exists, offer a clean re-research action instead
-                  of an implementation-detail toggle — same request, force-fresh. */}
+                  of an implementation-detail toggle - same request, force-fresh. */}
               {result && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                   <IntelStatus

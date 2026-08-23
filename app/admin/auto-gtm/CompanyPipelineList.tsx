@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// CompanyPipelineList — "Continue Where You Left Off"
+// CompanyPipelineList - "Continue Where You Left Off"
 // ============================================================
 // Rendered on Auto Flow's Research step, below the single-company input,
 // only while nothing is actively being researched (see page.tsx's gating
@@ -11,14 +11,14 @@
 // why it can't group by outbound_campaigns.source_run_id alone).
 //
 // Two stages, both from the same endpoint:
-// - 'sent': has reached a campaign (real send/open/reply counts) — resume
+// - 'sent': has reached a campaign (real send/open/reply counts) - resume
 //   lands on step 6 (Track & Follow Up).
 // - 'in_progress': has committed decision-maker contacts but hasn't reached
-//   a campaign yet — resume lands on step 4 (Campaign & Outreach), where
+//   a campaign yet - resume lands on step 4 (Campaign & Outreach), where
 //   auto-pilot picks up drafting/review from wherever this run left off.
 //
 // Styled as researchable company-intelligence cards, not a plain database
-// list — flat bordered rows (intelligence-workspace pass) with a real
+// list - flat bordered rows (intelligence-workspace pass) with a real
 // IntelStatus dot per company instead of an ad hoc colored Badge.
 // ============================================================
 
@@ -70,12 +70,12 @@ function relativeTime(iso: string, nowMs: number): string {
 
 // nowMs is passed in (captured once when the list loads, see
 // CompanyPipelineList's own useState below) rather than read via Date.now()
-// here — this component renders inside a map, and calling an impure
+// here - this component renders inside a map, and calling an impure
 // function directly in a component body is flagged by this repo's
 // react-hooks/purity lint rule; a stable snapshot is also the right
 // semantics here anyway (a status list, not a live ticking clock).
 // Maps each real pipeline outcome onto IntelStatus's shared status
-// vocabulary (dot color) with an honest, specific label override — the
+// vocabulary (dot color) with an honest, specific label override - the
 // underlying data is unchanged, only the rendering primitive is shared now.
 function pipelineStatus(company: PipelineCompany, nowMs: number): { status: IntelStatusKind; label: string } {
   if (company.stage === 'in_progress') {
@@ -112,13 +112,13 @@ export function CompanyPipelineList({
   onResume,
 }: {
   // Told which step to land on, since the two stages resume to different
-  // places — see this file's header comment.
+  // places - see this file's header comment.
   onResume: (runId: string, step: 4 | 6) => Promise<void>
 }) {
   const [companies, setCompanies] = useState<PipelineCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [resumingRunId, setResumingRunId] = useState<string | null>(null)
-  // Captured once, from the API response's own `now` timestamp — a stable
+  // Captured once, from the API response's own `now` timestamp - a stable
   // snapshot for this list's lifetime rather than a live-ticking clock (and
   // avoids calling Date.now() during render, see PipelineStatusBadge above).
   const [nowMs, setNowMs] = useState(0)
@@ -133,7 +133,7 @@ export function CompanyPipelineList({
           setNowMs(data.now ? new Date(data.now).getTime() : Date.now())
         }
       } catch {
-        // Non-fatal — the Research step still works fine with this section
+        // Non-fatal - the Research step still works fine with this section
         // just empty; nothing here blocks starting new research.
       } finally {
         setLoading(false)
@@ -161,14 +161,14 @@ export function CompanyPipelineList({
         <div>
           <h2 className="text-sm font-semibold text-foreground">Continue Where You Left Off</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Companies already researched — resume to pick up outreach or check status.
+            Companies already researched - resume to pick up outreach or check status.
           </p>
         </div>
       </div>
 
       {companies.length === 0 ? (
         <p className="text-xs text-muted-foreground/60 italic">
-          Nothing in progress yet — research a company below to get started.
+          Nothing in progress yet - research a company below to get started.
         </p>
       ) : (
         <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-1">

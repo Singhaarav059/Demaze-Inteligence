@@ -1,13 +1,13 @@
 'use client'
 
 // ============================================================
-// MagneticButton — cursor-attraction wrapper for the public landing page
+// MagneticButton - cursor-attraction wrapper for the public landing page
 // ============================================================
 // Wraps a Link/button and nudges it a few px toward the cursor on hover,
 // springing back on leave. Pointer-fine + !reduced-motion only (a magnetic
 // pull has no meaning on touch, and reduced-motion users get the plain
 // element via the same discipline as ScrollReveal/SmoothScroll elsewhere
-// in this codebase). Never intercepts clicks — only the wrapper's
+// in this codebase). Never intercepts clicks - only the wrapper's
 // transform moves, the child element's own hit target is untouched.
 // ============================================================
 

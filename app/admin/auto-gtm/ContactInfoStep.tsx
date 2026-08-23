@@ -1,15 +1,15 @@
 'use client'
 
 // ============================================================
-// ContactInfoStep — Auto Flow's "Contact Information" step
+// ContactInfoStep - Auto Flow's "Contact Information" step
 // ============================================================
 // Runs email discovery automatically for every contact that hasn't been
-// looked up yet (email_finder_status === 'pending'), sequentially — same
+// looked up yet (email_finder_status === 'pending'), sequentially - same
 // "loop on mount, no button, one at a time" pattern OutreachStep's
 // draftMissing() uses for generation. Phone and LinkedIn have no discovery
 // call to make (no phone provider exists in this codebase; LinkedIn is
 // whatever the contact already carries from decision-maker discovery or a
-// manual paste) — ContactInfoRow just displays those honestly.
+// manual paste) - ContactInfoRow just displays those honestly.
 // ============================================================
 
 import { useCallback, useEffect, useRef } from 'react'
@@ -30,7 +30,7 @@ export function ContactInfoStep({
   findEmailForContact: (contactId: string) => Promise<void>
   deleteContact: (contactId: string) => Promise<void>
   // Batch mode (many companies at once) shows a company-name header above
-  // each run of contacts, same grouping the old Contacts step used —
+  // each run of contacts, same grouping the old Contacts step used -
   // single-company mode has nothing to group by, so this defaults off.
   groupByCompany?: boolean
 }) {
@@ -52,13 +52,13 @@ export function ContactInfoStep({
   useEffect(() => {
     void runLookups()
     // Deliberately keyed on the joined contact-id list rather than
-    // `contacts` itself (contacts is re-created every parent render) — this
+    // `contacts` itself (contacts is re-created every parent render) - this
     // effect should only re-run when the set of contacts actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts.map(c => c.id).join(',')])
 
   // Screen-reader-only status announcement while the automatic lookup pass
-  // is in flight — matches this app's existing aria-live convention on
+  // is in flight - matches this app's existing aria-live convention on
   // other long-running async steps (Auto Flow research, batch progress,
   // drafting). Purely additive, no visual change.
   const lookingUpCount = contacts.filter(

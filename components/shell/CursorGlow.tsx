@@ -1,14 +1,14 @@
 'use client'
 
 // ============================================================
-// CursorGlow — spotlight that follows the cursor within a container
+// CursorGlow - spotlight that follows the cursor within a container
 // ============================================================
 // Purely decorative radial-gradient glow, absolutely positioned within
 // `containerRef` (must be `position: relative`). Tracks mouse position
-// relative to that container only — deliberately NOT `position: fixed` +
+// relative to that container only - deliberately NOT `position: fixed` +
 // window-level mousemove, which would drag the glow across sections the
 // user has scrolled past. Pointer-fine + !reduced-motion only, same guard
-// as MagneticButton — meaningless on touch, and reduced-motion users
+// as MagneticButton - meaningless on touch, and reduced-motion users
 // should see a static hero, not a moving glow.
 // ============================================================
 

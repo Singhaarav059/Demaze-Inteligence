@@ -1,14 +1,14 @@
 'use client'
 
 // ============================================================
-// ContactRow — single contact card with Find Email / Enrich /
+// ContactRow - single contact card with Find Email / Enrich /
 // Outreach / Delete actions. Email validation was removed (2026-07-19,
 // mock-only capability, no real vendor decision made) rather than left
 // on mock data.
 // ============================================================
 // Extracted out of contacts/page.tsx so it can also be reused by the
 // Auto Flow guided-flow page (app/admin/auto-gtm) for its Enrich
-// and Prepare Outreach steps — this one component already covers both.
+// and Prepare Outreach steps - this one component already covers both.
 // ============================================================
 
 import { useState } from 'react'
@@ -80,7 +80,7 @@ export function ContactRow({
   onFindEmail: () => void
   onEnrich: () => void
   onDelete: () => void
-  // Auto Flow hides this — outreach drafting has its own dedicated
+  // Auto Flow hides this - outreach drafting has its own dedicated
   // Email step there instead of living inline per-row (default true, for
   // the standalone Contacts page).
   showOutreach?: boolean

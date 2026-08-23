@@ -1,16 +1,16 @@
 'use client'
 
 // ============================================================
-// Discover Companies — /admin/company-discovery
+// Discover Companies - /admin/company-discovery
 // ============================================================
 // Demaze's own company-discovery workflow: define who to target, review
 // matching companies, then research the ones worth pursuing with Demaze's
 // intelligence pipeline. Explee is the data source behind every search
 // (see useCompanyDiscoverySearch.ts / lib/enrichment/sources/
 // explee-client.ts) and is deliberately never named, linked, or exposed
-// here — no vendor terminology, credits, provider selection, or raw API
+// here - no vendor terminology, credits, provider selection, or raw API
 // fields. Every filter on this page maps to a real, verified field on
-// Explee's own schema (see search-options.ts's header comment) — nothing
+// Explee's own schema (see search-options.ts's header comment) - nothing
 // here is a client-side-only control that the underlying search ignores.
 // ============================================================
 
@@ -35,7 +35,7 @@ import {
   type SectorOption,
 } from './search-options'
 
-// A segment is a persisted "target market" search — replaces the old
+// A segment is a persisted "target market" search - replaces the old
 // localStorage-only recent-searches list. Saved automatically after every
 // successful search (see saveSegment() below); the Home dashboard's
 // "Continue where you left off" section reads the same rows via the same
@@ -99,7 +99,7 @@ async function saveSegment(name: string, sector: SectorOption, filters: SegmentF
       }),
     })
   } catch {
-    // Best-effort only — a failed save shouldn't block or error out the search itself.
+    // Best-effort only - a failed save shouldn't block or error out the search itself.
   }
 }
 
@@ -259,7 +259,7 @@ function CompanyDiscoveryInner() {
     setPresenceKeys(new Set(f.presenceKeys))
     setExcludeKeywords(f.excludeKeywords)
     scrollToSearch()
-    // Re-run the same search so the results list matches — but don't save a
+    // Re-run the same search so the results list matches - but don't save a
     // new segment row here. researchedCount/totalCount are computed fresh
     // on every GET from the *existing* snapshot, so there's nothing to
     // refresh; re-saving would just create a visible duplicate in Recent
@@ -295,7 +295,7 @@ function CompanyDiscoveryInner() {
 
   // ── Resume a saved segment ─────────────────────────────────────
   // From the Home dashboard's "Continue where you left off" cards
-  // (?resumeSegmentId=...) — a real segment id, distinct from the free-text
+  // (?resumeSegmentId=...) - a real segment id, distinct from the free-text
   // ?segment= param above. Runs once, prefills every filter, then re-runs
   // the exact same search.
   const resumedRef = useRef(false)
@@ -312,7 +312,7 @@ function CompanyDiscoveryInner() {
           await applySegment({ ...data.segment, researchedCount: 0, totalCount: 0 } as Segment)
         }
       } catch {
-        // Best-effort — if the segment can't be loaded, the page just shows
+        // Best-effort - if the segment can't be loaded, the page just shows
         // its normal empty state instead of erroring out.
       }
     })()
@@ -345,9 +345,9 @@ function CompanyDiscoveryInner() {
         {showHowItWorks && (
           <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" exit="exit">
             <GuideNote>
-              <p><strong>1. Define the companies worth researching</strong> — industry, size, revenue, and headquarters.</p>
-              <p><strong>2. Review matching companies</strong> — a manageable, relevant set, not a giant database dump.</p>
-              <p><strong>3. Research with Demaze</strong> — select the ones you want and Demaze finds recent business signals, potential challenges, and Demaze opportunities for each.</p>
+              <p><strong>1. Define the companies worth researching</strong> - industry, size, revenue, and headquarters.</p>
+              <p><strong>2. Review matching companies</strong> - a manageable, relevant set, not a giant database dump.</p>
+              <p><strong>3. Research with Demaze</strong> - select the ones you want and Demaze finds recent business signals, potential challenges, and Demaze opportunities for each.</p>
             </GuideNote>
           </motion.div>
         )}
@@ -356,7 +356,7 @@ function CompanyDiscoveryInner() {
       <div ref={searchCardRef} className="rounded-lg border border-border bg-card">
         <div className="px-4 py-2.5 border-b border-border/60">
           <h2 className="text-sm font-semibold text-foreground">Target market</h2>
-          <p className="text-muted-foreground/60 text-xs mt-0.5">Set the criteria Demaze should search for — a focused, relevant set, not a database dump.</p>
+          <p className="text-muted-foreground/60 text-xs mt-0.5">Set the criteria Demaze should search for - a focused, relevant set, not a database dump.</p>
         </div>
 
         <div className="px-4 py-4 space-y-3">

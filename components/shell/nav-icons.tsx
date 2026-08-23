@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// Shell icons — thin-stroke inline SVGs (no icon dependency)
+// Shell icons - thin-stroke inline SVGs (no icon dependency)
 // Linear-like 1.5px strokes, currentColor.
 // ============================================================
 

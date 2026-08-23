@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Reusable icon + message + optional CTA block. Added to replace 5 ad hoc
-// empty states (some bare text, one — CompanyMatchList — rendering nothing
+// empty states (some bare text, one - CompanyMatchList - rendering nothing
 // at all) with one consistent pattern.
 export function EmptyState({
   icon: Icon,

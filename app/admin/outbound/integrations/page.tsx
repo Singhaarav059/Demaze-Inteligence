@@ -1,15 +1,15 @@
 'use client'
 
 // ============================================================
-// Outbound Integrations — /admin/outbound/integrations
+// Outbound Integrations - /admin/outbound/integrations
 // ============================================================
 // One stacked Card per outbound capability (Email Finder, Email Validation,
 // Contact Enrichment, Email Sending, Email Warm-Up). Every capability ships
-// with a working 'mock' provider — selecting a real vendor here just
+// with a working 'mock' provider - selecting a real vendor here just
 // records the choice; there's no live provider class behind it yet, and
 // Test Connection says so explicitly rather than pretending to succeed.
 // Credentials are encrypted server-side (lib/outbound/settings/credential-
-// crypto.ts) before storage — this page never receives a stored key back,
+// crypto.ts) before storage - this page never receives a stored key back,
 // only a masked "····1234" hint via credential_last_four.
 // ============================================================
 
@@ -72,7 +72,7 @@ function OutboundIntegrationsPageInner() {
   const router = useRouter()
 
   // Gmail's OAuth callback (a top-level browser redirect, not a fetch call)
-  // can't return JSON to this page directly — it redirects back here with
+  // can't return JSON to this page directly - it redirects back here with
   // ?gmail_oauth=success|error instead. Toast once, then strip the query
   // params so a refresh doesn't re-toast.
   useEffect(() => {
@@ -204,7 +204,7 @@ function OutboundIntegrationsPageInner() {
 
       <GuideNote>
         <p>
-          Every capability below works today via a built-in mock provider — nothing breaks if you
+          Every capability below works today via a built-in mock provider - nothing breaks if you
           leave everything as-is. Switching one to a real vendor here is a config change, not a
           code change: pick a provider, save (or connect via OAuth for Gmail), then Test Connection
           to confirm it's live.

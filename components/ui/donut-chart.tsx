@@ -1,12 +1,13 @@
 // ============================================================
-// DonutChart — compact categorical-distribution donut + legend
+// DonutChart - compact categorical-distribution donut + legend
 // ============================================================
 // Same "no charting dependency" precedent as sparkline.tsx/bar-trend.tsx:
 // plain inline SVG (stacked stroke-dasharray arcs), no library. Renders
-// nothing when every slice is 0 — callers should omit the surrounding panel
+// nothing when every slice is 0 - callers should omit the surrounding panel
 // entirely in that case rather than show an empty ring.
 // ============================================================
 
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 export interface DonutSlice {
@@ -14,6 +15,8 @@ export interface DonutSlice {
   value: number
   /** a CSS color, e.g. 'var(--signal-strong)' */
   colorVar: string
+  /** Navigates there on click; omit for a plain, non-interactive legend row. */
+  href?: string
 }
 
 export function DonutChart({
@@ -71,13 +74,26 @@ export function DonutChart({
         })}
       </svg>
       <ul className="space-y-1 text-xs">
-        {slices.filter(s => s.value > 0).map((s, i) => (
-          <li key={i} className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: s.colorVar }} />
-            <span className="text-foreground">{s.label}</span>
-            <span className="tabular-nums text-muted-foreground/70">{Math.round((s.value / total) * 100)}%</span>
-          </li>
-        ))}
+        {slices.filter(s => s.value > 0).map((s, i) => {
+          const row = (
+            <>
+              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: s.colorVar }} />
+              <span className="text-foreground">{s.label}</span>
+              <span className="tabular-nums text-muted-foreground/70">{Math.round((s.value / total) * 100)}%</span>
+            </>
+          )
+          return (
+            <li key={i}>
+              {s.href ? (
+                <Link href={s.href} className="flex items-center gap-1.5 text-muted-foreground rounded transition-colors hover:text-foreground">
+                  {row}
+                </Link>
+              ) : (
+                <span className="flex items-center gap-1.5 text-muted-foreground">{row}</span>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

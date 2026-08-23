@@ -1,5 +1,5 @@
 // ============================================================
-// Company Research Card — renders one Demaze intelligence-layer result
+// Company Research Card - renders one Demaze intelligence-layer result
 // ============================================================
 // Recent Signals -> What This Suggests -> Potential Pain Points -> Demaze
 // Opportunity -> Why Contact Now, per the intelligence-layer spec. No
@@ -27,7 +27,7 @@ const CONFIDENCE_CLASS: Record<SignalConfidence, string> = {
 
 export function CompanyResearchCard({ result, firmographics }: { result: CompanyResearchResult; firmographics?: DiscoveredCompanyFirmographics }) {
   // Computed even when result.error is set below (hooks must run
-  // unconditionally) — qualifyDiscoveredCompany() degrades safely on an
+  // unconditionally) - qualifyDiscoveredCompany() degrades safely on an
   // empty result (no signals/opportunities), same as every other branch here.
   const qualification = useMemo(() => qualifyDiscoveredCompany(firmographics ?? {}, result), [firmographics, result])
 

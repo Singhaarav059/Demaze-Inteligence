@@ -1,7 +1,7 @@
 'use client'
 
 // ============================================================
-// useSuppressionList — state + actions for the Suppression List page
+// useSuppressionList - state + actions for the Suppression List page
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react'

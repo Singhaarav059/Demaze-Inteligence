@@ -1,16 +1,16 @@
 'use client'
 
 // ============================================================
-// SectorQualificationCard — Auto Flow's "is this company in scope, and
+// SectorQualificationCard - Auto Flow's "is this company in scope, and
 // why" display
 // ============================================================
 // Renders lib/sector-playbook's qualification scorecard (DRAFT). Lives in
-// Auto Flow, not the Research product (app/admin/intelligence-lab) — the
+// Auto Flow, not the Research product (app/admin/intelligence-lab) - the
 // dedicated Research section stays sector-agnostic deep research; sector
 // qualification against Demaze's 3 active target sectors is an Auto Flow
 // concept only. Shown inline on the Research step (full detail) and
 // compactly on Review & Send (Part 20's "Sector"/"Confidence" requirement)
-// — never as its own step, per the standing "no Sales Strategy step" rule.
+// - never as its own step, per the standing "no Sales Strategy step" rule.
 // ============================================================
 
 import { CheckCircle2, Lightbulb, Target } from 'lucide-react'
@@ -40,7 +40,7 @@ function ScoreRow({ label, score, reasons }: { label: string; score: number | nu
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-medium text-foreground">{label}</p>
           <span className={cn('shrink-0 text-sm font-semibold tabular-nums', score === null ? 'text-muted-foreground/50' : scoreColor(score))}>
-            {score === null ? '—' : score}
+            {score === null ? '-' : score}
           </span>
         </div>
         <p className="text-[11px] text-muted-foreground/70 mt-0.5">{reasons[0]}</p>

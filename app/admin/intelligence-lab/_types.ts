@@ -80,7 +80,7 @@ export interface RunResult {
     companySubjectCount: number
     signalSummary: string
     // Named leadership individuals extracted from the company's own scraped
-    // site (lib/pipeline/evidence-extractor.ts's LeadershipContact[]) — fed
+    // site (lib/pipeline/evidence-extractor.ts's LeadershipContact[]) - fed
     // to decision-maker discovery as grounding input (2026-07-18 fix). See
     // DecisionMakerFinder's leadershipContacts prop.
     leadershipContacts?: Array<{
