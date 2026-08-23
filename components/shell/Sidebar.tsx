@@ -6,34 +6,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGroup, motion } from 'framer-motion'
+import { useState } from 'react'
+import { LayoutGroup, motion, AnimatePresence } from 'framer-motion'
+import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { BrandMark } from './BrandMark'
 import { DotIcon } from './nav-icons'
 import { NAV, NAV_GROUPS, SECONDARY_NAV, isNavActive } from './nav-config'
 
-// Real, existing routes only (both already live in SECONDARY_NAV) — shown
-// as indented children under the Outbound group so the sidebar's density
-// reads closer to the reference collage without duplicating nav-config's
-// NAV array (which BottomTabBar/TopBar/command palette still consume
-// unchanged) or inventing a destination that doesn't exist.
-const OUTBOUND_QUICK_LINKS = [
-  SECONDARY_NAV.find(n => n.href === '/admin/outbound/campaigns')!,
-  SECONDARY_NAV.find(n => n.href === '/admin/outbound/contacts')!,
-]
-// Same pattern for System — Integrations is this app's real settings
-// surface (vendor providers per outbound capability), so it fills the
-// "Settings" slot the reference shows under SYSTEM without inventing a
-// page that doesn't exist.
-const SYSTEM_QUICK_LINKS = [SECONDARY_NAV.find(n => n.href === '/admin/outbound/integrations')!]
-
-const QUICK_LINKS_BY_GROUP: Record<string, typeof SECONDARY_NAV[number][]> = {
-  Outbound: OUTBOUND_QUICK_LINKS,
-  System: SYSTEM_QUICK_LINKS,
-}
-
-function QuickLink({ href, label, icon: Icon, hint, active }: (typeof SECONDARY_NAV)[number] & { active: boolean }) {
+function SubLink({ href, label, icon: Icon, hint, active }: (typeof SECONDARY_NAV)[number] & { active: boolean }) {
   return (
     <Tooltip key={href}>
       <TooltipTrigger
@@ -58,6 +40,15 @@ function QuickLink({ href, label, icon: Icon, hint, active }: (typeof SECONDARY_
 
 export function Sidebar() {
   const pathname = usePathname()
+  // The Outbound group is a dropdown, not a direct link — clicking it
+  // toggles visibility of every SECONDARY_NAV tool (Overview, Contacts,
+  // Campaigns, Follow-ups, Sales Knowledge, Suppression, Warm-Up,
+  // Integrations) inline, instead of requiring a click into the
+  // /admin/outbound hub page first to see the same list. Starts open when
+  // already inside that section so a deep link doesn't land with its own
+  // nav collapsed.
+  const outboundSectionActive = pathname.startsWith('/admin/outbound')
+  const [outboundOpen, setOutboundOpen] = useState(outboundSectionActive)
 
   return (
     <aside aria-label="Primary" className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-sidebar-border bg-sidebar md:flex">
@@ -89,6 +80,56 @@ export function Sidebar() {
                 </p>
                 <div className="space-y-0.5">
                   {items.map(({ href, label, icon: Icon, hint }) => {
+                    if (group.label === 'Outbound') {
+                      return (
+                        <div key={href}>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  onClick={() => setOutboundOpen((v) => !v)}
+                                  aria-expanded={outboundOpen}
+                                  className={cn(
+                                    'group relative flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] transition-colors',
+                                    outboundSectionActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                                  )}
+                                />
+                              }
+                            >
+                              {outboundSectionActive && (
+                                <motion.span
+                                  layoutId="sidebar-active-bar"
+                                  className="absolute left-0 top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+                                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                                />
+                              )}
+                              <Icon className={cn('relative size-4 shrink-0', outboundSectionActive ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground')} />
+                              <span className={cn('relative flex-1 text-left font-medium', outboundSectionActive && 'text-foreground')}>{label}</span>
+                              <ChevronDown className={cn('relative size-3.5 shrink-0 text-muted-foreground/60 transition-transform', outboundOpen && 'rotate-180')} />
+                            </TooltipTrigger>
+                            <TooltipContent>{hint}</TooltipContent>
+                          </Tooltip>
+                          <AnimatePresence initial={false}>
+                            {outboundOpen && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="space-y-0.5 pt-0.5">
+                                  {SECONDARY_NAV.map((link) => (
+                                    <SubLink key={link.href} {...link} active={isNavActive(pathname, link.href)} />
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )
+                    }
                     const active = isNavActive(pathname, href)
                     return (
                       <Tooltip key={href}>
@@ -118,9 +159,6 @@ export function Sidebar() {
                       </Tooltip>
                     )
                   })}
-                  {(QUICK_LINKS_BY_GROUP[group.label] ?? []).map(link => (
-                    <QuickLink key={link.href} {...link} active={pathname === link.href || pathname.startsWith(link.href + '/')} />
-                  ))}
                 </div>
               </div>
             )

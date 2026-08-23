@@ -45,9 +45,14 @@ export const NAV_GROUPS = [
 
 // Pages pulled out of primary nav on 2026-07-18 — still real, still linked
 // to directly (a campaign's pause/resume controls, changing an active
-// provider), just no longer worth a permanent sidebar slot. Shared by the
-// TopBar "More" menu and the Cmd+K command palette so both stay in sync,
-// same reasoning as NAV above.
+// provider). Shared by the TopBar "More" menu, the Cmd+K command palette,
+// and (2026-08-23) Sidebar's own "Outbound" dropdown — clicking it reveals
+// this full list inline instead of requiring a click into the
+// /admin/outbound hub page first. All 9 entries live under Outbound in the
+// sidebar now, including Integrations (previously a separate one-off
+// quick-link under System) — it's a genuinely outbound-scoped setting
+// ("vendor providers for each outbound capability"), so this is a better
+// home for it, not just a dedup.
 // Shared active-route check for Sidebar/TopBar/BottomTabBar. A plain
 // `pathname.startsWith(href + '/')` breaks for '/admin' specifically —
 // it's a prefix of every other admin route, so without this special case

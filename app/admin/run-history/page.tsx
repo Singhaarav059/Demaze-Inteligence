@@ -391,7 +391,7 @@ export default function RunHistoryPage() {
         <MetricTile icon={Send} label="Outreach events" value={outreachEmails.length} />
       </div>
 
-      <Tabs defaultValue="all">
+      <Tabs defaultValue="research">
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="research">Research</TabsTrigger>
