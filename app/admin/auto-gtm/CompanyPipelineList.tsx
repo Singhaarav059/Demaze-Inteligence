@@ -25,9 +25,10 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Building2, History } from 'lucide-react'
+import { History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { Avatar } from '@/components/ui/avatar'
 import { IntelStatus, type IntelStatusKind } from '@/components/ui/intel-status'
 import { staggerList, listItem } from '@/lib/motion'
 
@@ -154,7 +155,7 @@ export function CompanyPipelineList({
   if (loading) return null // avoids a layout flash before the first fetch resolves
 
   return (
-    <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
+    <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-2.5">
       <div className="flex items-center gap-2">
         <History className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
         <div>
@@ -170,16 +171,14 @@ export function CompanyPipelineList({
           Nothing in progress yet — research a company below to get started.
         </p>
       ) : (
-        <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-1.5">
+        <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-1">
           {companies.map(company => (
             <motion.div
               key={company.runId}
               variants={listItem}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-border/70 bg-background/40 transition-colors hover:border-border-strong"
+              className="flex items-center gap-3 px-2.5 py-2 rounded-md transition-colors hover:bg-accent/50"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-muted-foreground">
-                <Building2 className="size-4" />
-              </span>
+              <Avatar name={company.companyName} size="sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground truncate">{company.companyName}</span>

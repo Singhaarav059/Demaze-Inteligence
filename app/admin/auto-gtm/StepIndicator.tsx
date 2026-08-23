@@ -33,8 +33,8 @@
 // component is now pure progress display.
 // ============================================================
 
+import { Search, Users, IdCard, Mail, ClipboardCheck, Clock, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { IntelStatus, type IntelStatusKind } from '@/components/ui/intel-status'
 
 // Exported so page.tsx can reuse the same labels for its step-change
 // screen-reader announcement instead of duplicating this list.
@@ -47,18 +47,14 @@ export const STEPS = [
   'Track & Follow Up',
 ] as const
 
+const STEP_ICONS = [Search, Users, IdCard, Mail, ClipboardCheck, Clock] as const
+
 export type StepStatus = 'complete' | 'active' | 'waiting' | 'not_started'
 
 export interface StepMeta {
   status: StepStatus
   /** One real, honest status line — e.g. "2 found", "4 verified". Omit rather than guess. */
   detail?: string
-}
-
-function statusToIntelStatus(status: StepStatus): IntelStatusKind {
-  if (status === 'complete') return 'complete'
-  if (status === 'active') return 'researching'
-  return 'not_researched'
 }
 
 function defaultDetail(status: StepStatus): string {
@@ -81,7 +77,7 @@ export function StepIndicator({
 }) {
   return (
     <ol
-      className="flex items-stretch gap-0 overflow-x-auto"
+      className="flex items-start gap-0 overflow-x-auto"
       role="group"
       aria-label="Auto Flow progress"
     >
@@ -89,29 +85,40 @@ export function StepIndicator({
         const stepNum = i + 1
         const isCurrent = stepNum === current
         const isReached = stepNum <= maxReached
+        const isComplete = meta[i]?.status === 'complete'
         const isLast = stepNum === STEPS.length
+        const Icon = STEP_ICONS[i]
         const m = meta[i] ?? { status: 'not_started' as StepStatus }
         return (
-          <li key={label} className="flex shrink-0 items-stretch">
+          <li key={label} className="flex shrink-0 flex-1 items-start">
             <button
               type="button"
               disabled={!isReached}
               onClick={() => isReached && onStepClick(stepNum)}
               aria-current={isCurrent ? 'step' : undefined}
               className={cn(
-                'flex min-w-[104px] flex-col items-start gap-0.5 rounded-md px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                isCurrent && 'bg-primary/10',
-                isReached ? 'cursor-pointer hover:bg-accent/40' : 'cursor-not-allowed opacity-50'
+                'flex min-w-[104px] flex-col items-center gap-1.5 rounded-md px-1.5 py-1 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                isReached ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
               )}
             >
-              <IntelStatus
-                status={statusToIntelStatus(m.status)}
-                label={label}
-                className={cn('text-[10px] font-semibold uppercase tracking-wide', isCurrent ? '' : m.status === 'not_started' ? 'opacity-70' : '')}
-              />
-              <span className="pl-3 text-[11px] text-muted-foreground/70">{m.detail ?? defaultDetail(m.status)}</span>
+              <span
+                className={cn(
+                  'grid size-9 shrink-0 place-items-center rounded-full border transition-colors',
+                  isCurrent && 'border-primary bg-primary text-primary-foreground shadow-[0_0_0_4px_var(--primary)]/10',
+                  !isCurrent && isComplete && 'border-primary/40 bg-primary/15 text-primary',
+                  !isCurrent && !isComplete && isReached && 'border-border-strong bg-card text-muted-foreground group-hover:text-foreground',
+                  !isCurrent && !isComplete && !isReached && 'border-border bg-transparent text-muted-foreground/50'
+                )}
+                style={isCurrent ? { boxShadow: '0 0 0 4px color-mix(in oklab, var(--primary) 15%, transparent)' } : undefined}
+              >
+                {isComplete && !isCurrent ? <Check className="size-4" /> : <Icon className="size-4" />}
+              </span>
+              <span className={cn('text-[11px] font-medium leading-tight', isCurrent ? 'text-foreground' : 'text-muted-foreground')}>
+                {label}
+              </span>
+              <span className="text-[10px] text-muted-foreground/60">{m.detail ?? defaultDetail(m.status)}</span>
             </button>
-            {!isLast && <div className="mx-1 my-auto h-px w-3 shrink-0 bg-border" aria-hidden="true" />}
+            {!isLast && <div className="mt-[18px] h-px flex-1 shrink-0 bg-border" aria-hidden="true" />}
           </li>
         )
       })}

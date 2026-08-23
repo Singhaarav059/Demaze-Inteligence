@@ -17,6 +17,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, ExternalLink, HelpCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
+import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -88,14 +89,6 @@ function groundingIcon(status: 'confirmed' | 'conflict' | 'not_found') {
   return HelpCircle
 }
 
-// initials() — first letters of up to the first two words of a name, for the
-// PersonCard avatar circle. Pure display helper, no data implication.
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
-}
-
 // PersonCard — one candidate decision-maker, rendered as a clear person card
 // instead of a plain checkbox label row (visual-only redesign). Every field
 // shown comes straight from DecisionMakerCandidate/the caller's own already-
@@ -131,9 +124,7 @@ function PersonCard({
         onChange={onToggle}
         className="size-3.5 mt-1.5 shrink-0 accent-primary"
       />
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-foreground/80">
-        {initials(candidate.personName)}
-      </span>
+      <Avatar name={candidate.personName} size="sm" />
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-foreground">{candidate.personName}</span>

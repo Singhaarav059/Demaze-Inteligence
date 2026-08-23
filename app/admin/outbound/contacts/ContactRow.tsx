@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { Avatar } from '@/components/ui/avatar'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GenerationPanel } from './GenerationPanel'
 import { StatusDot, type StatusTone } from '../StatusDot'
@@ -91,6 +92,8 @@ export function ContactRow({
     <Card className="border-border bg-card">
       <CardContent className="px-5 py-3">
         <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+          <Avatar name={contact.person_name} size="sm" className="mt-0.5" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground truncate">{contact.person_name}</span>
@@ -121,6 +124,7 @@ export function ContactRow({
                 <StatusDot tone="medium" label={contact.enrichment_status} />
               )}
             </div>
+          </div>
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" disabled={pending === 'find-email'} onClick={onFindEmail}>

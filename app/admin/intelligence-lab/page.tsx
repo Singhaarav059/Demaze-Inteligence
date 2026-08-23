@@ -32,7 +32,7 @@ import {
   getDeterministicOpportunities,
   getServiceEvidenceDebug,
 } from '@/lib/pipeline/analysis-sections'
-import type { RunResult, Operation, AnalysisMode, ActiveTab } from './_types'
+import type { RunResult, Operation, ActiveTab } from './_types'
 import { ComparisonPanel } from './ComparisonPanel'
 import { ResearchCard } from './ResearchCard'
 
@@ -67,7 +67,6 @@ function isCacheStale(iso: string): boolean {
 
 export default function IntelligenceLab() {
   const [url, setUrl] = useState('https://bharatforge.com')
-  const [mode, setMode] = useState<AnalysisMode>('full')
   const [running, setRunning] = useState(false)
   const [activeOp, setActiveOp] = useState<string | null>(null)
   const [result, setResult] = useState<RunResult | null>(null)
@@ -163,7 +162,7 @@ export default function IntelligenceLab() {
     try {
       const data: RunResult = await callApi(endpoint, {
         url: urlNormalized,
-        mode,
+        mode: 'full',
         force: sendForce,
       })
       runData = data
@@ -254,7 +253,7 @@ export default function IntelligenceLab() {
         </p>
       </div>
 
-      {/* ── URL Input + Mode ───────────────────────────────── */}
+      {/* ── URL Input ──────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-2">
           <Input
@@ -266,30 +265,6 @@ export default function IntelligenceLab() {
             disabled={running}
             onKeyDown={(e) => e.key === 'Enter' && run('analysis')}
           />
-
-          {/* Mode toggle */}
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-            <button
-              onClick={() => setMode('lightweight')}
-              disabled={running}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs transition-colors',
-                mode === 'lightweight' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              Lightweight <span className="ml-1 opacity-60">3k</span>
-            </button>
-            <button
-              onClick={() => setMode('full')}
-              disabled={running}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs transition-colors',
-                mode === 'full' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              Full <span className="ml-1 opacity-60">15k</span>
-            </button>
-          </div>
         </div>
 
         {/* ── Scrape Status ──────────────────────────────────── */}
@@ -371,9 +346,6 @@ export default function IntelligenceLab() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {mode === 'lightweight'
-            ? 'Lightweight: sends up to 3,000 chars to AI, faster, lower cost.'
-            : 'Full: sends up to 15,000 chars, thorough analysis, higher cost.'}
           {cacheIsValidForUrl
             ? ' Analyze and Scrape will reuse the cached scrape. Use Re-Scrape or Clear Cache to force a fresh scrape.'
             : ' No cache, will scrape fresh.'}
@@ -388,7 +360,7 @@ export default function IntelligenceLab() {
             {activeOp === 'rescrape' ? 'Re-scraping website content…'
               : activeOp === 'scraper' ? 'Scraping website content…'
               : activeOp === 'analysis' || activeOp === 'pipeline'
-                ? `${cacheIsValidForUrl ? 'Using cached scrape · ' : 'Scraping · '}Running AI analysis (${mode} mode)…`
+                ? `${cacheIsValidForUrl ? 'Using cached scrape · ' : 'Scraping · '}Running AI analysis…`
               : 'Running…'}
           </span>
         </div>
@@ -655,7 +627,7 @@ export default function IntelligenceLab() {
             <StatCard label="Pages failed" value={String(sr?.failedUrls.length ?? 0)} dim />
             <StatCard label="Content sent" value={`${((result.contentCharsUsed ?? sr?.totalCharCount ?? 0) / 1000).toFixed(1)}k`} />
             <StatCard label="Quality" value={`${result.quality?.score ?? 0}/100`} />
-            <StatCard label="Mode" value={result.mode ?? mode} />
+            <StatCard label="Mode" value={result.mode ?? 'full'} />
             <StatCard
               label="Scrape"
               value={result.scrapeSource === 'cache' ? '✓ Cached' : '↻ Fresh'}

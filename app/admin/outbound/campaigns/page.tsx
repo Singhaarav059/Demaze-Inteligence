@@ -15,6 +15,7 @@ import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Inbox, Clock } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -24,6 +25,9 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GuideNote } from '@/components/ui/guide-note'
 import { MetricTile } from '@/components/ui/metric-tile'
+import { BarTrend } from '@/components/ui/bar-trend'
+import { ArrowRight } from 'lucide-react'
+import { computeDailyCounts, hasSufficientTrendData } from '@/lib/analytics/daily-counts'
 import { cn } from '@/lib/utils'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import { useOutboundCampaigns, type Campaign } from './useOutboundCampaigns'
@@ -127,6 +131,15 @@ function OutboundCampaignsPageInner() {
     }
     return { total: campaignContacts.length, sent, replied, bounced, queued }
   }, [campaignContacts])
+
+  // Real "Performance over time" — bucketed from this campaign's own
+  // already-fetched event timeline (real occurred_at timestamps), never a
+  // separate fetch. Gated the same way every other trend in this app is.
+  const sentTrend = useMemo(() => {
+    const sentAt = events.filter(e => e.event_type === 'sent').map(e => e.occurred_at)
+    const buckets = computeDailyCounts(sentAt, 14)
+    return hasSufficientTrendData(buckets) ? buckets : null
+  }, [events])
 
   useEffect(() => {
     if (campaignFromUrl) setSelectedCampaignId(campaignFromUrl)
@@ -271,14 +284,30 @@ function OutboundCampaignsPageInner() {
 
       {selectedCampaign && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MetricTile icon={Inbox} label="Contacts" value={selectedCounts.total} />
-            <MetricTile icon={Clock} label="Queued" value={selectedCounts.queued} />
-            <MetricTile icon={Inbox} label="Sent" value={selectedCounts.sent} />
-            <MetricTile icon={Inbox} label="Replied" value={selectedCounts.replied} sub={selectedCounts.bounced > 0 ? `${selectedCounts.bounced} bounced` : undefined} />
+          {/* Funnel: Contacts -> Queued -> Sent -> Replied — the real, only
+              hierarchy this data model has (no separate "prospects" stage
+              exists upstream of an enqueued campaign contact). */}
+          <div className="flex items-center gap-1 overflow-x-auto sm:gap-2">
+            <MetricTile icon={Inbox} label="Contacts" value={selectedCounts.total} className="min-w-[110px] flex-1" />
+            <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/30" />
+            <MetricTile icon={Clock} label="Queued" value={selectedCounts.queued} className="min-w-[110px] flex-1" />
+            <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/30" />
+            <MetricTile icon={Inbox} label="Sent" value={selectedCounts.sent} className="min-w-[110px] flex-1" />
+            <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/30" />
+            <MetricTile icon={Inbox} label="Replied" value={selectedCounts.replied} sub={selectedCounts.bounced > 0 ? `${selectedCounts.bounced} bounced` : undefined} className="min-w-[110px] flex-1" />
           </div>
 
-          <Card className="border-border bg-card">
+          {sentTrend && (
+            <Card className="border-border bg-card">
+              <CardContent className="px-5 py-4">
+                <p className="text-xs font-medium text-muted-foreground">Performance over time</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground/60">Emails sent · last 14 days</p>
+                <BarTrend data={sentTrend} label="Emails sent trend" className="mt-3" />
+              </CardContent>
+            </Card>
+          )}
+
+          <GlassCard>
             <CardContent className="px-5 py-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">{selectedCampaign.name}</h2>
@@ -338,7 +367,7 @@ function OutboundCampaignsPageInner() {
                 on-demand, click it rather than waiting for a timer.
               </p>
             </CardContent>
-          </Card>
+          </GlassCard>
 
           <Card className="border-border bg-card">
             <CardContent className="px-5 py-4 space-y-3">

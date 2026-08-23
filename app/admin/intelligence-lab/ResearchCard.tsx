@@ -25,7 +25,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import {
   Building2, Newspaper, AlertTriangle, Lightbulb, Users, Target, TrendingUp,
   ShieldCheck, Sparkles, MessageSquare, ExternalLink, CheckCircle2, BrainCircuit,
-  Radar,
+  Radar, ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { EvidenceStack, SourceRow } from '@/components/ui/evidence-stack'
@@ -65,6 +65,17 @@ import { DEMAZE_PROOF_POINTS, type ProofPoint } from '@/lib/knowledge/demaze-pro
 import type { RunResult } from './_types'
 
 const str = (v: unknown) => (v != null && v !== '' ? String(v) : null)
+
+// The LLM sometimes answers a field with an honest "I don't know" instead
+// of omitting it (e.g. headquarters_location: "Not stated") — that's a
+// non-answer, not a fact, and showing it verbatim in the facts line reads
+// as real data. Filter it out at the source rather than special-casing
+// every consumer.
+const PLACEHOLDER_VALUE = /^(not stated|not specified|not available|not disclosed|unspecified|unknown|n\/a|none|tbd)$/i
+const realStr = (v: unknown) => {
+  const s = str(v)
+  return s && !PLACEHOLDER_VALUE.test(s.trim()) ? s : null
+}
 
 // Compact "source reference" chip — domain + external-link affordance. Never
 // labeled "verified"; this pipeline doesn't mechanically verify sources, it
@@ -123,32 +134,60 @@ function DownloadIcon({ className }: { className?: string }) {
   )
 }
 
+// `collapsible` is used for the report's secondary/supporting sections
+// (Business Profile, Competitors, Target Segments, Market Intelligence,
+// Research Quality) so the report reads as a scannable panel instead of a
+// wall of text — the primary sales-facing sections (hero, fit, why-Demaze,
+// signals, pain points/opportunities, personalization, outreach draft) stay
+// uncollapsible. Collapsed by default; each section still independently
+// decides whether it renders at all (its own "only render when there's
+// something real" null-check runs before this ever mounts).
 function Section({
   label,
   accent,
   icon: Icon,
   className,
+  collapsible = false,
   children,
 }: {
   label: string
   accent?: string
   icon?: React.ComponentType<{ className?: string }>
   className?: string
+  collapsible?: boolean
   children: React.ReactNode
 }) {
+  const [open, setOpen] = useState(!collapsible)
+  const labelRow = (
+    <p
+      className={cn(
+        'flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]',
+        collapsible ? 'flex-1' : 'mb-3',
+        accent ?? 'text-muted-foreground',
+      )}
+    >
+      {Icon && <Icon className="size-3.5" />}
+      {label}
+    </p>
+  )
+
   return (
     <Card className={cn('border-border bg-card', className)}>
       <CardContent className="px-5 py-4">
-        <p
-          className={cn(
-            'mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]',
-            accent ?? 'text-muted-foreground',
-          )}
-        >
-          {Icon && <Icon className="size-3.5" />}
-          {label}
-        </p>
-        {children}
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            aria-expanded={open}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            {labelRow}
+            <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground/60 transition-transform', open && 'rotate-90')} />
+          </button>
+        ) : (
+          labelRow
+        )}
+        {open && <div className={collapsible ? 'mt-3' : undefined}>{children}</div>}
       </CardContent>
     </Card>
   )
@@ -649,7 +688,7 @@ export function BusinessProfileSection({ profile }: { profile?: CompanyBusinessP
   if (!hasContent) return null
 
   return (
-    <Section label="Business Profile" accent="text-signal-strong" icon={Building2}>
+    <Section label="Business Profile" accent="text-signal-strong" icon={Building2} collapsible>
       <div className="space-y-3">
         {(profile.ideal_customers || profile.target_company_size || profile.market_positioning) && (
           <p className="text-xs leading-relaxed text-muted-foreground">
@@ -677,7 +716,7 @@ const CATEGORY_LABEL: Record<string, string> = { direct: 'Direct', growing: 'Gro
 export function CompetitorsSection({ competitors }: { competitors: CompetitorProfile[] }) {
   if (competitors.length === 0) return null
   return (
-    <Section label="Competitors" accent="text-signal-medium" icon={Users}>
+    <Section label="Competitors" accent="text-signal-medium" icon={Users} collapsible>
       <ul className="space-y-3">
         {competitors.map((c, i) => (
           <li key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-accent/10 px-3.5 py-3 text-sm">
@@ -755,7 +794,7 @@ export function TargetSegmentsSection({
 }) {
   if (segments.length === 0) return null
   return (
-    <Section label="Target Customer Segments" accent="text-signal-medium" icon={Target}>
+    <Section label="Target Customer Segments" accent="text-signal-medium" icon={Target} collapsible>
       <ul className="space-y-3">
         {segments.map((s, i) => (
           <li key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-accent/10 px-3.5 py-3 text-sm">
@@ -839,7 +878,7 @@ export function TargetSegmentsSection({
 export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] }) {
   if (items.length === 0) return null
   return (
-    <Section label="Market Intelligence" accent="text-signal-medium" icon={TrendingUp}>
+    <Section label="Market Intelligence" accent="text-signal-medium" icon={TrendingUp} collapsible>
       <ul className="space-y-3">
         {items.map((m, i) => {
           const categoryLabel =
@@ -878,7 +917,7 @@ export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] 
 export function ResearchQualitySection({ quality }: { quality?: ResearchQualityAudit }) {
   if (!quality || (quality.items_flagged ?? 0) === 0) return null
   return (
-    <Section label="Research Quality" accent="text-signal-medium" icon={ShieldCheck}>
+    <Section label="Research Quality" accent="text-signal-medium" icon={ShieldCheck} collapsible>
       <p className="mb-3 text-xs text-muted-foreground">
         {quality.items_flagged} of {quality.items_audited} audited item
         {quality.items_audited !== 1 ? 's' : ''} flagged for review. Informational only, nothing above was
@@ -1151,10 +1190,10 @@ export function getResearchCardData(result: RunResult) {
   if (!a) return null
 
   const companyName = str(a.company_name) ?? 'Unknown Company'
-  const industry = str(a.industry) ?? ''
-  const subIndustry = str(a.sub_industry) ?? ''
-  const sizeEstimate = str(a.company_size_estimate) ?? ''
-  const headquarters = str(a.headquarters_location) ?? ''
+  const industry = realStr(a.industry) ?? ''
+  const subIndustry = realStr(a.sub_industry) ?? ''
+  const sizeEstimate = realStr(a.company_size_estimate) ?? ''
+  const headquarters = realStr(a.headquarters_location) ?? ''
   const summary = humanizeText(a.company_summary)
   const confidence = str(a.confidence_level) ?? 'low'
   const businessModel = humanizeText(a.business_model)
@@ -1322,40 +1361,89 @@ export function ResearchCard({ result }: { result: RunResult }) {
     outreachDraft, matchedProofPoint, facts, briefInput, briefExtras,
   } = data
 
+  const hasPersonalization = Boolean(whyContact || likelyProblem || whyNow || whatToSell || openingAngle)
+
+  // Jump-to-section rail — every entry points at a section that actually
+  // renders content below (sections already self-hide when empty; gating
+  // on the same real data here keeps the rail free of dead links, never a
+  // fabricated "Decision Makers"/"Sources" entry this component has no
+  // data for).
+  const railSections = [
+    { id: 'rc-overview', label: 'Overview', show: true },
+    { id: 'rc-signals', label: 'Signals', count: signals.length, show: signals.length > 0 },
+    { id: 'rc-opportunities', label: 'Opportunities', count: opportunities.length, show: opportunities.length > 0 || painPoints.length > 0 },
+    { id: 'rc-competitors', label: 'Competitors', count: competitors.length, show: competitors.length > 0 },
+    { id: 'rc-segments', label: 'Target Segments', count: icpSegments.length, show: icpSegments.length > 0 },
+    { id: 'rc-market', label: 'Market Intel', count: marketIntel.length, show: marketIntel.length > 0 },
+    { id: 'rc-personalization', label: 'Personalization', show: hasPersonalization },
+    { id: 'rc-outreach', label: 'Outreach', show: Boolean(outreachDraft) },
+  ].filter(s => s.show)
+
   return (
-    <div className="space-y-3">
-      <ExportToolbar briefInput={briefInput} briefExtras={briefExtras} />
-      <AISynthesisFailureBanner failed={aiSynthesisFailed} reason={aiSynthesisFailureReason} />
-      <ResearchHero
-        companyName={companyName}
-        industry={industry}
-        subIndustry={subIndustry}
-        summary={summary}
-        businessModel={businessModel}
-        confidence={confidence}
-        signalCount={signalCount}
-        painPointsCount={painPoints.length}
-        opportunitiesCount={opportunities.length}
-        facts={facts}
-        lastResearchedAt={lastResearchedAt}
-      />
-      <FitSummaryRow companyFit={companyFit} automationOpportunity={automationOpportunity} whyNow={whyNowScore} confidence={confidence} />
-      <WhyDemazeSection whyDemaze={whyDemaze} />
-      <BusinessProfileSection profile={businessProfile} />
-      <RecentNewsSection items={recentActivity} />
-      <SignalsSection signals={signals} />
-      <PainPointsAndOpportunitiesSection
-        painPoints={painPoints}
-        painPointsStructured={painPointsStructured}
-        opportunities={opportunities}
-        aiSynthesisFailed={aiSynthesisFailed}
-      />
-      <CompetitorsSection competitors={competitors} />
-      <TargetSegmentsSection segments={icpSegments} companyName={companyName} />
-      <MarketIntelligenceSection items={marketIntel} />
-      <ResearchQualitySection quality={researchQuality} />
-      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} whyContact={whyContact} likelyProblem={likelyProblem} />
-      <OutreachDraftSection draft={outreachDraft} matchedProofPoint={matchedProofPoint} />
+    <div className="lg:grid lg:grid-cols-[168px_1fr] lg:items-start lg:gap-6">
+      <nav aria-label="Jump to section" className="sticky top-20 hidden space-y-0.5 lg:block">
+        {railSections.map(s => (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            className="flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {s.label}
+            {s.count != null && <span className="text-xs text-muted-foreground/60">{s.count}</span>}
+          </a>
+        ))}
+      </nav>
+
+      <div className="min-w-0 space-y-3">
+        <ExportToolbar briefInput={briefInput} briefExtras={briefExtras} />
+        <AISynthesisFailureBanner failed={aiSynthesisFailed} reason={aiSynthesisFailureReason} />
+        <div id="rc-overview" className="scroll-mt-20 space-y-3">
+          <ResearchHero
+            companyName={companyName}
+            industry={industry}
+            subIndustry={subIndustry}
+            summary={summary}
+            businessModel={businessModel}
+            confidence={confidence}
+            signalCount={signalCount}
+            painPointsCount={painPoints.length}
+            opportunitiesCount={opportunities.length}
+            facts={facts}
+            lastResearchedAt={lastResearchedAt}
+          />
+          <FitSummaryRow companyFit={companyFit} automationOpportunity={automationOpportunity} whyNow={whyNowScore} confidence={confidence} />
+          <WhyDemazeSection whyDemaze={whyDemaze} />
+          <BusinessProfileSection profile={businessProfile} />
+          <RecentNewsSection items={recentActivity} />
+        </div>
+        <div id="rc-signals" className="scroll-mt-20">
+          <SignalsSection signals={signals} />
+        </div>
+        <div id="rc-opportunities" className="scroll-mt-20">
+          <PainPointsAndOpportunitiesSection
+            painPoints={painPoints}
+            painPointsStructured={painPointsStructured}
+            opportunities={opportunities}
+            aiSynthesisFailed={aiSynthesisFailed}
+          />
+        </div>
+        <div id="rc-competitors" className="scroll-mt-20">
+          <CompetitorsSection competitors={competitors} />
+        </div>
+        <div id="rc-segments" className="scroll-mt-20">
+          <TargetSegmentsSection segments={icpSegments} companyName={companyName} />
+        </div>
+        <div id="rc-market" className="scroll-mt-20">
+          <MarketIntelligenceSection items={marketIntel} />
+        </div>
+        <ResearchQualitySection quality={researchQuality} />
+        <div id="rc-personalization" className="scroll-mt-20">
+          <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} whyContact={whyContact} likelyProblem={likelyProblem} />
+        </div>
+        <div id="rc-outreach" className="scroll-mt-20">
+          <OutreachDraftSection draft={outreachDraft} matchedProofPoint={matchedProofPoint} />
+        </div>
+      </div>
     </div>
   )
 }

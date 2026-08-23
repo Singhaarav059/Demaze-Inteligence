@@ -67,8 +67,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Workflow, Building2, Radar, ArrowRight, Lightbulb, Users, Mail } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Workflow, Radar, ArrowRight, Lightbulb, Users, Mail } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -426,30 +427,38 @@ export default function AutoGtmFlowPage() {
 
   return (
     <div className={cn('mx-auto max-w-3xl px-4 py-8 space-y-4', nextAction && 'pb-28 md:pb-8')}>
-      {/* Header — flat panel, not a floating glass card (intelligence-workspace pass) */}
-      <div className="rounded-lg border border-border bg-card px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Workflow className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold tracking-tight text-foreground">Auto Flow</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Research a prospect company (or upload a lead list), pick who to contact, and send them a
-                personalized email, all in one continuous flow.{' '}
-                <Link href="/admin/wizard" className="underline hover:text-foreground">
-                  Need the manual/debug tools instead?
-                </Link>
-              </p>
-            </div>
+      {/* Header — compact title bar, not a padded hero block */}
+      <div className="flex items-center justify-between gap-3 px-1">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Workflow className="size-3.5" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold tracking-tight text-foreground">Auto Flow</h1>
+            <p className="truncate text-xs text-muted-foreground">
+              One guided flow from company research to conversation.{' '}
+              <Link href="/admin/wizard" className="underline hover:text-foreground">
+                Manual tools
+              </Link>
+            </p>
           </div>
-          {(flow.runId || flow.batchCompanies.length > 0) && (
-            <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowStartNewConfirm(true)}>
-              Start New
-            </Button>
-          )}
         </div>
+        {(flow.runId || flow.batchCompanies.length > 0) && (
+          <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowStartNewConfirm(true)}>
+            Start New
+          </Button>
+        )}
+      </div>
+
+      {/* Compact progress strip — see StepIndicator.tsx's own header for why
+          this replaced the old giant numbered-circle stepper. */}
+      <div className="rounded-lg border border-border bg-card px-3 py-3">
+        <StepIndicator
+          current={flow.step}
+          maxReached={flow.maxStepReached}
+          meta={stepMeta}
+          onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6)}
+        />
       </div>
 
       {/* Company intelligence header — the researched company is the central
@@ -458,43 +467,46 @@ export default function AutoGtmFlowPage() {
           getResearchCardData()/flow state; a missing field (no industry, no
           HQ) is simply omitted, never shown as a placeholder. */}
       {flow.inputMode === 'single' && hasResearch && researchData && (
-        <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Building2 className="size-4.5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="truncate text-base font-semibold text-foreground">{researchData.companyName}</h2>
-                {researchData.confidence && (
-                  <span
-                    className={cn(
-                      'text-[11px]',
-                      researchData.confidence === 'high'
-                        ? 'text-signal-strong'
-                        : researchData.confidence === 'medium'
-                          ? 'text-signal-medium'
-                          : 'text-muted-foreground'
-                    )}
-                  >
-                    {researchData.confidence} confidence
-                  </span>
+        <Card className="border-border bg-card">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Current Company</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 py-3 space-y-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <Avatar name={researchData.companyName} size="md" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="truncate text-base font-semibold text-foreground">{researchData.companyName}</h2>
+                  {researchData.confidence && (
+                    <span
+                      className={cn(
+                        'text-[11px]',
+                        researchData.confidence === 'high'
+                          ? 'text-signal-strong'
+                          : researchData.confidence === 'medium'
+                            ? 'text-signal-medium'
+                            : 'text-muted-foreground'
+                      )}
+                    >
+                      {researchData.confidence} confidence
+                    </span>
+                  )}
+                </div>
+                {researchData.facts.length > 0 && (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {researchData.facts.map(f => f.value).join(' · ')}
+                  </p>
                 )}
               </div>
-              {researchData.facts.length > 0 && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {researchData.facts.map(f => f.value).join(' · ')}
-                </p>
-              )}
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <MetricTile icon={Radar} label="Signals" value={researchData.signalCount} />
-            <MetricTile icon={Lightbulb} label="Opportunities" value={researchData.opportunities.length} />
-            <MetricTile icon={Users} label="Decision Makers" value={flow.contacts.length} />
-            <MetricTile icon={Mail} label="Verified Contacts" value={emailsFoundCount} />
-          </div>
-        </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <MetricTile icon={Radar} label="Signals" value={researchData.signalCount} />
+              <MetricTile icon={Lightbulb} label="Opportunities" value={researchData.opportunities.length} />
+              <MetricTile icon={Users} label="Decision Makers" value={flow.contacts.length} />
+              <MetricTile icon={Mail} label="Verified Contacts" value={emailsFoundCount} />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {flow.inputMode === 'batch' && batchHasProgress && (
@@ -506,17 +518,6 @@ export default function AutoGtmFlowPage() {
           {emailsFoundCount > 0 && ` · ${emailsFoundCount} email${emailsFoundCount === 1 ? '' : 's'} found`}
         </p>
       )}
-
-      {/* Compact progress strip — see StepIndicator.tsx's own header for why
-          this replaced the old giant numbered-circle stepper. */}
-      <div className="rounded-lg border border-border bg-card px-2 py-1.5">
-        <StepIndicator
-          current={flow.step}
-          maxReached={flow.maxStepReached}
-          meta={stepMeta}
-          onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6)}
-        />
-      </div>
 
       {/* Next Best Action — the flow's one "move forward" control, now a
           distinct callout instead of a bare button crowded next to the step
@@ -585,37 +586,23 @@ export default function AutoGtmFlowPage() {
 
       {/* Step 1: Research */}
 
-      {flow.step === 1 && (
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1 w-fit">
-          <button
-            onClick={() => flow.setInputMode('single')}
-            className={cn(
-              'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              flow.inputMode === 'single'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Single Company
-          </button>
-          <button
-            onClick={() => flow.setInputMode('batch')}
-            className={cn(
-              'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              flow.inputMode === 'batch'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Upload Lead List
-          </button>
-        </div>
-      )}
-
       {flow.step === 1 && flow.inputMode === 'single' && (
         <Card className="border-border bg-card">
-          <CardContent className="px-5 py-4 space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Research company</h2>
+          <CardContent className="px-4 py-3 space-y-3">
+            <div className="flex items-center gap-1 rounded-md bg-accent p-0.5 w-fit">
+              <button
+                onClick={() => flow.setInputMode('single')}
+                className="rounded px-2.5 py-1 text-xs font-medium bg-primary text-primary-foreground shadow-sm"
+              >
+                Single Company
+              </button>
+              <button
+                onClick={() => flow.setInputMode('batch')}
+                className="rounded px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Upload Lead List
+              </button>
+            </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 ref={urlInputRef}
@@ -668,6 +655,23 @@ export default function AutoGtmFlowPage() {
             <StageProgress active={flow.researching} stages={RESEARCH_STAGES} />
           </CardContent>
         </Card>
+      )}
+
+      {flow.step === 1 && flow.inputMode === 'batch' && (
+        <div className="flex items-center gap-1 rounded-md bg-accent p-0.5 w-fit">
+          <button
+            onClick={() => flow.setInputMode('single')}
+            className="rounded px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Single Company
+          </button>
+          <button
+            onClick={() => flow.setInputMode('batch')}
+            className="rounded px-2.5 py-1 text-xs font-medium bg-primary text-primary-foreground shadow-sm"
+          >
+            Upload Lead List
+          </button>
+        </div>
       )}
 
       {flow.step === 1 && flow.inputMode === 'single' && !hasResearch && (

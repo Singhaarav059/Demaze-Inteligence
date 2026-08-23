@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 
@@ -24,14 +25,6 @@ function emailConfidenceBadgeVariant(confidence: OutboundContact['email_confiden
   if (confidence === 'high') return 'default' as const
   if (confidence === 'medium' || confidence === 'low') return 'secondary' as const
   return 'outline' as const
-}
-
-// initials() — first letters of up to the first two words of a name, for the
-// avatar circle. Pure display helper, no data implication either way.
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
 }
 
 function StatusLine({ icon: Icon, children, found }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode; found: boolean | null }) {
@@ -59,9 +52,7 @@ export function ContactInfoRow({
     <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-2.5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-foreground/80">
-            {initials(contact.person_name)}
-          </span>
+          <Avatar name={contact.person_name} size="sm" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground truncate">{contact.person_name}</span>

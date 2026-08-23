@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Avatar } from '@/components/ui/avatar'
 import { IntelStatus, type IntelStatusKind } from '@/components/ui/intel-status'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { CompanyResearchCard } from './CompanyResearchCard'
@@ -239,8 +240,9 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                   checked={selected}
                   onChange={() => toggle(company.id)}
                   disabled={running}
-                  className="accent-primary mt-0.5"
+                  className="accent-primary mt-1.5"
                 />
+                <Avatar name={match.name} size="sm" className="mt-0.5" />
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-foreground text-sm font-semibold truncate">{match.name}</span>

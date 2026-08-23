@@ -3,7 +3,7 @@
 // mobile drawer so the two never drift out of sync.
 // ============================================================
 
-import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban, Library, ClipboardCheck } from 'lucide-react'
+import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban, Library, ClipboardCheck, Home } from 'lucide-react'
 import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIcon } from './nav-icons'
 
 // Contacts / Campaigns / Warm-Up / Integrations were removed from nav
@@ -25,6 +25,7 @@ import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIc
 // is a look-back/reference page (past runs), so it now sits last in the
 // primary flow ordering instead of splitting Discover from Outbound Tools.
 export const NAV = [
+  { href: '/admin', label: 'Home', icon: Home, hint: 'Your workspace overview' },
   { href: '/admin/auto-gtm', label: 'Auto Flow', icon: AutoFlowIcon, hint: 'Start here: research a company, find who to contact, and prepare outreach, one guided flow' },
   { href: '/admin/wizard', label: 'Research', icon: ResearchIcon, hint: 'Research a single company, or upload a spreadsheet of many' },
   { href: '/admin/company-discovery', label: 'Discover', icon: DiscoveryIcon, hint: 'Define your target market and let Demaze find companies that match' },
@@ -37,7 +38,7 @@ export const NAV = [
 // order, or the flat NAV array every other consumer (TopBar, command
 // palette, BottomTabBar) already relies on.
 export const NAV_GROUPS = [
-  { label: 'Workspace', hrefs: ['/admin/auto-gtm', '/admin/wizard', '/admin/company-discovery'] },
+  { label: 'Workspace', hrefs: ['/admin', '/admin/auto-gtm', '/admin/wizard', '/admin/company-discovery'] },
   { label: 'Outbound', hrefs: ['/admin/outbound'] },
   { label: 'System', hrefs: ['/admin/run-history'] },
 ] as const
@@ -47,6 +48,14 @@ export const NAV_GROUPS = [
 // provider), just no longer worth a permanent sidebar slot. Shared by the
 // TopBar "More" menu and the Cmd+K command palette so both stay in sync,
 // same reasoning as NAV above.
+// Shared active-route check for Sidebar/TopBar/BottomTabBar. A plain
+// `pathname.startsWith(href + '/')` breaks for '/admin' specifically —
+// it's a prefix of every other admin route, so without this special case
+// "Home" would show active on every page, not just '/admin' itself.
+export function isNavActive(pathname: string, href: string): boolean {
+  return pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'))
+}
+
 export const SECONDARY_NAV = [
   { href: '/admin/outbound/overview', label: 'Overview', icon: LayoutDashboard, hint: 'Cross-campaign stats and every email queued or sent, in one table' },
   { href: '/admin/outbound/pilot-review', label: 'Pilot Review', icon: ClipboardCheck, hint: 'Human quality review of a researched pilot batch — approve, reject, or flag before outreach is generated' },

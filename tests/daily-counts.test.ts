@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeDailyCounts, hasSufficientTrendData, MIN_TREND_TOTAL, MIN_TREND_ACTIVE_DAYS } from '@/lib/analytics/daily-counts'
+import { computeDailyCounts, hasSufficientTrendData, computeWindowDelta, MIN_TREND_TOTAL, MIN_TREND_ACTIVE_DAYS } from '@/lib/analytics/daily-counts'
 
 const NOW = new Date('2026-08-22T12:00:00Z')
 
@@ -53,5 +53,41 @@ describe('hasSufficientTrendData', () => {
     const buckets = computeDailyCounts(timestamps, 14, NOW)
     expect(buckets.filter(b => b.count > 0).length).toBeGreaterThanOrEqual(MIN_TREND_ACTIVE_DAYS)
     expect(hasSufficientTrendData(buckets)).toBe(true)
+  })
+})
+
+describe('computeWindowDelta', () => {
+  it('returns null deltaPct when the previous window has no activity', () => {
+    const buckets = computeDailyCounts(['2026-08-22T00:00:00Z'], 14, NOW)
+    const delta = computeWindowDelta(buckets, 7)
+    expect(delta.current).toBe(1)
+    expect(delta.previous).toBe(0)
+    expect(delta.deltaPct).toBeNull()
+  })
+
+  it('computes a real positive %-change between two equal windows', () => {
+    const timestamps = [
+      // previous window (8-14 days ago): 2 events
+      '2026-08-10T00:00:00Z', '2026-08-11T00:00:00Z',
+      // current window (last 7 days): 4 events
+      '2026-08-19T00:00:00Z', '2026-08-20T00:00:00Z', '2026-08-21T00:00:00Z', '2026-08-22T00:00:00Z',
+    ]
+    const buckets = computeDailyCounts(timestamps, 14, NOW)
+    const delta = computeWindowDelta(buckets, 7)
+    expect(delta.previous).toBe(2)
+    expect(delta.current).toBe(4)
+    expect(delta.deltaPct).toBe(100)
+  })
+
+  it('computes a real negative %-change', () => {
+    const timestamps = [
+      '2026-08-09T00:00:00Z', '2026-08-10T00:00:00Z', '2026-08-11T00:00:00Z', '2026-08-12T00:00:00Z',
+      '2026-08-20T00:00:00Z',
+    ]
+    const buckets = computeDailyCounts(timestamps, 14, NOW)
+    const delta = computeWindowDelta(buckets, 7)
+    expect(delta.previous).toBe(4)
+    expect(delta.current).toBe(1)
+    expect(delta.deltaPct).toBe(-75)
   })
 })

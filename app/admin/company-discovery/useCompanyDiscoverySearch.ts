@@ -171,14 +171,16 @@ export function useCompanyDiscoverySearch() {
   }
 
   // ── Search ──────────────────────────────────────────────────
-  // Returns the number of matches found (or -1 on error) so the caller can
-  // record a real "recent search" entry — never a fabricated count.
+  // Returns the matches found (empty + count -1 on error) so the caller can
+  // save a real segment snapshot — never fabricated data, and never reliant
+  // on stale `companies` state (this return value reflects the fresh result
+  // synchronously, before React has re-rendered).
 
-  async function handleSearch(filters: DiscoverySearchFilters): Promise<number> {
+  async function handleSearch(filters: DiscoverySearchFilters): Promise<{ count: number; matches: DiscoveredMatch[]; total: number }> {
     const definition = filters.definitionOverride?.trim() || (filters.sector ? sectorDefinition(filters.sector) : '')
     if (!definition) {
       setSearchError('Select an industry to search.')
-      return -1
+      return { count: -1, matches: [], total: 0 }
     }
 
     setSearching(true)
@@ -195,7 +197,7 @@ export function useCompanyDiscoverySearch() {
 
     if (!result.ok) {
       setSearchError(result.error)
-      return -1
+      return { count: -1, matches: [], total: 0 }
     }
 
     lastRequestBody.current = body
@@ -217,7 +219,7 @@ export function useCompanyDiscoverySearch() {
       selected: !match.lastResearchedAt,
       status: (match.lastResearchedAt ? 'already_researched' : 'not_researched') as CompanyStatus,
     })))
-    return matches.length
+    return { count: matches.length, matches, total }
   }
 
   // ── Load more — same filters, next page, appended ────────────

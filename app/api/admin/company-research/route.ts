@@ -95,7 +95,13 @@ export async function POST(req: NextRequest) {
 async function persistResult(input: CompanyResearchInput, result: Awaited<ReturnType<typeof researchCompanySignals>>) {
   try {
     const supabase = createServerClient()
-    await supabase.from('pipeline_test_runs').insert({
+    // supabase-js resolves {error} rather than throwing on a DB-level
+    // rejection (e.g. a CHECK constraint violation) — must check it
+    // explicitly, or a persistently-failing insert silently never persists
+    // anything while every caller believes it succeeded. Confirmed this
+    // exact failure mode live before this check existed (see migration
+    // 028's header comment).
+    const { error } = await supabase.from('pipeline_test_runs').insert({
       company_url: input.domain ?? input.name,
       domain: input.domain ?? null,
       operation: 'company_signals_research',
@@ -103,6 +109,9 @@ async function persistResult(input: CompanyResearchInput, result: Awaited<Return
       final_result: result,
       error_message: result.error ?? null,
     })
+    if (error) {
+      logger.warn('CompanyResearch', 'failed to persist run', error.message)
+    }
   } catch (e) {
     logger.warn('CompanyResearch', 'failed to persist run', e instanceof Error ? e.message : String(e))
   }

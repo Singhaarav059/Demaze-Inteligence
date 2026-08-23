@@ -55,3 +55,25 @@ export function hasSufficientTrendData(buckets: DailyCount[]): boolean {
   const activeDays = buckets.filter(b => b.count > 0).length
   return total >= MIN_TREND_TOTAL && activeDays >= MIN_TREND_ACTIVE_DAYS
 }
+
+export interface WindowDelta {
+  current: number
+  previous: number
+  /** null when there's no prior-window activity to compare against — never render a delta chip for null. */
+  deltaPct: number | null
+}
+
+/**
+ * Real week-over-week (or any equal window) %-change from the same bucket
+ * array a sparkline/bar-trend already renders — never a separate fetch.
+ * `buckets` should cover at least 2x `windowDays` for a meaningful compare.
+ */
+export function computeWindowDelta(buckets: DailyCount[], windowDays: number): WindowDelta {
+  const n = buckets.length
+  const currentBuckets = buckets.slice(Math.max(0, n - windowDays))
+  const previousBuckets = buckets.slice(Math.max(0, n - windowDays * 2), Math.max(0, n - windowDays))
+  const current = currentBuckets.reduce((sum, b) => sum + b.count, 0)
+  const previous = previousBuckets.reduce((sum, b) => sum + b.count, 0)
+  const deltaPct = previous > 0 ? Math.round(((current - previous) / previous) * 100) : null
+  return { current, previous, deltaPct }
+}

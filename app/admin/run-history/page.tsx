@@ -414,20 +414,21 @@ export default function RunHistoryPage() {
                     {group.label}
                   </h3>
                   <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
-                    {group.items.map(item => (
+                    {group.items.map(item => {
+                      const Icon = item.kind === 'research' ? History : item.kind === 'discovery' ? UserSearch : Send
+                      const tone = item.kind === 'research' ? 'text-signal-strong' : item.kind === 'discovery' ? 'text-primary' : 'text-signal-medium'
+                      return (
                       <div key={item.key} className="flex items-center gap-3 px-4 py-2.5">
-                        <span
-                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            item.kind === 'research' ? 'bg-signal-strong' : item.kind === 'discovery' ? 'bg-primary' : 'bg-signal-medium'
-                          }`}
-                          aria-hidden="true"
-                        />
+                        <span className={`flex size-6 shrink-0 items-center justify-center rounded-md bg-accent ${tone}`}>
+                          <Icon className="size-3.5" aria-hidden="true" />
+                        </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-foreground text-sm truncate">{item.title}</p>
                           <p className="text-muted-foreground/70 text-xs">{item.subtitle}</p>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               ))}

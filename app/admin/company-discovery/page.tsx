@@ -27,6 +27,7 @@ import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { fadeSlideUp } from '@/lib/motion'
 import { useCompanyDiscoverySearch } from './useCompanyDiscoverySearch'
+import type { DiscoveredMatch } from './useCompanyDiscoverySearch'
 import { CompanyMatchList } from './CompanyMatchList'
 import {
   SECTOR_OPTIONS, EMPLOYEE_RANGES, REVENUE_RANGES, REGION_OPTIONS,
@@ -34,39 +35,71 @@ import {
   type SectorOption,
 } from './search-options'
 
-const RECENT_SEARCHES_KEY = 'demaze_company_discovery_recent_searches'
-const MAX_RECENT_SEARCHES = 5
-
-interface RecentSearchEntry {
+// A segment is a persisted "target market" search — replaces the old
+// localStorage-only recent-searches list. Saved automatically after every
+// successful search (see saveSegment() below); the Home dashboard's
+// "Continue where you left off" section reads the same rows via the same
+// GET /api/admin/company-discovery/segments endpoint, so a search started
+// here can be resumed from either place.
+interface SegmentFilters {
   sector: SectorOption
   regionKeys: string[]
-  employeeRangeLabel: string | null
-  revenueRangeLabel: string | null
-  resultCount: number
-  searchedAt: string
+  customCountries: string[]
+  countries: string[]
+  employeeRangeKey: string
+  revenueRangeKey: string
+  foundedAfter: string
+  foundedBefore: string
+  companyTypeKeys: string[]
+  presenceKeys: string[]
+  excludeKeywords: string
 }
 
-function loadRecentSearches(): RecentSearchEntry[] {
-  if (typeof window === 'undefined') return []
+interface Segment {
+  id: string
+  name: string
+  sector: SectorOption
+  filters: SegmentFilters
+  totalFound: number
+  researchedCount: number
+  totalCount: number
+  createdAt: string
+  lastViewedAt: string
+}
+
+async function fetchSegments(limit = 5): Promise<Segment[]> {
   try {
-    const raw = window.localStorage.getItem(RECENT_SEARCHES_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    if (!Array.isArray(parsed)) return []
-    // Tolerate entries saved under an older schema (e.g. a "countries" field
-    // from before regions replaced free-country selection) — normalize
-    // rather than let a stale localStorage value crash the page.
-    return parsed
-      .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && typeof e.sector === 'string')
-      .map((e): RecentSearchEntry => ({
-        sector: e.sector as SectorOption,
-        regionKeys: Array.isArray(e.regionKeys) ? e.regionKeys as string[] : [],
-        employeeRangeLabel: typeof e.employeeRangeLabel === 'string' ? e.employeeRangeLabel : null,
-        revenueRangeLabel: typeof e.revenueRangeLabel === 'string' ? e.revenueRangeLabel : null,
-        resultCount: typeof e.resultCount === 'number' ? e.resultCount : 0,
-        searchedAt: typeof e.searchedAt === 'string' ? e.searchedAt : new Date().toISOString(),
-      }))
+    const res = await fetch(`/api/admin/company-discovery/segments?limit=${limit}`)
+    const data = await res.json()
+    return data.success ? (data.segments as Segment[]) : []
   } catch {
     return []
+  }
+}
+
+async function saveSegment(name: string, sector: SectorOption, filters: SegmentFilters, matches: DiscoveredMatch[], totalFound: number): Promise<void> {
+  try {
+    await fetch('/api/admin/company-discovery/segments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        sector,
+        filters,
+        totalFound,
+        companies: matches.map(m => ({
+          name: m.name,
+          domain: m.domain,
+          industry: m.industry,
+          employeeCount: m.employeeCount,
+          hqLocation: m.hqLocation,
+          founded: m.founded,
+          revenueAnnual: m.revenueAnnual,
+        })),
+      }),
+    })
+  } catch {
+    // Best-effort only — a failed save shouldn't block or error out the search itself.
   }
 }
 
@@ -143,12 +176,12 @@ function CompanyDiscoveryInner() {
   const [presenceKeys, setPresenceKeys] = useState<Set<string>>(new Set())
   const [excludeKeywords, setExcludeKeywords] = useState('')
   const [showHowItWorks, setShowHowItWorks] = useState(false)
-  const [recentSearches, setRecentSearches] = useState<RecentSearchEntry[]>([])
+  const [segments, setSegments] = useState<Segment[]>([])
 
   const searchCardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setRecentSearches(loadRecentSearches())
+    void fetchSegments().then(setSegments)
   }, [])
 
   function scrollToSearch() {
@@ -167,12 +200,27 @@ function CompanyDiscoveryInner() {
     return Array.from(new Set([...regionCountries, ...customCountries]))
   }
 
-  function recordRecentSearch(entry: RecentSearchEntry) {
-    setRecentSearches(prev => {
-      const next = [entry, ...prev].slice(0, MAX_RECENT_SEARCHES)
-      try { window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)) } catch { /* best-effort only */ }
-      return next
-    })
+  function buildSegmentName(forSector: SectorOption, regionKeys: string[]): string {
+    const regionLabel = regionKeys.length > 0
+      ? regionKeys.map(k => REGION_OPTIONS.find(r => r.key === k)?.label ?? k).join(', ')
+      : null
+    return regionLabel ? `${forSector} • ${regionLabel}` : forSector
+  }
+
+  function currentSegmentFilters(forSector: SectorOption): SegmentFilters {
+    return {
+      sector: forSector,
+      regionKeys: Array.from(selectedRegions),
+      customCountries: Array.from(customCountries),
+      countries: resolvedCountries(),
+      employeeRangeKey,
+      revenueRangeKey,
+      foundedAfter,
+      foundedBefore,
+      companyTypeKeys: Array.from(companyTypeKeys),
+      presenceKeys: Array.from(presenceKeys),
+      excludeKeywords,
+    }
   }
 
   async function runSearch() {
@@ -180,50 +228,55 @@ function CompanyDiscoveryInner() {
       search.setSearchError('Select an industry to search.')
       return
     }
-    const employeeRange = EMPLOYEE_RANGES.find(r => r.key === employeeRangeKey)
-    const revenueRange = REVENUE_RANGES.find(r => r.key === revenueRangeKey)
-    const count = await search.handleSearch({
+    const filters = currentSegmentFilters(sector)
+    const { count, matches, total } = await search.handleSearch({
       sector,
-      countries: resolvedCountries(),
+      countries: filters.countries,
       employeeRangeKey: employeeRangeKey || undefined,
       revenueRangeKey: revenueRangeKey || undefined,
       foundedAfter: foundedAfter ? Number(foundedAfter) : undefined,
       foundedBefore: foundedBefore ? Number(foundedBefore) : undefined,
-      companyTypeKeys: Array.from(companyTypeKeys),
-      presenceKeys: Array.from(presenceKeys),
+      companyTypeKeys: filters.companyTypeKeys,
+      presenceKeys: filters.presenceKeys,
       excludeKeywords: excludeKeywords.split(',').map(s => s.trim()).filter(Boolean),
     })
-    if (count >= 0) {
-      recordRecentSearch({
-        sector,
-        regionKeys: Array.from(selectedRegions),
-        employeeRangeLabel: employeeRange?.label ?? null,
-        revenueRangeLabel: revenueRange?.label ?? null,
-        resultCount: count,
-        searchedAt: new Date().toISOString(),
-      })
+    if (count > 0 && matches.length > 0) {
+      await saveSegment(buildSegmentName(sector, filters.regionKeys), sector, filters, matches, total || count)
+      setSegments(await fetchSegments())
     }
   }
 
-  async function applyRecentSearch(entry: RecentSearchEntry) {
-    setSector(entry.sector)
-    setSelectedRegions(new Set(entry.regionKeys))
-    setCustomCountries(new Set())
-    const employeeRange = EMPLOYEE_RANGES.find(r => r.label === entry.employeeRangeLabel)
-    setEmployeeRangeKey(employeeRange?.key ?? '')
-    const revenueRange = REVENUE_RANGES.find(r => r.label === entry.revenueRangeLabel)
-    setRevenueRangeKey(revenueRange?.key ?? '')
+  async function applySegment(segment: Segment) {
+    const f = segment.filters
+    setSector(f.sector)
+    setSelectedRegions(new Set(f.regionKeys))
+    setCustomCountries(new Set(f.customCountries))
+    setEmployeeRangeKey(f.employeeRangeKey)
+    setRevenueRangeKey(f.revenueRangeKey)
+    setFoundedAfter(f.foundedAfter)
+    setFoundedBefore(f.foundedBefore)
+    setCompanyTypeKeys(new Set(f.companyTypeKeys))
+    setPresenceKeys(new Set(f.presenceKeys))
+    setExcludeKeywords(f.excludeKeywords)
     scrollToSearch()
-    const regionCountries = REGION_OPTIONS.filter(r => entry.regionKeys.includes(r.key)).flatMap(r => r.countries)
-    const count = await search.handleSearch({
-      sector: entry.sector,
-      countries: regionCountries,
-      employeeRangeKey: employeeRange?.key,
-      revenueRangeKey: revenueRange?.key,
+    // Re-run the same search so the results list matches — but don't save a
+    // new segment row here. researchedCount/totalCount are computed fresh
+    // on every GET from the *existing* snapshot, so there's nothing to
+    // refresh; re-saving would just create a visible duplicate in Recent
+    // Searches (found via live testing, not guessed).
+    await search.handleSearch({
+      sector: f.sector,
+      countries: f.countries,
+      employeeRangeKey: f.employeeRangeKey || undefined,
+      revenueRangeKey: f.revenueRangeKey || undefined,
+      foundedAfter: f.foundedAfter ? Number(f.foundedAfter) : undefined,
+      foundedBefore: f.foundedBefore ? Number(f.foundedBefore) : undefined,
+      companyTypeKeys: f.companyTypeKeys,
+      presenceKeys: f.presenceKeys,
+      excludeKeywords: f.excludeKeywords.split(',').map(s => s.trim()).filter(Boolean),
     })
-    if (count >= 0) {
-      recordRecentSearch({ ...entry, resultCount: count, searchedAt: new Date().toISOString() })
-    }
+    await fetch(`/api/admin/company-discovery/segments/${segment.id}`, { method: 'PATCH' })
+    setSegments(await fetchSegments())
   }
 
   // ── Arrive-via-link autosearch ───────────────────────────────
@@ -237,6 +290,32 @@ function CompanyDiscoveryInner() {
     if (!segment) return
     autoSearchedRef.current = true
     search.handleSearch({ definitionOverride: segment, excludeCompanyName: searchParams.get('exclude') ?? undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Resume a saved segment ─────────────────────────────────────
+  // From the Home dashboard's "Continue where you left off" cards
+  // (?resumeSegmentId=...) — a real segment id, distinct from the free-text
+  // ?segment= param above. Runs once, prefills every filter, then re-runs
+  // the exact same search.
+  const resumedRef = useRef(false)
+  useEffect(() => {
+    if (resumedRef.current) return
+    const resumeSegmentId = searchParams.get('resumeSegmentId')
+    if (!resumeSegmentId) return
+    resumedRef.current = true
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/company-discovery/segments/${resumeSegmentId}`)
+        const data = await res.json()
+        if (data.success && data.segment) {
+          await applySegment({ ...data.segment, researchedCount: 0, totalCount: 0 } as Segment)
+        }
+      } catch {
+        // Best-effort — if the segment can't be loaded, the page just shows
+        // its normal empty state instead of erroring out.
+      }
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -275,21 +354,24 @@ function CompanyDiscoveryInner() {
       </AnimatePresence>
 
       <div ref={searchCardRef} className="rounded-lg border border-border bg-card">
-        <div className="px-5 py-4 border-b border-border/60">
+        <div className="px-4 py-2.5 border-b border-border/60">
           <h2 className="text-sm font-semibold text-foreground">Target market</h2>
           <p className="text-muted-foreground/60 text-xs mt-0.5">Set the criteria Demaze should search for — a focused, relevant set, not a database dump.</p>
         </div>
 
-        <div className="px-5 py-5 space-y-4">
-          <FilterSection label="Industry" icon={Building2}>
-            <div className="flex flex-wrap gap-1.5">
-              {SECTOR_OPTIONS.map(s => (
-                <PillToggle key={s} label={s} selected={sector === s} onClick={() => setSector(s)} />
-              ))}
+        <div className="px-4 py-4 space-y-3">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+            <div className="space-y-1.5">
+              <Label className="gap-1.5 text-xs">
+                <Building2 className="size-3.5 text-muted-foreground" /> Industry
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {SECTOR_OPTIONS.map(s => (
+                  <PillToggle key={s} label={s} selected={sector === s} onClick={() => setSector(s)} />
+                ))}
+              </div>
             </div>
-          </FilterSection>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/50 pt-4">
             <div className="space-y-1.5">
               <Label htmlFor="employee-range-select" className="text-xs">
                 Company size <span className="text-muted-foreground/60 font-normal">(optional)</span>
@@ -299,7 +381,7 @@ function CompanyDiscoveryInner() {
                 value={employeeRangeKey}
                 onValueChange={(v) => setEmployeeRangeKey(v as string)}
               >
-                <SelectTrigger id="employee-range-select">
+                <SelectTrigger id="employee-range-select" className="w-44">
                   <SelectValue placeholder="Any size" />
                 </SelectTrigger>
                 <SelectContent>
@@ -319,7 +401,7 @@ function CompanyDiscoveryInner() {
                 value={revenueRangeKey}
                 onValueChange={(v) => setRevenueRangeKey(v as string)}
               >
-                <SelectTrigger id="revenue-range-select">
+                <SelectTrigger id="revenue-range-select" className="w-44">
                   <SelectValue placeholder="Any revenue" />
                 </SelectTrigger>
                 <SelectContent>
@@ -344,7 +426,7 @@ function CompanyDiscoveryInner() {
             </div>
           </FilterSection>
 
-          <details className="group text-xs border-t border-border/50 pt-4">
+          <details className="group text-xs border-t border-border/50 pt-3">
             <summary className="cursor-pointer list-none text-muted-foreground/70 hover:text-foreground/80 flex items-center gap-1.5 w-fit select-none">
               <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
               <Filter className="size-3.5" /> Advanced filters
@@ -447,7 +529,7 @@ function CompanyDiscoveryInner() {
             </div>
           </details>
 
-          <div className="flex items-center gap-3 flex-wrap border-t border-border/50 pt-4">
+          <div className="flex items-center gap-3 flex-wrap border-t border-border/50 pt-3">
             <Button size="lg" onClick={runSearch} disabled={searching || !sector}>
               {searching ? <><Spinner /> Finding matching companies…</> : <><Search className="size-4" /> Find Companies</>}
             </Button>
@@ -469,28 +551,23 @@ function CompanyDiscoveryInner() {
         </div>
       </div>
 
-      {recentSearches.length > 0 && (
+      {segments.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xs font-medium text-muted-foreground/80 flex items-center gap-1.5">
             <Clock className="size-3.5" /> Recent Searches
           </h3>
           <div className="space-y-1.5">
-            {recentSearches.map((entry, i) => (
+            {segments.map((seg) => (
               <button
-                key={i}
-                onClick={() => applyRecentSearch(entry)}
+                key={seg.id}
+                onClick={() => applySegment(seg)}
                 disabled={searching}
                 className="w-full flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left hover:bg-accent hover:border-border-strong transition-colors disabled:opacity-50"
               >
                 <div className="min-w-0">
-                  <p className="text-foreground text-xs font-medium truncate">
-                    {entry.sector}
-                    {entry.regionKeys.length > 0 && ` · ${entry.regionKeys.map(k => REGION_OPTIONS.find(r => r.key === k)?.label ?? k).join(', ')}`}
-                    {entry.employeeRangeLabel && ` · ${entry.employeeRangeLabel}`}
-                    {entry.revenueRangeLabel && ` · ${entry.revenueRangeLabel}`}
-                  </p>
+                  <p className="text-foreground text-xs font-medium truncate">{seg.name}</p>
                   <p className="text-muted-foreground/60 text-[11px] mt-0.5">
-                    {entry.resultCount} compan{entry.resultCount === 1 ? 'y' : 'ies'} found · {new Date(entry.searchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {seg.totalCount} compan{seg.totalCount === 1 ? 'y' : 'ies'} · {seg.researchedCount} of {seg.totalCount} researched · {new Date(seg.lastViewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </p>
                 </div>
                 <ChevronRight className="size-3.5 text-muted-foreground/50 flex-shrink-0" />
