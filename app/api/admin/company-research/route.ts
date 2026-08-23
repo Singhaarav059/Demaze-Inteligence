@@ -1,17 +1,70 @@
 // ============================================================
-// Admin: Company Signals Research — POST /api/admin/company-research
+// Admin: Company Signals Research — POST + GET /api/admin/company-research
 // ============================================================
-// Thin wrapper around researchCompanySignals() (lib/research/company-
+// POST: thin wrapper around researchCompanySignals() (lib/research/company-
 // signals.ts) — the Demaze intelligence layer's single grounded-search call.
 // Non-fatal persistence to run history, same pattern as
 // useCompanyDiscoverySearch.ts's own persistResult().
+//
+// GET: fetches back the most recent already-persisted result for a company
+// (?domain= or ?name=) — added so Company Discovery's "already researched"
+// rows (companies researched on a PRIOR visit to that page, flagged by
+// explee-discovery/route.ts's annotateAlreadyResearched) can show their
+// real result on demand instead of the "View report" action silently never
+// appearing, which was the previous behavior (result was only ever kept in
+// in-memory React state from the POST response, never fetched back).
+// Deliberately scoped to operation='company_signals_research' rows only —
+// a company may also have been researched via the separate deep pipeline
+// (Auto Flow/Wizard/Research), whose final_result is a completely different
+// shape (CompanyResearchResult here vs. the full analysisResult there);
+// CompanyResearchCard.tsx can only render the former, so a deep-pipeline
+// row is correctly left unmatched here rather than force-fit into the
+// wrong shape.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
-import { researchCompanySignals, type CompanyResearchInput } from '@/lib/research/company-signals'
+import { researchCompanySignals, type CompanyResearchInput, type CompanyResearchResult } from '@/lib/research/company-signals'
+import { normalizeDomain, normalizeName } from '@/lib/enrichment/company-discovery'
 import { createServerClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logger'
+
+export async function GET(req: NextRequest) {
+  const authError = verifyAdminRequest(req)
+  if (authError) return authError
+
+  const domain = req.nextUrl.searchParams.get('domain')?.trim() || null
+  const name = req.nextUrl.searchParams.get('name')?.trim() || null
+  if (!domain && !name) {
+    return NextResponse.json({ success: false, error: 'domain or name is required' }, { status: 400 })
+  }
+
+  // No .limit() here, matching annotateAlreadyResearched's own full-scan
+  // pattern (explee-discovery/route.ts) — the operation filter already
+  // narrows this to just this page's own research rows, and normalized
+  // domain/name matching (below) can't be pushed into the SQL query since
+  // stored values aren't guaranteed to already be normalized.
+  const supabase = createServerClient()
+  const { data: rows, error } = await supabase
+    .from('pipeline_test_runs')
+    .select('domain, company_url, final_result')
+    .eq('operation', 'company_signals_research')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+
+  const wantDomain = domain ? normalizeDomain(domain) : null
+  const wantName = name ? normalizeName(name) : null
+  const match = (rows ?? []).find(r => {
+    if (wantDomain && r.domain && normalizeDomain(r.domain) === wantDomain) return true
+    if (wantName && r.company_url && normalizeName(r.company_url) === wantName) return true
+    return false
+  })
+
+  return NextResponse.json({ success: true, result: (match?.final_result as CompanyResearchResult | undefined) ?? null })
+}
 
 export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)

@@ -36,8 +36,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { IntelStatus, type IntelStatusKind } from '@/components/ui/intel-status'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -52,7 +54,7 @@ import {
   AlertDialogDescription,
   AlertDialogClose,
 } from '@/components/ui/alert-dialog'
-import { Clock, Mail } from 'lucide-react'
+import { Clock, Mail, Eye, EyeOff } from 'lucide-react'
 import { staggerList, listItem } from '@/lib/motion'
 import { nextFollowupSequence, buildFollowupSubject } from '@/lib/outbound/sending/followup-schedule'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
@@ -115,28 +117,24 @@ function formatDue(dueAt: string | null): string {
   return days === 0 ? 'Due today' : `Due in ${days}d`
 }
 
+// Maps each real campaign-contact status onto IntelStatus's shared status
+// vocabulary/dot color instead of an ad hoc colored Badge — same underlying
+// status string, only the rendering primitive changed.
+const STATUS_INTEL: Record<string, { status: IntelStatusKind; label: string }> = {
+  queued: { status: 'not_researched', label: 'Not sent yet' },
+  sent: { status: 'researching', label: 'Sent' },
+  followup_1: { status: 'researching', label: 'Follow-up 1 sent' },
+  followup_2: { status: 'researching', label: 'Follow-up 2 sent' },
+  followup_3: { status: 'researching', label: 'Follow-up 3 sent' },
+  replied: { status: 'complete', label: 'Replied' },
+  bounced: { status: 'failed', label: 'Bounced' },
+  stopped: { status: 'already_researched', label: 'Stopped' },
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    queued: 'bg-accent text-muted-foreground',
-    sent: 'bg-primary/10 text-primary border border-primary/40',
-    followup_1: 'bg-primary/10 text-primary border border-primary/40',
-    followup_2: 'bg-primary/10 text-primary border border-primary/40',
-    followup_3: 'bg-primary/10 text-primary border border-primary/40',
-    replied: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30',
-    bounced: 'bg-destructive/10 text-destructive border border-destructive/40',
-    stopped: 'bg-accent text-muted-foreground',
-  }
-  const label: Record<string, string> = {
-    queued: 'Not sent yet',
-    sent: 'Sent',
-    followup_1: 'Follow-up 1 sent',
-    followup_2: 'Follow-up 2 sent',
-    followup_3: 'Follow-up 3 sent',
-    replied: 'Replied',
-    bounced: 'Bounced',
-    stopped: 'Stopped',
-  }
-  return <Badge className={`text-[10px] ${map[status] ?? 'border border-border text-foreground'}`}>{label[status] ?? status}</Badge>
+  const meta = STATUS_INTEL[status]
+  if (!meta) return <Badge className="text-[10px] border border-border text-foreground">{status}</Badge>
+  return <IntelStatus status={meta.status} label={meta.label} />
 }
 
 export function TrackFollowUpStep({
@@ -488,7 +486,7 @@ export function TrackFollowUpStep({
             const busy = busyRowId === row.id
             return (
               <motion.div key={row.id} variants={listItem}>
-                <Card className="border-border bg-card">
+                <Card className="border-border bg-card transition-colors hover:border-border-strong">
                   <CardContent className="px-5 py-4 space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -502,7 +500,8 @@ export function TrackFollowUpStep({
                       <StatusBadge status={row.status} />
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
+                      <span className={cn('flex items-center gap-1', row.opened_at && 'text-signal-strong')}>
+                        {row.opened_at ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
                         {row.opened_at ? `Open detected ${timeAgo(row.opened_at)}` : 'No open detected yet'}
                         <InfoTooltip>
                           Open detected means the recipient's email client loaded a tracking image — it doesn't

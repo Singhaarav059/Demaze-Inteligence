@@ -10,12 +10,11 @@
 // silently marked sent.
 // ============================================================
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Inbox, Clock } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -24,11 +23,12 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GuideNote } from '@/components/ui/guide-note'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { MetricTile } from '@/components/ui/metric-tile'
 import { cn } from '@/lib/utils'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
-import { useOutboundCampaigns } from './useOutboundCampaigns'
+import { useOutboundCampaigns, type Campaign } from './useOutboundCampaigns'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
+import { StatusDot, type StatusTone } from '../StatusDot'
 
 // Both Send Queued and Process Follow-ups can trigger a REAL send once a
 // real sending provider (e.g. Gmail) is active — see CLAUDE.md's standing
@@ -46,15 +46,19 @@ interface AvailableContact {
   email: string | null
 }
 
-function CampaignStatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    sent: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30',
-    active: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30',
-    queued: 'bg-accent text-muted-foreground',
-    paused: 'bg-signal-medium/10 text-signal-medium border border-signal-medium/30',
-    bounced: 'bg-destructive/10 text-destructive border border-destructive/40',
-  }
-  return <Badge className={cn('text-[10px]', map[status] ?? 'border border-border text-foreground')}>{status}</Badge>
+function campaignStatusTone(status: Campaign['status']): StatusTone {
+  if (status === 'active') return 'strong'
+  if (status === 'paused') return 'medium'
+  if (status === 'completed') return 'muted'
+  return 'muted'
+}
+
+function contactStatusTone(status: string): StatusTone {
+  if (status === 'replied' || status === 'sent') return 'strong'
+  if (status === 'bounced') return 'destructive'
+  if (status.startsWith('followup')) return 'medium'
+  if (status === 'queued' || status === 'stopped') return 'muted'
+  return 'muted'
 }
 
 export default function OutboundCampaignsPage() {
@@ -106,6 +110,23 @@ function OutboundCampaignsPageInner() {
 
   const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId) ?? null
   const isRealSendingProvider = sendingProviderName !== null && sendingProviderName !== 'mock'
+
+  // Real counts derived from the selected campaign's already-fetched
+  // contacts — per-campaign send/reply counts aren't returned by the
+  // campaigns list endpoint itself (would need one extra fetch per
+  // campaign to show on every card), so the campaign list below only ever
+  // shows what it actually has (name/status/provider/created date); real
+  // contact/sent/replied/bounced counts appear once a campaign is opened.
+  const selectedCounts = useMemo(() => {
+    let sent = 0, replied = 0, bounced = 0, queued = 0
+    for (const cc of campaignContacts) {
+      if (cc.status === 'replied') replied++
+      else if (cc.status === 'bounced') bounced++
+      else if (cc.status === 'queued') queued++
+      else sent++
+    }
+    return { total: campaignContacts.length, sent, replied, bounced, queued }
+  }, [campaignContacts])
 
   useEffect(() => {
     if (campaignFromUrl) setSelectedCampaignId(campaignFromUrl)
@@ -162,14 +183,12 @@ function OutboundCampaignsPageInner() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <GlassCard>
-        <CardContent className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">Campaigns</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Batches of prepared emails, sent together to a group of contacts.
-          </p>
-        </CardContent>
-      </GlassCard>
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Campaigns</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Batches of prepared emails, sent together to a group of contacts.
+        </p>
+      </div>
 
       <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
@@ -198,54 +217,72 @@ function OutboundCampaignsPageInner() {
         </p>
       </GuideNote>
 
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="campaign-picker">Campaign</Label>
-            <Select
-              items={campaigns.map(c => ({ value: c.id, label: `${c.name} (${c.status})` }))}
-              value={selectedCampaignId ?? ''}
-              onValueChange={value => setSelectedCampaignId((value as string) || null)}
-              disabled={loadingCampaigns}
-            >
-              <SelectTrigger id="campaign-picker">
-                <SelectValue placeholder={loadingCampaigns ? 'Loading…' : 'Select a campaign…'} />
-              </SelectTrigger>
-              <SelectContent>
-                {campaigns.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} ({c.status})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1 pt-1 border-t border-border">
-            <Label htmlFor="new-campaign-name">Or create a new one</Label>
-            <div className="flex gap-2">
-              <Input
-                id="new-campaign-name"
-                aria-label="Campaign name"
-                value={newCampaignName}
-                onChange={e => setNewCampaignName(e.target.value)}
-                placeholder="Q3 Manufacturing Outreach"
-              />
-              <Button size="sm" disabled={creating || !newCampaignName.trim()} onClick={handleCreate}>
-                {creating ? <Spinner className="size-3.5" /> : null}
-                Create
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-1">
+        <Label htmlFor="new-campaign-name">New campaign</Label>
+        <div className="flex gap-2">
+          <Input
+            id="new-campaign-name"
+            aria-label="Campaign name"
+            value={newCampaignName}
+            onChange={e => setNewCampaignName(e.target.value)}
+            placeholder="Q3 Manufacturing Outreach"
+          />
+          <Button size="sm" disabled={creating || !newCampaignName.trim()} onClick={handleCreate}>
+            {creating ? <Spinner className="size-3.5" /> : null}
+            Create
+          </Button>
+        </div>
+      </div>
+
+      {loadingCampaigns ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Spinner className="size-4" /> Loading campaigns…
+        </div>
+      ) : campaigns.length === 0 ? (
+        <EmptyState icon={Inbox} title="No campaigns yet" className="border-none py-4" />
+      ) : (
+        <div className="divide-y divide-border rounded-lg border border-border bg-card">
+          {campaigns.map(c => {
+            const active = c.id === selectedCampaignId
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedCampaignId(c.id)}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'relative flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors',
+                  active ? 'bg-accent/60' : 'hover:bg-accent/40'
+                )}
+              >
+                {active && <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />}
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">{c.name}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground/60">
+                    {c.sender_provider} · {new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+                <StatusDot tone={campaignStatusTone(c.status)} label={c.status} className="shrink-0" />
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {selectedCampaign && (
         <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricTile icon={Inbox} label="Contacts" value={selectedCounts.total} />
+            <MetricTile icon={Clock} label="Queued" value={selectedCounts.queued} />
+            <MetricTile icon={Inbox} label="Sent" value={selectedCounts.sent} />
+            <MetricTile icon={Inbox} label="Replied" value={selectedCounts.replied} sub={selectedCounts.bounced > 0 ? `${selectedCounts.bounced} bounced` : undefined} />
+          </div>
+
           <Card className="border-border bg-card">
             <CardContent className="px-5 py-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground">{selectedCampaign.name}</h2>
-                <CampaignStatusBadge status={selectedCampaign.status} />
+                <StatusDot tone={campaignStatusTone(selectedCampaign.status)} label={selectedCampaign.status} />
               </div>
               <div className="flex gap-2">
                 <Button
@@ -352,7 +389,7 @@ function OutboundCampaignsPageInner() {
                       <span className="text-foreground">
                         {cc.outbound_contacts?.person_name ?? cc.contact_id} · {cc.outbound_contacts?.company_name}
                       </span>
-                      <CampaignStatusBadge status={cc.status} />
+                      <StatusDot tone={contactStatusTone(cc.status)} label={cc.status.replace(/_/g, ' ')} />
                     </motion.div>
                   ))}
                 </motion.div>

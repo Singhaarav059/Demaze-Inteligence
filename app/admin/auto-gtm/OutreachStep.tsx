@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AnimatePresence, motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
@@ -93,6 +94,15 @@ function urgencyBadgeVariant(urgency: FollowupDraft['urgency']) {
   if (urgency === 'high') return 'destructive' as const
   if (urgency === 'medium') return 'secondary' as const
   return 'outline' as const
+}
+
+// Signal-strength color scale (matches ResearchCard.tsx's own confidenceClass()
+// — same visual language, duplicated locally per this repo's own
+// "duplication over cross-module coupling for small helpers" convention).
+function relevanceBadgeClass(confidence: 'high' | 'medium' | 'low') {
+  if (confidence === 'high') return 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+  if (confidence === 'medium') return 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+  return 'border-signal-weak/40 bg-signal-weak/10 text-signal-weak'
 }
 
 function initialsOf(name: string): string {
@@ -474,6 +484,7 @@ export function OutreachStep({
   }
 
   const readyCount = contacts.filter(c => drafts[c.id]?.email_draft).length
+  const draftProgress = contacts.length > 0 ? Math.round((readyCount / contacts.length) * 100) : 0
 
   return (
     <div className="space-y-3">
@@ -492,9 +503,19 @@ export function OutreachStep({
             Drafted automatically below. Edit, switch subject, or regenerate — sending happens on the next step.
           </p>
         </div>
-        <Badge variant="outline" className="shrink-0">
-          {readyCount} of {contacts.length} drafted
-        </Badge>
+        {contacts.length > 0 && (
+          <div className="shrink-0 text-right">
+            <Badge variant="outline" className="mb-1.5">
+              {readyCount} of {contacts.length} drafted
+            </Badge>
+            <div className="h-1 w-28 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-signal-strong transition-[width] duration-500"
+                style={{ width: `${draftProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {contacts.length === 0 ? (
@@ -503,31 +524,47 @@ export function OutreachStep({
         <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col md:flex-row">
           {/* Left: compact contact list — click a row to preview its draft on the right */}
           <div className="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-border">
-            <div className="max-h-[560px] overflow-y-auto divide-y divide-border">
+            <div className="max-h-[560px] overflow-y-auto divide-y divide-border/60">
               {contacts.map(contact => {
                 const generated = drafts[contact.id]
                 const isActive = activeContactId === contact.id
                 const isDraftingThis = draftingIds.has(contact.id) && !generated?.email_draft
+                const statusDotClass = generated?.email_draft
+                  ? 'bg-signal-strong'
+                  : isDraftingThis
+                    ? 'bg-signal-medium animate-pulse'
+                    : 'bg-signal-none'
 
                 return (
                   <div
                     key={contact.id}
-                    className={`flex items-center gap-2 px-3 py-2 ${isActive ? 'bg-accent' : 'hover:bg-accent/40'}`}
+                    className={cn(
+                      'flex items-center gap-2 pl-2.5 pr-3 py-2 border-l-2 transition-colors',
+                      isActive ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-accent/40'
+                    )}
                   >
                     <button
                       type="button"
                       onClick={() => selectContact(contact.id)}
-                      className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                      className="flex-1 min-w-0 flex items-center gap-2.5 text-left"
                       aria-current={isActive ? 'true' : undefined}
                     >
-                      <span className="size-7 shrink-0 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground">
-                        {initialsOf(contact.person_name)}
+                      <span className="relative shrink-0">
+                        <span className="size-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground">
+                          {initialsOf(contact.person_name)}
+                        </span>
+                        <span
+                          className={cn('absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-card', statusDotClass)}
+                          aria-hidden="true"
+                        />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="text-xs font-medium text-foreground truncate">{contact.person_name}</span>
                           {generated?.email_draft && (
-                            <Badge variant="outline" className="text-[9px] px-1 py-0">drafted</Badge>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-signal-strong/40 bg-signal-strong/10 text-signal-strong">
+                              drafted
+                            </Badge>
                           )}
                         </span>
                         <span className="block text-[11px] text-muted-foreground/70 truncate">
@@ -571,6 +608,16 @@ export function OutreachStep({
                         <span className="text-sm font-medium text-foreground">{contact.person_name}</span>
                         {contact.title_hint && (
                           <span className="text-xs text-muted-foreground/70">{contact.title_hint}</span>
+                        )}
+                        {contact.discovery_confidence && (
+                          <span
+                            className={cn(
+                              'rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                              relevanceBadgeClass(contact.discovery_confidence)
+                            )}
+                          >
+                            {contact.discovery_confidence} relevance
+                          </span>
                         )}
                       </div>
                     </div>
@@ -658,34 +705,45 @@ export function OutreachStep({
                       </div>
                     ) : (
                       !isSwitching && (
-                        <div className="rounded-md border border-border bg-background/50 p-3 space-y-2">
-                          <div className="text-xs text-muted-foreground/70">
-                            To: <span className="text-foreground">{contact.email}</span>
+                        <div className="rounded-lg border border-border bg-background/50 overflow-hidden">
+                          <div className="space-y-1.5 border-b border-border/60 bg-muted/20 px-3 py-2.5">
+                            <div className="text-xs text-muted-foreground/70">
+                              To <span className="text-foreground">{contact.email}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground/70">
+                              Subject <span className="text-foreground font-medium">{generated.selected_subject_line}</span>
+                            </div>
+                            {generated.email_draft.personalizationCheck?.isGeneric ? (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-signal-weak/40 bg-signal-weak/10 text-signal-weak"
+                                title={generated.email_draft.personalizationCheck.reason}
+                              >
+                                Generic personalization — review before sending
+                              </Badge>
+                            ) : generated.email_draft.personalizationCheck?.referencesRealEvidence ? (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-signal-strong/40 bg-signal-strong/10 text-signal-strong"
+                              >
+                                Evidence-based personalization
+                              </Badge>
+                            ) : null}
                           </div>
-                          <div className="text-xs text-muted-foreground/70">
-                            Subject: <span className="text-foreground font-medium">{generated.selected_subject_line}</span>
-                          </div>
-                          {generated.email_draft.personalizationCheck?.isGeneric && (
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px]"
-                              title={generated.email_draft.personalizationCheck.reason}
-                            >
-                              Generic personalization — review before sending
-                            </Badge>
-                          )}
-                          <p className="text-xs text-foreground whitespace-pre-wrap pt-2 border-t border-border/60">
+                          <p className="text-xs text-foreground whitespace-pre-wrap px-3 py-3">
                             <TypewriterText text={generated.email_draft.fullText} />
                           </p>
-                          <Button size="sm" variant="outline" onClick={() => startEditing(contact)}>
-                            Edit
-                          </Button>
+                          <div className="border-t border-border/60 px-3 py-2">
+                            <Button size="sm" variant="outline" onClick={() => startEditing(contact)}>
+                              Edit
+                            </Button>
+                          </div>
                         </div>
                       )
                     )
                   ) : (
                     !isDrafting && (
-                      <div className="rounded-md border border-dashed border-border bg-background/50 p-3 space-y-2">
+                      <div className="rounded-lg border border-dashed border-border bg-background/50 px-3 py-4 flex flex-col items-center text-center gap-2">
                         <p className="text-xs text-muted-foreground/60">No draft yet for this contact.</p>
                         <Button size="sm" variant="outline" onClick={() => void draftForContact(contact)}>
                           Draft Email

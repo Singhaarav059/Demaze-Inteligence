@@ -24,8 +24,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { GuideNote } from '@/components/ui/guide-note'
 import { EmptyState } from '@/components/ui/empty-state'
-import { GlassCard } from '@/components/ui/glass-card'
-import { CardContent } from '@/components/ui/card'
 import { staggerList, listItem } from '@/lib/motion'
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_work'
@@ -280,15 +278,13 @@ export default function PilotReviewPage() {
           description="This fills in once a batch of pilot companies has been researched — nothing has been tagged as a pilot run yet."
         />
       ) : (
-        <GlassCard>
-          <CardContent>
-            <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-3">
-              {companies.map(c => (
-                <ReviewCard key={c.runId} company={c} onReview={handleReview} />
-              ))}
-            </motion.div>
-          </CardContent>
-        </GlassCard>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-3">
+            {companies.map(c => (
+              <ReviewCard key={c.runId} company={c} onReview={handleReview} />
+            ))}
+          </motion.div>
+        </div>
       )}
     </div>
   )

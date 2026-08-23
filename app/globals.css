@@ -36,6 +36,12 @@
   --color-signal-weak: var(--signal-weak);
   --color-signal-none: var(--signal-none);
 
+  /* Evidence hierarchy (fact/inference/opportunity) — distinct from
+     signal-strength above; see components/ui/evidence-stack.tsx */
+  --color-evidence-fact: var(--evidence-fact);
+  --color-evidence-inference: var(--evidence-inference);
+  --color-evidence-opportunity: var(--evidence-opportunity);
+
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -95,29 +101,34 @@
      falling back to a white popup with our light-on-dark text color
      inherited into it (the "invisible <option> list" bug). */
   color-scheme: dark;
-  --radius: 0.625rem;
-  --background: oklch(0.145 0.003 285);
+  --radius: 0.5rem;
+  /* 2026-08-22 redesign: near-black "intelligence workspace" surface ladder
+     (#0B0D10 canvas -> #111419 -> #15191F -> #191E25), replacing the
+     flatter oklch grey-indigo ladder. Values given as hex per the redesign
+     spec, converted to oklch below only where a computed relation (hover/
+     alpha) is easier to express that way. */
+  --background: #0b0d10;
   --foreground: oklch(0.96 0.003 285);
-  --surface: oklch(0.19 0.004 285);
+  --surface: #111419;
   --surface-foreground: oklch(0.96 0.003 285);
-  --elevated: oklch(0.22 0.005 285);
-  --card: oklch(0.19 0.004 285);
+  --elevated: #191e25;
+  --card: #15191f;
   --card-foreground: oklch(0.96 0.003 285);
-  --popover: oklch(0.22 0.005 285);
+  --popover: #191e25;
   --popover-foreground: oklch(0.96 0.003 285);
   --primary: oklch(0.64 0.19 277);
   --primary-hover: oklch(0.72 0.16 277);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.27 0.008 285);
+  --secondary: #191e25;
   --secondary-foreground: oklch(0.96 0.003 285);
-  --muted: oklch(0.27 0.008 285);
-  --muted-foreground: oklch(0.68 0.012 285);
-  --accent: oklch(0.28 0.01 285);
+  --muted: #15191f;
+  --muted-foreground: oklch(0.66 0.012 285);
+  --accent: #191e25;
   --accent-foreground: oklch(0.96 0.003 285);
   --destructive: oklch(0.68 0.2 22);
-  --border: oklch(1 0 0 / 8%);
-  --border-strong: oklch(1 0 0 / 14%);
-  --input: oklch(1 0 0 / 11%);
+  --border: #272d35;
+  --border-strong: #333b46;
+  --input: #272d35;
   --ring: oklch(0.64 0.19 277);
 
   /* Evidence-strength — tuned for legibility on dark surfaces */
@@ -134,14 +145,20 @@
   --chart-3: oklch(0.8 0.14 78);
   --chart-4: oklch(0.68 0.2 22);
   --chart-5: oklch(0.7 0.14 210);
-  --sidebar: oklch(0.125 0.003 285);
+  --sidebar: #0b0d10;
   --sidebar-foreground: oklch(0.96 0.003 285);
   --sidebar-primary: oklch(0.64 0.19 277);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.27 0.008 285);
+  --sidebar-accent: #191e25;
   --sidebar-accent-foreground: oklch(0.96 0.003 285);
-  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-border: #272d35;
   --sidebar-ring: oklch(0.64 0.19 277);
+
+  /* Evidence hierarchy (fact/inference/opportunity) — a distinct concept
+     from signal-strength above; used by EvidenceStack. */
+  --evidence-fact: oklch(0.74 0.16 158);
+  --evidence-inference: oklch(0.8 0.14 78);
+  --evidence-opportunity: oklch(0.64 0.19 277);
 }
 
 @layer base {

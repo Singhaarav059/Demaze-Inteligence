@@ -13,6 +13,7 @@
 // — never as its own step, per the standing "no Sales Strategy step" rule.
 // ============================================================
 
+import { CheckCircle2, Lightbulb, Target } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -25,16 +26,31 @@ function scoreColor(score: number): string {
   return 'text-destructive'
 }
 
+function scoreBarColor(score: number): string {
+  if (score >= 75) return 'bg-signal-strong'
+  if (score >= 50) return 'bg-signal-medium'
+  if (score >= 25) return 'bg-muted-foreground'
+  return 'bg-destructive'
+}
+
 function ScoreRow({ label, score, reasons }: { label: string; score: number | null; reasons: string[] }) {
   return (
     <div className="flex items-start justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-foreground">{label}</p>
-        <p className="text-[11px] text-muted-foreground/70">{reasons[0]}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-foreground">{label}</p>
+          <span className={cn('shrink-0 text-sm font-semibold tabular-nums', score === null ? 'text-muted-foreground/50' : scoreColor(score))}>
+            {score === null ? '—' : score}
+          </span>
+        </div>
+        <p className="text-[11px] text-muted-foreground/70 mt-0.5">{reasons[0]}</p>
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-accent">
+          <div
+            className={cn('h-full rounded-full transition-all', score === null ? 'bg-muted-foreground/30' : scoreBarColor(score))}
+            style={{ width: `${score ?? 0}%` }}
+          />
+        </div>
       </div>
-      <span className={cn('shrink-0 text-sm font-semibold tabular-nums', score === null ? 'text-muted-foreground/50' : scoreColor(score))}>
-        {score === null ? '—' : score}
-      </span>
     </div>
   )
 }
@@ -46,6 +62,7 @@ export function SectorQualificationCard({ qualification, companyFitLabel = 'Comp
     <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          <Target className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-foreground">Target Sector & Fit</h3>
           <Badge variant="secondary" className="text-[10px]">DRAFT</Badge>
           <InfoTooltip>
@@ -73,9 +90,23 @@ export function SectorQualificationCard({ qualification, companyFitLabel = 'Comp
         <div className="pt-1 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Possible opportunities</p>
           {matchedOpportunities.map((m, i) => (
-            <div key={i} className="rounded border border-border/60 bg-accent/30 px-2.5 py-1.5">
+            <div
+              key={i}
+              className={cn(
+                'rounded border-l-2 bg-accent/30 px-2.5 py-1.5',
+                m.tier === 'confirmed' ? 'border-l-signal-strong/50' : 'border-l-signal-medium/50'
+              )}
+            >
               <div className="flex items-center gap-1.5">
-                <Badge variant={m.tier === 'confirmed' ? 'default' : 'secondary'} className="text-[9px]">
+                <Badge
+                  className={cn(
+                    'text-[9px] gap-1',
+                    m.tier === 'confirmed'
+                      ? 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30'
+                      : 'bg-signal-medium/10 text-signal-medium border border-signal-medium/30'
+                  )}
+                >
+                  {m.tier === 'confirmed' ? <CheckCircle2 className="size-2.5" /> : <Lightbulb className="size-2.5" />}
                   {m.tier === 'confirmed' ? 'Confirmed evidence' : 'Reasonable inference'}
                 </Badge>
                 <span className="text-[11px] text-muted-foreground/70">{m.capability}</span>

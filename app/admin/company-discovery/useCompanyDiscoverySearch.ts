@@ -31,6 +31,13 @@ export interface DiscoveredMatch extends CompanyMatch {
   founded?: number | null
   revenueAnnual?: number | null
   lastResearchedAt?: string | null
+  // True when a prior result exists AND was produced by this same page's
+  // research call (operation='company_signals_research') — see
+  // explee-discovery/route.ts's annotateAlreadyResearched. Only then can
+  // viewStoredResult() below actually fetch something back; a company
+  // researched only via the separate deep pipeline still shows
+  // "Already researched" but has nothing to fetch through this page.
+  hasStoredResult?: boolean
 }
 
 export interface DiscoveredCompanyState {
@@ -94,6 +101,7 @@ export function useCompanyDiscoverySearch() {
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null)
   const [pausedReason, setPausedReason] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [viewingId, setViewingId] = useState<string | null>(null)
 
   const stopRequested = useRef(false)
   // Remembers the last-run request so "Load more" can re-issue it at the
@@ -158,6 +166,7 @@ export function useCompanyDiscoverySearch() {
         founded: c.founded,
         revenueAnnual: c.revenue_annual,
         lastResearchedAt: (c as ExpleeCompany & { lastResearchedAt?: string | null }).lastResearchedAt ?? null,
+        hasStoredResult: (c as ExpleeCompany & { hasStoredResult?: boolean }).hasStoredResult ?? false,
       }))
   }
 
@@ -256,6 +265,34 @@ export function useCompanyDiscoverySearch() {
     setCompanies(prev => prev.map(c => c.company.id === id ? { ...c, ...patch } : c))
   }
 
+  // ── View a previously-researched company's stored result ──────────
+  // For 'already_researched' rows whose result was never fetched into
+  // React state (see explee-discovery/route.ts's hasStoredResult flag).
+  // On success this populates `result`, at which point CompanyMatchList's
+  // existing "View report"/"Find decision makers" UI lights up exactly as
+  // it already does for a freshly-researched ('done') company.
+  async function viewStoredResult(id: string) {
+    const item = companies.find(c => c.company.id === id)
+    if (!item) return
+    setViewingId(id)
+    try {
+      const params = new URLSearchParams()
+      if (item.match.domain) params.set('domain', item.match.domain)
+      else params.set('name', item.match.name)
+      const res = await fetch(`/api/admin/company-research?${params.toString()}`)
+      const data = await res.json()
+      if (data.success && data.result) {
+        updateCompany(id, { result: data.result })
+      } else {
+        toast.error('Could not load this company’s saved research.')
+      }
+    } catch {
+      toast.error('Could not load this company’s saved research.')
+    } finally {
+      setViewingId(null)
+    }
+  }
+
   // ── Sequential research loop — one company at a time, by design ────
   // Calls the Demaze intelligence layer (one grounded search call per
   // company, see lib/research/company-signals.ts) instead of the full
@@ -347,6 +384,7 @@ export function useCompanyDiscoverySearch() {
     companies, setCompanies,
     running, progress, pausedReason,
     expandedId, setExpandedId,
+    viewingId, viewStoredResult,
     selectedCount, doneCount,
     handleSearch, toggle, selectAll, selectNone, updateCompany,
     researchSelected, stopBatch,

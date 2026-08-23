@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ArrowDown, Lock, CheckCircle2 } from 'lucide-react'
+import { Check, ArrowDown, Lock, CheckCircle2, Rocket, Zap, Clock3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -277,7 +277,9 @@ export function CampaignSettingsPanel({
         <div className="space-y-6">
           {/* A. CAMPAIGN */}
           <div className="space-y-4">
-            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Campaign</h4>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide">
+              <Rocket className="size-3.5 text-muted-foreground/70" /> Campaign
+            </h4>
             <div className="space-y-1">
               <Label htmlFor="campaign-name">Campaign name</Label>
               <Input
@@ -310,7 +312,9 @@ export function CampaignSettingsPanel({
           {/* B. SENDING */}
           <div className="space-y-3 pt-2 border-t border-border">
             <div>
-              <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Sending</h4>
+              <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide">
+                <Zap className="size-3.5 text-muted-foreground/70" /> Sending
+              </h4>
               <p className="text-xs text-muted-foreground/70 mt-1">How should Demaze send?</p>
             </div>
 
@@ -420,7 +424,9 @@ export function CampaignSettingsPanel({
           {/* C. FOLLOW-UPS */}
           <div className="space-y-3 pt-2 border-t border-border">
             <div>
-              <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Follow-ups</h4>
+              <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide">
+                <Clock3 className="size-3.5 text-muted-foreground/70" /> Follow-ups
+              </h4>
               <p className="text-xs text-muted-foreground/70 mt-1">
                 Demaze will follow up when a contact hasn&apos;t replied.{' '}
                 <Badge variant="outline" className="text-[9px] align-middle">

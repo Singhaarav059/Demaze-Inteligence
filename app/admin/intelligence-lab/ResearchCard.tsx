@@ -22,7 +22,15 @@
 
 import Link from 'next/link'
 import { Fragment, useState, type ReactNode } from 'react'
+import {
+  Building2, Newspaper, AlertTriangle, Lightbulb, Users, Target, TrendingUp,
+  ShieldCheck, Sparkles, MessageSquare, ExternalLink, CheckCircle2, BrainCircuit,
+  Radar,
+} from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { EvidenceStack, SourceRow } from '@/components/ui/evidence-stack'
+import { IntelStatus } from '@/components/ui/intel-status'
+import { MetricTile } from '@/components/ui/metric-tile'
 import { cn } from '@/lib/utils'
 import { humanizeText, humanizeList } from '@/lib/text/humanize'
 import { downloadBriefPdf, downloadBriefWord } from '@/lib/export/download-brief'
@@ -35,18 +43,76 @@ import {
   getCompanyOfferings,
   getBusinessProfile,
   getSignals,
+  getPainPointsStructured,
   getOutreachDraft,
+  getWhyDemaze,
+  getCompanyFit,
+  getAutomationOpportunity,
+  getWhyNow,
   type CompetitorProfile,
   type ICPSegment,
   type MarketIntelItem,
   type ResearchQualityAudit,
   type CompanyBusinessProfile,
   type OutreachDraft,
+  type WhyDemaze,
+  type WhyDemazeReason,
+  type CompanyFit,
+  type AutomationOpportunity,
+  type WhyNow,
 } from '@/lib/pipeline/analysis-sections'
 import { DEMAZE_PROOF_POINTS, type ProofPoint } from '@/lib/knowledge/demaze-proof-points'
 import type { RunResult } from './_types'
 
 const str = (v: unknown) => (v != null && v !== '' ? String(v) : null)
+
+// Compact "source reference" chip — domain + external-link affordance. Never
+// labeled "verified"; this pipeline doesn't mechanically verify sources, it
+// just cites where a claim was found. Reused by Competitors/Target Segments/
+// Market Intelligence, the three sections that already carry source_urls.
+function domainFromUrl(url: string): string {
+  try {
+    return new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+function SourceLinks({ urls }: { urls?: string[] }) {
+  if (!urls || urls.length === 0) return null
+  const deduped = Array.from(new Set(urls)).slice(0, 3)
+  return (
+    <div className="mt-1.5 -mx-2 flex flex-col">
+      {deduped.map((u) => (
+        <SourceRow
+          key={u}
+          icon={ExternalLink}
+          label={domainFromUrl(u)}
+          href={u.startsWith('http') ? u : `https://${u}`}
+        />
+      ))}
+    </div>
+  )
+}
+
+// Shared FACT vs DEMAZE READ tag — only ever reflects a real claim_type/source
+// field already on the data (see hard constraint: never fabricate this
+// distinction). 'observed'/'deterministic'/'llm_verified' read as an
+// observed fact; 'inferred'/'llm_inferred' read as Demaze's own read on it.
+function ClaimTag({ claimType, source }: { claimType?: string; source?: string }) {
+  const isFact = source === 'deterministic' || source === 'llm_verified' || claimType === 'observed'
+  const isInference = source === 'llm_inferred' || claimType === 'inferred'
+  if (!isFact && !isInference) return null
+  return isFact ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-evidence-fact">
+      <CheckCircle2 className="size-3" /> Fact
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-evidence-inference">
+      <BrainCircuit className="size-3" /> Demaze read
+    </span>
+  )
+}
 
 function DownloadIcon({ className }: { className?: string }) {
   return (
@@ -60,11 +126,13 @@ function DownloadIcon({ className }: { className?: string }) {
 function Section({
   label,
   accent,
+  icon: Icon,
   className,
   children,
 }: {
   label: string
   accent?: string
+  icon?: React.ComponentType<{ className?: string }>
   className?: string
   children: React.ReactNode
 }) {
@@ -73,24 +141,16 @@ function Section({
       <CardContent className="px-5 py-4">
         <p
           className={cn(
-            'mb-3 text-[11px] font-semibold uppercase tracking-[0.14em]',
+            'mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]',
             accent ?? 'text-muted-foreground',
           )}
         >
+          {Icon && <Icon className="size-3.5" />}
           {label}
         </p>
         {children}
       </CardContent>
     </Card>
-  )
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1.5">
-      <span className="shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground/70">{label}</span>
-      <span className="text-right text-xs font-medium text-foreground/90">{value}</span>
-    </div>
   )
 }
 
@@ -169,6 +229,23 @@ export interface ResearchHeroProps {
   painPointsCount: number
   opportunitiesCount: number
   facts: Array<{ label: string; value: string }>
+  // When available (a saved/cached run), shown as "Researched Xh ago" next
+  // to the status dot instead of a bare "Research complete" — real data
+  // only, from RunResult.cachedAt, never fabricated.
+  lastResearchedAt?: string
+}
+
+// Small relative-time formatter — mirrors intelligence-lab/page.tsx's own
+// local timeAgo(), duplicated per this codebase's small-helper-per-file
+// convention rather than extracted into a shared util for one caller.
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 export function ResearchHero({
@@ -182,33 +259,27 @@ export function ResearchHero({
   painPointsCount,
   opportunitiesCount,
   facts,
+  lastResearchedAt,
 }: ResearchHeroProps) {
-  const tier = signalCount >= 4 ? 'strong' : signalCount >= 2 ? 'medium' : 'weak'
-  const tierMeta = {
-    strong: { label: 'Strong signal', text: 'text-signal-strong', ring: 'border-signal-strong/40 bg-signal-strong/10' },
-    medium: { label: 'Some signal', text: 'text-signal-medium', ring: 'border-signal-medium/40 bg-signal-medium/10' },
-    weak: { label: 'Inferred', text: 'text-signal-none', ring: 'border-border bg-accent/40' },
-  }[tier]
   const confText =
     confidence === 'high' ? 'text-signal-strong' : confidence === 'medium' ? 'text-signal-medium' : 'text-muted-foreground'
 
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-      <Card className="border-border bg-card lg:col-span-2">
+    <div className="space-y-3">
+      <Card className="border-border bg-card">
         <CardContent className="px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h2 className="truncate text-2xl font-semibold tracking-tight text-foreground">{companyName}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {[industry, subIndustry && subIndustry !== industry ? subIndustry : null].filter(Boolean).join(' · ')}
+                {[industry, subIndustry && subIndustry !== industry ? subIndustry : null, ...facts.filter(f => f.label !== 'Industry' && f.label !== 'Segment').map(f => f.value)]
+                  .filter(Boolean)
+                  .join(' · ') || 'No firmographic detail extracted.'}
               </p>
             </div>
-            <div className={cn('shrink-0 rounded-lg border px-3 py-2 text-right', tierMeta.ring)}>
-              <div className={cn('text-xs font-semibold', tierMeta.text)}>{tierMeta.label}</div>
-              <div className={cn('mt-0.5 text-xs', confText)}>{confidence} confidence</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground/70">
-                {signalCount} signal{signalCount !== 1 ? 's' : ''}
-              </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <IntelStatus status="complete" label={lastResearchedAt ? `Researched ${timeAgo(lastResearchedAt)}` : undefined} />
+              <span className={cn('text-xs', confText)}>{confidence} confidence</span>
             </div>
           </div>
           {summary && (
@@ -220,33 +291,73 @@ export function ResearchHero({
         </CardContent>
       </Card>
 
-      {/* Facts rail, fills what used to be dead space on the right */}
-      <Card className="border-border bg-card">
-        <CardContent className="flex h-full flex-col px-5 py-4">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            At a glance
-          </p>
-          {facts.length > 0 ? (
-            <div className="divide-y divide-border/60">
-              {facts.map((f) => (
-                <Fact key={f.label} label={f.label} value={f.value} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs italic text-muted-foreground">No firmographic detail extracted.</p>
-          )}
-          <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
-            <div className="rounded-lg border border-border bg-background/40 px-3 py-2 text-center">
-              <div className="text-lg font-semibold text-foreground">{painPointsCount}</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Pain points</div>
-            </div>
-            <div className="rounded-lg border border-border bg-background/40 px-3 py-2 text-center">
-              <div className="text-lg font-semibold text-foreground">{opportunitiesCount}</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Opportunities</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-3 gap-2.5">
+        <MetricTile icon={Radar} label="Signals" value={signalCount} />
+        <MetricTile icon={AlertTriangle} label="Pain points" value={painPointsCount} />
+        <MetricTile icon={Lightbulb} label="Opportunities" value={opportunitiesCount} />
+      </div>
+    </div>
+  )
+}
+
+// Scored labels only ever come from scorer.ts's shared scoreLabel()
+// ('Strong' | 'Good' | 'Moderate' | 'Weak') — same tone scale used by
+// evidenceBadge/confidenceClass below, just keyed off this specific label
+// set instead of a raw 'high'/'medium' confidence string.
+function scoredLabelTone(label?: string): string {
+  if (label === 'Strong') return 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+  if (label === 'Good') return 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+  if (label === 'Moderate') return 'border-signal-weak/40 bg-signal-weak/10 text-signal-weak'
+  if (label === 'Weak') return 'border-border bg-accent/40 text-muted-foreground'
+  return 'border-border bg-accent/40 text-muted-foreground'
+}
+
+function SummaryCard({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: string }) {
+  return (
+    <div className={cn('rounded-lg border px-3.5 py-3', tone)}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">{label}</p>
+      <p className="mt-1 text-base font-semibold">{value}</p>
+      {sub && <p className="mt-0.5 truncate text-[11px] opacity-70" title={sub}>{sub}</p>}
+    </div>
+  )
+}
+
+// Top summary row — company_fit ("is this a good lead for Demaze"),
+// automation_opportunity, why_now (urgency), and the existing confidence
+// field. All four are scored deterministically upstream (lib/pipeline/
+// scorer.ts) and already flow into the API response — previously only
+// ever rendered in intelligence-lab's raw debug Inspector (ScoreRow), not
+// on this shared card. Renders nothing (not a row of "—" placeholders) if
+// none of the four scores are present, e.g. a run from before this scoring
+// pass existed.
+export function FitSummaryRow({
+  companyFit,
+  automationOpportunity,
+  whyNow,
+  confidence,
+}: {
+  companyFit?: CompanyFit
+  automationOpportunity?: AutomationOpportunity
+  whyNow?: WhyNow
+  confidence: string
+}) {
+  if (!companyFit?.label && !automationOpportunity?.label && !whyNow?.urgency_label) return null
+  const confTone =
+    confidence === 'high' ? scoredLabelTone('Strong') : confidence === 'medium' ? scoredLabelTone('Good') : scoredLabelTone('Weak')
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      {companyFit?.label && (
+        <SummaryCard label="Fit" value={companyFit.label} sub={companyFit.rationale} tone={scoredLabelTone(companyFit.label)} />
+      )}
+      {automationOpportunity?.label && (
+        <SummaryCard label="Opportunity" value={automationOpportunity.label} tone={scoredLabelTone(automationOpportunity.label)} />
+      )}
+      {whyNow?.urgency_label && (
+        <SummaryCard label="Why Now" value={whyNow.urgency_label} sub={whyNow.explanation} tone={scoredLabelTone(whyNow.score != null && whyNow.score >= 5 ? 'Strong' : whyNow.score != null && whyNow.score >= 2 ? 'Good' : 'Weak')} />
+      )}
+      {confidence && (
+        <SummaryCard label="Confidence" value={confidence.charAt(0).toUpperCase() + confidence.slice(1)} tone={confTone} />
+      )}
     </div>
   )
 }
@@ -254,14 +365,56 @@ export function ResearchHero({
 export function RecentNewsSection({ items }: { items: string[] }) {
   if (items.length === 0) return null
   return (
-    <Section label="Recent News">
-      <ul className="grid grid-cols-1 gap-x-8 gap-y-2 md:grid-cols-2">
+    <Section label="Recent News" icon={Newspaper}>
+      <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
         {items.map((item, i) => (
-          <li key={i} className="flex gap-2 text-sm text-foreground/90">
-            <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-            <span>{item}</span>
+          <li key={i} className="flex gap-2.5 rounded-lg border border-border/60 bg-accent/20 px-3 py-2.5 text-sm">
+            <span className="mt-0.5 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Fact</span>
+            <span className="text-foreground/90 leading-relaxed">{item}</span>
           </li>
         ))}
+      </ul>
+    </Section>
+  )
+}
+
+export interface SignalItem {
+  type?: unknown
+  category?: unknown
+  strength?: unknown
+  evidence?: unknown
+}
+
+// Detected Signals — the deterministic evidence layer under Pain
+// Points/Opportunities (lib/pipeline SIGNAL_PATTERNS), each backed by a
+// real quote from the company's own scraped/enriched content. Previously
+// only ever shown in intelligence-lab's debug Inspector — never on the
+// SDR-facing report itself. Same "only render when there's something
+// real" discipline as every other additive section here.
+export function SignalsSection({ signals }: { signals: SignalItem[] }) {
+  if (signals.length === 0) return null
+  return (
+    <Section label="Signals Detected" accent="text-signal-medium" icon={Radar}>
+      <ul className="space-y-3">
+        {signals.map((sig, i) => {
+          const type = str(sig.type)
+          const category = str(sig.category)
+          const strength = str(sig.strength)
+          const evidence = str(sig.evidence)
+          if (!evidence && !type) return null
+          return (
+            <li key={i}>
+              <EvidenceStack
+                fact={evidence ? `“${evidence}”` : (type ?? 'Signal detected')}
+                factMeta={joinWithDot([
+                  type && <span className="capitalize">{type.replace(/_/g, ' ')}</span>,
+                  strength && <span className="capitalize">{strength}</span>,
+                  category && <span className="capitalize">{category.replace(/_/g, ' ')}</span>,
+                ])}
+              />
+            </li>
+          )
+        })}
       </ul>
     </Section>
   )
@@ -274,6 +427,23 @@ export interface OpportunityItem {
   evidence?: unknown
   claim_type?: unknown
   source?: unknown
+  category?: unknown
+  service_line?: unknown
+  relevance?: unknown
+  // Real fields on the normalized opportunity (normalize.ts) — the verbatim
+  // fact this opportunity is grounded in, and (for llm_inferred entries with
+  // no literal quote) the stated reasoning basis. Used to drive the
+  // Evidence -> Inference -> Opportunity chain below.
+  observed_basis?: unknown
+  inferred_from?: unknown
+}
+
+export interface PainPointItem {
+  title?: unknown
+  confidence?: unknown
+  claim_type?: unknown
+  evidence?: unknown
+  reasoning?: unknown
 }
 
 // Master Plan Phase 4/10.4: "never present inference as fact." source/
@@ -284,31 +454,67 @@ export interface OpportunityItem {
 // Confirmed; 'llm_inferred' (reasoning, no literal quote) reads as
 // Reasonable inference — matches this repo's own evidence_id discipline
 // (see normalize.ts's stableEvidenceId).
-function evidenceBadge(o: OpportunityItem): { label: string; className: string } | null {
-  const source = str(o.source)
-  const claimType = str(o.claim_type)
-  if (source === 'deterministic' || source === 'llm_verified' || claimType === 'observed') {
-    return { label: 'Confirmed evidence', className: 'text-signal-strong' }
-  }
-  if (source === 'llm_inferred' || claimType === 'inferred') {
-    return { label: 'Reasonable inference', className: 'text-muted-foreground/70' }
-  }
-  return null
+// Kept as a thin wrapper around the shared ClaimTag for existing callers
+// that pass the looser OpportunityItem shape.
+function evidenceBadge(o: OpportunityItem): { claimType?: string; source?: string } | null {
+  const source = str(o.source) ?? undefined
+  const claimType = str(o.claim_type) ?? undefined
+  if (!source && !claimType) return null
+  return { claimType, source }
 }
 
 export function PainPointsAndOpportunitiesSection({
   painPoints,
+  painPointsStructured,
   opportunities,
   aiSynthesisFailed,
 }: {
   painPoints: string[]
+  // Optional — when present (and non-empty), each pain point renders as an
+  // evidence-graded assessment card (confidence + Fact/Demaze-read tag +
+  // evidence quote + reasoning) instead of a flat bullet. Falls back to the
+  // plain `painPoints` list when omitted, so existing callers that only pass
+  // `painPoints` (Step1Research, AutoFlowResearchSummary) are unaffected.
+  painPointsStructured?: PainPointItem[]
   opportunities: OpportunityItem[]
   aiSynthesisFailed: boolean
 }) {
+  const structured = (painPointsStructured ?? []).filter(p => str(p.title))
+
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <Section label="Pain Points" accent="text-signal-medium">
-        {painPoints.length > 0 ? (
+      <Section label="Pain Points" accent="text-signal-medium" icon={AlertTriangle}>
+        {structured.length > 0 ? (
+          <ul className="space-y-3">
+            {structured.map((p, i) => {
+              const claimType = str(p.claim_type) ?? undefined
+              const borderTone =
+                claimType === 'observed' ? 'border-evidence-fact/50' : claimType === 'inferred' ? 'border-evidence-inference/50' : 'border-border'
+              const conf = str(p.confidence)
+              return (
+                <li key={i} className={cn('border-l-2 py-0.5 pl-3', borderTone)}>
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <span className="font-medium text-foreground">{humanizeText(p.title)}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <ClaimTag claimType={claimType} />
+                      {conf && (
+                        <span className={cn('rounded-md border px-1.5 py-0.5 text-[10px] font-medium capitalize', confidenceClass(conf))}>
+                          {conf}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {str(p.evidence) && (
+                    <p className="mt-1 text-xs italic leading-relaxed text-muted-foreground/80">&ldquo;{humanizeText(p.evidence)}&rdquo;</p>
+                  )}
+                  {str(p.reasoning) && (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{humanizeText(p.reasoning)}</p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        ) : painPoints.length > 0 ? (
           <ul className="space-y-2.5">
             {painPoints.map((p, i) => (
               <li key={i} className="flex gap-2.5 text-sm text-foreground/90">
@@ -324,33 +530,72 @@ export function PainPointsAndOpportunitiesSection({
         )}
       </Section>
 
-      <Section label="AI Opportunities" accent="text-signal-strong">
+      <Section label="AI Opportunities" accent="text-signal-strong" icon={Lightbulb}>
         {opportunities.length > 0 ? (
           <ul className="space-y-3">
             {opportunities.map((o, i) => {
               const badge = evidenceBadge(o)
+              const service = str(o.service_line) ?? str(o.category)
+              const relevance = str(o.relevance)
+              // Evidence -> Inference -> Opportunity chain, only when there's
+              // real fact-level grounding (a verbatim quote or stated observed
+              // basis) to anchor it — never label reasoning-only content as
+              // EVIDENCE (hard rule: don't present inference as observed fact).
+              const factText = str(o.evidence) ?? str(o.observed_basis)
+              const inferenceText = str(o.inferred_from)
+              const metaRow = (service || str(o.entry_point) || relevance) ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {service && (
+                    <span className="rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      {humanizeText(service)}
+                    </span>
+                  )}
+                  {relevance && (
+                    <span className={cn('rounded-md border px-1.5 py-0.5 text-[10px] font-medium capitalize', confidenceClass(relevance.toLowerCase()))}>
+                      {relevance} relevance
+                    </span>
+                  )}
+                  {str(o.entry_point) && (
+                    <span className="text-[10px] text-muted-foreground/70">
+                      Entry point: <span className="text-muted-foreground/90">{humanizeText(o.entry_point)}</span>
+                    </span>
+                  )}
+                </div>
+              ) : undefined
+
+              if (factText) {
+                return (
+                  <li key={i} className="rounded-lg border border-border/60 bg-accent/10 px-3.5 py-3">
+                    <EvidenceStack
+                      fact={`“${humanizeText(factText)}”`}
+                      inference={inferenceText ? humanizeText(inferenceText) : undefined}
+                      opportunity={
+                        <>
+                          <span className="font-medium text-foreground">{humanizeText(o.title)}</span>
+                          {str(o.description) && (
+                            <span className="mt-0.5 block font-normal text-muted-foreground">{humanizeText(o.description)}</span>
+                          )}
+                        </>
+                      }
+                      opportunityMeta={metaRow}
+                    />
+                  </li>
+                )
+              }
+
               return (
-                <li key={i} className="flex gap-2.5 text-sm">
-                  <span className="mt-0.5 shrink-0 text-signal-strong">▸</span>
-                  <div>
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-medium text-foreground">{humanizeText(o.title)}</span>
-                      {badge && (
-                        <span className={`text-[10px] uppercase tracking-wider ${badge.className}`}>{badge.label}</span>
-                      )}
-                    </div>
-                    {str(o.description) && (
-                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{humanizeText(o.description)}</p>
-                    )}
-                    {str(o.evidence) && (
-                      <p className="mt-1 text-xs italic leading-relaxed text-muted-foreground/80">&ldquo;{humanizeText(o.evidence)}&rdquo;</p>
-                    )}
-                    {str(o.entry_point) && (
-                      <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                        Entry point: <span className="normal-case text-muted-foreground/80">{humanizeText(o.entry_point)}</span>
-                      </p>
-                    )}
+                <li key={i} className="rounded-lg border border-border bg-accent/20 px-3.5 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <span className="font-medium text-foreground">{humanizeText(o.title)}</span>
+                    {badge && <ClaimTag claimType={badge.claimType} source={badge.source} />}
                   </div>
+                  {str(o.description) && (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{humanizeText(o.description)}</p>
+                  )}
+                  {inferenceText && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-evidence-inference/90">{humanizeText(inferenceText)}</p>
+                  )}
+                  {metaRow && <div className="mt-2">{metaRow}</div>}
                 </li>
               )
             })}
@@ -404,7 +649,7 @@ export function BusinessProfileSection({ profile }: { profile?: CompanyBusinessP
   if (!hasContent) return null
 
   return (
-    <Section label="Business Profile" accent="text-signal-strong">
+    <Section label="Business Profile" accent="text-signal-strong" icon={Building2}>
       <div className="space-y-3">
         {(profile.ideal_customers || profile.target_company_size || profile.market_positioning) && (
           <p className="text-xs leading-relaxed text-muted-foreground">
@@ -432,10 +677,10 @@ const CATEGORY_LABEL: Record<string, string> = { direct: 'Direct', growing: 'Gro
 export function CompetitorsSection({ competitors }: { competitors: CompetitorProfile[] }) {
   if (competitors.length === 0) return null
   return (
-    <Section label="Competitors" accent="text-signal-medium">
+    <Section label="Competitors" accent="text-signal-medium" icon={Users}>
       <ul className="space-y-3">
         {competitors.map((c, i) => (
-          <li key={i} className="flex items-start justify-between gap-3 text-sm">
+          <li key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-accent/10 px-3.5 py-3 text-sm">
             <div className="min-w-0">
               <span className="font-medium text-foreground">{c.name}</span>
               {c.category && CATEGORY_LABEL[c.category] && (
@@ -476,6 +721,7 @@ export function CompetitorsSection({ competitors }: { competitors: CompetitorPro
                   ])}
                 </p>
               )}
+              <SourceLinks urls={c.source_urls} />
             </div>
             {c.confidence && (
               <span className={cn('shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium capitalize', confidenceClass(c.confidence))}>
@@ -509,10 +755,10 @@ export function TargetSegmentsSection({
 }) {
   if (segments.length === 0) return null
   return (
-    <Section label="Target Customer Segments" accent="text-signal-medium">
+    <Section label="Target Customer Segments" accent="text-signal-medium" icon={Target}>
       <ul className="space-y-3">
         {segments.map((s, i) => (
-          <li key={i} className="flex items-start justify-between gap-3 text-sm">
+          <li key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-accent/10 px-3.5 py-3 text-sm">
             <div className="min-w-0">
               <span className="font-medium text-foreground">{s.name}</span>
               {s.source === 'ai_knowledge' && (
@@ -552,6 +798,7 @@ export function TargetSegmentsSection({
                   ])}
                 </p>
               )}
+              <SourceLinks urls={s.source_urls} />
               {s.name && (
                 onSelectSegment ? (
                   <button
@@ -592,7 +839,7 @@ export function TargetSegmentsSection({
 export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] }) {
   if (items.length === 0) return null
   return (
-    <Section label="Market Intelligence" accent="text-signal-medium">
+    <Section label="Market Intelligence" accent="text-signal-medium" icon={TrendingUp}>
       <ul className="space-y-3">
         {items.map((m, i) => {
           const categoryLabel =
@@ -601,12 +848,13 @@ export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] 
             : m.category === 'shift' ? 'Industry Shift'
             : 'Trend'
           return (
-            <li key={i} className="flex items-start justify-between gap-3 text-sm">
+            <li key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-accent/10 px-3.5 py-3 text-sm">
               <div className="min-w-0">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
                   {categoryLabel}
                 </span>
                 <p className="mt-0.5 text-xs leading-relaxed text-foreground/90">{m.statement}</p>
+                <SourceLinks urls={m.source_urls} />
               </div>
               {m.confidence && (
                 <span className={cn('shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium capitalize', confidenceClass(m.confidence))}>
@@ -630,7 +878,7 @@ export function MarketIntelligenceSection({ items }: { items: MarketIntelItem[] 
 export function ResearchQualitySection({ quality }: { quality?: ResearchQualityAudit }) {
   if (!quality || (quality.items_flagged ?? 0) === 0) return null
   return (
-    <Section label="Research Quality" accent="text-signal-medium">
+    <Section label="Research Quality" accent="text-signal-medium" icon={ShieldCheck}>
       <p className="mb-3 text-xs text-muted-foreground">
         {quality.items_flagged} of {quality.items_audited} audited item
         {quality.items_audited !== 1 ? 's' : ''} flagged for review. Informational only, nothing above was
@@ -689,8 +937,8 @@ export function PersonalizationSummarySection({
   return (
     <Card className="border-primary/30 bg-primary/[0.07]">
       <CardContent className="px-6 py-5">
-        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-          Personalization Summary
+        <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+          <MessageSquare className="size-3.5" /> Personalization Summary
         </p>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {openingAngle && (
@@ -727,6 +975,88 @@ export function PersonalizationSummarySection({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+// Why Demaze Should Care — evidence-graded reasons this company is worth
+// pursuing (lib/pipeline's why_demaze: signal + a real evidence quote +
+// evidence_tier + business_implication + recommended_service, each
+// independently confidence-graded). This has existed and been populated
+// since the narrative prompt shipped, but was only ever rendered in
+// intelligence-lab's debug Inspector tab (MaybeWhyDemaze/WhyDemazeCard) —
+// invisible on every SDR-facing surface (Auto Flow, run-history, batch,
+// company-discovery) that renders ResearchCard instead. Ported here with
+// the same content/fields, restyled to this file's Section/confidenceClass
+// conventions instead of page.tsx's ad hoc classes. Older ("v3") runs whose
+// why_demaze.reasons are plain strings still render, just without the
+// evidence/confidence chips those runs never had.
+export function WhyDemazeSection({ whyDemaze }: { whyDemaze?: WhyDemaze }) {
+  if (!whyDemaze || !whyDemaze.reasons || whyDemaze.reasons.length === 0) return null
+  return (
+    <Section label="Why Demaze Should Care" accent="text-signal-strong" icon={Sparkles}>
+      <div className="space-y-3">
+        {whyDemaze.summary && (
+          <p className="text-sm leading-relaxed text-foreground/90">{humanizeText(whyDemaze.summary)}</p>
+        )}
+        <div className="space-y-2.5">
+          {whyDemaze.reasons.map((reason, i) => {
+            if (typeof reason === 'string') {
+              return (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 shrink-0 text-signal-strong">▸</span>
+                  <span className="text-foreground/90">{humanizeText(reason)}</span>
+                </div>
+              )
+            }
+            const r = reason as Exclude<WhyDemazeReason, string>
+            return (
+              <div key={i} className="rounded-lg border border-signal-strong/25 bg-signal-strong/[0.06] px-3.5 py-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{r.signal}</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {r.confidence && (
+                      <span className={cn('rounded-md border px-1.5 py-0.5 text-[10px] font-medium capitalize', confidenceClass(r.confidence))}>
+                        {r.confidence}
+                      </span>
+                    )}
+                    {r.evidence_tier && (
+                      <span className="rounded-md border border-border bg-accent/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {r.evidence_tier}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {r.evidence && (
+                  <p className="border-l-2 border-border-strong pl-2.5 text-xs italic leading-relaxed text-muted-foreground">
+                    &ldquo;{r.evidence}&rdquo;
+                  </p>
+                )}
+                {r.business_implication && (
+                  <p className="text-xs leading-relaxed text-foreground/90">{humanizeText(r.business_implication)}</p>
+                )}
+                {r.recommended_service && (
+                  <span className="inline-block rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    {r.recommended_service}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {whyDemaze.relevant_services && whyDemaze.relevant_services.length > 0 && (
+          <div className="border-t border-border pt-2.5">
+            <p className="mb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60">Relevant Demaze Services</p>
+            <div className="flex flex-wrap gap-1.5">
+              {whyDemaze.relevant_services.map((svc, i) => (
+                <span key={i} className="rounded-md border border-signal-strong/30 bg-signal-strong/10 px-2 py-0.5 text-[10px] font-medium text-signal-strong">
+                  {svc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </Section>
   )
 }
 
@@ -834,7 +1164,8 @@ export function getResearchCardData(result: RunResult) {
   // extractorResult only exists for live in-session runs; historical runs
   // loaded from run-history only have the normalized analysisResult, which
   // carries its own merged `signals` array (see normalize.ts's mergeSignals).
-  const signalCount = result.extractorResult?.signals?.length ?? getSignals(a).length
+  const signals = getSignals(a).slice(0, 8) as SignalItem[]
+  const signalCount = result.extractorResult?.signals?.length ?? signals.length
 
   const rawPainPoints = Array.isArray(a.pain_points) ? (a.pain_points as unknown[]) : []
   const painPoints: string[] = rawPainPoints
@@ -852,6 +1183,7 @@ export function getResearchCardData(result: RunResult) {
   const opportunities = Array.isArray(a.opportunities)
     ? (a.opportunities as Array<Record<string, unknown>>).slice(0, 6)
     : []
+  const painPointsStructured = getPainPointsStructured(a).slice(0, 6) as PainPointItem[]
   const aiSynthesisFailed = a.ai_synthesis_status === 'failed'
   const aiSynthesisFailureReason = str(a.ai_synthesis_failure_reason)
 
@@ -861,6 +1193,10 @@ export function getResearchCardData(result: RunResult) {
   const researchQuality = getResearchQuality(a)
   const companyOfferings = getCompanyOfferings(a)
   const businessProfile = getBusinessProfile(a)
+  const whyDemaze = getWhyDemaze(a)
+  const companyFit = getCompanyFit(a)
+  const automationOpportunity = getAutomationOpportunity(a)
+  const whyNowScore = getWhyNow(a)
 
   const outreachIntel = a.outreach_intelligence as Record<string, unknown> | null
   const openingAngle = humanizeText(str(outreachIntel?.conversation_angle) ?? str(a.outreach_angle) ?? '')
@@ -919,8 +1255,13 @@ export function getResearchCardData(result: RunResult) {
     businessModel,
     confidence,
     signalCount,
+    signals,
+    // RunResult.cachedAt — real "when this run's scrape was cached" timestamp,
+    // used to show "Researched Xh ago" in the header when available.
+    lastResearchedAt: result.cachedAt,
     recentActivity,
     painPoints,
+    painPointsStructured,
     opportunities,
     aiSynthesisFailed,
     aiSynthesisFailureReason,
@@ -930,6 +1271,10 @@ export function getResearchCardData(result: RunResult) {
     researchQuality,
     companyOfferings,
     businessProfile,
+    whyDemaze,
+    companyFit,
+    automationOpportunity,
+    whyNowScore,
     openingAngle,
     whatToSell,
     whyNow,
@@ -969,9 +1314,10 @@ export function ResearchCard({ result }: { result: RunResult }) {
     )
 
   const {
-    companyName, industry, subIndustry, summary, businessModel, confidence, signalCount,
-    recentActivity, painPoints, opportunities, aiSynthesisFailed, aiSynthesisFailureReason,
-    competitors, icpSegments, marketIntel, researchQuality, businessProfile, openingAngle, whatToSell, whyNow,
+    companyName, industry, subIndustry, summary, businessModel, confidence, signalCount, signals, lastResearchedAt,
+    recentActivity, painPoints, painPointsStructured, opportunities, aiSynthesisFailed, aiSynthesisFailureReason,
+    competitors, icpSegments, marketIntel, researchQuality, businessProfile, whyDemaze,
+    companyFit, automationOpportunity, whyNowScore, openingAngle, whatToSell, whyNow,
     whyContact, likelyProblem,
     outreachDraft, matchedProofPoint, facts, briefInput, briefExtras,
   } = data
@@ -991,11 +1337,16 @@ export function ResearchCard({ result }: { result: RunResult }) {
         painPointsCount={painPoints.length}
         opportunitiesCount={opportunities.length}
         facts={facts}
+        lastResearchedAt={lastResearchedAt}
       />
+      <FitSummaryRow companyFit={companyFit} automationOpportunity={automationOpportunity} whyNow={whyNowScore} confidence={confidence} />
+      <WhyDemazeSection whyDemaze={whyDemaze} />
       <BusinessProfileSection profile={businessProfile} />
       <RecentNewsSection items={recentActivity} />
+      <SignalsSection signals={signals} />
       <PainPointsAndOpportunitiesSection
         painPoints={painPoints}
+        painPointsStructured={painPointsStructured}
         opportunities={opportunities}
         aiSynthesisFailed={aiSynthesisFailed}
       />

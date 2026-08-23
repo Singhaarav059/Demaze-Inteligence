@@ -22,39 +22,34 @@
 // Flow's UI chooses to show. The full picture (including everything
 // omitted here) is always one click away in the Research section.
 //
-// Shown: company identity/summary/facts, Business Profile (what it does,
-// who it serves, market positioning — literally "what is this company /
-// what does it do / what kind of business is it" from the Auto Flow spec),
-// Recent News, and the Personalization Summary (why_contact/what_to_sell/
-// why_now — purpose-built outbound framing).
+// Shown: a short company-description paragraph, Business Profile (what it
+// does, who it serves, market positioning — literally "what is this
+// company / what does it do / what kind of business is it" from the Auto
+// Flow spec), sector qualification, Recent News, and an evidence-driven
+// "Intelligence Snapshot" (why_contact/what_to_sell/why_now — purpose-built
+// outbound framing, rendered via EvidenceStack instead of a plain-text
+// list so it reads as evidence -> inference -> the Demaze opportunity it
+// implies, not a flat FAQ).
 // Omitted: Competitors, Target Customer Segments, Market Intelligence,
 // Pain Points & Opportunities, Research Quality audit, Outreach Draft, and
 // the PDF/Word export toolbar — all either deep-research content that
 // belongs to the Research section, or (Outreach Draft) superseded by Auto
-// Flow's own Campaign & Outreach step.
+// Flow's own Campaign & Outreach step. Company name/industry/HQ/size and
+// the signal/opportunity/contact counts are shown once, in page.tsx's own
+// company-header strip above this component — not repeated here.
 // ============================================================
 
-import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+import { Lightbulb } from 'lucide-react'
+import { EvidenceStack } from '@/components/ui/evidence-stack'
 import {
   getResearchCardData,
   AISynthesisFailureBanner,
   BusinessProfileSection,
   RecentNewsSection,
-  PersonalizationSummarySection,
 } from '@/app/admin/intelligence-lab/ResearchCard'
 import { SectorQualificationCard } from './SectorQualificationCard'
 import type { RunResult } from '@/app/admin/intelligence-lab/_types'
 import type { QualificationResult } from '@/lib/sector-playbook/qualify'
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1.5">
-      <span className="shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground/70">{label}</span>
-      <span className="text-right text-xs font-medium text-foreground/90">{value}</span>
-    </div>
-  )
-}
 
 export function AutoFlowResearchSummary({
   result,
@@ -67,58 +62,49 @@ export function AutoFlowResearchSummary({
   if (!data) return null
 
   const {
-    companyName, industry, subIndustry, summary, businessModel, confidence,
+    summary, businessModel,
     aiSynthesisFailed, aiSynthesisFailureReason, recentActivity,
-    businessProfile, openingAngle, whatToSell, whyNow, whyContact, likelyProblem, facts,
+    businessProfile, openingAngle, whatToSell, whyNow, whyContact, likelyProblem,
   } = data
 
-  const confText =
-    confidence === 'high' ? 'text-signal-strong' : confidence === 'medium' ? 'text-signal-medium' : 'text-muted-foreground'
+  // Nothing real to show if every personalization field came back empty —
+  // an EvidenceStack with no fact would be an empty placeholder, so this
+  // whole section is skipped rather than rendered hollow.
+  const hasPersonalization = Boolean(whyContact || likelyProblem || whyNow || whatToSell || openingAngle)
 
   return (
     <div className="space-y-3">
       <AISynthesisFailureBanner failed={aiSynthesisFailed} reason={aiSynthesisFailureReason} />
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <Card className="border-border bg-card lg:col-span-2">
-          <CardContent className="px-6 py-5">
-            <h2 className="truncate text-xl font-semibold tracking-tight text-foreground">{companyName}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {[industry, subIndustry && subIndustry !== industry ? subIndustry : null].filter(Boolean).join(' · ')}
-              {confidence && <span className={cn('ml-2 text-xs', confText)}>({confidence} confidence)</span>}
-            </p>
-            {summary && (
-              <p className="mt-4 border-t border-border pt-4 text-[15px] leading-relaxed text-foreground/90">{summary}</p>
-            )}
-            {businessModel && !summary.toLowerCase().includes(businessModel.toLowerCase().slice(0, 20)) && (
-              <p className="mt-2 text-xs italic text-muted-foreground">{businessModel}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-border bg-card">
-          <CardContent className="px-5 py-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              At a glance
-            </p>
-            {facts.length > 0 ? (
-              <div className="divide-y divide-border/60">
-                {facts.map((f) => (
-                  <Fact key={f.label} label={f.label} value={f.value} />
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs italic text-muted-foreground">No firmographic detail extracted.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {summary && (
+        <div className="rounded-lg border border-border bg-card px-5 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Company Description</p>
+          <p className="mt-2 text-sm leading-relaxed text-foreground/90">{summary}</p>
+          {businessModel && !summary.toLowerCase().includes(businessModel.toLowerCase().slice(0, 20)) && (
+            <p className="mt-2 text-xs italic text-muted-foreground">{businessModel}</p>
+          )}
+        </div>
+      )}
 
       {qualification && <SectorQualificationCard qualification={qualification} />}
 
+      {hasPersonalization && (
+        <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <Lightbulb className="size-3.5" aria-hidden="true" />
+            Intelligence Snapshot
+          </p>
+          <EvidenceStack
+            fact={whyContact || likelyProblem || 'No specific evidence surfaced yet.'}
+            inference={[whyContact && likelyProblem ? likelyProblem : null, whyNow].filter(Boolean).join(' ') || undefined}
+            opportunity={whatToSell || undefined}
+            opportunityMeta={openingAngle || undefined}
+          />
+        </div>
+      )}
+
       <BusinessProfileSection profile={businessProfile} />
       <RecentNewsSection items={recentActivity} />
-      <PersonalizationSummarySection openingAngle={openingAngle} whatToSell={whatToSell} whyNow={whyNow} whyContact={whyContact} likelyProblem={likelyProblem} />
     </div>
   )
 }

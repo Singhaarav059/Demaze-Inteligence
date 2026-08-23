@@ -63,12 +63,12 @@
 // Sales Intelligence section for the full history.
 // ============================================================
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
+import { Workflow, Building2, Radar, ArrowRight, Lightbulb, Users, Mail } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -76,12 +76,14 @@ import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import { StageProgress, type ProgressStage } from '@/components/ui/stage-progress'
+import { MetricTile } from '@/components/ui/metric-tile'
 import { useSlashFocus } from '@/lib/hooks/useSlashFocus'
 import { cn } from '@/lib/utils'
 import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
+import { getResearchCardData } from '@/app/admin/intelligence-lab/ResearchCard'
 import { AutoFlowResearchSummary } from './AutoFlowResearchSummary'
 import { DecisionMakerFinder, type DecisionMakerFinderHandle } from '@/app/admin/outbound/contacts/DecisionMakerFinder'
-import { StepIndicator, STEPS } from './StepIndicator'
+import { StepIndicator, STEPS, type StepMeta } from './StepIndicator'
 import { ContactInfoStep } from './ContactInfoStep'
 import { OutreachStep } from './OutreachStep'
 import { ReviewSendStep } from './ReviewSendStep'
@@ -174,6 +176,13 @@ export default function AutoGtmFlowPage() {
       : flow.contacts
 
   const emailsFoundCount = flow.contacts.filter(c => c.email).length
+
+  // Real research data for the company-header strip below — reuses
+  // ResearchCard's own exported getResearchCardData() rather than
+  // re-deriving signal/opportunity counts, same "same underlying data, only
+  // presentation differs" discipline AutoFlowResearchSummary.tsx already
+  // documents for its own use of this function.
+  const researchData = useMemo(() => (flow.result ? getResearchCardData(flow.result) : null), [flow.result])
 
   // ── Auto-pilot (2026-08-13) ──────────────────────────────────
   // User request: the flow should not need manual "Continue" clicks between
@@ -369,13 +378,63 @@ export default function AutoGtmFlowPage() {
     nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(6), disabled: false }
   }
 
+  // Real, per-step progress detail for the compact StepIndicator strip below
+  // — every value here is derived from flow state already computed above
+  // (contact counts, the drafting-settled/decision-maker-discovery signals,
+  // send outcomes), never invented. See StepIndicator.tsx's own header for
+  // why this replaced the old giant numbered-circle stepper.
+  const contactsCommitted = flow.contacts.length > 0
+  const emailLookupSettled = contactsCommitted && !flow.contacts.some(c => c.email_finder_status === 'pending')
+  const sentCount = Object.values(flow.campaignContactStatus).filter(s => s.status === 'sent').length
+  const stepMeta: StepMeta[] = [
+    hasResearch || (flow.inputMode === 'batch' && batchHasProgress && !flow.batchRunning)
+      ? {
+          status: 'complete',
+          detail: flow.inputMode === 'single'
+            ? (flow.companyName || flow.domain)
+            : `${batchDoneCount}/${flow.batchCompanies.length} researched`,
+        }
+      : flow.researching || flow.batchRunning
+        ? { status: 'active', detail: 'Researching…' }
+        : { status: flow.step === 1 ? 'active' : 'not_started' },
+    contactsCommitted
+      ? { status: 'complete', detail: `${flow.contacts.length} found` }
+      : flow.step === 2
+        ? { status: 'active', detail: committingDm ? 'Adding…' : dmDiscoveryDone ? 'Reviewing…' : 'Searching…' }
+        : { status: hasResearch || batchHasProgress ? 'waiting' : 'not_started' },
+    emailLookupSettled
+      ? { status: 'complete', detail: `${emailsFoundCount} verified` }
+      : flow.step === 3
+        ? { status: 'active', detail: 'Looking up…' }
+        : { status: contactsCommitted ? 'waiting' : 'not_started' },
+    draftingSettled
+      ? { status: 'complete', detail: 'Drafted' }
+      : flow.step === 4
+        ? { status: 'active', detail: 'Drafting…' }
+        : { status: emailLookupSettled ? 'waiting' : 'not_started' },
+    sentCount > 0
+      ? { status: 'complete', detail: `${sentCount} sent` }
+      : flow.step === 5
+        ? { status: 'active' }
+        : { status: flow.maxStepReached >= 5 ? 'waiting' : 'not_started' },
+    flow.step === 6
+      ? { status: 'active' }
+      : flow.maxStepReached >= 6
+        ? { status: 'complete', detail: 'Tracking' }
+        : { status: sentCount > 0 ? 'waiting' : 'not_started' },
+  ]
+
   return (
-    <div className={cn('mx-auto max-w-3xl px-4 py-8 space-y-6', nextAction && 'pb-28 md:pb-8')}>
-      <GlassCard>
-        <CardContent className="space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-lg font-semibold text-foreground">Auto Flow</h1>
+    <div className={cn('mx-auto max-w-3xl px-4 py-8 space-y-4', nextAction && 'pb-28 md:pb-8')}>
+      {/* Header — flat panel, not a floating glass card (intelligence-workspace pass) */}
+      <div className="rounded-lg border border-border bg-card px-5 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Workflow className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight text-foreground">Auto Flow</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 Research a prospect company (or upload a lead list), pick who to contact, and send them a
                 personalized email, all in one continuous flow.{' '}
@@ -384,34 +443,100 @@ export default function AutoGtmFlowPage() {
                 </Link>
               </p>
             </div>
-            {(flow.runId || flow.batchCompanies.length > 0) && (
-              <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowStartNewConfirm(true)}>
-                Start New
-              </Button>
-            )}
           </div>
-
-          {/* One persistent context line instead of a repeated "done" card per
-              step below — the step pills already show completion, this just
-              answers "which company / how far along" without duplicating that. */}
-          {(hasResearch || batchHasProgress) && (
-            <p className="text-xs text-muted-foreground -mt-2">
-              {flow.inputMode === 'single'
-                ? flow.companyName || flow.domain
-                : `${batchDoneCount} of ${flow.batchCompanies.length} compan${flow.batchCompanies.length === 1 ? 'y' : 'ies'} researched`}
-              {flow.contacts.length > 0 && ` · ${flow.contacts.length} contact${flow.contacts.length === 1 ? '' : 's'}`}
-              {emailsFoundCount > 0 && ` · ${emailsFoundCount} email${emailsFoundCount === 1 ? '' : 's'} found`}
-            </p>
+          {(flow.runId || flow.batchCompanies.length > 0) && (
+            <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowStartNewConfirm(true)}>
+              Start New
+            </Button>
           )}
+        </div>
+      </div>
 
-          <StepIndicator
-            current={flow.step}
-            maxReached={flow.maxStepReached}
-            onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6)}
-            nextAction={nextAction}
-          />
-        </CardContent>
-      </GlassCard>
+      {/* Company intelligence header — the researched company is the central
+          object of the page once research exists, not just another step's
+          content. Every field/metric here comes straight from
+          getResearchCardData()/flow state; a missing field (no industry, no
+          HQ) is simply omitted, never shown as a placeholder. */}
+      {flow.inputMode === 'single' && hasResearch && researchData && (
+        <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Building2 className="size-4.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="truncate text-base font-semibold text-foreground">{researchData.companyName}</h2>
+                {researchData.confidence && (
+                  <span
+                    className={cn(
+                      'text-[11px]',
+                      researchData.confidence === 'high'
+                        ? 'text-signal-strong'
+                        : researchData.confidence === 'medium'
+                          ? 'text-signal-medium'
+                          : 'text-muted-foreground'
+                    )}
+                  >
+                    {researchData.confidence} confidence
+                  </span>
+                )}
+              </div>
+              {researchData.facts.length > 0 && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {researchData.facts.map(f => f.value).join(' · ')}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <MetricTile icon={Radar} label="Signals" value={researchData.signalCount} />
+            <MetricTile icon={Lightbulb} label="Opportunities" value={researchData.opportunities.length} />
+            <MetricTile icon={Users} label="Decision Makers" value={flow.contacts.length} />
+            <MetricTile icon={Mail} label="Verified Contacts" value={emailsFoundCount} />
+          </div>
+        </div>
+      )}
+
+      {flow.inputMode === 'batch' && batchHasProgress && (
+        <p className="px-1 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground/80">
+            {batchDoneCount} of {flow.batchCompanies.length} compan{flow.batchCompanies.length === 1 ? 'y' : 'ies'} researched
+          </span>
+          {flow.contacts.length > 0 && ` · ${flow.contacts.length} contact${flow.contacts.length === 1 ? '' : 's'}`}
+          {emailsFoundCount > 0 && ` · ${emailsFoundCount} email${emailsFoundCount === 1 ? '' : 's'} found`}
+        </p>
+      )}
+
+      {/* Compact progress strip — see StepIndicator.tsx's own header for why
+          this replaced the old giant numbered-circle stepper. */}
+      <div className="rounded-lg border border-border bg-card px-2 py-1.5">
+        <StepIndicator
+          current={flow.step}
+          maxReached={flow.maxStepReached}
+          meta={stepMeta}
+          onStepClick={n => flow.setStep(n as 1 | 2 | 3 | 4 | 5 | 6)}
+        />
+      </div>
+
+      {/* Next Best Action — the flow's one "move forward" control, now a
+          distinct callout instead of a bare button crowded next to the step
+          pills. Hidden on mobile: page.tsx's own sticky bottom bar (below)
+          already covers the same action there. */}
+      {nextAction && (
+        <div className="hidden items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 md:flex">
+          <div className="flex min-w-0 items-center gap-2">
+            <ArrowRight className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/80">Next best action</p>
+              <p className="truncate text-sm text-foreground">{nextAction.label}</p>
+            </div>
+          </div>
+          <Button onClick={nextAction.onClick} disabled={nextAction.disabled} className="shrink-0">
+            {nextAction.loading ? <Spinner className="size-3.5" /> : null}
+            Continue
+          </Button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={showStartNewConfirm}
@@ -466,7 +591,9 @@ export default function AutoGtmFlowPage() {
             onClick={() => flow.setInputMode('single')}
             className={cn(
               'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              flow.inputMode === 'single' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+              flow.inputMode === 'single'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             Single Company
@@ -475,7 +602,9 @@ export default function AutoGtmFlowPage() {
             onClick={() => flow.setInputMode('batch')}
             className={cn(
               'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              flow.inputMode === 'batch' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+              flow.inputMode === 'batch'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             Upload Lead List
@@ -498,28 +627,11 @@ export default function AutoGtmFlowPage() {
                 disabled={flow.researching}
                 onKeyDown={e => e.key === 'Enter' && flow.runResearch()}
               />
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-                <button
-                  onClick={() => flow.setMode('lightweight')}
-                  disabled={flow.researching}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs transition-colors',
-                    flow.mode === 'lightweight' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  Lightweight
-                </button>
-                <button
-                  onClick={() => flow.setMode('full')}
-                  disabled={flow.researching}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs transition-colors',
-                    flow.mode === 'full' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  Full
-                </button>
-              </div>
+              {/* Lightweight/Full mode picker deliberately not exposed here — Auto
+                  Flow always researches in the app-wide default (full) mode; the
+                  toggle stays available in Wizard/Intelligence Lab's manual/debug
+                  tools for anyone who needs it. flow.mode/setMode are unchanged
+                  in the hook, just not rendered as a choice in this flow. */}
               <Button onClick={() => flow.runResearch()} disabled={flow.researching || !flow.url.trim()}>
                 {flow.researching && !flow.forcingFresh ? (
                   <>
@@ -560,13 +672,14 @@ export default function AutoGtmFlowPage() {
 
       {flow.step === 1 && flow.inputMode === 'single' && !hasResearch && (
         <CompanyPipelineList
-          onResume={async runId => {
+          onResume={async (runId, step) => {
             await flow.resumeFromRun(runId)
-            // Step 6 (Track & Follow Up), not step 4/5 — resuming here means
-            // "I already sent, let me check on it," not "let me draft/send
-            // again." Every row in this list has, by construction, already
-            // reached Review & Send, so step 6 is always a valid landing spot.
-            flow.setStep(6)
+            // 'sent' rows land on step 6 (Track & Follow Up) — already sent,
+            // just checking status. 'in_progress' rows land on step 4
+            // (Campaign & Outreach) — auto-pilot picks up drafting/review
+            // from wherever this run left off. See CompanyPipelineList's own
+            // header for the two stages.
+            flow.setStep(step)
           }}
         />
       )}

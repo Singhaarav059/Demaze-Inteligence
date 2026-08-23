@@ -12,7 +12,8 @@
 // Research entirely.
 //
 // Two input modes, toggled at the top:
-//   - Single: URL input + lightweight/full toggle (unchanged from before).
+//   - Single: URL input. Research always runs at full depth — there is one
+//     research mode, not a user-facing lightweight/full toggle.
 //   - Batch: upload a lead-list file (xlsx/csv/docx/pdf), ported from the
 //     now-removed standalone /admin/batch-upload page. Parsing/dedup/
 //     quota-pause logic stays in lib/batch/* (reused, not duplicated) —
@@ -24,13 +25,15 @@
 import Link from 'next/link'
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { RotateCw, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
+import { IntelStatus } from '@/components/ui/intel-status'
 import { cn } from '@/lib/utils'
-import type { RunResult, AnalysisMode } from '@/app/admin/intelligence-lab/_types'
+import type { RunResult } from '@/app/admin/intelligence-lab/_types'
 import { WizardShell } from '@/components/wizard/WizardShell'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
@@ -60,14 +63,28 @@ function StatusBadge({ status }: { status: CompanyStatus }) {
   return <Badge className={`text-[10px] flex-shrink-0 ${className}`}>{label}</Badge>
 }
 
+// Small relative-time formatter for the "last researched" status label —
+// mirrors intelligence-lab/page.tsx's own local timeAgo(), duplicated
+// rather than shared per this codebase's small-helper-per-file convention.
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
 export default function WizardPage() {
   const [inputMode, setInputMode] = useState<InputMode>('single')
   const urlInputRef = useRef<HTMLInputElement>(null)
   useSlashFocus(urlInputRef)
 
-  // ── Single-URL mode state (unchanged from before) ────────────
+  // ── Single-URL mode state ─────────────────────────────────────
+  // Research mode is always 'full' — there is exactly one research depth,
+  // not a user-facing implementation detail to choose between.
   const [url, setUrl] = useState('')
-  const [mode, setMode] = useState<AnalysisMode>('full')
   const [running, setRunning] = useState(false)
   const [forcingFresh, setForcingFresh] = useState(false)
   const [result, setResult] = useState<RunResult | null>(null)
@@ -142,7 +159,7 @@ export default function WizardPage() {
       const res = await fetch('/api/admin/test-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlNormalized, mode, force: Boolean(opts.force) }),
+        body: JSON.stringify({ url: urlNormalized, mode: 'full', force: Boolean(opts.force) }),
       })
       const data: RunResult = await res.json()
       setResult(data)
@@ -359,62 +376,67 @@ export default function WizardPage() {
 
       {inputMode === 'single' ? (
         <>
-          <div className="glass-panel space-y-3 rounded-xl p-4">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                ref={urlInputRef}
-                aria-label="Company URL"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://company.com (press / to focus)"
-                className="flex-1 font-mono text-sm"
-                disabled={running}
-                onKeyDown={(e) => e.key === 'Enter' && run()}
-              />
-
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-                <button
-                  onClick={() => setMode('lightweight')}
-                  disabled={running}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs transition-colors',
-                    mode === 'lightweight' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  Lightweight <span className="ml-1 opacity-60">3k</span>
-                </button>
-                <button
-                  onClick={() => setMode('full')}
-                  disabled={running}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs transition-colors',
-                    mode === 'full' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  Full <span className="ml-1 opacity-60">15k</span>
-                </button>
+          <Card className="border-border bg-card">
+            <CardContent className="space-y-4 px-6 py-6">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Research a company</h2>
               </div>
 
-              <Button onClick={() => run()} disabled={running || !url.trim()}>
-                {running && !forcingFresh ? <><Spinner /> Researching…</> : 'Research'}
-              </Button>
-              <Button
-                onClick={() => run({ force: true })}
-                disabled={running || !url.trim()}
-                variant="outline"
-                title="Ignore any cached scrape for this URL and research it fresh"
-              >
-                {running && forcingFresh ? <><Spinner /> Clearing cache…</> : '↻ Clear Cache & Re-Research'}
-              </Button>
-            </div>
-          </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  ref={urlInputRef}
+                  aria-label="Company URL"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://company.com (press / to focus)"
+                  className="flex-1 text-sm"
+                  disabled={running}
+                  onKeyDown={(e) => e.key === 'Enter' && run()}
+                />
+                <Button size="lg" onClick={() => run()} disabled={running || !url.trim()}>
+                  {running && !forcingFresh ? <><Spinner /> Researching…</> : 'Research Company'}
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Demaze combines company data with current public signals to build an actionable intelligence brief.
+              </p>
+
+              {/* Once a result exists, offer a clean re-research action instead
+                  of an implementation-detail toggle — same request, force-fresh. */}
+              {result && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                  <IntelStatus
+                    status={result.success ? 'complete' : 'failed'}
+                    label={
+                      result.success
+                        ? result.cachedAt ? `Researched ${timeAgo(result.cachedAt)}` : 'Research complete'
+                        : 'Research failed'
+                    }
+                  />
+                  <Button
+                    onClick={() => run({ force: true })}
+                    disabled={running || !url.trim()}
+                    variant="outline"
+                    size="sm"
+                    title="Research this company again from scratch"
+                  >
+                    {running && forcingFresh
+                      ? <><Spinner /> Re-researching…</>
+                      : <><RotateCw className="size-3.5" /> Re-research</>}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <WizardShell result={result} running={running} error={error} />
         </>
       ) : (
         <div className="space-y-5">
           {/* ── Upload ──────────────────────────────────────────── */}
-          <Card className="bg-card border-border">
+          <Card className="border-border bg-card">
             <CardContent className="px-5 py-4 space-y-3">
               <div className="flex items-center gap-3">
                 <input

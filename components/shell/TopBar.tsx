@@ -34,7 +34,7 @@ export function TopBar() {
         {/* Mobile brand (sidebar hidden < md — BottomTabBar covers primary
             nav on mobile instead, so there's no hamburger trigger here
             anymore, just the brand mark). */}
-        <Link href="/admin/intelligence-lab" className="flex items-center gap-2 md:hidden">
+        <Link href="/admin" className="flex items-center gap-2 md:hidden">
           <BrandMark size="sm" />
         </Link>
         <span className="hidden text-muted-foreground md:inline">Demaze</span>

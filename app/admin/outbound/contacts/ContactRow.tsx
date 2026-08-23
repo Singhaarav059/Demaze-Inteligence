@@ -14,16 +14,16 @@
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { GenerationPanel } from './GenerationPanel'
+import { StatusDot, type StatusTone } from '../StatusDot'
 import type { OutboundContact } from './useOutboundContacts'
 
-function emailConfidenceBadgeVariant(confidence: OutboundContact['email_confidence']) {
-  if (confidence === 'high') return 'default' as const
-  if (confidence === 'medium' || confidence === 'low') return 'secondary' as const
-  return 'outline' as const
+function emailConfidenceTone(confidence: OutboundContact['email_confidence']): StatusTone {
+  if (confidence === 'high') return 'strong'
+  if (confidence === 'medium' || confidence === 'low') return 'medium'
+  return 'muted'
 }
 
 interface EnrichmentData {
@@ -108,19 +108,17 @@ export function ContactRow({
               {contact.email ? (
                 <>
                   <span className="text-xs text-muted-foreground truncate">{contact.email}</span>
-                  <Badge variant={emailConfidenceBadgeVariant(contact.email_confidence)}>
-                    {contact.email_confidence}
-                  </Badge>
+                  <StatusDot tone={emailConfidenceTone(contact.email_confidence)} label={contact.email_confidence ?? 'unknown'} />
                 </>
               ) : contact.email_finder_status === 'not_found' ? (
-                <Badge variant="outline">not found</Badge>
+                <StatusDot tone="muted" label="not found" />
               ) : contact.email_finder_status === 'error' ? (
-                <Badge variant="destructive">error</Badge>
+                <StatusDot tone="destructive" label="error" />
               ) : (
                 <span className="text-xs text-muted-foreground/50">No email looked up yet</span>
               )}
               {contact.enrichment_status !== 'pending' && (
-                <Badge variant="secondary">{contact.enrichment_status}</Badge>
+                <StatusDot tone="medium" label={contact.enrichment_status} />
               )}
             </div>
           </div>

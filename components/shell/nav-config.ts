@@ -32,6 +32,16 @@ export const NAV = [
   { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: 'Past research runs you\'ve saved' },
 ] as const
 
+// 2026-08-22 redesign: purely a display grouping for Sidebar (which NAV
+// entries render under which section header) — does not change routes,
+// order, or the flat NAV array every other consumer (TopBar, command
+// palette, BottomTabBar) already relies on.
+export const NAV_GROUPS = [
+  { label: 'Workspace', hrefs: ['/admin/auto-gtm', '/admin/wizard', '/admin/company-discovery'] },
+  { label: 'Outbound', hrefs: ['/admin/outbound'] },
+  { label: 'System', hrefs: ['/admin/run-history'] },
+] as const
+
 // Pages pulled out of primary nav on 2026-07-18 — still real, still linked
 // to directly (a campaign's pause/resume controls, changing an active
 // provider), just no longer worth a permanent sidebar slot. Shared by the

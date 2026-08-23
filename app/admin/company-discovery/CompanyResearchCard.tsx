@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useMemo } from 'react'
+import { Radio, Lightbulb, AlertTriangle, Target, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { SectorQualificationCard } from '@/app/admin/auto-gtm/SectorQualificationCard'
 import { qualifyDiscoveredCompany, type DiscoveredCompanyFirmographics } from '@/lib/sector-playbook/qualify-discovery'
@@ -37,11 +38,13 @@ export function CompanyResearchCard({ result, firmographics }: { result: Company
   const hasNothing = result.signals.length === 0 && !result.whyContactNow
 
   return (
-    <div className="space-y-4 text-sm">
+    <div className="space-y-5 text-sm">
       <SectorQualificationCard qualification={qualification} companyFitLabel="Data profile" />
 
-      <section>
-        <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-2">Recent Signals</h4>
+      <section className="border-t border-border/50 pt-4">
+        <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
+          <Radio className="size-3.5 text-muted-foreground/70" /> Recent Signals
+        </h4>
         {result.signals.length === 0 ? (
           <p className="text-muted-foreground/70 text-xs">No significant recent public signals found.</p>
         ) : (
@@ -66,15 +69,19 @@ export function CompanyResearchCard({ result, firmographics }: { result: Company
       </section>
 
       {result.whatThisSuggests && (
-        <section>
-          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-1.5">What This Suggests</h4>
+        <section className="border-t border-border/50 pt-4">
+          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+            <Lightbulb className="size-3.5 text-muted-foreground/70" /> What This Suggests
+          </h4>
           <p className="text-muted-foreground/90 text-xs">{result.whatThisSuggests}</p>
         </section>
       )}
 
       {result.potentialPainPoints.length > 0 && (
-        <section>
-          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-1.5">Potential Pain Points</h4>
+        <section className="border-t border-border/50 pt-4">
+          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+            <AlertTriangle className="size-3.5 text-muted-foreground/70" /> Potential Pain Points
+          </h4>
           <ul className="list-disc list-inside space-y-0.5">
             {result.potentialPainPoints.map((p, i) => (
               <li key={i} className="text-muted-foreground/90 text-xs">{p}</li>
@@ -84,8 +91,10 @@ export function CompanyResearchCard({ result, firmographics }: { result: Company
       )}
 
       {result.opportunities.length > 0 && (
-        <section>
-          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-2">Demaze Opportunity</h4>
+        <section className="border-t border-border/50 pt-4">
+          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <Target className="size-3.5 text-muted-foreground/70" /> Demaze Opportunity
+          </h4>
           <div className="space-y-2.5">
             {result.opportunities.map((o, i) => (
               <div key={i} className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
@@ -99,8 +108,10 @@ export function CompanyResearchCard({ result, firmographics }: { result: Company
       )}
 
       {result.whyContactNow ? (
-        <section>
-          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-1.5">Why Contact Now?</h4>
+        <section className="border-t border-border/50 pt-4">
+          <h4 className="text-foreground/90 text-xs font-semibold uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+            <Clock className="size-3.5 text-muted-foreground/70" /> Why Contact Now?
+          </h4>
           <p className="text-foreground/90 text-xs">{result.whyContactNow}</p>
         </section>
       ) : hasNothing ? (

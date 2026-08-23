@@ -44,12 +44,20 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      render={render}
+      // Composing with a non-<button> element (e.g. render={<Link/>}) means
+      // the rendered node is never a native button — default nativeButton to
+      // false in that case so Base UI doesn't warn, while still respecting
+      // an explicit override either way.
+      nativeButton={nativeButton ?? !render}
       {...props}
     />
   )

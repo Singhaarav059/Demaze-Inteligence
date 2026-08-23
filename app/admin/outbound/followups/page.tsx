@@ -23,7 +23,6 @@ import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Clock, Mail } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { GlassCard } from '@/components/ui/glass-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +36,7 @@ import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import type { FollowupEngineTickSummary } from '@/lib/outbound/sending/followup-engine/run-tick'
 import { useFollowupPanel, type FollowupRow } from './useFollowupPanel'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
+import { StatusDot } from '../StatusDot'
 
 type PendingAction = { type: 'send' | 'stop'; row: FollowupRow } | null
 
@@ -168,14 +168,12 @@ export default function FollowupPanelPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <GlassCard>
-        <CardContent className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">Follow-ups</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            What follow-up is due for whom, send now / stop, and the follow-up cadence.
-          </p>
-        </CardContent>
-      </GlassCard>
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Follow-ups</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          What follow-up is due for whom, send now / stop, and the follow-up cadence.
+        </p>
+      </div>
 
       <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
@@ -278,15 +276,13 @@ export default function FollowupPanelPage() {
                   summary={
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground truncate">{group.companyName}</span>
-                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                      <span className="ml-auto flex shrink-0 items-center gap-3">
                         {group.overdueCount > 0 && (
-                          <Badge className="text-[10px] bg-destructive/10 text-destructive border border-destructive/40">
-                            {group.overdueCount} overdue
-                          </Badge>
+                          <StatusDot tone="destructive" label={`${group.overdueCount} overdue`} />
                         )}
-                        <Badge variant="outline">
+                        <span className="text-xs text-muted-foreground/70">
                           {group.rows.length} follow-up{group.rows.length === 1 ? '' : 's'}
-                        </Badge>
+                        </span>
                       </span>
                     </div>
                   }

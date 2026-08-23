@@ -26,6 +26,19 @@
 // one. See useAutoGtmFlow.ts's runResearch() for the actual consumer:
 // re-researching a company already in this list now updates that same
 // run in place instead of inserting a duplicate row.
+//
+// Also surfaces "in progress" companies (added for the Auto Flow landing
+// page's "Continue Where You Left Off" section) — a run that has committed
+// decision-maker contacts but hasn't reached a campaign/send yet. Same
+// contact-derived grouping as the sent-stage rows above, just sourced from
+// outbound_contacts directly instead of outbound_campaign_contacts, and
+// excluded from that set once it's reached (a run only ever appears in one
+// of the two stages). stage: 'in_progress' entries are intentionally
+// lighter-weight (no follow-up cadence, no sent/opened counts — none of
+// that exists yet) — just contactsTotal and how many already have a
+// drafted email, which is enough for the UI to show an honest one-line
+// status without pretending to know per-step completion it can't cheaply
+// verify.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -46,11 +59,44 @@ interface CampaignContactJoinRow {
   outbound_contacts: { source_run_id: string | null; company_name: string } | null
 }
 
+interface ContactRow {
+  id: string
+  source_run_id: string | null
+  company_name: string
+  created_at: string
+}
+
 interface RunRow {
   id: string
   domain: string
   company_url: string
   created_at: string
+}
+
+interface SentCompany {
+  stage: 'sent'
+  runId: string
+  companyName: string
+  domain: string | null
+  companyUrl: string | null
+  contactsTotal: number
+  sentCount: number
+  openedCount: number
+  repliedCount: number
+  bouncedCount: number
+  nextFollowupDueAt: string | null
+  lastActivityAt: string
+}
+
+interface InProgressCompany {
+  stage: 'in_progress'
+  runId: string
+  companyName: string
+  domain: string | null
+  companyUrl: string | null
+  contactsTotal: number
+  draftsReadyCount: number
+  lastActivityAt: string
 }
 
 export async function GET(req: NextRequest) {
@@ -80,11 +126,43 @@ export async function GET(req: NextRequest) {
     byRunId.set(runId, arr)
   }
 
-  if (byRunId.size === 0) {
+  // In-progress companies: has committed contacts, but this run hasn't
+  // reached byRunId (the campaign/send stage) above.
+  const { data: contactRows, error: contactsError } = await supabase
+    .from('outbound_contacts')
+    .select('id, source_run_id, company_name, created_at')
+
+  if (contactsError) {
+    return NextResponse.json({ success: false, error: contactsError.message }, { status: 500 })
+  }
+
+  const inProgressByRunId = new Map<string, ContactRow[]>()
+  for (const row of (contactRows ?? []) as ContactRow[]) {
+    if (!row.source_run_id || byRunId.has(row.source_run_id)) continue
+    const arr = inProgressByRunId.get(row.source_run_id) ?? []
+    arr.push(row)
+    inProgressByRunId.set(row.source_run_id, arr)
+  }
+
+  if (byRunId.size === 0 && inProgressByRunId.size === 0) {
     return NextResponse.json({ success: true, companies: [] })
   }
 
-  const runIds = Array.from(byRunId.keys())
+  const inProgressRunIds = Array.from(inProgressByRunId.keys())
+  const { data: draftRows } = inProgressRunIds.length > 0
+    ? await supabase
+        .from('outbound_generated_content')
+        .select('source_run_id, email_draft')
+        .in('source_run_id', inProgressRunIds)
+    : { data: [] as Array<{ source_run_id: string | null; email_draft: unknown }> }
+
+  const draftsReadyByRunId = new Map<string, number>()
+  for (const row of draftRows ?? []) {
+    if (!row.source_run_id || row.email_draft == null) continue
+    draftsReadyByRunId.set(row.source_run_id, (draftsReadyByRunId.get(row.source_run_id) ?? 0) + 1)
+  }
+
+  const runIds = Array.from(new Set([...byRunId.keys(), ...inProgressByRunId.keys()]))
   const { data: runs, error: runsError } = await supabase
     .from('pipeline_test_runs')
     .select('id, domain, company_url, created_at')
@@ -112,42 +190,62 @@ export async function GET(req: NextRequest) {
     )
   )
 
-  let companies = runIds
-    .map(runId => {
-      const rows = byRunId.get(runId)!
-      const run = runById.get(runId)
-      const companyName = rows.find(r => r.outbound_contacts?.company_name)?.outbound_contacts?.company_name ?? run?.domain ?? runId
+  const sentCompanies: SentCompany[] = Array.from(byRunId.keys()).map(runId => {
+    const rows = byRunId.get(runId)!
+    const run = runById.get(runId)
+    const companyName = rows.find(r => r.outbound_contacts?.company_name)?.outbound_contacts?.company_name ?? run?.domain ?? runId
 
-      const contactsTotal = rows.length
-      const sentCount = rows.filter(r => r.status !== 'queued').length
-      const openedCount = rows.filter(r => r.opened_at !== null).length
-      const repliedCount = rows.filter(r => r.status === 'replied').length
-      const bouncedCount = rows.filter(r => r.status === 'bounced').length
+    const contactsTotal = rows.length
+    const sentCount = rows.filter(r => r.status !== 'queued').length
+    const openedCount = rows.filter(r => r.opened_at !== null).length
+    const repliedCount = rows.filter(r => r.status === 'replied').length
+    const bouncedCount = rows.filter(r => r.status === 'bounced').length
 
-      let nextDue: Date | null = null
-      for (const r of rows) {
-        if (!FOLLOWUP_PENDING_STATUSES.includes(r.status)) continue
-        const intervalsDays = intervalsByCampaignId.get(r.campaign_id) ?? FOLLOWUP_INTERVALS_DAYS
-        const due = nextFollowupDueAt(r.status, r.updated_at, intervalsDays)
-        if (due && (!nextDue || due < nextDue)) nextDue = due
-      }
+    let nextDue: Date | null = null
+    for (const r of rows) {
+      if (!FOLLOWUP_PENDING_STATUSES.includes(r.status)) continue
+      const intervalsDays = intervalsByCampaignId.get(r.campaign_id) ?? FOLLOWUP_INTERVALS_DAYS
+      const due = nextFollowupDueAt(r.status, r.updated_at, intervalsDays)
+      if (due && (!nextDue || due < nextDue)) nextDue = due
+    }
 
-      const lastActivityAt = rows.reduce((latest, r) => (r.updated_at > latest ? r.updated_at : latest), rows[0].updated_at)
+    const lastActivityAt = rows.reduce((latest, r) => (r.updated_at > latest ? r.updated_at : latest), rows[0].updated_at)
 
-      return {
-        runId,
-        companyName,
-        domain: run?.domain ?? null,
-        companyUrl: run?.company_url ?? null,
-        contactsTotal,
-        sentCount,
-        openedCount,
-        repliedCount,
-        bouncedCount,
-        nextFollowupDueAt: nextDue ? nextDue.toISOString() : null,
-        lastActivityAt,
-      }
-    })
+    return {
+      stage: 'sent',
+      runId,
+      companyName,
+      domain: run?.domain ?? null,
+      companyUrl: run?.company_url ?? null,
+      contactsTotal,
+      sentCount,
+      openedCount,
+      repliedCount,
+      bouncedCount,
+      nextFollowupDueAt: nextDue ? nextDue.toISOString() : null,
+      lastActivityAt,
+    }
+  })
+
+  const inProgressCompanies: InProgressCompany[] = inProgressRunIds.map(runId => {
+    const rows = inProgressByRunId.get(runId)!
+    const run = runById.get(runId)
+    const companyName = rows.find(r => r.company_name)?.company_name ?? run?.domain ?? runId
+    const lastActivityAt = rows.reduce((latest, r) => (r.created_at > latest ? r.created_at : latest), rows[0].created_at)
+
+    return {
+      stage: 'in_progress',
+      runId,
+      companyName,
+      domain: run?.domain ?? null,
+      companyUrl: run?.company_url ?? null,
+      contactsTotal: rows.length,
+      draftsReadyCount: draftsReadyByRunId.get(runId) ?? 0,
+      lastActivityAt,
+    }
+  })
+
+  let companies: Array<SentCompany | InProgressCompany> = [...sentCompanies, ...inProgressCompanies]
     .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt))
 
   if (domainFilter) {

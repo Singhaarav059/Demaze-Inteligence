@@ -41,11 +41,12 @@ import {
   AlertDialogDescription,
   AlertDialogClose,
 } from '@/components/ui/alert-dialog'
-import { CheckCircle2, Mail, AlertTriangle, Ban, XCircle } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 import type { OutboundIntegrationRow } from '@/lib/outbound/settings/types'
 import type { ContactReviewStatus } from '@/lib/outbound/sending/campaign-review'
 import type { QualificationResult } from '@/lib/sector-playbook/qualify'
+import { IntelStatus, type IntelStatusKind } from '@/components/ui/intel-status'
 import { CompactSectorBadge } from './SectorQualificationCard'
 
 interface SendOutcomeDetail {
@@ -93,13 +94,41 @@ interface CampaignInfo {
   name: string
 }
 
-const STATUS_META: Record<ContactReviewStatus, { label: string; icon: typeof CheckCircle2; className: string }> = {
-  ready: { label: 'Ready', icon: CheckCircle2, className: 'bg-signal-strong/10 text-signal-strong border border-signal-strong/30' },
-  missing_email: { label: 'No email', icon: XCircle, className: 'bg-accent text-muted-foreground border border-border' },
-  suppressed: { label: 'Suppressed', icon: Ban, className: 'bg-destructive/10 text-destructive border border-destructive/40' },
-  already_sent: { label: 'Already sent', icon: CheckCircle2, className: 'bg-accent text-muted-foreground border border-border' },
-  not_ready: { label: 'Needs a draft', icon: AlertTriangle, className: 'bg-signal-medium/10 text-signal-medium border border-signal-medium/30' },
-  blocked: { label: 'Blocked', icon: Ban, className: 'bg-destructive/10 text-destructive border border-destructive/40' },
+// Maps each real review outcome onto IntelStatus's shared status
+// vocabulary/dot color — same classifier output as before
+// (campaign-review.ts), only the rendering primitive changed.
+const STATUS_META: Record<ContactReviewStatus, { label: string; status: IntelStatusKind }> = {
+  ready: { label: 'Ready', status: 'complete' },
+  missing_email: { label: 'No email', status: 'not_researched' },
+  suppressed: { label: 'Suppressed', status: 'failed' },
+  already_sent: { label: 'Already sent', status: 'already_researched' },
+  not_ready: { label: 'Needs a draft', status: 'needs_review' },
+  blocked: { label: 'Blocked', status: 'failed' },
+}
+
+function StatChip({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string
+  value: number
+  tone?: 'default' | 'strong' | 'medium' | 'destructive'
+}) {
+  const valueClass =
+    tone === 'strong'
+      ? 'text-signal-strong'
+      : tone === 'medium'
+        ? 'text-signal-medium'
+        : tone === 'destructive'
+          ? 'text-destructive'
+          : 'text-foreground'
+  return (
+    <div className="rounded-lg bg-background/50 px-2.5 py-2">
+      <span className="block text-[11px] text-muted-foreground/60">{label}</span>
+      <span className={`block text-base font-semibold tabular-nums ${valueClass}`}>{value}</span>
+    </div>
+  )
 }
 
 export function ReviewSendStep({
@@ -287,31 +316,34 @@ export function ReviewSendStep({
         {qualification && <div className="mt-1.5"><CompactSectorBadge qualification={qualification} /></div>}
       </div>
 
-      <div className="rounded-lg border border-border bg-card px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 text-xs">
-        <div><span className="block text-muted-foreground/60">Sending account</span><span className="text-foreground font-medium">{isRealSendingProvider ? sendingProviderName : 'Demo mode'}</span></div>
-        <div><span className="block text-muted-foreground/60">Contacts</span><span className="text-foreground font-medium">{summary.total}</span></div>
-        <div><span className="block text-muted-foreground/60">Ready</span><span className="text-signal-strong font-medium">{readyRows.length}</span></div>
-        <div><span className="block text-muted-foreground/60">Missing email</span><span className="text-foreground font-medium">{missingEmailRows.length}</span></div>
-        <div><span className="block text-muted-foreground/60">Suppressed</span><span className="text-destructive font-medium">{suppressedRows.length}</span></div>
-        <div><span className="block text-muted-foreground/60">Already sent</span><span className="text-foreground font-medium">{alreadySentRows.length}</span></div>
-        <div><span className="block text-muted-foreground/60">Needs a draft</span><span className="text-foreground font-medium">{notReadyRows.length}</span></div>
-        <div><span className="block text-muted-foreground/60">Blocked</span><span className="text-destructive font-medium">{blockedRows.length}</span></div>
-        <div><span className="block text-muted-foreground/60">Sequence</span><span className="text-foreground font-medium">1 initial + up to 3 follow-ups</span></div>
+      <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground/70">
+            Sending from <span className="text-foreground font-medium">{isRealSendingProvider ? sendingProviderName : 'Demo mode (mock)'}</span>
+          </span>
+          <span className="text-muted-foreground/70">Sequence: 1 initial + up to 3 follow-ups</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatChip label="Contacts" value={summary.total} />
+          <StatChip label="Ready" value={readyRows.length} tone="strong" />
+          <StatChip label="Missing email" value={missingEmailRows.length} />
+          <StatChip label="Suppressed" value={suppressedRows.length} tone="destructive" />
+          <StatChip label="Already sent" value={alreadySentRows.length} />
+          <StatChip label="Needs a draft" value={notReadyRows.length} tone="medium" />
+          <StatChip label="Blocked" value={blockedRows.length} tone="destructive" />
+        </div>
       </div>
 
       <div className="space-y-1.5">
         {[...readyRows, ...notReadyRows, ...blockedRows, ...missingEmailRows, ...suppressedRows, ...alreadySentRows].map(row => {
           const meta = STATUS_META[row.status]
-          const Icon = meta.icon
           const isSendingThis = sendingContactId === row.contactId
           return (
-            <div key={row.contactId} className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+            <div key={row.contactId} className="flex items-center gap-3 rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:border-border-strong">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-foreground truncate">{row.personName}</span>
-                  <Badge className={`text-[10px] gap-1 ${meta.className}`}>
-                    <Icon className="size-3" /> {meta.label}
-                  </Badge>
+                  <IntelStatus status={meta.status} label={meta.label} />
                   {row.status === 'ready' && row.emailConfidence === 'low' && (
                     <Badge
                       variant="secondary"
@@ -388,11 +420,11 @@ export function ReviewSendStep({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 pt-1">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3.5">
         <p className="text-xs text-muted-foreground/70">
           {readyRows.length === 0
             ? 'Nothing ready to send yet.'
-            : `${readyRows.length} email${readyRows.length === 1 ? '' : 's'} will be sent.`}
+            : `${readyRows.length} email${readyRows.length === 1 ? '' : 's'} will be sent${isRealSendingProvider ? ' — this is a real send.' : ' (demo mode).'}`}
         </p>
         <Button size="lg" disabled={readyRows.length === 0 || sendingSelected} onClick={() => setPendingConfirm(true)}>
           {sendingSelected ? <Spinner className="size-3.5" /> : null}

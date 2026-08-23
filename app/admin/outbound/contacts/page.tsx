@@ -14,7 +14,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { UserPlus } from 'lucide-react'
+import { Search, UserPlus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { CollapsibleRow } from '@/components/ui/collapsible-row'
-import { staggerList, listItem } from '@/lib/motion'
+import { fadeSlideUp, staggerList, listItem } from '@/lib/motion'
 import { getLeadershipContacts } from '@/lib/pipeline/analysis-sections'
 import { useOutboundContacts, guessCompanyName } from './useOutboundContacts'
 import { ContactRow } from './ContactRow'
@@ -82,6 +82,7 @@ export default function OutboundContactsPage() {
         </p>
       </div>
 
+      <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
         <p>
           Pick a researched company, then add contacts. Manually typing in a name (from Sales
@@ -113,6 +114,15 @@ export default function OutboundContactsPage() {
           </Select>
         </CardContent>
       </Card>
+
+      {!loadingRuns && runs.length === 0 && (
+        <EmptyState
+          icon={Search}
+          title="No researched companies yet"
+          description="Research a company first (Auto Flow or Research), then come back here to add contacts."
+          className="border-none py-4"
+        />
+      )}
 
       {selectedRunId && selectedRun && (
         <>
@@ -183,6 +193,7 @@ export default function OutboundContactsPage() {
           )}
         </>
       )}
+      </motion.div>
     </div>
   )
 }

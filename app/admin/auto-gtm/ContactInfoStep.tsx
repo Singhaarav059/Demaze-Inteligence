@@ -57,8 +57,19 @@ export function ContactInfoStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts.map(c => c.id).join(',')])
 
+  // Screen-reader-only status announcement while the automatic lookup pass
+  // is in flight — matches this app's existing aria-live convention on
+  // other long-running async steps (Auto Flow research, batch progress,
+  // drafting). Purely additive, no visual change.
+  const lookingUpCount = contacts.filter(
+    c => c.email_finder_status === 'pending' || pendingAction[c.id] === 'find-email'
+  ).length
+
   return (
     <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
+      <p role="status" aria-live="polite" className="sr-only">
+        {lookingUpCount > 0 ? `Looking up email for ${lookingUpCount} contact${lookingUpCount === 1 ? '' : 's'}…` : ''}
+      </p>
       {contacts.map((contact, i) => (
         <motion.div key={contact.id} variants={listItem}>
           {groupByCompany && (i === 0 || contacts[i - 1].company_name !== contact.company_name) && (

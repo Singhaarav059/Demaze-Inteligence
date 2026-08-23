@@ -13,10 +13,9 @@
 
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Funnel, TriangleAlert } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
+import { StatusDot, type StatusTone } from '../StatusDot'
 
 interface PilotFunnel {
   companiesEntered: number
@@ -76,10 +75,17 @@ const FAILURE_LABELS: Record<keyof PilotFailures, string> = {
   suppression: 'Suppression',
 }
 
-function outcomeBadgeVariant(outcome: PilotCompanyTrace['outcome']) {
-  if (outcome === 'replied') return 'default' as const
-  if (outcome === 'bounced') return 'destructive' as const
-  return 'secondary' as const
+function outcomeTone(outcome: PilotCompanyTrace['outcome']): StatusTone {
+  if (outcome === 'replied') return 'strong'
+  if (outcome === 'bounced') return 'destructive'
+  if (outcome === 'opened') return 'medium'
+  return 'muted'
+}
+
+function qaTone(status: PilotCompanyTrace['qaStatus']): StatusTone {
+  if (status === 'passed') return 'strong'
+  if (status === 'failed') return 'destructive'
+  return 'muted'
 }
 
 export function PilotFunnelPanel() {
@@ -112,8 +118,7 @@ export function PilotFunnelPanel() {
   }, [open, loaded])
 
   return (
-    <Card className="border-border bg-card">
-      <CardContent className="px-5 py-4 space-y-3">
+    <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
@@ -143,11 +148,18 @@ export function PilotFunnelPanel() {
 
             {!loading && funnel && funnel.companiesEntered > 0 && (
               <>
-                <div className="flex flex-wrap gap-2">
-                  {FUNNEL_STAGES.map(({ key, label }) => (
-                    <div key={key} className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5">
-                      <span className="text-xs text-muted-foreground">{label}</span>
-                      <span className="text-sm font-semibold text-foreground">{funnel[key]}</span>
+                {/* Stepped funnel — small flat tiles chained by a chevron, not a wall
+                    of charts. Real stage counts only, from the funnel API. */}
+                <div className="flex flex-wrap items-stretch gap-1.5">
+                  {FUNNEL_STAGES.map(({ key, label }, i) => (
+                    <div key={key} className="flex items-center gap-1.5">
+                      <div className="rounded-md border border-border bg-background px-3 py-2 text-center min-w-20">
+                        <div className="text-lg font-semibold tabular-nums text-foreground">{funnel[key]}</div>
+                        <div className="text-[10px] text-muted-foreground/70 leading-tight">{label}</div>
+                      </div>
+                      {i < FUNNEL_STAGES.length - 1 && (
+                        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/30" />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -157,13 +169,13 @@ export function PilotFunnelPanel() {
                     <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                       <TriangleAlert className="size-3.5" /> Failure breakdown
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
                       {(Object.keys(FAILURE_LABELS) as Array<keyof PilotFailures>)
                         .filter(k => failures[k] > 0)
                         .map(k => (
-                          <Badge key={k} variant="outline">
-                            {FAILURE_LABELS[k]}: {failures[k]}
-                          </Badge>
+                          <span key={k} className="text-xs text-muted-foreground">
+                            {FAILURE_LABELS[k]}: <span className="text-foreground font-medium">{failures[k]}</span>
+                          </span>
                         ))}
                     </div>
                   </div>
@@ -184,13 +196,11 @@ export function PilotFunnelPanel() {
                         <tr key={c.runId} className="border-t border-border">
                           <td className="py-1.5 pr-3 text-foreground">{c.companyName}</td>
                           <td className="py-1.5 pr-3">
-                            <Badge variant={c.qaStatus === 'passed' ? 'default' : c.qaStatus === 'failed' ? 'destructive' : 'secondary'}>
-                              {c.qaStatus.replace('_', ' ')}
-                            </Badge>
+                            <StatusDot tone={qaTone(c.qaStatus)} label={c.qaStatus.replace('_', ' ')} />
                           </td>
                           <td className="py-1.5 pr-3 text-muted-foreground">{c.sendStatus.replace(/_/g, ' ')}</td>
                           <td className="py-1.5">
-                            <Badge variant={outcomeBadgeVariant(c.outcome)}>{c.outcome.replace(/_/g, ' ')}</Badge>
+                            <StatusDot tone={outcomeTone(c.outcome)} label={c.outcome.replace(/_/g, ' ')} />
                           </td>
                         </tr>
                       ))}
@@ -201,7 +211,6 @@ export function PilotFunnelPanel() {
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

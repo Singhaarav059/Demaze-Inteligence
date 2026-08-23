@@ -12,10 +12,12 @@
 // automation.
 // ============================================================
 
+import { ExternalLink, Mail, Phone, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 
 function emailConfidenceBadgeVariant(confidence: OutboundContact['email_confidence']) {
@@ -24,13 +26,20 @@ function emailConfidenceBadgeVariant(confidence: OutboundContact['email_confiden
   return 'outline' as const
 }
 
-function StatusLine({ children, found }: { children: React.ReactNode; found: boolean | null }) {
+// initials() — first letters of up to the first two words of a name, for the
+// avatar circle. Pure display helper, no data implication either way.
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
+}
+
+function StatusLine({ icon: Icon, children, found }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode; found: boolean | null }) {
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <span className={found === true ? 'text-signal-strong' : 'text-muted-foreground/50'}>
-        {found === true ? '✓' : found === false ? '✕' : ''}
-      </span>
+      <Icon className={cn('size-3.5 shrink-0', found === true ? 'text-signal-strong' : 'text-muted-foreground/40')} />
       <span className={found === true ? 'text-foreground' : 'text-muted-foreground/70'}>{children}</span>
+      {found === false && <XCircle className="size-3 shrink-0 text-muted-foreground/40" />}
     </div>
   )
 }
@@ -47,18 +56,23 @@ export function ContactInfoRow({
   onRemove: () => void
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-2">
+    <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-2.5">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground truncate">{contact.person_name}</span>
-            {contact.title_hint && (
-              <span className="text-xs text-muted-foreground/70 truncate">{contact.title_hint}</span>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-foreground/80">
+            {initials(contact.person_name)}
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground truncate">{contact.person_name}</span>
+              {contact.title_hint && (
+                <span className="text-xs text-muted-foreground/70 truncate">{contact.title_hint}</span>
+              )}
+            </div>
+            {contact.discovery_source === 'decision_maker_discovery' && contact.discovery_confidence && (
+              <p className="text-xs text-muted-foreground/50 mt-0.5">{contact.discovery_confidence} confidence match</p>
             )}
           </div>
-          {contact.discovery_source === 'decision_maker_discovery' && contact.discovery_confidence && (
-            <p className="text-xs text-muted-foreground/50 mt-0.5">{contact.discovery_confidence} confidence match</p>
-          )}
         </div>
         <Button
           variant="ghost"
@@ -72,7 +86,7 @@ export function ContactInfoRow({
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 pt-1">
+      <div className="grid grid-cols-1 gap-1.5 border-t border-border/60 pt-2.5 sm:grid-cols-3">
         {lookingUpEmail ? (
           <div className="flex items-center gap-1.5">
             <Spinner className="size-3" />
@@ -81,7 +95,7 @@ export function ContactInfoRow({
           </div>
         ) : contact.email ? (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <StatusLine found>Email Found</StatusLine>
+            <StatusLine icon={Mail} found>Email Found</StatusLine>
             <Badge variant={emailConfidenceBadgeVariant(contact.email_confidence)} className="text-[10px]">
               {contact.email_confidence}
             </Badge>
@@ -90,20 +104,20 @@ export function ContactInfoRow({
             )}
           </div>
         ) : contact.email_finder_status === 'error' ? (
-          <StatusLine found={false}>Email lookup failed</StatusLine>
+          <StatusLine icon={Mail} found={false}>Email lookup failed</StatusLine>
         ) : (
-          <StatusLine found={false}>Email Not Found</StatusLine>
+          <StatusLine icon={Mail} found={false}>Email Not Found</StatusLine>
         )}
 
-        <StatusLine found={null}>Phone Not Available</StatusLine>
+        <StatusLine icon={Phone} found={null}>Phone Not Available</StatusLine>
 
-        <StatusLine found={Boolean(contact.linkedin_url)}>
+        <StatusLine icon={ExternalLink} found={Boolean(contact.linkedin_url)}>
           {contact.linkedin_url ? 'LinkedIn Found' : 'LinkedIn Not Found'}
         </StatusLine>
       </div>
 
       {contact.email && (
-        <p className="text-xs text-muted-foreground/70 truncate">{contact.email}</p>
+        <p className="text-xs text-muted-foreground/70 truncate pl-[2.625rem]">{contact.email}</p>
       )}
     </div>
   )

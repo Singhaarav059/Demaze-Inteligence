@@ -20,7 +20,6 @@ import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { Flame, ChevronRight, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { GlassCard } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -404,14 +403,12 @@ function OutboundWarmupPageInner() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <GlassCard>
-        <CardContent className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">Warm-Up</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Mailbox warm-up status and metrics.
-          </p>
-        </CardContent>
-      </GlassCard>
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Warm-Up</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Mailbox warm-up status and metrics.
+        </p>
+      </div>
 
       <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>

@@ -80,6 +80,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
+interface HistoryEntry {
+  at: string
+  // True when the matched row is this page's own operation
+  // ('company_signals_research') — see company-research/route.ts's GET
+  // handler, which can only render that exact shape back. A company
+  // previously researched via the separate deep pipeline (Auto Flow/
+  // Wizard/Research) still correctly counts as "already researched" here,
+  // it just has no on-demand result to fetch through this page.
+  hasStoredResult: boolean
+}
+
 // Non-fatal on DB error — an unannotated result is far cheaper than the
 // whole search failing.
 async function annotateAlreadyResearched(companies: ExpleeCompany[]): Promise<ExpleeCompany[]> {
@@ -88,31 +99,29 @@ async function annotateAlreadyResearched(companies: ExpleeCompany[]): Promise<Ex
     const supabase = createServerClient()
     const { data: history } = await supabase
       .from('pipeline_test_runs')
-      .select('company_url, domain, created_at')
+      .select('company_url, domain, created_at, operation')
       .order('created_at', { ascending: false })
 
-    const byDomain = new Map<string, string>()
-    const byName = new Map<string, string>()
+    const byDomain = new Map<string, HistoryEntry>()
+    const byName = new Map<string, HistoryEntry>()
     for (const h of history ?? []) {
-      const at = h.created_at as string
-      if (h.domain && !byDomain.has(normalizeDomain(h.domain))) byDomain.set(normalizeDomain(h.domain), at)
+      const entry: HistoryEntry = { at: h.created_at as string, hasStoredResult: h.operation === 'company_signals_research' }
+      if (h.domain && !byDomain.has(normalizeDomain(h.domain))) byDomain.set(normalizeDomain(h.domain), entry)
       if (h.company_url) {
         const looksLikeDomainOrUrl = /^https?:\/\//i.test(h.company_url) || h.company_url.includes('.')
         if (looksLikeDomainOrUrl) {
           const key = normalizeDomain(h.company_url)
-          if (!byDomain.has(key)) byDomain.set(key, at)
+          if (!byDomain.has(key)) byDomain.set(key, entry)
         } else {
           const key = normalizeName(h.company_url)
-          if (key && !byName.has(key)) byName.set(key, at)
+          if (key && !byName.has(key)) byName.set(key, entry)
         }
       }
     }
 
     return companies.map(c => {
-      const lastResearchedAt = (c.domain && byDomain.get(normalizeDomain(c.domain)))
-        || (c.name && byName.get(normalizeName(c.name)))
-        || null
-      return { ...c, alreadyResearched: !!lastResearchedAt, lastResearchedAt }
+      const entry = (c.domain && byDomain.get(normalizeDomain(c.domain))) || (c.name && byName.get(normalizeName(c.name))) || null
+      return { ...c, alreadyResearched: !!entry, lastResearchedAt: entry?.at ?? null, hasStoredResult: entry?.hasStoredResult ?? false }
     })
   } catch (e) {
     logger.warn('ExpleeDiscovery', 'already-researched annotation skipped', e instanceof Error ? e.message : String(e))

@@ -19,6 +19,16 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Clock } from 'lucide-react'
 import { describeEvent, formatTimestamp, type CampaignEvent } from './EventLabels'
 
+// Same signal-strength/destructive semantic split used throughout Auto Flow
+// (see OutreachStep.tsx's relevanceBadgeClass, TrackFollowUpStep's
+// StatusBadge) — a good outcome is green, a problem is red, everything else
+// is a neutral marker.
+function eventDotClass(eventType: string): string {
+  if (eventType === 'replied' || eventType === 'opened') return 'bg-signal-strong'
+  if (eventType === 'bounced' || eventType === 'send_failed' || eventType === 'suppressed') return 'bg-destructive'
+  return 'bg-muted-foreground/40'
+}
+
 export function ContactTimeline({
   personName,
   events,
@@ -42,11 +52,12 @@ export function ContactTimeline({
       {sorted.length === 0 ? (
         <EmptyState icon={Clock} title="No recorded activity yet" className="border-none py-3" />
       ) : (
-        <ol className="space-y-2">
+        <ol className="space-y-2 border-l border-border/60 pl-3">
           {sorted.map(e => (
-            <li key={e.id} className="flex items-start gap-2 text-xs">
+            <li key={e.id} className="relative flex items-start gap-2 text-xs">
+              <span className={`absolute -left-[15px] top-1 size-1.5 rounded-full ${eventDotClass(e.event_type)}`} aria-hidden="true" />
               <span className="text-muted-foreground/60 shrink-0 tabular-nums">{formatTimestamp(e.occurred_at)}</span>
-              <span className="text-foreground">— {describeEvent(e)}</span>
+              <span className="text-foreground">{describeEvent(e)}</span>
             </li>
           ))}
         </ol>

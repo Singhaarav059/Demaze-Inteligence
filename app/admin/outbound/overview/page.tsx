@@ -16,8 +16,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Search, Mail, Inbox, Reply, Ban, Clock, Send, Eye, UserX } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,8 +23,11 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { GuideNote } from '@/components/ui/guide-note'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { MetricTile } from '@/components/ui/metric-tile'
+import { computeDailyCounts, hasSufficientTrendData } from '@/lib/analytics/daily-counts'
 import { useOutboundOverview } from './useOutboundOverview'
 import { PilotFunnelPanel } from './PilotFunnelPanel'
+import { StatusDot, type StatusTone } from '../StatusDot'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -40,12 +41,13 @@ const STATUS_OPTIONS = [
   { value: 'stopped', label: 'Stopped' },
 ]
 
-function statusBadgeVariant(status: string) {
-  if (status === 'replied') return 'default' as const
-  if (status === 'bounced') return 'destructive' as const
-  if (status === 'queued') return 'outline' as const
-  if (status.startsWith('followup')) return 'secondary' as const
-  return 'secondary' as const
+function statusTone(status: string): StatusTone {
+  if (status === 'replied') return 'strong'
+  if (status === 'bounced') return 'destructive'
+  if (status === 'queued') return 'muted'
+  if (status.startsWith('followup')) return 'medium'
+  if (status === 'stopped') return 'muted'
+  return 'strong'
 }
 
 function statusLabel(status: string) {
@@ -62,31 +64,6 @@ function formatDate(iso: string) {
 interface CampaignOption {
   id: string
   name: string
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string | number
-  sub?: string
-}) {
-  return (
-    <Card className="border-border bg-card">
-      <CardContent className="px-4 py-3">
-        <div className="flex items-center gap-2 text-muted-foreground/70">
-          <Icon className="size-3.5" />
-          <span className="text-xs font-medium">{label}</span>
-        </div>
-        <div className="mt-1 text-xl font-semibold text-foreground">{value}</div>
-        {sub && <div className="text-xs text-muted-foreground/60 mt-0.5">{sub}</div>}
-      </CardContent>
-    </Card>
-  )
 }
 
 export default function OutboundOverviewPage() {
@@ -108,6 +85,7 @@ export default function OutboundOverviewPage() {
 
   const [searchDraft, setSearchDraft] = useState('')
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([])
+  const [sentTimestamps, setSentTimestamps] = useState<string[] | null>(null)
 
   useEffect(() => {
     void (async () => {
@@ -120,6 +98,24 @@ export default function OutboundOverviewPage() {
       }
     })()
   }, [])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/outbound/overview/activity')
+        const data = await res.json()
+        if (data.success) setSentTimestamps(data.sentTimestamps)
+      } catch {
+        // non-fatal — the sparkline just stays hidden, same as insufficient data
+      }
+    })()
+  }, [])
+
+  // Real data only (redesign brief Section 24) — the sparkline renders
+  // exclusively when there's enough genuine send activity to read as a
+  // trend, never a near-empty placeholder chart.
+  const dailySends = sentTimestamps ? computeDailyCounts(sentTimestamps, 14) : null
+  const showSendsTrend = dailySends !== null && hasSufficientTrendData(dailySends)
 
   useEffect(() => {
     const handle = setTimeout(() => setSearch(searchDraft.trim()), 300)
@@ -157,22 +153,27 @@ export default function OutboundOverviewPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <StatCard icon={Send} label="Total Contacted" value={stats.totalContacted} sub={`${stats.sentLast24h} in last 24h`} />
-          <StatCard icon={Inbox} label="Queued" value={stats.queued} />
-          <StatCard icon={Reply} label="Replied" value={stats.replied} sub={`${replyRatePct}% reply rate`} />
-          <StatCard icon={Ban} label="Bounced" value={stats.bounced} />
-          <StatCard icon={Clock} label="Follow-ups Pending" value={stats.followupPending} sub={`${stats.followupDueNow} due now`} />
-          <StatCard icon={Mail} label="All Contacted Statuses" value={Object.keys(stats.byStatus).length} sub="distinct statuses in use" />
+          <MetricTile
+            icon={Send}
+            label="Total Contacted"
+            value={stats.totalContacted}
+            sub={`${stats.sentLast24h} in last 24h`}
+            trend={showSendsTrend && dailySends ? dailySends : undefined}
+          />
+          <MetricTile icon={Inbox} label="Queued" value={stats.queued} />
+          <MetricTile icon={Reply} label="Replied" value={stats.replied} sub={`${replyRatePct}% reply rate`} />
+          <MetricTile icon={Ban} label="Bounced" value={stats.bounced} />
+          <MetricTile icon={Clock} label="Follow-ups Pending" value={stats.followupPending} sub={`${stats.followupDueNow} due now`} />
+          <MetricTile icon={Mail} label="All Contacted Statuses" value={Object.keys(stats.byStatus).length} sub="distinct statuses in use" />
           {/* Secondary signals — not the primary business metric (Pilot Readiness Plan D4) */}
-          <StatCard icon={Eye} label="Opened" value={stats.opened} />
-          <StatCard icon={UserX} label="Unsubscribed" value={stats.unsubscribed} />
+          <MetricTile icon={Eye} label="Opened" value={stats.opened} />
+          <MetricTile icon={UserX} label="Unsubscribed" value={stats.unsubscribed} />
         </div>
       )}
 
       <PilotFunnelPanel />
 
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-3">
+      <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1 sm:col-span-1">
               <Label htmlFor="overview-search">Search</Label>
@@ -219,11 +220,9 @@ export default function OutboundOverviewPage() {
               </Select>
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
-      <Card className="border-border bg-card">
-        <CardContent className="px-5 py-4 space-y-3">
+      <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">Emails</h2>
             <span className="text-xs text-muted-foreground/60">
@@ -271,7 +270,7 @@ export default function OutboundOverviewPage() {
                         {row.outbound_generated_content?.selected_subject_line ?? '—'}
                       </td>
                       <td className="py-2 pr-3">
-                        <Badge variant={statusBadgeVariant(row.status)}>{statusLabel(row.status)}</Badge>
+                        <StatusDot tone={statusTone(row.status)} label={statusLabel(row.status)} />
                       </td>
                       <td className="py-2 pr-3 text-muted-foreground/60 whitespace-nowrap">
                         {formatDate(row.updated_at)}
@@ -293,8 +292,7 @@ export default function OutboundOverviewPage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   )
 }

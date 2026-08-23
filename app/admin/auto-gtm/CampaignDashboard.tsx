@@ -16,7 +16,20 @@
 import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { BarChart3 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  BarChart3,
+  Users,
+  Clock,
+  Send,
+  Eye,
+  MessageSquareReply,
+  AlertTriangle,
+  CalendarClock,
+  PauseCircle,
+  ShieldOff,
+  type LucideIcon,
+} from 'lucide-react'
 import { nextFollowupSequence } from '@/lib/outbound/sending/followup-schedule'
 import { formatTimestamp, type CampaignEvent } from './EventLabels'
 
@@ -74,16 +87,16 @@ export function CampaignDashboard({
     } satisfies Record<Segment, DashboardRow[]>
   }, [rows])
 
-  const cards: Array<{ key: Segment; label: string; tooltip?: string }> = [
-    { key: 'total', label: 'Total' },
-    { key: 'queued', label: 'Queued' },
-    { key: 'sent', label: 'Sent' },
-    { key: 'opened', label: 'Opened', tooltip: 'Open detected via a tracking image — not a guarantee the message was read. Images may be blocked, or prefetched by the provider before a human opens it.' },
-    { key: 'replied', label: 'Replied' },
-    { key: 'bounced', label: 'Bounced', tooltip: "Gmail's bounce detection doesn't distinguish hard vs. soft bounces — every bounce is treated the same way and the address is suppressed either way." },
-    { key: 'followups_scheduled', label: 'Follow-ups scheduled' },
-    { key: 'stopped', label: 'Stopped' },
-    { key: 'suppressed', label: 'Suppressed' },
+  const cards: Array<{ key: Segment; label: string; icon: LucideIcon; tone?: 'strong' | 'medium' | 'destructive'; tooltip?: string }> = [
+    { key: 'total', label: 'Total', icon: Users },
+    { key: 'queued', label: 'Queued', icon: Clock },
+    { key: 'sent', label: 'Sent', icon: Send },
+    { key: 'opened', label: 'Opened', icon: Eye, tone: 'strong', tooltip: 'Open detected via a tracking image — not a guarantee the message was read. Images may be blocked, or prefetched by the provider before a human opens it.' },
+    { key: 'replied', label: 'Replied', icon: MessageSquareReply, tone: 'strong' },
+    { key: 'bounced', label: 'Bounced', icon: AlertTriangle, tone: 'destructive', tooltip: "Gmail's bounce detection doesn't distinguish hard vs. soft bounces — every bounce is treated the same way and the address is suppressed either way." },
+    { key: 'followups_scheduled', label: 'Follow-ups scheduled', icon: CalendarClock, tone: 'medium' },
+    { key: 'stopped', label: 'Stopped', icon: PauseCircle },
+    { key: 'suppressed', label: 'Suppressed', icon: ShieldOff, tone: 'destructive' },
   ]
 
   const selectedRows = selected ? buckets[selected] : []
@@ -94,6 +107,17 @@ export function CampaignDashboard({
         {cards.map(c => {
           const isActive = selected === c.key
           const count = buckets[c.key].length
+          const Icon = c.icon
+          const toneClass =
+            count === 0
+              ? 'text-muted-foreground/40'
+              : c.tone === 'strong'
+                ? 'text-signal-strong'
+                : c.tone === 'medium'
+                  ? 'text-signal-medium'
+                  : c.tone === 'destructive'
+                    ? 'text-destructive'
+                    : 'text-foreground'
           return (
             <button
               key={c.key}
@@ -101,12 +125,16 @@ export function CampaignDashboard({
               aria-pressed={isActive}
               disabled={count === 0}
               onClick={() => setSelected(prev => (prev === c.key ? null : c.key))}
-              className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                isActive ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-accent/50'
-              } ${count === 0 ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}
+              className={cn(
+                'rounded-lg border px-3 py-2.5 text-left transition-colors',
+                isActive ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-accent/50',
+                count === 0 ? 'opacity-50 cursor-default' : 'cursor-pointer'
+              )}
             >
-              <span className="block text-[11px] text-muted-foreground/70">{c.label}</span>
-              <span className="block text-lg font-semibold text-foreground tabular-nums">{count}</span>
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground/70">
+                <Icon className="size-3" /> {c.label}
+              </span>
+              <span className={cn('block text-lg font-semibold tabular-nums', toneClass)}>{count}</span>
             </button>
           )
         })}

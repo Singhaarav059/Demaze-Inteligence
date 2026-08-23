@@ -14,6 +14,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
+import { AlertTriangle, CheckCircle2, ExternalLink, HelpCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -64,22 +66,123 @@ export interface DecisionMakerFinderHandle {
   commitSelected: () => Promise<void>
 }
 
-function confidenceBadgeVariant(confidence: 'high' | 'medium' | 'low') {
-  if (confidence === 'high') return 'default' as const
-  if (confidence === 'medium') return 'secondary' as const
-  return 'outline' as const
-}
-
-function groundingBadgeVariant(status: 'confirmed' | 'conflict' | 'not_found') {
-  if (status === 'confirmed') return 'default' as const
-  if (status === 'conflict') return 'destructive' as const
-  return 'outline' as const
+// Signal-strength color scale (matches ResearchCard.tsx's own confidenceClass()
+// — same visual language, duplicated locally per this repo's own
+// "duplication over cross-module coupling for small helpers" convention
+// rather than importing across the intelligence-lab/outbound boundary).
+function confidenceBadgeClass(confidence: 'high' | 'medium' | 'low') {
+  if (confidence === 'high') return 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+  if (confidence === 'medium') return 'border-signal-medium/40 bg-signal-medium/10 text-signal-medium'
+  return 'border-signal-weak/40 bg-signal-weak/10 text-signal-weak'
 }
 
 function groundingLabel(status: 'confirmed' | 'conflict' | 'not_found') {
   if (status === 'confirmed') return 'Confirmed on website'
   if (status === 'conflict') return 'Conflicts with website'
   return 'Not on website'
+}
+
+function groundingIcon(status: 'confirmed' | 'conflict' | 'not_found') {
+  if (status === 'confirmed') return CheckCircle2
+  if (status === 'conflict') return AlertTriangle
+  return HelpCircle
+}
+
+// initials() — first letters of up to the first two words of a name, for the
+// PersonCard avatar circle. Pure display helper, no data implication.
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
+}
+
+// PersonCard — one candidate decision-maker, rendered as a clear person card
+// instead of a plain checkbox label row (visual-only redesign). Every field
+// shown comes straight from DecisionMakerCandidate/the caller's own already-
+// computed helpers (relevanceReasonFor, isRecommendedCandidate, grounding) —
+// nothing here invents a reasoning line, confidence score, or availability
+// flag that isn't already present on the real candidate. Kept local to this
+// file (single consumer) rather than promoted to components/ui/.
+function PersonCard({
+  candidate,
+  checked,
+  onToggle,
+  recommended,
+  relevanceReason,
+}: {
+  candidate: DecisionMakerCandidate
+  checked: boolean
+  onToggle: () => void
+  recommended: boolean
+  relevanceReason: string | null
+}) {
+  const GroundingIcon = candidate.grounding ? groundingIcon(candidate.grounding.status) : null
+  return (
+    <motion.label
+      variants={listItem}
+      className={cn(
+        'flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm cursor-pointer transition-colors',
+        checked ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:border-border-strong'
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        className="size-3.5 mt-1.5 shrink-0 accent-primary"
+      />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-foreground/80">
+        {initials(candidate.personName)}
+      </span>
+      <span className="min-w-0 flex-1 space-y-1">
+        <span className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-foreground">{candidate.personName}</span>
+          {recommended && <Badge className="text-[10px]">Recommended</Badge>}
+        </span>
+        <span className="block text-xs text-muted-foreground/80">{candidate.title}</span>
+        <span className="flex items-center gap-1.5 flex-wrap pt-0.5">
+          <span
+            className={cn(
+              'rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+              confidenceBadgeClass(candidate.confidence)
+            )}
+          >
+            {candidate.confidence} relevance
+          </span>
+          {candidate.grounding && GroundingIcon && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+                candidate.grounding.status === 'confirmed'
+                  ? 'border-signal-strong/40 bg-signal-strong/10 text-signal-strong'
+                  : candidate.grounding.status === 'conflict'
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                  : 'border-border text-muted-foreground/70'
+              )}
+              title={candidate.grounding.reason}
+            >
+              <GroundingIcon className="size-2.5" />
+              {groundingLabel(candidate.grounding.status)}
+            </span>
+          )}
+          {candidate.linkedinUrl && (
+            <a
+              href={candidate.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-[10px] text-primary hover:text-primary-hover"
+            >
+              <ExternalLink className="size-2.5" /> LinkedIn available
+            </a>
+          )}
+        </span>
+        {relevanceReason && (
+          <span className="block text-[11px] text-muted-foreground/70">Why this person: {relevanceReason}</span>
+        )}
+      </span>
+    </motion.label>
+  )
 }
 
 export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
@@ -194,6 +297,20 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
     if (recommendedTitleSet.size === 0) return false
     const t = candidate.title.toLowerCase()
     return Array.from(recommendedTitleSet).some(rt => t.includes(rt) || rt.includes(t))
+  }
+
+  // Plain-English "why this contact" line (spec section 18) — only ever
+  // reuses recommendTitlesFromResearch()'s own already-computed reason text
+  // for whichever research-derived group this candidate's title matched,
+  // never invents new copy. Returns null (rendered as nothing) when the
+  // candidate didn't match a real research signal, same honest-empty-state
+  // discipline as everything else in this component.
+  function relevanceReasonFor(candidate: DecisionMakerCandidate): string | null {
+    const t = candidate.title.toLowerCase()
+    const match = recommendedGroups.find(
+      g => g.fromResearch && g.titles.some(gt => t.includes(gt.toLowerCase()) || gt.toLowerCase().includes(t))
+    )
+    return match?.reason ?? null
   }
 
   // Runs once on mount, regardless of autoStart: first checks for an
@@ -490,30 +607,14 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
 
               <motion.div variants={staggerList} initial="hidden" animate="visible" className="space-y-2">
                 {visible.map(({ candidate, i }) => (
-                  <motion.label
+                  <PersonCard
                     key={`${candidate.title}-${i}`}
-                    variants={listItem}
-                    className="flex items-center gap-2.5 text-sm cursor-pointer flex-wrap"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCandidates.has(i)}
-                      onChange={() => toggleCandidate(i)}
-                      className="size-3.5"
-                    />
-                    <span className="text-foreground">{candidate.personName}</span>
-                    <span className="text-xs text-muted-foreground/70">{candidate.title}</span>
-                    <Badge variant={confidenceBadgeVariant(candidate.confidence)}>{candidate.confidence}</Badge>
-                    {isRecommendedCandidate(candidate) && <Badge variant="default">Recommended</Badge>}
-                    {candidate.grounding && (
-                      <Badge
-                        variant={groundingBadgeVariant(candidate.grounding.status)}
-                        title={candidate.grounding.reason}
-                      >
-                        {groundingLabel(candidate.grounding.status)}
-                      </Badge>
-                    )}
-                  </motion.label>
+                    candidate={candidate}
+                    checked={selectedCandidates.has(i)}
+                    onToggle={() => toggleCandidate(i)}
+                    recommended={isRecommendedCandidate(candidate)}
+                    relevanceReason={relevanceReasonFor(candidate)}
+                  />
                 ))}
               </motion.div>
               {compact ? (
