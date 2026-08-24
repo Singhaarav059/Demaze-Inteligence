@@ -233,7 +233,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                   : 'border-border hover:border-border-strong'
               }`}
             >
-              <div className="flex items-start gap-3 px-4 py-3">
+              <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-3">
                 <input
                   type="checkbox"
                   aria-label={`Select ${match.name}`}
@@ -262,7 +262,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                   </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                <div className="flex flex-row flex-wrap items-center justify-end gap-1.5 pl-8 sm:flex-col sm:items-end sm:pl-0 sm:flex-shrink-0">
                   <IntelStatus {...toIntelStatus(status, match.lastResearchedAt)} />
                   {status === 'done' && result && (result.signals.length > 0 || result.opportunities.length > 0) && (
                     <p className="text-muted-foreground/60 text-[11px] whitespace-nowrap">
@@ -270,7 +270,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                     </p>
                   )}
                   {(status === 'done' || status === 'already_researched') && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {result ? (
                         <button
                           onClick={() => setExpandedId(expandedId === company.id ? null : company.id)}

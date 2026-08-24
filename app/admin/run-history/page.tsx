@@ -45,15 +45,10 @@ import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import { humanizeText } from '@/lib/text/humanize'
 import type { RunResult } from '@/app/admin/intelligence-lab/_types'
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
-
 function formatDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return `${MONTHS[d.getMonth()]} ${d.getDate()} ${d.getFullYear()}`
+  return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 // Relative-day bucket label for the "All" activity timeline - local calendar
@@ -587,7 +582,7 @@ export default function RunHistoryPage() {
                           onClick={() => fetchDetail(run.id)}
                           className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors cursor-pointer"
                         >
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <IntelStatus status={runIntelStatus(run)} />
@@ -611,7 +606,7 @@ export default function RunHistoryPage() {
                                 display:none, so they stay tabbable and visible
                                 on touch devices - no discoverability loss vs.
                                 the always-visible buttons this replaces). */}
-                            <div className="flex items-center gap-1.5 flex-shrink-0 opacity-70 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:flex-shrink-0 opacity-100 sm:opacity-70 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                               <Button
                                 size="sm"
                                 variant="outline"

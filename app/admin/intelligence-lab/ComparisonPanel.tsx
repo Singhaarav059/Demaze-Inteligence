@@ -44,7 +44,21 @@ export function ComparisonPanel({ a, b }: { a: RunResult | null; b: RunResult | 
         <CardTitle className="text-sm text-foreground/90">Side-by-side comparison</CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-4">
-        <div className="overflow-x-auto">
+        {/* Mobile card list - sm:hidden. Below sm, "Metric / Slot A / Slot B"
+            is too narrow a 3-column table to read comfortably even scrolled;
+            each row becomes its own stacked block instead. */}
+        <div className="sm:hidden space-y-2">
+          {rows.map(({ label, fn }) => (
+            <div key={label} className="rounded-md border border-border/50 px-3 py-2">
+              <p className="text-muted-foreground text-[11px] mb-1">{label}</p>
+              <div className="flex items-center justify-between gap-3 text-xs text-foreground/90">
+                <span className="truncate">A: {fn(a)}</span>
+                <span className="truncate">B: {fn(b)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border">

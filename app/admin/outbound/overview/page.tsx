@@ -237,7 +237,41 @@ export default function OutboundOverviewPage() {
           ) : emails.length === 0 ? (
             <EmptyState icon={Inbox} title="No emails match these filters" className="border-none py-6" />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile card list - md:hidden. The table below (md:block) is
+                the same data; overflow-x-auto alone still meant scrolling a
+                5-column table sideways on a phone, not a real app-like view. */}
+            <div className="md:hidden space-y-2">
+              {emails.map(row => (
+                <div key={row.id} className="rounded-lg border border-border px-3 py-2.5 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-foreground text-sm truncate">{row.outbound_contacts?.person_name ?? '-'}</p>
+                      <p className="text-muted-foreground/60 text-xs truncate">
+                        {row.outbound_contacts?.company_name}
+                        {row.outbound_contacts?.email ? ` · ${row.outbound_contacts.email}` : ''}
+                      </p>
+                    </div>
+                    <StatusDot tone={statusTone(row.status)} label={statusLabel(row.status)} />
+                  </div>
+                  {row.outbound_generated_content?.selected_subject_line && (
+                    <p className="text-muted-foreground text-xs truncate">
+                      {row.outbound_generated_content.selected_subject_line}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <Link
+                      href={`/admin/outbound/campaigns?campaign=${row.campaign_id}`}
+                      className="text-foreground hover:text-primary transition-colors truncate"
+                    >
+                      {row.outbound_campaigns?.name ?? '-'}
+                    </Link>
+                    <span className="text-muted-foreground/60 flex-shrink-0">{formatDate(row.updated_at)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-left text-muted-foreground/60 border-b border-border">
@@ -280,6 +314,7 @@ export default function OutboundOverviewPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
           {total > pageSize && (

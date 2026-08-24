@@ -34,7 +34,6 @@ import { Spinner } from '@/components/ui/spinner'
 import { IntelStatus } from '@/components/ui/intel-status'
 import { cn } from '@/lib/utils'
 import type { RunResult } from '@/app/admin/intelligence-lab/_types'
-import { WizardShell } from '@/components/wizard/WizardShell'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
@@ -431,7 +430,31 @@ export default function WizardPage() {
             </CardContent>
           </Card>
 
-          <WizardShell result={result} running={running} error={error} />
+          {/* Inlined WizardShell (2026-08-24 ponytail pass) - was a single-
+              call-site wrapper; its own header comment already said the
+              multi-step stager it was built for no longer exists. */}
+          {(() => {
+            const hasAnalysis = Boolean(result?.success && result.analysisResult && !result.parseError)
+            // A network/fetch-throw failure (as opposed to a { success: false }
+            // API response) never produces a `result` at all - only `error`
+            // gets set. See the 2026-07-19 fix note this guard preserves.
+            if (!result && !running && !error) return null
+            return (
+              <div className="space-y-5">
+                {error && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+                {result && !hasAnalysis && !error && result.parseError && (
+                  <div className="rounded-lg border border-signal-medium/30 bg-signal-medium/10 px-4 py-3 text-sm text-signal-medium">
+                    Analysis returned but could not be parsed: {result.parseError}
+                  </div>
+                )}
+                {hasAnalysis && result && <Step1Research result={result} />}
+              </div>
+            )
+          })()}
         </>
       ) : (
         <div className="space-y-5">

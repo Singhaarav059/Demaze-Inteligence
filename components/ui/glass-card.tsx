@@ -7,7 +7,3 @@ import { Card } from '@/components/ui/card'
 export function GlassCard({ className, ...props }: React.ComponentProps<typeof Card>) {
   return <Card className={cn('glass-panel', className)} {...props} />
 }
-
-export function GlassCardStrong({ className, ...props }: React.ComponentProps<typeof Card>) {
-  return <Card className={cn('glass-panel-strong', className)} {...props} />
-}

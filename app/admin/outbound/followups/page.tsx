@@ -298,17 +298,17 @@ export default function FollowupPanelPage() {
                       <Card key={row.id} className="border-border bg-card">
                         <CardContent className="px-5 py-4 space-y-3">
                           <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-foreground">{row.personName}</div>
-                              <div className="text-xs text-muted-foreground/70">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-foreground truncate">{row.personName}</div>
+                              <div className="text-xs text-muted-foreground/70 truncate">
                                 {row.email ?? 'no email on file'}
                               </div>
-                              <div className="text-xs text-muted-foreground/60 mt-0.5">
+                              <div className="text-xs text-muted-foreground/60 mt-0.5 truncate">
                                 {row.campaignName}
                                 {row.campaignPaused && <Badge variant="secondary" className="ml-1.5">campaign paused</Badge>}
                               </div>
                             </div>
-                            <div className="flex flex-col items-end gap-1">
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               <Badge variant="outline">Step {row.sequence}</Badge>
                               {dueLabel && (
                                 <span className={row.overdue ? 'text-xs font-medium text-destructive flex items-center gap-1' : 'text-xs text-muted-foreground/70 flex items-center gap-1'}>
@@ -359,7 +359,7 @@ export default function FollowupPanelPage() {
                             </div>
                           )}
 
-                          <div className="flex gap-2 pt-1">
+                          <div className="flex flex-wrap gap-2 pt-1">
                             <Button
                               size="sm"
                               disabled={busy || !row.email || row.draftBody === null || row.campaignPaused}
