@@ -250,24 +250,15 @@ export const getDeterministicOpportunities = (data: Record<string, unknown>): De
 export const getCompetitors = (data: Record<string, unknown>): CompetitorProfile[] =>
   arr(data.competitors)
 
-export const getCompetitorSufficiency = (data: Record<string, unknown>): string | undefined =>
-  data.competitor_sufficiency ? String(data.competitor_sufficiency) : undefined
-
 // ICP Generator (Phase 2 item 2). Same "add now, UI section built alongside
 // this session" pattern as getCompetitors above.
 export const getICPSegments = (data: Record<string, unknown>): ICPSegment[] =>
   arr(data.icp_segments)
 
-export const getICPSufficiency = (data: Record<string, unknown>): string | undefined =>
-  data.icp_sufficiency ? String(data.icp_sufficiency) : undefined
-
 // Market Intelligence Layer (Phase 2 item 6). Same "add now, UI section
 // built alongside this session" pattern as getCompetitors/getICPSegments.
 export const getMarketIntelligence = (data: Record<string, unknown>): MarketIntelItem[] =>
   arr(data.market_intelligence)
-
-export const getMarketIntelligenceSufficiency = (data: Record<string, unknown>): string | undefined =>
-  data.market_intelligence_sufficiency ? String(data.market_intelligence_sufficiency) : undefined
 
 export const getLeadershipContacts = (data: Record<string, unknown>): LeadershipContact[] =>
   arr(data.leadership_contacts)

@@ -193,10 +193,6 @@ const B2C_PATTERNS = [
   /locate\s+a?\s*dealer/i,
 ]
 
-export function detectB2CSite(content: string): boolean {
-  return B2C_PATTERNS.filter((p) => p.test(content)).length >= 3
-}
-
 // ── Corporate seed paths ──────────────────────────────────────
 // Probed directly when B2C site detected and no corporate
 // URLs found via sitemap/link extraction.
