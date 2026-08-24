@@ -48,8 +48,16 @@ export function MetricTile({
           </span>
         )}
       </div>
-      {sub && <div className="mt-0.5 text-xs text-muted-foreground/60">{sub}</div>}
-      {trend && <Sparkline data={trend} label={`${label} trend`} className="mt-2" />}
+      {/* sub/trend slots are always rendered (blank when absent), not
+          conditionally mounted - a row of tiles where only some have a
+          sub-line/sparkline and others don't ends up uneven height with a
+          jagged, cluttered look once real data replaces the loading
+          skeleton (which is uniform because every skeleton box is
+          identical). Reserving the space keeps every tile in a row the
+          same shape whether or not this particular metric has a sub/trend
+          to show - never fabricates a value, just holds its place. */}
+      <div className="mt-0.5 min-h-4 text-xs text-muted-foreground/60">{sub}</div>
+      <div className="mt-2 h-9">{trend && <Sparkline data={trend} label={`${label} trend`} />}</div>
     </div>
   )
 }
