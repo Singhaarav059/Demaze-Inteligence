@@ -143,6 +143,8 @@ export function ReviewSendStep({
   sendingSelected,
   sendOneContact,
   sendSelectedContacts,
+  excludedIds,
+  onExcludedIdsChange,
   onEditContact,
 }: {
   contacts: OutboundContact[]
@@ -160,12 +162,17 @@ export function ReviewSendStep({
   sendingSelected: boolean
   sendOneContact: (contactId: string) => Promise<void>
   sendSelectedContacts: (contactIds: string[]) => Promise<void>
+  // Lifted to the parent page (audit follow-up, 2026-08-24) - this step's
+  // own local state used to reset on every remount (step 5 remounts on
+  // every step change), silently un-removing anyone the user had excluded
+  // if they navigated away and back before confirming send.
+  excludedIds: Set<string>
+  onExcludedIdsChange: (ids: Set<string>) => void
   onEditContact: (contactId?: string) => void
 }) {
   const [loading, setLoading] = useState(true)
   const [campaign, setCampaign] = useState<CampaignInfo | null>(null)
   const [summary, setSummary] = useState<ReviewSummary | null>(null)
-  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ personName: string; subject: string; body: string; loading: boolean; notFound: boolean } | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState(false)
@@ -260,7 +267,7 @@ export function ReviewSendStep({
           return
         }
       }
-      setExcludedIds(prev => new Set(prev).add(row.contactId))
+      onExcludedIdsChange(new Set(excludedIds).add(row.contactId))
       toast.success(`Removed ${row.personName} from this send`)
     } catch {
       toast.error('Could not reach the campaigns API')

@@ -454,6 +454,14 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
           toast.error(data.error ?? `Failed to add ${candidate.personName}`)
           continue
         }
+        // The route dedupes by (source_run_id, person_name) and returns the
+        // existing row instead of inserting a new one - skip re-adding it to
+        // the caller's list (would show as a visual duplicate row) and say
+        // so plainly rather than a misleading "Added".
+        if (data.deduped) {
+          toast.message(`${candidate.personName} was already added`)
+          continue
+        }
         onContactAdded(data.contact)
         toast.success(`Added ${candidate.personName}`)
       }

@@ -138,6 +138,16 @@ export default function AutoGtmFlowPage() {
   // something that needs to survive a refresh.
   const [focusContactId, setFocusContactId] = useState<string | null>(null)
 
+  // FIXED (audit follow-up, 2026-08-24): used to be local state inside
+  // ReviewSendStep, which remounts fresh every time flow.step changes (step
+  // 5's content lives in the per-step motion.div, keyed by step). Removing
+  // a contact then navigating to step 4 to edit something and back reset
+  // this to empty, silently un-removing anyone excluded - the one supposed-
+  // to-be-durable safety action before a real send. Lifted here so it
+  // survives step navigation; reset per run same as the other per-run state
+  // above/below.
+  const [excludedContactIds, setExcludedContactIds] = useState<Set<string>>(new Set())
+
   // Auto-pilot state (see the block below `emailsFoundCount` for the full
   // explanation) - declared up here alongside this file's other per-run
   // refs/state, since the effects that use them live further down (after
@@ -221,6 +231,7 @@ export default function AutoGtmFlowPage() {
     autoAdvancedRef.current = new Set()
     setDmDiscoveryDone(false)
     setDraftingSettled(false)
+    setExcludedContactIds(new Set())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.runId])
 
@@ -338,22 +349,20 @@ export default function AutoGtmFlowPage() {
       disabled: !batchHasProgress || flow.batchRunning || flow.contacts.length === 0,
     }
   } else if (flow.step === 2) {
-    // FIXED (audit follow-up): this used to commit whenever dmSelectedCount
-    // > 0, with no check of whether contacts already exist for this run -
-    // unlike the auto-pilot effect above (step 2's own useEffect), which
-    // has always guarded commitSelected() behind `flow.contacts.length ===
-    // 0`. On a resumed run with a cached decision-maker search,
-    // DecisionMakerFinder pre-selects every cached candidate regardless of
-    // which ones were already committed as contacts, so clicking this
-    // manual button (rather than letting auto-pilot handle it) could
-    // re-add them as duplicates - outbound_contacts has no uniqueness
-    // constraint. Now mirrors the auto-pilot guard exactly, so the manual
-    // fallback button can never diverge from what auto-pilot would have
-    // done. Also checks !flow.resuming for the same reason the auto-pilot
-    // effect does (see that effect's own comment) - flow.contacts.length
-    // can still be stale/not-yet-restored while resuming is true, so this
-    // treats "still resuming" the same as "don't know yet, don't commit".
-    const willCommit = flow.inputMode === 'single' && !flow.resuming && flow.contacts.length === 0 && dmSelectedCount > 0
+    // FIXED (audit follow-up, 2026-08-24): used to only commit when
+    // flow.contacts.length === 0, so re-searching (DecisionMakerFinder's
+    // "Search Again") and selecting new people after the first commit was a
+    // silent no-op on this button - the "already committed" gate blocked
+    // adding anyone new, not just re-adding the same people. The real
+    // duplicate risk that gate existed for (outbound_contacts had no
+    // uniqueness constraint) is now handled at the source - POST
+    // /api/admin/outbound/contacts dedupes by (source_run_id, person_name)
+    // and returns the existing row instead of inserting again - so this can
+    // safely commit whatever's currently selected every time, resumed run
+    // or not. Still checks !flow.resuming: flow.contacts can be stale/not-
+    // yet-restored during that window, and committing against stale state
+    // could show a misleading count even though the dedup itself is safe.
+    const willCommit = flow.inputMode === 'single' && !flow.resuming && dmSelectedCount > 0
     nextAction = {
       label: `Continue to Contact Info (${willCommit ? flow.contacts.length + dmSelectedCount : flow.contacts.length})`,
       onClick: async () => {
@@ -885,6 +894,8 @@ export default function AutoGtmFlowPage() {
             sendingSelected={flow.sendingSelected}
             sendOneContact={flow.sendOneContact}
             sendSelectedContacts={flow.sendSelectedContacts}
+            excludedIds={excludedContactIds}
+            onExcludedIdsChange={setExcludedContactIds}
             onEditContact={contactId => {
               if (contactId) setFocusContactId(contactId)
               flow.setStep(4)

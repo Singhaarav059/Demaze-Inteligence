@@ -4,10 +4,11 @@
 // Outbound Campaigns - /admin/outbound/campaigns
 // ============================================================
 // Create a campaign -> enqueue contacts already added on the Contacts page
-// -> Send (mock provider only - no real email is delivered). Sending
-// requires each enqueued contact to already have a generated email
-// (Contacts page's Generate panel); contacts missing one are skipped, not
-// silently marked sent.
+// -> Send. Provider-aware (see isRealSendingProvider below) - sends for
+// real once a real sending provider (e.g. Gmail) is the active integration,
+// mock otherwise. Sending requires each enqueued contact to already have a
+// generated email (Contacts page's Generate panel); contacts missing one
+// are skipped, not silently marked sent.
 // ============================================================
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'

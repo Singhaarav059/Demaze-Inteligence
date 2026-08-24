@@ -544,6 +544,7 @@ export default function WizardPage() {
                         checked={selected}
                         onChange={() => toggleCompany(company.id)}
                         disabled={batchRunning}
+                        aria-label={`Select ${company.companyName}`}
                         className="accent-primary"
                       />
                       <div className="min-w-0 flex-1">

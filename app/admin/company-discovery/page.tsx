@@ -125,6 +125,7 @@ function PillToggle({ label, selected, onClick }: { label: string; selected: boo
     <motion.button
       type="button"
       onClick={onClick}
+      aria-pressed={selected}
       whileTap={{ scale: 0.96 }}
       className={`inline-flex items-center gap-1 text-sm px-3.5 py-1.5 rounded-full border transition-colors ${
         selected
@@ -287,7 +288,10 @@ function CompanyDiscoveryInner() {
   useEffect(() => {
     if (autoSearchedRef.current) return
     const segment = searchParams.get('segment')
-    if (!segment) return
+    // A link should never carry both params, but if one ever does, let
+    // resumeSegmentId (the more specific, saved-segment case below) win
+    // instead of racing two searches against each other.
+    if (!segment || searchParams.get('resumeSegmentId')) return
     autoSearchedRef.current = true
     search.handleSearch({ definitionOverride: segment, excludeCompanyName: searchParams.get('exclude') ?? undefined })
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -109,6 +109,12 @@ export function useCompanyDiscoverySearch() {
   const lastRequestBody = useRef<Record<string, unknown> | null>(null)
   const lastPage = useRef(1)
   const lastIndustryLabel = useRef<string | null>(null)
+  // FIXED (audit follow-up, 2026-08-24): loadMore() used to build its
+  // results with an empty filters object, dropping excludeKeywords/
+  // excludeCompanyName from the original search - a company the user
+  // explicitly excluded could reappear on page 2. Remembered here the same
+  // way lastRequestBody/lastIndustryLabel already are.
+  const lastFilters = useRef<DiscoverySearchFilters>({})
 
   function buildRequestBody(filters: DiscoverySearchFilters, definition: string) {
     const employeeRange = EMPLOYEE_RANGES.find(r => r.key === filters.employeeRangeKey)
@@ -203,6 +209,7 @@ export function useCompanyDiscoverySearch() {
     lastRequestBody.current = body
     lastPage.current = 1
     lastIndustryLabel.current = industryLabel
+    lastFilters.current = filters
 
     const matches = toMatches(result.companies, filters, industryLabel)
     const total = result.meta?.total ?? matches.length
@@ -235,7 +242,7 @@ export function useCompanyDiscoverySearch() {
       return
     }
     lastPage.current = nextPage
-    const matches = toMatches(result.companies, {}, lastIndustryLabel.current)
+    const matches = toMatches(result.companies, lastFilters.current, lastIndustryLabel.current)
     setCompanies(prev => {
       const seen = new Set(prev.map(c => (c.match.domain ? `d:${c.match.domain}` : `n:${c.match.name.toLowerCase()}`)))
       const fresh = matches.filter(m => !seen.has(m.domain ? `d:${m.domain}` : `n:${m.name.toLowerCase()}`))
@@ -256,8 +263,14 @@ export function useCompanyDiscoverySearch() {
   function toggle(id: string) {
     setCompanies(prev => prev.map(c => c.company.id === id ? { ...c, selected: !c.selected } : c))
   }
+  // FIXED (audit follow-up, 2026-08-24): used to force-select every row
+  // including already-researched ones, unlike the smart initial default
+  // (`selected: !match.lastResearchedAt` above) that skips them - so
+  // "Select all" -> "Research" re-ran paid research on companies already
+  // researched. Mirrors that same default; an individual row can still be
+  // checked by hand to deliberately re-research it.
   function selectAll() {
-    setCompanies(prev => prev.map(c => ({ ...c, selected: true })))
+    setCompanies(prev => prev.map(c => ({ ...c, selected: c.status !== 'already_researched' })))
   }
   function selectNone() {
     setCompanies(prev => prev.map(c => ({ ...c, selected: false })))

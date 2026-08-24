@@ -21,6 +21,7 @@
 // ============================================================
 
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { Fragment, useState, type ReactNode } from 'react'
 import {
   Building2, Newspaper, AlertTriangle, Lightbulb, Users, Target, TrendingUp,
@@ -1108,7 +1109,7 @@ function CopyButton({ text }: { text: string }) {
         navigator.clipboard.writeText(text).then(() => {
           setCopied(true)
           setTimeout(() => setCopied(false), 1500)
-        })
+        }).catch(() => toast.error('Could not copy - your browser blocked clipboard access'))
       }}
       className="shrink-0 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
     >

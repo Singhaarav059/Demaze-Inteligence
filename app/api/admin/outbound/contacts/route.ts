@@ -71,6 +71,25 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServerClient()
 
+  // outbound_contacts has no DB-level uniqueness constraint, so this route
+  // is the one chokepoint every caller (manual add, single decision-maker
+  // add, batch decision-maker add) goes through — dedup here once rather
+  // than in each caller. A same-run add of a name already on file returns
+  // the existing row instead of inserting a duplicate that could later be
+  // sent to twice.
+  if (source_run_id && person_name.trim()) {
+    const { data: existing } = await supabase
+      .from('outbound_contacts')
+      .select('*')
+      .eq('source_run_id', source_run_id)
+      .ilike('person_name', person_name.trim())
+      .limit(1)
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json({ success: true, contact: existing, deduped: true })
+    }
+  }
+
   // discovery_source/confidence/provider are only sent to the DB when the
   // caller actually passed one — keeps plain manual adds working on a DB
   // that hasn't run migration 010 yet (those columns don't exist there).

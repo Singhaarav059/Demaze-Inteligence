@@ -25,7 +25,7 @@
 // - All tab: the three real sources above, merged and sorted chronologically.
 // ============================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { History, UserSearch, Send, X } from 'lucide-react'
@@ -174,13 +174,19 @@ export default function RunHistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  // Tracks which row's debug-detail fetch is the most recent one requested,
+  // so a slower earlier request (row A) can't land after a faster later one
+  // (row B) and overwrite B's panel with A's data (audit follow-up, 2026-08-24).
+  const expandRequestIdRef = useRef<string | null>(null)
 
   // Discovery + Outreach tabs - fetched once, independent of the Research
   // tab's opFilter/sort, since they're a different real data source.
   const [discoveryContacts, setDiscoveryContacts] = useState<DiscoveryContact[]>([])
   const [discoveryLoading, setDiscoveryLoading] = useState(true)
+  const [discoveryError, setDiscoveryError] = useState(false)
   const [outreachEmails, setOutreachEmails] = useState<OutreachEmail[]>([])
   const [outreachLoading, setOutreachLoading] = useState(true)
+  const [outreachError, setOutreachError] = useState(false)
 
   async function fetchRuns() {
     setLoading(true)
@@ -219,9 +225,14 @@ export default function RunHistoryPage() {
           setDiscoveryContacts(
             (data.contacts as DiscoveryContact[]).filter(c => c.discovery_source === 'decision_maker_discovery')
           )
+        } else {
+          setDiscoveryError(true)
         }
       } catch {
-        // non-fatal - the Discovery tab just shows its empty state
+        // FIXED (audit follow-up, 2026-08-24): a failed fetch used to fall
+        // through to the same empty state as "genuinely zero decision
+        // makers found" - masking a real backend problem as "nothing here".
+        setDiscoveryError(true)
       } finally {
         setDiscoveryLoading(false)
       }
@@ -233,8 +244,9 @@ export default function RunHistoryPage() {
         const res = await fetch('/api/admin/outbound/overview?limit=200')
         const data = await res.json()
         if (data.success) setOutreachEmails(data.emails)
+        else setOutreachError(true)
       } catch {
-        // non-fatal - the Outreach tab just shows its empty state
+        setOutreachError(true)
       } finally {
         setOutreachLoading(false)
       }
@@ -249,23 +261,30 @@ export default function RunHistoryPage() {
       return
     }
 
+    // The report itself is already visible from `runs` (see the render
+    // below) - this fetch is only for the collapsed debug-JSON panel.
+    // FIXED (audit follow-up, 2026-08-24): this used to collapse the
+    // report (setExpandedId(null)) on any failure here, even though the
+    // visible report never depended on this request - a flaky network
+    // could make an already-loaded report vanish for no real reason. Now
+    // failure just leaves the debug panel unavailable.
     setExpandedId(id)
     setShowDebug(false)
     setLoadingDetail(true)
+    expandRequestIdRef.current = id
     try {
       const res = await fetch(`/api/admin/test-runs/${id}`)
+      if (expandRequestIdRef.current !== id) return // a later click superseded this one
       if (res.ok) {
         const data = await res.json()
         setExpandedDetail(data.run)
       } else {
-        toast.error('Failed to load report detail')
-        setExpandedId(null)
+        toast.error('Could not load debug detail for this run')
       }
     } catch {
-      toast.error('Could not reach the run-history API')
-      setExpandedId(null)
+      if (expandRequestIdRef.current === id) toast.error('Could not reach the run-history API')
     } finally {
-      setLoadingDetail(false)
+      if (expandRequestIdRef.current === id) setLoadingDetail(false)
     }
   }
 
@@ -729,6 +748,12 @@ export default function RunHistoryPage() {
         <TabsContent value="discovery" className="mt-4">
           {discoveryLoading ? (
             <div className="text-muted-foreground text-sm">Loading…</div>
+          ) : discoveryError ? (
+            <EmptyState
+              icon={UserSearch}
+              title="Could not load decision makers"
+              description="The request to load this tab failed - try refreshing the page."
+            />
           ) : discoveryContacts.length === 0 ? (
             <EmptyState
               icon={UserSearch}
@@ -758,6 +783,12 @@ export default function RunHistoryPage() {
         <TabsContent value="outreach" className="mt-4">
           {outreachLoading ? (
             <div className="text-muted-foreground text-sm">Loading…</div>
+          ) : outreachError ? (
+            <EmptyState
+              icon={Send}
+              title="Could not load outreach activity"
+              description="The request to load this tab failed - try refreshing the page."
+            />
           ) : outreachEmails.length === 0 ? (
             <EmptyState
               icon={Send}
