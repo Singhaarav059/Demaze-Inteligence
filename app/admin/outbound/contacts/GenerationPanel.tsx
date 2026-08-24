@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { humanizeText } from '@/lib/text/humanize'
+import { urgencyBadgeVariant } from '@/lib/outbound/generation/types'
 
 interface EmailDraft {
   hook: string
@@ -42,12 +43,6 @@ interface GeneratedContent {
   email_draft: EmailDraft | null
   followups: FollowupDraft[] | null
   status: 'draft' | 'approved' | 'sent'
-}
-
-function urgencyBadgeVariant(urgency: FollowupDraft['urgency']) {
-  if (urgency === 'high') return 'destructive' as const
-  if (urgency === 'medium') return 'secondary' as const
-  return 'outline' as const
 }
 
 export function GenerationPanel({ contactId }: { contactId: string }) {

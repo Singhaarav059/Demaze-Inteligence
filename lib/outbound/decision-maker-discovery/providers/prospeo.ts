@@ -13,12 +13,12 @@
 import { getProspeoApiKey, callProspeoSearchPerson } from '@/lib/outbound/shared/prospeo-client'
 import type { ProspeoPerson, ProspeoJobHistoryEntry } from '@/lib/outbound/shared/prospeo-client'
 import { DEFAULT_TARGET_TITLES } from '../types'
+import { bestTargetTitleMatch, tierConfidence, stripToHostname } from '../title-match'
 import type {
   DecisionMakerDiscoveryProvider,
   DecisionMakerDiscoveryRequest,
   DecisionMakerDiscoveryResult,
   DecisionMakerCandidate,
-  DecisionMakerConfidence,
 } from '../types'
 
 // Raised from 10 (2026-08-13) — the old cap silently discarded real,
@@ -29,53 +29,6 @@ import type {
 // unpredictable number of paid lookups. No realistic target-title search
 // against a real company returns more genuine matches than this.
 const MAX_CANDIDATES = 50
-
-// Common C-level/VP acronyms expanded so e.g. "CEO" and "Chief Executive
-// Officer" are recognized as the same title — without this, an acronym-
-// shaped target title would never word-overlap with a spelled-out real job
-// title, or vice versa.
-const TITLE_EXPANSIONS: Record<string, string> = {
-  ceo: 'chief executive officer',
-  cto: 'chief technology officer',
-  coo: 'chief operating officer',
-  cfo: 'chief financial officer',
-  cmo: 'chief marketing officer',
-  cio: 'chief information officer',
-  vp: 'vice president',
-}
-
-const STOPWORDS = new Set(['of', 'the', 'and', 'for', 'a', 'an', '&'])
-
-function normalizeTitleWords(title: string): string[] {
-  const raw = title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-  const expanded = raw.flatMap(w => (TITLE_EXPANSIONS[w] ? TITLE_EXPANSIONS[w].split(' ') : [w]))
-  return expanded.filter(w => !STOPWORDS.has(w))
-}
-
-// Ratio of targetTitle's own words found in candidateTitle — same word-
-// boundary discipline as matchesKeyword()/classifySubject() elsewhere in
-// this repo, never a naive substring match (which would e.g. collide "VP"
-// inside an unrelated word).
-function titleOverlapRatio(candidateTitle: string, targetTitle: string): number {
-  const targetWords = normalizeTitleWords(targetTitle)
-  if (targetWords.length === 0) return 0
-  const candidateWords = new Set(normalizeTitleWords(candidateTitle))
-  const matched = targetWords.filter(w => candidateWords.has(w)).length
-  return matched / targetWords.length
-}
-
-function bestTargetTitleMatch(candidateTitle: string, targetTitles: string[]): { target: string; ratio: number } | null {
-  let best: { target: string; ratio: number } | null = null
-  for (const target of targetTitles) {
-    const ratio = titleOverlapRatio(candidateTitle, target)
-    if (ratio > 0 && (!best || ratio > best.ratio)) best = { target, ratio }
-  }
-  return best
-}
 
 function currentJob(person: ProspeoPerson): ProspeoJobHistoryEntry | undefined {
   return person.job_history?.find(j => j.current) ?? person.job_history?.[0]
@@ -107,22 +60,7 @@ function bestMatchForPerson(
   }
   return best
 }
-
-function tierConfidence(ratio: number, isCurrentTitle: boolean): DecisionMakerConfidence {
-  if (ratio >= 1 && isCurrentTitle) return 'high'
-  if (ratio >= 0.5) return 'medium'
-  return 'low'
-}
-
-function stripToHostname(domain: string): string {
-  return domain
-    .trim()
-    .replace(/^https?:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/.*$/, '')
-    .toLowerCase()
-}
-
+
 function dedupeKey(person: ProspeoPerson): string {
   return (person.linkedin_url || person.full_name || '').toLowerCase().trim()
 }

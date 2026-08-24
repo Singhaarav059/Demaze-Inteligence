@@ -32,6 +32,7 @@ import { TypewriterText } from '@/components/ui/typewriter-text'
 import { humanizeText } from '@/lib/text/humanize'
 import { expandCollapse } from '@/lib/motion'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
+import { urgencyBadgeVariant } from '@/lib/outbound/generation/types'
 import { CampaignSettingsPanel } from './CampaignSettingsPanel'
 
 // Real, stage-driven progress (not a guessed skeleton) - each contact's
@@ -92,12 +93,6 @@ interface EditDraft {
 }
 
 type DraftStage = 'subjects' | 'email' | 'followups'
-
-function urgencyBadgeVariant(urgency: FollowupDraft['urgency']) {
-  if (urgency === 'high') return 'destructive' as const
-  if (urgency === 'medium') return 'secondary' as const
-  return 'outline' as const
-}
 
 // Signal-strength color scale (matches ResearchCard.tsx's own confidenceClass()
 // - same visual language, duplicated locally per this repo's own

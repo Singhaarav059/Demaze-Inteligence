@@ -8,69 +8,24 @@
 // resolveCompanyLinkedinId's own comment for the precision tradeoff this
 // implies), else falls back to the looser company_filters.definition
 // (natural-language name match). Local word-overlap title tiering
-// (duplicated from providers/prospeo.ts — this repo's own precedent of
-// duplication over cross-file coupling for small helpers) — a result
-// whose job_title shares no word with any requested title is dropped
-// rather than surfaced as a guess.
+// (lib/outbound/decision-maker-discovery/title-match.ts, shared with
+// providers/prospeo.ts) — a result whose job_title shares no word with
+// any requested title is dropped rather than surfaced as a guess.
 // ============================================================
 
 import { getExpleeApiKey, callExpleeSearchPeople } from '@/lib/outbound/shared/explee-client'
 import type { ExpleePerson } from '@/lib/outbound/shared/explee-client'
 import { searchExpleeCompanies } from '@/lib/enrichment/sources/explee-client'
 import { DEFAULT_TARGET_TITLES } from '../types'
+import { bestTargetTitleMatch, tierConfidence, stripToHostname } from '../title-match'
 import type {
   DecisionMakerDiscoveryProvider,
   DecisionMakerDiscoveryRequest,
   DecisionMakerDiscoveryResult,
   DecisionMakerCandidate,
-  DecisionMakerConfidence,
 } from '../types'
 
 const MAX_CANDIDATES = 50
-
-const TITLE_EXPANSIONS: Record<string, string> = {
-  ceo: 'chief executive officer',
-  cto: 'chief technology officer',
-  coo: 'chief operating officer',
-  cfo: 'chief financial officer',
-  cmo: 'chief marketing officer',
-  cio: 'chief information officer',
-  vp: 'vice president',
-}
-
-const STOPWORDS = new Set(['of', 'the', 'and', 'for', 'a', 'an', '&'])
-
-function normalizeTitleWords(title: string): string[] {
-  const raw = title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean)
-  const expanded = raw.flatMap(w => (TITLE_EXPANSIONS[w] ? TITLE_EXPANSIONS[w].split(' ') : [w]))
-  return expanded.filter(w => !STOPWORDS.has(w))
-}
-
-function titleOverlapRatio(candidateTitle: string, targetTitle: string): number {
-  const targetWords = normalizeTitleWords(targetTitle)
-  if (targetWords.length === 0) return 0
-  const candidateWords = new Set(normalizeTitleWords(candidateTitle))
-  return targetWords.filter(w => candidateWords.has(w)).length / targetWords.length
-}
-
-function bestTargetTitleMatch(candidateTitle: string, targetTitles: string[]): { target: string; ratio: number } | null {
-  let best: { target: string; ratio: number } | null = null
-  for (const target of targetTitles) {
-    const ratio = titleOverlapRatio(candidateTitle, target)
-    if (ratio > 0 && (!best || ratio > best.ratio)) best = { target, ratio }
-  }
-  return best
-}
-
-function tierConfidence(ratio: number): DecisionMakerConfidence {
-  if (ratio >= 1) return 'high'
-  if (ratio >= 0.5) return 'medium'
-  return 'low'
-}
-
-function stripToHostname(domain: string): string {
-  return domain.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').toLowerCase()
-}
 
 // Resolves a confirmed Explee company match, preferring an exact domain
 // match over a bare "only one candidate came back" guess.

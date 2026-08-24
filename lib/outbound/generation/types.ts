@@ -106,6 +106,15 @@ export interface FollowupDraft {
   body: string
 }
 
+// Badge variant for a follow-up's urgency - shared by OutreachStep.tsx and
+// GenerationPanel.tsx, which both render a FollowupDraft (2026-08-24: was
+// duplicated verbatim in both, deduped here).
+export function urgencyBadgeVariant(urgency: FollowupUrgency) {
+  if (urgency === 'high') return 'destructive' as const
+  if (urgency === 'medium') return 'secondary' as const
+  return 'outline' as const
+}
+
 export interface FollowupResult {
   status: GenerationStatus
   followups: FollowupDraft[]

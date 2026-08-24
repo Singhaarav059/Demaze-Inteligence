@@ -243,13 +243,9 @@ export async function fetchGmailAddress(
 }
 
 // base64url per RFC 4648 §5 (Gmail's `raw` field requires this, not
-// standard base64) — strip padding, swap +/ for -_.
+// standard base64) — native 'base64url' encoding since Node 15.7.
 export function base64UrlEncode(input: string): string {
-  return Buffer.from(input, 'utf8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  return Buffer.from(input, 'utf8').toString('base64url')
 }
 
 // RFC 2047-encode the Subject header so non-ASCII (any language other than
