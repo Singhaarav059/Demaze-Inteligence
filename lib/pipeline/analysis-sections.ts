@@ -53,12 +53,16 @@ export interface SignalCluster {
   tier: number
 }
 
+// 2026-08-27 fix: previously declared service/priority fields that
+// lib/pipeline/business-model-classifier.ts's real StrategicChallenge type
+// (what normalize.ts actually assigns to data.strategic_challenges) never
+// had — every "Strategic Challenges" card in the UI was silently rendering
+// two empty badges. Matches the real shape now.
 export interface StrategicChallenge {
   id: string
   title: string
   description: string
-  service: string
-  priority: string
+  signal_triggers?: string[]
 }
 
 export interface DeterministicOpportunity {

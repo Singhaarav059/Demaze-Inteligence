@@ -257,10 +257,13 @@ export function buildAnalysisAppendix(extras: BriefExtras): string {
         challenges
           .slice(0, 8)
           .map(
+            // 2026-08-27 fix: c.priority/c.service don't exist on the real
+            // StrategicChallenge shape (see analysis-sections.ts) — dropped
+            // rather than backfilled with invented values.
             (c) =>
-              `<div class="drow"><p class="drow-t">${H(c.title)} <span class="muted">${E(c.priority)}</span></p>${
+              `<div class="drow"><p class="drow-t">${H(c.title)}</p>${
                 c.description ? `<p class="drow-d">${H(c.description)}</p>` : ''
-              }${c.service ? `<p class="drow-s">${E(c.service)}</p>` : ''}</div>`,
+              }</div>`,
           )
           .join(''),
       ),

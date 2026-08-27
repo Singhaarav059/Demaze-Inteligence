@@ -996,20 +996,19 @@ function AnalysisViewer({ data, extractorResult }: {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="space-y-2">
+              {/* 2026-08-27 fix: this used to render challenge.priority/
+                  challenge.service badges that don't exist on the real
+                  StrategicChallenge shape (see analysis-sections.ts) — two
+                  empty badges on every card. Removed rather than backfilled
+                  with invented values; nothing in the pipeline currently
+                  derives a grounded priority or Demaze-service mapping per
+                  challenge. */}
               {strategicChallenges.slice(0, 6).map((challenge) => (
                 <div key={challenge.id} className="flex items-start gap-3 rounded-md bg-muted/40 px-3 py-2.5">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-xs font-medium text-foreground">{challenge.title}</p>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${
-                        challenge.priority === 'critical' ? 'bg-destructive/15 text-destructive' :
-                        challenge.priority === 'high'     ? 'bg-signal-medium/15 text-signal-medium' :
-                                                            'bg-muted text-muted-foreground'
-                      }`}>{challenge.priority}</span>
-                    </div>
+                    <p className="text-xs font-medium text-foreground">{challenge.title}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{challenge.description}</p>
                   </div>
-                  <span className="text-[10px] text-primary bg-primary/10 border border-primary/30 px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0">{challenge.service}</span>
                 </div>
               ))}
             </div>

@@ -726,7 +726,29 @@ export function normalizeAnalysisResult(
   )
 
   // ── Strategic challenges from business model profile ─────────
-  const strategic_challenges = modelProfile.strategic_challenges
+  // 2026-08-27 fix: modelProfile.strategic_challenges was a static,
+  // business-model-type-keyed template — every company sharing a
+  // business_model_type (e.g. 'Manufacturing') got the exact same list,
+  // word for word, regardless of what was actually found about them.
+  // Confirmed live: Bharat Forge, Ador Welding, and ATE Group (three
+  // unrelated real businesses) all returned a byte-identical 7-item array.
+  // Each challenge already carries signal_triggers ("which detected_factors
+  // activate this" — see business-model-classifier.ts) but it was never
+  // consulted before this fix. Now ranks/filters to challenges with at
+  // least one matching detected_factor (most evidence-relevant first).
+  // Falls back to the full static list only when NOTHING matched at all —
+  // an honest "typical challenges for this business model" baseline, never
+  // a fabricated company-specific claim (the UI already labels this section
+  // "Business-model-specific", not company-specific).
+  const detectedFactorsLookup = detected_factors as Partial<Record<string, boolean>>
+  const rankedStrategicChallenges = modelProfile.strategic_challenges
+    .map(c => ({ challenge: c, matchCount: c.signal_triggers.filter(t => detectedFactorsLookup[t]).length }))
+    .filter(c => c.matchCount > 0)
+    .sort((a, b) => b.matchCount - a.matchCount)
+    .map(c => c.challenge)
+  const strategic_challenges = rankedStrategicChallenges.length > 0
+    ? rankedStrategicChallenges
+    : modelProfile.strategic_challenges
 
   // ── Deterministic opportunities (code) ──────────────────────
   // v3: gates directly against the 8 confirmed Demaze services via
