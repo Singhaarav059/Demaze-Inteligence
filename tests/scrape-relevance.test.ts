@@ -239,6 +239,49 @@ describe('selectResearchCorpus — safety net (never worse than not running)', (
   })
 })
 
+describe('selectResearchCorpus — syndicated news-ticker widget content', () => {
+  // 2026-08-27 fix: found live on a real Lechler press page — a third-party
+  // financial-news-ticker widget scraped verbatim alongside genuine page
+  // content drove a completely unrelated "Why Now" trigger about a zoo
+  // executive's career. Recognizable by "N hours ago" co-occurring with
+  // earnings/stock vocabulary, a shape that never occurs in organic
+  // company-authored prose.
+  it('rejects a page containing a syndicated financial-news-ticker widget', () => {
+    const contaminatedPage = page(
+      `${BASE}/news/industry-roundup`,
+      pad('Northwind Manufacturing announced a new facility. [Sanmina jumps 5.1% amid sector-wide rally 2 hours ago] [Abercrombie & Fitch Delivers 5% Revenue Growth in Q2 2026 12 hours ago] [Salesforce (CRM) Q2 2027 Earnings: Key financials and quarterly highlights 9 hours ago]'),
+    )
+    const goodPage = page(
+      `${BASE}/investor-relations`,
+      pad('Northwind Manufacturing reported record revenue this quarter across all facilities.'),
+    )
+    const result = selectResearchCorpus([contaminatedPage, goodPage], COMPANY)
+    expect(result.selectedPages.map(p => p.url)).not.toContain(contaminatedPage.url)
+    expect(result.selectedPages.map(p => p.url)).toContain(goodPage.url)
+    expect(result.rejectionReasons[contaminatedPage.url]).toBe('syndicated_content')
+  })
+
+  it('does not reject a page that only mentions earnings/revenue in a legitimate own-company context (no "hours ago" timestamp)', () => {
+    const legitPage = page(
+      `${BASE}/investor-relations/q2-results`,
+      pad('Northwind Manufacturing reported strong quarterly results with revenue growth of 12% year over year, driven by expanded production capacity.'),
+    )
+    const result = selectResearchCorpus([legitPage], COMPANY)
+    expect(result.selectedPages.map(p => p.url)).toContain(legitPage.url)
+    expect(result.rejectionReasons[legitPage.url]).toBeUndefined()
+  })
+
+  it('does not reject a page with a relative-time phrase alone (no stock/earnings vocabulary nearby)', () => {
+    const legitPage = page(
+      `${BASE}/blog/plant-tour`,
+      pad('Our team completed the new plant tour 3 hours ago and everyone was impressed by the automated production line.'),
+    )
+    const result = selectResearchCorpus([legitPage], COMPANY)
+    expect(result.selectedPages.map(p => p.url)).toContain(legitPage.url)
+    expect(result.rejectionReasons[legitPage.url]).toBeUndefined()
+  })
+})
+
 describe('selectResearchCorpus — scrape failures and thin content', () => {
   it('excludes failed and too-thin pages from the corpus without crashing', () => {
     const goodPage = page(

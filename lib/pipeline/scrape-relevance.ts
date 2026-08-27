@@ -109,14 +109,42 @@ function pathOf(url: string): string {
   try { return new URL(url).pathname } catch { return url }
 }
 
+// ── Syndicated news-ticker widget detection (found live, 2026-08-27) ────
+// A real Lechler press page (own-domain URL, page_type 'press') had a
+// third-party financial-news-ticker widget scraped verbatim alongside its
+// genuine content — unrelated stock-earnings headlines and an unrelated zoo
+// executive's bio, sitting on the same page. Both got tagged origin:
+// 'own_site' purely because the URL is on lechler.com, and
+// evidence-extractor.ts's SIGNAL_PATTERNS then matched a real, verbatim-
+// quotable phrase out of the widget (a leadership_hiring hit on the zoo
+// bio), which deriveWhyNowTrace() cited as the company's "Why Now" trigger.
+// Quote-verification correctly proves a claimed quote is real text from a
+// real source; it says nothing about whether that source is actually about
+// the researched company — same gap extraction-guards.ts's header already
+// documents for cross-domain search contamination, just found here in an
+// own-domain page instead. Recognizable by a distinct structural shape that
+// never occurs in organic company-authored prose: a relative-time news-feed
+// timestamp ("N hours ago") co-occurring with earnings/stock vocabulary.
+// A whole-page reject (not a block-level strip) — safer and consistent with
+// this module's other hard-exclusion categories, and the safety-net
+// fallback below still guards against zeroing the corpus if a company's
+// entire scrape happens to be this kind of page.
+const NEWS_TICKER_TIMESTAMP = /\b\d{1,2}\s*hours?\s+ago\b/i
+const STOCK_MARKET_VOCAB = /\b(?:earnings|revenue\s+growth|quarterly\s+(?:highlights|results)|q[1-4]\s*20\d{2}\s+earnings|jumps?\s+\d+(?:\.\d+)?%)\b/i
+
+export function looksLikeSyndicatedNewsTicker(text: string): boolean {
+  return NEWS_TICKER_TIMESTAMP.test(text) && STOCK_MARKET_VOCAB.test(text)
+}
+
 // ── Types (Master Plan Step 3.5 naming) ──────────────────────────────────
 
 export type RejectionReason =
-  | 'scrape_failed'      // page.success === false, or empty content
-  | 'thin_content'       // below MIN_USEFUL_CHARS
-  | 'boilerplate'        // privacy/cookie/terms/login/search/etc.
-  | 'identity_mismatch'  // weak URL category + company name never mentioned
-  | 'duplicate_content'  // near-identical to an already-selected page
+  | 'scrape_failed'        // page.success === false, or empty content
+  | 'thin_content'         // below MIN_USEFUL_CHARS
+  | 'boilerplate'          // privacy/cookie/terms/login/search/etc.
+  | 'identity_mismatch'    // weak URL category + company name never mentioned
+  | 'duplicate_content'    // near-identical to an already-selected page
+  | 'syndicated_content'   // third-party news-ticker widget embedded in the page — see looksLikeSyndicatedNewsTicker()
 
 interface PageRelevance {
   category: string
@@ -184,6 +212,12 @@ export function selectResearchCorpus(pages: ScrapePageResult[], companyName: str
     }
     if (page.charCount < MIN_USEFUL_CHARS) {
       rejectionReasons[page.url] = 'thin_content'
+      relevanceScores[page.url] = 0
+      rejectedPages.push(page)
+      continue
+    }
+    if (looksLikeSyndicatedNewsTicker(page.markdown)) {
+      rejectionReasons[page.url] = 'syndicated_content'
       relevanceScores[page.url] = 0
       rejectedPages.push(page)
       continue

@@ -219,8 +219,21 @@ function detectEcommerceEcosystems(content: string): ServiceThresholdResult {
     [/\b(?:expand\w+|scal\w+|grow\w+)\b[^.]{0,80}\b(?:channels?|marketplaces?|storefronts?)\b/i,
       'explicit growth/expansion language near multi-channel evidence'],
   ]
+  // 2026-08-27 fix: a bare brand-name match (no commerce-context requirement
+  // at all) reproduced live on Bharat Forge — a heavy forgings/defense
+  // manufacturer, not a retailer — surfacing "Ecommerce ecosystems" as its
+  // top, "Strong"-confidence opportunity off a single stray "Amazon" mention
+  // in the blended content pool (plausibly AWS/cloud-hosting, or unrelated
+  // syndicated content — see the same-day scrape-relevance.ts fix for the
+  // sibling case). Now requires the brand mention to sit near real
+  // commerce-context vocabulary in the same clause, same proximity
+  // discipline the 'strong' tier above already uses.
+  const marketplaceCommerceContext = '(?:sell(?:ing|s)?|sold|list(?:ing|ed)?|storefront|shop|store|order[s]?|checkout|catalog(?:ue)?)\\w*'
   const medium: Pattern[] = [
-    [/\b(?:amazon|flipkart|myntra|nykaa)\b/i, 'named marketplace channel'],
+    [new RegExp(`\\b${marketplaceCommerceContext}\\b[^.]{0,60}\\b(?:amazon|flipkart|myntra|nykaa)\\b`, 'i'),
+      'named marketplace channel described as a sales channel'],
+    [new RegExp(`\\b(?:amazon|flipkart|myntra|nykaa)\\b[^.]{0,60}\\b${marketplaceCommerceContext}\\b`, 'i'),
+      'named marketplace channel described as a sales channel'],
     [/\bomnichannel\b/i, 'omnichannel language'],
     [/\b(?:own\s+site|website)\s+(?:and|as\s+well\s+as)\s+(?:marketplaces?|social\s+commerce)\b/i,
       'multiple sales channels described'],
