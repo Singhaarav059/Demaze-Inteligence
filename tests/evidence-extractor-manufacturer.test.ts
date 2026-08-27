@@ -86,4 +86,60 @@ manufacturing, testing, and validation.
     const { profile } = buildCompanyProfile(content)
     expect(profile.company_type.manufacturer).toBe(false)
   })
+
+  // ── Subsidiary/brand-attributed manufacturing (ATE Group audit fix) ──
+  // Real gap found on ategroup.com: a group/holding company describes its
+  // own manufacturing in the third person, named by brand/subsidiary, not
+  // "we/our" — none of the patterns above covered this construction.
+  it('detects third-person subsidiary/brand manufacturing ("Brand manufactures high-quality X")', () => {
+    const content = `AxisValence manufactures high-quality equipment that enhances safety, productivity, and environmental performance across a wide range of industries.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(true)
+  })
+
+  it('detects a different brand name with a different qualifying adjective', () => {
+    const content = `TeraSpin manufactures precision components for leading textile machinery manufacturers and mills worldwide.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(true)
+  })
+
+  it('does NOT match a bare "X manufactures Y" with no qualifying adjective (generic-mention guard)', () => {
+    const content = `Ford manufactures cars and trucks for the North American market.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(false)
+  })
+
+  // ── Reader/customer-description guard (ATE Group audit fix) ──────────
+  // Real false positive found live on ategroup.com: the industrial_vendor
+  // pattern matched "...or equipment manufacturer seeking a trusted
+  // counterpart..." inside a sentence addressing the READER, not
+  // describing the company itself.
+  it('does NOT set manufacturer/industrial_vendor from reader-addressed "if you are an equipment manufacturer..."', () => {
+    const content = `If you are a technology provider or equipment manufacturer seeking a trusted counterpart with deep domain expertise, talk to us.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(false)
+    expect(profile.company_type.industrial_vendor).toBe(false)
+  })
+
+  it('does NOT set manufacturer/industrial_vendor from reader-addressed "if you are a distributor..."', () => {
+    const content = `If you are a distributor or equipment manufacturer looking for a partner, we would love to hear from you.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(false)
+    expect(profile.company_type.industrial_vendor).toBe(false)
+  })
+
+  it('does NOT set manufacturer from "your manufacturing facility" (reader-identity framing) — without the guard, "manufactur* + facilit*" would otherwise fire', () => {
+    const content = `Wondering if your manufacturing facility could run more efficiently? Our software platform can help you find out.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(false)
+  })
+
+  // Explicit non-regression: a bare "you"/"your" mention must NOT reject a
+  // genuine company self-description — the company is still clearly the
+  // sentence's actor here.
+  it('still matches genuine self-description that happens to mention "your" ("we manufacture... for your industry")', () => {
+    const content = `We manufacture precision components engineered for your industry's toughest demands.`
+    const { profile } = buildCompanyProfile(content)
+    expect(profile.company_type.manufacturer).toBe(true)
+  })
 })

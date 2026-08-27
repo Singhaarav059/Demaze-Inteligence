@@ -858,6 +858,105 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
   return 'generic_marketing'
 }
 
+// ── Reader/customer-description guard ──────────────────────────
+// captureFlag() (below) backs every company_type detector and is a bare
+// regex scan with no subject awareness — unlike classifySubject() (used
+// for signal/opportunity evidence elsewhere in this file), it can't tell
+// "we manufacture X" from "if you are an X manufacturer, talk to us" or
+// "our customers include X manufacturers". Real false positive found live
+// on ategroup.com: the industrial_vendor pattern matched "...or equipment
+// manufacturer seeking a trusted counterpart..." inside a sentence
+// addressing the READER, not describing ATE itself.
+//
+// This is a narrow, local-window heuristic — it runs on the same ~100-char
+// snippet captureFlag() already extracts around each match, not the whole
+// page — deliberately not a classifySubject()-style rebuild: buildCompanyProfile()
+// is a pure single-content function with no page-type/company-name context
+// classifySubject() depends on, and threading that through is a bigger
+// change than this bug needs.
+//
+// Deliberately narrow: a bare "you"/"your" mention does NOT reject a match
+// on its own — "we help your business scale" is a legitimate company
+// self-description that happens to mention the reader as the object of
+// "help", and must still count. Only an explicit reader-identity claim
+// ("if you are a...", "you are a...", "your own manufacturing
+// capabilities...") or an explicit customer/partner description (same
+// "our customers"/"case study" framing classifySubject() already treats as
+// external) trips this guard. CSR/donation context is a separate check
+// (isCsrContext() below) — see its own comment for why.
+function isReaderOrCustomerDescribed(snippet: string): boolean {
+  const t = snippet.toLowerCase()
+
+  // Reader-identity framing — the READER is being told they hold some role
+  // ("if you are a distributor...", "you are a technology provider...",
+  // "your own manufacturing capabilities") — true regardless of any nearby
+  // we/our, since the identity claim is about the reader, not the company.
+  if (/\bif\s+you(?:'re|\s+are)\b/.test(t)) return true
+  if (/\byou\s+are\s+(?:a|an|the)\b/.test(t)) return true
+  if (/\byour\s+(?:own\s+)?(?:manufacturing|production|industrial|business)\s+(?:capabilit\w*|operations?|facilit\w*)/.test(t)) return true
+
+  // Customer/partner description — the sentence's subject is a customer or
+  // partner, not the company being profiled (same framing classifySubject()
+  // already labels 'customer_use_case'/'partner_story').
+  if (/\b(?:our|the)\s+(?:customer|client)s?\s+(?:include|benefit|gain|achieve|report|see|use|can)\b/.test(t)) return true
+  if (/\b(?:case\s+stud(?:y|ies)|success\s+stor(?:y|ies)|customer\s+stor(?:y|ies))\b/.test(t)) return true
+  if (/\b(?:our\s+partner|worked\s+with|collaborated\s+with)\b/.test(t)) return true
+
+  // Bare second-person mention alone is NOT enough — "we help your
+  // business" keeps the company as the sentence's actor.
+  if (!/\b(?:you|your)\b/.test(t)) return false
+  return !/\b(?:we|our)\b/.test(t)
+}
+
+// CSR/donation context — a company's own CSR section routinely lists
+// unrelated beneficiary sectors ("healthcare", "rural development") that say
+// nothing about what the company itself does. Real false positive found on
+// a-1fenceproducts.com: "...water and sanitation, healthcare services. ##
+// CSR INITIATIVES..." set healthcare_provider = true off a CSR list.
+//
+// Deliberately checked against the RAW local-window snippet (same one
+// captureFlag() stores for debug display), not the sentence-scoped window
+// isReaderOrCustomerDescribed() uses above. Real CSR sections are routinely
+// written as a heading immediately AFTER the sentence containing the
+// keyword ("...healthcare services. ## CSR INITIATIVES") — sentence-scoping
+// (which stops at the first '.') would cut the heading out entirely, which
+// is exactly why the first version of this fix didn't catch the real case.
+// This does re-introduce a little of the bleed-through risk sentence-
+// scoping exists to prevent, but CSR headings and the keyword they gate are
+// only ever a few words apart in real content (a heading directly
+// introducing or closing the list it labels) — unlike the "manufacturing
+// units ... CSR initiatives" adjacency that motivated sentence-scoping,
+// which was two unrelated topics placed artificially close together, not a
+// realistic same-window case.
+function isCsrContext(snippet: string): boolean {
+  return /\bcsr\b|corporate\s+social\s+responsibility/i.test(snippet)
+}
+
+// Finds the sentence containing a match — bounded scan, not a full
+// sentence-splitter — used ONLY to decide whether isReaderOrCustomerDescribed()
+// should reject a match. A fixed-size character window (like the debug
+// `snippet` below) can bleed into an adjacent, unrelated sentence on short
+// content: e.g. "...six manufacturing units across India. Our CSR
+// initiatives cover healthcare services..." — a raw window around
+// "healthcare services" would otherwise also flag the unrelated
+// "manufacturing units" match a few words earlier. Capped at 200 chars each
+// direction so content with no sentence-ending punctuation nearby (e.g. a
+// bullet list) doesn't scan the whole page.
+function sentenceWindow(content: string, matchIndex: number, matchLength: number): string {
+  const SCAN_CAP = 200
+  const searchStart = Math.max(0, matchIndex - SCAN_CAP)
+  const before = content.slice(searchStart, matchIndex)
+  const lastBreak = Math.max(before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?'), before.lastIndexOf('\n'))
+  const start = lastBreak === -1 ? searchStart : searchStart + lastBreak + 1
+
+  const searchEnd = Math.min(content.length, matchIndex + matchLength + SCAN_CAP)
+  const after = content.slice(matchIndex + matchLength, searchEnd)
+  const breaks = [after.indexOf('.'), after.indexOf('!'), after.indexOf('?'), after.indexOf('\n')].filter(i => i !== -1)
+  const end = breaks.length === 0 ? searchEnd : matchIndex + matchLength + Math.min(...breaks) + 1
+
+  return content.slice(start, end).replace(/\s+/g, ' ').trim()
+}
+
 // ── captureFlag helper ────────────────────────────────────────
 // Runs each [regex, label] pair against content.
 // On a match: appends {pattern, matched, snippet} to evidence[flag] and returns true.
@@ -877,6 +976,14 @@ function captureFlag(
       const start   = Math.max(0, m.index - 45)
       const end     = Math.min(content.length, m.index + m[0].length + 55)
       const snippet = content.slice(start, end).replace(/\s+/g, ' ').trim()
+      // Reject matches that describe the READER, a customer/partner, or a
+      // CSR/donation-context sector, not the company itself. Reader/customer
+      // framing uses the sentence-scoped window (needs grammatical
+      // locality); CSR context uses the raw local `snippet` (CSR headings
+      // routinely follow the sentence, not sit inside it) — see each
+      // function's own comment for why they use different windows.
+      const guardText = sentenceWindow(content, m.index, m[0].length)
+      if (isReaderOrCustomerDescribed(guardText) || isCsrContext(snippet)) continue
       if (!evidence[flag]) evidence[flag] = []
       evidence[flag].push({ pattern: label, matched: m[0], snippet })
       fired = true
@@ -949,6 +1056,24 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
     // above all require direct adjacency and miss this list-style copy. Bounded to 40 chars
     // and excludes '.'/newline so the gap can't cross a sentence boundary into an unrelated claim.
     [/\b(?:forging|casting|stamping|machining|fabricat\w+|assembly)\b[^.\n]{0,40}?\b(?:facilit\w*|plant|unit)\b/i, 'forging/casting/machining/fabrication + (enumerated list) + facility/plant/unit'],
+    // Subsidiary/brand-attributed manufacturing — a group/holding company
+    // routinely describes its own manufacturing in the third person, named
+    // by brand ("AxisValence manufactures high-quality equipment...",
+    // "TeraSpin manufactures precision components..."), not "we/our". None
+    // of the patterns above cover this construction (they're all "we
+    // manufacture" or bare "X manufacturer" noun-phrase framing) — real gap
+    // found live on ategroup.com, where genuine subsidiary-level
+    // manufacturing evidence existed on the page but nothing matched it.
+    // Requires a capitalized brand-like phrase (not a generic sentence-
+    // starter word) directly followed by "manufactures" + a qualifying
+    // adjective — same "qualifier required" discipline as the "leader in
+    // ... components" pattern above, so this doesn't degrade into matching
+    // any bare "X manufactures Y" mention (e.g. of an unrelated third
+    // party). Still passes through isReaderOrCustomerDescribed() like every
+    // other match here, so a customer/case-study "our client, Acme, which
+    // manufactures widgets..." would need to be caught by that guard, not
+    // this pattern.
+    [/\b(?!(?:The|This|It|They|We|Our|A|An)\b)[A-Z][A-Za-z0-9&'-]{2,}(?:\s+[A-Z][A-Za-z0-9&'-]{2,}){0,2}\s+manufactures\s+(?:high[\s-]quality|premium|precision|advanced|world[\s-]class|innovative|quality)\b/, 'Brand/Subsidiary manufactures (third-person, qualified)'],
   ], evidence)) profile.company_type.manufacturer = true
 
   // industrial_vendor: sells industrial equipment / automation / machinery to industry
