@@ -278,12 +278,23 @@ const UNIVERSAL_B2B_PATHS = [
 
 // ── Types ─────────────────────────────────────────────────────
 
+// Structured JSON-LD Person markup found on this page (team/leadership
+// pages commonly ship schema.org Person nodes) — name+jobTitle only, kept
+// deliberately small so it's cheap to cache alongside the rest of
+// ScrapePageResult. See extractJsonLdPersons() below for how these are
+// parsed out of the page's raw HTML.
+export interface JsonLdPersonHit {
+  name: string
+  title: string
+}
+
 export interface ScrapePageResult {
   url: string
   success: boolean
   markdown: string
   charCount: number
   error?: string
+  jsonLdPersons?: JsonLdPersonHit[]
 }
 
 export interface ScoredLink {
@@ -1380,7 +1391,7 @@ async function scrapeSinglePage(
   try {
     const response = await Promise.race([
       client.scrape(url, {
-        formats: ['markdown'],
+        formats: ['markdown', 'rawHtml'],
         excludeTags: ['nav', 'footer', 'header', 'aside', 'script', 'style', 'noscript'],
         waitFor: 3000,
         removeBase64Images: true,
@@ -1396,8 +1407,15 @@ async function scrapeSinglePage(
 
     const cleaned = cleanMarkdown(markdown)
     const truncated = cleaned.slice(0, MAX_PAGE_CHARS)
+    const jsonLdPersons = extractJsonLdPersons(response?.rawHtml ?? '')
 
-    return { url, success: true, markdown: truncated, charCount: truncated.length }
+    return {
+      url,
+      success: true,
+      markdown: truncated,
+      charCount: truncated.length,
+      ...(jsonLdPersons.length > 0 ? { jsonLdPersons } : {}),
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const isRoutine =
@@ -1413,6 +1431,63 @@ async function scrapeSinglePage(
 
     return { url, success: false, markdown: '', charCount: 0, error: message }
   }
+}
+
+// ── JSON-LD Person extraction (B.5, Epitaxy vNext audit) ────────
+// Firecrawl's 'rawHtml' format is the literal, unprocessed page source —
+// unlike 'markdown'/'html', it's NOT affected by excludeTags stripping
+// <script> tags, so this is the only place schema.org JSON-LD (which lives
+// inside <script type="application/ld+json">) is still visible. Narrow,
+// targeted regex + JSON.parse rather than a full HTML-parsing dependency
+// (cheerio/jsdom) — this repo has neither installed, and pulling one in for
+// one script-tag extraction would be exactly the premature dependency
+// CLAUDE.md's "don't add providers without a measured need" rule flags.
+
+const JSONLD_SCRIPT_RE = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+
+function collectPersonNodes(node: unknown, out: Record<string, unknown>[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectPersonNodes(item, out)
+    return
+  }
+  if (!node || typeof node !== 'object') return
+  const obj = node as Record<string, unknown>
+  const type = obj['@type']
+  if (type === 'Person' || (Array.isArray(type) && type.includes('Person'))) out.push(obj)
+  if (Array.isArray(obj['@graph'])) collectPersonNodes(obj['@graph'], out)
+  // Organization nodes sometimes nest leadership as employee/founder/member
+  // Person entries rather than emitting standalone Person nodes.
+  for (const key of ['employee', 'member', 'founder', 'employees', 'members']) {
+    if (obj[key]) collectPersonNodes(obj[key], out)
+  }
+}
+
+export function extractJsonLdPersons(html: string): JsonLdPersonHit[] {
+  if (!html) return []
+  const results: JsonLdPersonHit[] = []
+  const seen = new Set<string>()
+  const regex = new RegExp(JSONLD_SCRIPT_RE.source, JSONLD_SCRIPT_RE.flags)
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(html)) !== null) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(match[1].trim())
+    } catch {
+      continue // real-world JSON-LD is frequently malformed — skip, don't throw
+    }
+    const personNodes: Record<string, unknown>[] = []
+    collectPersonNodes(parsed, personNodes)
+    for (const p of personNodes) {
+      const name = typeof p.name === 'string' ? p.name.trim() : ''
+      const title = typeof p.jobTitle === 'string' ? p.jobTitle.trim() : ''
+      if (!name || !title) continue
+      const key = `${name}|${title}`.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      results.push({ name, title })
+    }
+  }
+  return results
 }
 
 // ── Helpers ───────────────────────────────────────────────────

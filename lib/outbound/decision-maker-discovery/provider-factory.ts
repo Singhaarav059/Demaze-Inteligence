@@ -12,6 +12,7 @@ import { getActiveProviderName } from '@/lib/outbound/settings/provider-selectio
 import { MockDecisionMakerDiscoveryProvider } from './providers/mock'
 import { ProspeoDecisionMakerDiscoveryProvider } from './providers/prospeo'
 import { ExpleeDecisionMakerDiscoveryProvider } from './providers/explee'
+import { LinkedInSearchDecisionMakerDiscoveryProvider } from './providers/linkedin-search'
 import { groundCandidates } from './grounding'
 import type {
   DecisionMakerDiscoveryProvider,
@@ -23,6 +24,7 @@ const PROVIDERS: Record<string, DecisionMakerDiscoveryProvider> = {
   mock: MockDecisionMakerDiscoveryProvider,
   prospeo: ProspeoDecisionMakerDiscoveryProvider,
   explee: ExpleeDecisionMakerDiscoveryProvider,
+  'linkedin-search': LinkedInSearchDecisionMakerDiscoveryProvider,
 }
 
 async function resolveProvider(): Promise<DecisionMakerDiscoveryProvider> {

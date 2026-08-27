@@ -258,4 +258,57 @@ This next paragraph is unrelated body copy that must never end up inside the tit
     expect(sunil?.title).not.toContain('\n')
     expect(sunil?.title).not.toContain('unrelated body copy')
   })
+
+  // ── JSON-LD (B.5, Epitaxy vNext audit) ──────────────────────────────
+  // A third, parallel strategy: schema.org Person markup already parsed out
+  // of raw HTML by lib/pipeline/scraper.ts's extractJsonLdPersons(), passed
+  // in as extractSignals()'s 4th argument (the markdown `content` here has
+  // no <script> tags left by the time it reaches this function).
+  it('adds a JSON-LD Person hit not otherwise present in the markdown content', () => {
+    const content = `
+--- PAGE: /team (https://example.com/team) ---
+
+Nothing markdown-extractable here.
+`
+    const result = extractSignals(content, undefined, undefined, [
+      { name: 'Meera Nair', title: 'Chief Operating Officer', sourceUrl: 'https://example.com/team' },
+    ])
+    const meera = result.leadershipContacts.find(c => c.name === 'Meera Nair')
+    expect(meera).toBeDefined()
+    expect(meera?.title).toBe('Chief Operating Officer')
+    expect(meera?.confidence).toBe('medium')
+    expect(meera?.statedPortfolio).toBe('')
+    expect(meera?.sourceUrl).toBe('https://example.com/team')
+  })
+
+  it('does not duplicate a name already found by the narrative strategy', () => {
+    const content = `
+--- PAGE: /leadership (https://example.com/leadership) ---
+
+### Jane Doe
+
+#### Chief Executive Officer
+
+Jane Doe leads the global manufacturing strategy for the entire company.
+`
+    const result = extractSignals(content, undefined, undefined, [
+      { name: 'Jane Doe', title: 'CEO', sourceUrl: 'https://example.com/leadership' },
+    ])
+    const janeMatches = result.leadershipContacts.filter(c => c.name === 'Jane Doe')
+    expect(janeMatches).toHaveLength(1)
+    expect(janeMatches[0].confidence).toBe('high') // narrative match wins, not overwritten
+  })
+
+  it('drops a JSON-LD hit missing a name or title rather than fabricating one', () => {
+    const content = `
+--- PAGE: /team (https://example.com/team) ---
+
+Nothing markdown-extractable here.
+`
+    const result = extractSignals(content, undefined, undefined, [
+      { name: '', title: 'VP Sales', sourceUrl: 'https://example.com/team' },
+      { name: 'No Title Person', title: '', sourceUrl: 'https://example.com/team' },
+    ])
+    expect(result.leadershipContacts).toHaveLength(0)
+  })
 })

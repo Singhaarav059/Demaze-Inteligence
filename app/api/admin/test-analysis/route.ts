@@ -533,8 +533,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Stage 3+2: SIGNAL + PROFILE extraction (website-only) ────────
+    // Flattened once, reused by every extractSignals() re-extraction call
+    // below — schema.org Person markup (lib/pipeline/scraper.ts's
+    // extractJsonLdPersons(), run per-page during scraping) doesn't change
+    // across re-extraction passes the way enrichedContent does.
+    const jsonLdPersons = scrapeResult.pages.flatMap(p =>
+      (p.jsonLdPersons ?? []).map(hit => ({ ...hit, sourceUrl: p.url }))
+    )
     const extractStart = Date.now()
-    let extractorResult: ExtractorResult = extractSignals(fullContent, undefined, companyNameFromScrape)
+    let extractorResult: ExtractorResult = extractSignals(fullContent, undefined, companyNameFromScrape, jsonLdPersons)
     timing.extraction = Date.now() - extractStart
     logger.info('Timing', `Evidence Extraction (website): ${t(timing.extraction)} | ${extractorResult.signals.length} signals | primary=${extractorResult.companyProfile.primary_type}`)
 
@@ -666,7 +673,7 @@ export async function POST(req: NextRequest) {
         if (enrichedContent.length > 100) {
           const preExtractStart = Date.now()
           const websiteOnlyCount = extractorResult.signals.length
-          extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape)
+          extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape, jsonLdPersons)
           timing.reextraction = Date.now() - preExtractStart
           logger.info('Bridge', `Pre-prompt re-extraction: ${websiteOnlyCount} → ${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlyCount}) in ${timing.reextraction}ms`)
         }
@@ -1109,7 +1116,7 @@ export async function POST(req: NextRequest) {
     const websiteOnlySignalCount = extractorResult.signals.length
     if (!promptEnriched && enrichedContent.length > 100) {
       const reextractStart = Date.now()
-      extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape)
+      extractorResult = extractSignals(fullContent, enrichedContent, companyNameFromScrape, jsonLdPersons)
       timing.reextraction = Date.now() - reextractStart
       logger.info('Bridge', `Re-extraction (late): website=${websiteOnlySignalCount} → enriched=${extractorResult.signals.length} signals (+${extractorResult.signals.length - websiteOnlySignalCount}) in ${timing.reextraction}ms`)
     } else if (promptEnriched) {

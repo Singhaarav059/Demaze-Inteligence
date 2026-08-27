@@ -1683,12 +1683,45 @@ function extractStructuralLeadershipEvidence(
   return results
 }
 
+// ── JSON-LD leadership extraction (B.5, Epitaxy vNext audit) ────────────
+// A third, parallel strategy alongside the narrative and structural ones
+// above — site-declared schema.org Person markup (parsed out of raw HTML by
+// lib/pipeline/scraper.ts's extractJsonLdPersons(), since by the time
+// content reaches here it's already markdown and any <script> tags are
+// long gone). Runs last so it only fills in names the markdown-based
+// strategies missed entirely; shares the same seenNames set so a person
+// already found narratively/structurally isn't duplicated. No portfolio
+// narrative is available from bare name+jobTitle markup, so statedPortfolio
+// is '' — same honest-gap convention extractStructuralLeadershipEvidence()
+// already uses above.
+export interface JsonLdLeadershipHit {
+  name: string
+  title: string
+  sourceUrl: string
+}
+
+function extractJsonLdLeadershipContacts(
+  hits: JsonLdLeadershipHit[],
+  seenNames: Set<string>
+): LeadershipContact[] {
+  const results: LeadershipContact[] = []
+  for (const hit of hits) {
+    const name = hit.name.trim()
+    const title = hit.title.trim()
+    if (!name || !title || seenNames.has(name)) continue
+    seenNames.add(name)
+    results.push({ name, title, statedPortfolio: '', sourceUrl: hit.sourceUrl, confidence: 'medium' })
+  }
+  return results
+}
+
 // ── Main extraction function ───────────────────────────────────
 
 export function extractSignals(
   websiteContent: string,
   enrichedContent?: string,
   companyName?: string,
+  jsonLdPersons?: JsonLdLeadershipHit[],
 ): ExtractorResult {
   const combined = enrichedContent
     ? websiteContent + '\n\n' + enrichedContent
@@ -1908,6 +1941,7 @@ export function extractSignals(
   const leadershipContacts = [
     ...extractLeadershipEvidence(segments, leadershipSeenNames),
     ...extractStructuralLeadershipEvidence(segments, leadershipSeenNames),
+    ...extractJsonLdLeadershipContacts(jsonLdPersons ?? [], leadershipSeenNames),
   ]
 
   // ── Company offerings — what THIS company sells (see service-offerings.ts) ──
