@@ -43,6 +43,7 @@ import { computeDailyCounts, hasSufficientTrendData } from '@/lib/analytics/dail
 import { getResearchCardData } from '@/app/admin/intelligence-lab/ResearchCard'
 import { Step1Research } from '@/components/wizard/steps/Step1Research'
 import { humanizeText } from '@/lib/text/humanize'
+import { diffRuns } from '@/lib/pipeline/run-diff'
 import type { RunResult } from '@/app/admin/intelligence-lab/_types'
 
 function formatDate(iso: string): string {
@@ -133,6 +134,24 @@ function outreachStatusVariant(status: string) {
 function outreachStatusLabel(status: string) {
   if (status.startsWith('followup_')) return `Follow-up ${status.slice(-1)}`
   return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+// Phase 3 (Epitaxy vNext audit) change detection — the most recent OTHER
+// completed run for the same domain, older than this one. Pure client-side
+// lookup over the already-fetched `runs` list (no new API route/table);
+// bounded by whatever the page already has loaded (currently up to 100
+// recent runs), same limitation the "All" activity tab already accepts.
+function findPreviousRun(runs: Run[], current: Run): Run | null {
+  const currentTime = new Date(current.created_at).getTime()
+  const candidates = runs.filter(r =>
+    r.id !== current.id &&
+    r.domain &&
+    r.domain === current.domain &&
+    r.final_result &&
+    new Date(r.created_at).getTime() < currentTime
+  )
+  candidates.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  return candidates[0] ?? null
 }
 
 function runIntelStatus(run: Run): IntelStatusKind {
@@ -688,6 +707,54 @@ export default function RunHistoryPage() {
                                 No saved analysis result for this run, nothing to render as a report.
                               </p>
                             )}
+
+                            {cardData && (() => {
+                              const previousRun = findPreviousRun(runs, run)
+                              if (!previousRun) return null
+                              const diff = diffRuns(previousRun.final_result ?? {}, run.final_result ?? {})
+                              const hasChanges =
+                                diff.newSignals.length > 0 || diff.removedSignals.length > 0 ||
+                                diff.newOpportunities.length > 0 || diff.removedOpportunities.length > 0
+                              return (
+                                <div className="rounded-lg border border-border bg-background px-4 py-3 space-y-1.5">
+                                  <p className="text-xs font-semibold text-foreground">
+                                    Changed since {formatDate(previousRun.created_at)}
+                                  </p>
+                                  {!hasChanges ? (
+                                    <p className="text-muted-foreground text-xs">
+                                      No new signals or opportunities since the previous run.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-1 text-xs">
+                                      {diff.newSignals.length > 0 && (
+                                        <p>
+                                          <span className="font-medium text-signal-strong">New signals: </span>
+                                          <span className="text-muted-foreground">{diff.newSignals.map(humanizeText).join(', ')}</span>
+                                        </p>
+                                      )}
+                                      {diff.newOpportunities.length > 0 && (
+                                        <p>
+                                          <span className="font-medium text-signal-strong">New opportunities: </span>
+                                          <span className="text-muted-foreground">{diff.newOpportunities.map(o => humanizeText(o.title)).join(', ')}</span>
+                                        </p>
+                                      )}
+                                      {diff.removedSignals.length > 0 && (
+                                        <p>
+                                          <span className="font-medium text-foreground/80">No longer detected: </span>
+                                          <span className="text-muted-foreground">{diff.removedSignals.map(humanizeText).join(', ')}</span>
+                                        </p>
+                                      )}
+                                      {diff.removedOpportunities.length > 0 && (
+                                        <p>
+                                          <span className="font-medium text-foreground/80">No longer surfaced: </span>
+                                          <span className="text-muted-foreground">{diff.removedOpportunities.map(o => humanizeText(o.title)).join(', ')}</span>
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
 
                             {run.quality_note && (
                               <p className="text-muted-foreground text-xs">{run.quality_note}</p>
