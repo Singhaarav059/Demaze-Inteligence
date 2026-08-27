@@ -64,10 +64,16 @@ export function buildEmailGenerationInput(
     ? (data.pain_points as unknown[]).filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
     : []
 
-  const opportunities: Array<{ title: string; description?: string; claimType?: 'observed' | 'inferred' }> = getOpportunities(data).flatMap(o => {
-    const title = toStr(o.title)
-    return title ? [{ title, description: toStr(o.description), claimType: claimTypeOf(o) }] : []
-  })
+  const opportunities: Array<{ title: string; description?: string; claimType?: 'observed' | 'inferred'; whyNowFact?: string }> =
+    getOpportunities(data).flatMap(o => {
+      const title = toStr(o.title)
+      if (!title) return []
+      // Phase 0's deriveWhyNowTrace() — only threaded through when
+      // why_now_status is 'traceable' (a real, code-matched signal); a
+      // 'no_verified_signal' opportunity gets no fabricated urgency here.
+      const whyNowFact = o.why_now_status === 'traceable' ? toStr(o.why_now_fact) : undefined
+      return [{ title, description: toStr(o.description), claimType: claimTypeOf(o), whyNowFact }]
+    })
 
   const recentActivity = Array.isArray(data.recent_activity)
     ? (data.recent_activity as unknown[]).filter((a): a is string => typeof a === 'string' && a.trim().length > 0)

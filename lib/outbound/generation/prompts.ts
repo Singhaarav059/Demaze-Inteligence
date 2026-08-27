@@ -24,7 +24,10 @@ function renderInputBlock(input: EmailGenerationInput): string {
   if (input.opportunities.length > 0) {
     lines.push(
       `Opportunities:\n${input.opportunities
-        .map(o => `- ${o.title}${o.description ? `: ${o.description}` : ''}${o.claimType === 'inferred' ? ' (unconfirmed inference)' : ''}`)
+        .map(o => {
+          const base = `- ${o.title}${o.description ? `: ${o.description}` : ''}${o.claimType === 'inferred' ? ' (unconfirmed inference)' : ''}`
+          return o.whyNowFact ? `${base} (Why now: ${o.whyNowFact})` : base
+        })
         .join('\n')}`
     )
   }

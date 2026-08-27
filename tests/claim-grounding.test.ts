@@ -70,4 +70,12 @@ describe('checkUnsupportedClaims', () => {
     const grounded = baseInput({ opportunities: [{ title: 'Cost reduction', description: 'up to 40% savings potential' }] })
     expect(checkUnsupportedClaims(email, grounded).hasUnsupportedClaim).toBe(false)
   })
+
+  it('does not flag a number that only appears in an opportunity\'s whyNowFact (Phase 4 wiring)', () => {
+    const input = baseInput({
+      opportunities: [{ title: 'Workflow Automation', whyNowFact: 'Acme Corp announced a $10M Series B in March 2026.' }],
+    })
+    const email = 'Congrats on the $10M raise at Acme Corp, great timing to talk automation.'
+    expect(checkUnsupportedClaims(email, input).hasUnsupportedClaim).toBe(false)
+  })
 })

@@ -49,7 +49,7 @@ function collectEvidenceText(input: EmailGenerationInput): string {
   return [
     input.companySummary,
     ...input.painPoints,
-    ...input.opportunities.map(o => `${o.title} ${o.description ?? ''}`),
+    ...input.opportunities.map(o => `${o.title} ${o.description ?? ''} ${o.whyNowFact ?? ''}`),
     ...input.recentActivity,
     input.openingAngle,
     input.whatToSell,

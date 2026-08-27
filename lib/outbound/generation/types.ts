@@ -45,7 +45,13 @@ export interface EmailGenerationInput {
   // or any pre-existing caller — prompts.ts falls back to the flat
   // `painPoints` list when this isn't present, so nothing here is required.
   painPointsDetailed?: Array<{ text: string; claimType?: 'observed' | 'inferred' }>
-  opportunities: Array<{ title: string; description?: string; claimType?: 'observed' | 'inferred' }>
+  // whyNowFact: the fact half of opportunity-engine.ts's deriveWhyNowTrace()
+  // (lib/pipeline/normalize.ts's why_now_fact, only when why_now_status is
+  // 'traceable' — a real, code-matched signal, never a guessed urgency
+  // statement). Additive: the top-level whyNow field below is a separate,
+  // pre-existing free-narrative summary (outreach_intelligence.why_now) —
+  // this is per-opportunity and evidence-traceable, not a replacement for it.
+  opportunities: Array<{ title: string; description?: string; claimType?: 'observed' | 'inferred'; whyNowFact?: string }>
   recentActivity: string[]
   openingAngle?: string
   whatToSell?: string
