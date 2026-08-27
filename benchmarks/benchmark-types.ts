@@ -18,6 +18,18 @@ export interface BenchmarkExpectations {
    */
   requiredProfileFlags: string[]
   /**
+   * Keys of companyProfile.company_type that must be FALSE — for a known,
+   * documented false-positive on this company that a classifier fix
+   * couldn't safely eliminate (e.g. AITG's healthcare_provider flag firing
+   * off a founder-history anecdote unrelated to reader-address/customer/
+   * CSR framing — see evidence-extractor.ts's isReaderOrCustomerDescribed()/
+   * isCsrContext() comments). Optional; omit when there's no known
+   * false-positive flag to guard against for this company. This exists so
+   * a recurrence is caught by the benchmark instead of only being
+   * rediscoverable by re-reading profileEvidence by hand.
+   */
+  forbiddenProfileFlags?: string[]
+  /**
    * Expected companyProfile.primary_type label. Optional — omit when the
    * correct label is still an open question (e.g. Ace Pipeline, not yet
    * root-caused). Added after the AITG conglomerate-priority bug stayed

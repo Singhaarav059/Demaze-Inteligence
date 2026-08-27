@@ -880,9 +880,10 @@ function classifySubject(text: string, pageType: PageType, profile?: CompanyProf
 // self-description that happens to mention the reader as the object of
 // "help", and must still count. Only an explicit reader-identity claim
 // ("if you are a...", "you are a...", "your own manufacturing
-// capabilities...") or an explicit customer/partner description (same
+// capabilities..."), an explicit customer/partner description (same
 // "our customers"/"case study" framing classifySubject() already treats as
-// external) trips this guard. CSR/donation context is a separate check
+// external), or a third-person individual biography/anecdote (see below)
+// trips this guard. CSR/donation context is a separate check
 // (isCsrContext() below) — see its own comment for why.
 function isReaderOrCustomerDescribed(snippet: string): boolean {
   const t = snippet.toLowerCase()
@@ -901,6 +902,23 @@ function isReaderOrCustomerDescribed(snippet: string): boolean {
   if (/\b(?:our|the)\s+(?:customer|client)s?\s+(?:include|benefit|gain|achieve|report|see|use|can)\b/.test(t)) return true
   if (/\b(?:case\s+stud(?:y|ies)|success\s+stor(?:y|ies)|customer\s+stor(?:y|ies))\b/.test(t)) return true
   if (/\b(?:our\s+partner|worked\s+with|collaborated\s+with)\b/.test(t)) return true
+
+  // Third-person individual biography/anecdote — a named founder/executive's
+  // personal history (a "Management"/"History" bio section is exactly where
+  // this appears) is not the company speaking about itself. Real false
+  // positive found on aitg.co/about.html: "...Nanasaheb chanced upon many
+  // imported hospital equipment lying unused due to failure. He offered to
+  // repair the equipment..." — describes the FOUNDER's personal 1957-era
+  // origin story, not AITG's current business. Generalizes to any
+  // company_type category, not just healthcare_provider: a third-person
+  // singular pronoun (he/his/she/her/him) with no company-collective
+  // self-reference anywhere in the same sentence is a strong, cheap signal
+  // that the subject is a person, not the company. The company-reference
+  // allow-list keeps genuine founder-history evidence intact — e.g. "He
+  // founded the company, which today manufactures precision components"
+  // still counts, since "the company" anchors the sentence back to the
+  // business being profiled.
+  if (/\b(?:he|his|him|she|her)\b/.test(t) && !/\b(?:we|our|the\s+company|the\s+group|the\s+firm)\b/.test(t)) return true
 
   // Bare second-person mention alone is NOT enough — "we help your
   // business" keeps the company as the sentence's actor.
@@ -942,17 +960,32 @@ function isCsrContext(snippet: string): boolean {
 // "manufacturing units" match a few words earlier. Capped at 200 chars each
 // direction so content with no sentence-ending punctuation nearby (e.g. a
 // bullet list) doesn't scan the whole page.
+//
+// A single '\n' is deliberately NOT a boundary — only '.'/'!'/'?' or an
+// actual paragraph break ('\n' followed by more whitespace/newlines) count.
+// Real scraped content (plaintext/PDF-derived scrapes especially) routinely
+// hard-wraps a running sentence at an arbitrary column width. Treating a
+// bare line-wrap as a sentence end silently truncated this window
+// mid-sentence on real content: aitg.co's actual scrape reads "...in
+// course\nof his trading business, Nanasaheb chanced upon many\nimported
+// hospital equipment..." — a single-newline boundary would cut "his" out
+// of the window entirely, even though it's the same sentence as the match.
+const SENTENCE_BOUNDARY = /[.!?]|\n\s*\n/g
+
 function sentenceWindow(content: string, matchIndex: number, matchLength: number): string {
   const SCAN_CAP = 200
   const searchStart = Math.max(0, matchIndex - SCAN_CAP)
   const before = content.slice(searchStart, matchIndex)
-  const lastBreak = Math.max(before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?'), before.lastIndexOf('\n'))
-  const start = lastBreak === -1 ? searchStart : searchStart + lastBreak + 1
+  let start = searchStart
+  SENTENCE_BOUNDARY.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = SENTENCE_BOUNDARY.exec(before)) !== null) start = searchStart + m.index + m[0].length
 
   const searchEnd = Math.min(content.length, matchIndex + matchLength + SCAN_CAP)
   const after = content.slice(matchIndex + matchLength, searchEnd)
-  const breaks = [after.indexOf('.'), after.indexOf('!'), after.indexOf('?'), after.indexOf('\n')].filter(i => i !== -1)
-  const end = breaks.length === 0 ? searchEnd : matchIndex + matchLength + Math.min(...breaks) + 1
+  SENTENCE_BOUNDARY.lastIndex = 0
+  const firstAfter = SENTENCE_BOUNDARY.exec(after)
+  const end = firstAfter ? matchIndex + matchLength + firstAfter.index + firstAfter[0].length : searchEnd
 
   return content.slice(start, end).replace(/\s+/g, ' ').trim()
 }

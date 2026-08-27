@@ -242,6 +242,21 @@ function runChecks(spec: BenchmarkSpec, apiResponse: ApiResponse): CheckResult[]
     )
   }
 
+  // Check 6a: Forbidden profile flags (FAIL — a documented, known
+  // false-positive flag on this company recurring is a real regression,
+  // not noise) — see BenchmarkExpectations.forbiddenProfileFlags.
+  for (const flag of spec.expectations.forbiddenProfileFlags ?? []) {
+    const absent = companyType[flag] !== true
+    check(
+      `no_profile_flag:${flag}`,
+      absent,
+      'FAIL',
+      absent ? 'false' : 'true',
+      'false',
+      absent ? undefined : `company_type.${flag} incorrectly true — see profileEvidence for the matched pattern/snippet`,
+    )
+  }
+
   // Check 6b: Expected primary_type label (FAIL — same severity as profile flags;
   // this is the check that would have caught the AITG conglomerate-priority bug
   // sooner, since profile_flag checks alone don't see primary_type mislabeling

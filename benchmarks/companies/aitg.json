@@ -8,6 +8,9 @@
     "requiredProfileFlags": [
       "manufacturer"
     ],
+    "forbiddenProfileFlags": [
+      "healthcare_provider"
+    ],
     "expectedPrimaryType": "manufacturer",
     "forbiddenTerms": [
       "SaaS onboarding",
