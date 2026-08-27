@@ -110,6 +110,55 @@ describe('buildEmailGenerationInput', () => {
     expect(input.openingAngle).toBe('raw angle')
     expect(input.whatToSell).toBe('raw sell')
   })
+
+  // D.1 fix: buildPlaybookSalesIntelligence() (the DRAFT sector-playbook
+  // fallback, used when no Sales Intelligence override was supplied) used to
+  // gate only on sector classification confidence — a company whose industry
+  // text merely matched a playbook's keyword list, with zero real matched
+  // opportunity evidence, still got the playbook's generic valueProposition/
+  // cta injected as openingAngle/whatToSell/salesIntelligence, and
+  // prompts.ts instructs the model to use that as "the email's core angle."
+  describe('sector-playbook fallback requires a real matched opportunity, not just sector classification', () => {
+    it('injects no positioning/CTA/sales intelligence for a company with a valid sector match but zero real opportunities', () => {
+      const finalResult = {
+        industry: 'Manufacturing',
+        company_summary: 'Operates multiple manufacturing facilities.',
+        // No _service_evidence_debug and no pain points — nothing for
+        // qualify.ts's opportunityPatterns loop to match against, so
+        // matchedOpportunities stays [] even though the sector match itself
+        // is real (industry: Manufacturing).
+      }
+      const input = buildEmailGenerationInput(contact, finalResult)
+      expect(input.salesIntelligence).toBeUndefined()
+      expect(input.openingAngle).toBeUndefined()
+      expect(input.whatToSell).toBeUndefined()
+    })
+
+    it('still injects positioning/CTA when a real matched opportunity exists (service-evidence-confirmed)', () => {
+      const finalResult = {
+        industry: 'Manufacturing',
+        company_summary: 'Operates multiple manufacturing facilities.',
+        _service_evidence_debug: {
+          services: [
+            {
+              service: 'Internal operational software',
+              threshold: 'strong',
+              surfaced: true,
+              disqualified: false,
+              evidence: [{ snippet: 'Six manufacturing facilities report independently.' }],
+            },
+          ],
+        },
+      }
+      const input = buildEmailGenerationInput(contact, finalResult)
+      expect(input.salesIntelligence).toBeDefined()
+      expect(input.salesIntelligence?.positioning).toContain('playbook')
+      expect(input.salesIntelligence?.recommendedCta).toBeTruthy()
+      expect(input.salesIntelligence?.evidenceSentence).toContain('Confirmed:')
+      expect(input.openingAngle).toBe(input.salesIntelligence?.positioning)
+      expect(input.whatToSell).toBe(input.salesIntelligence?.problemLabel)
+    })
+  })
 })
 
 describe('extractJsonFromResponse', () => {

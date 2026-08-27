@@ -26,10 +26,19 @@ export type SourceType =
   | 'sustainability_report'
   | 'corporate_website'
   | 'regulatory_filing'
+  // D.5: layoffs/restructuring and private-funding-round announcements —
+  // real trigger-event content, same tier as executive_change_announcement,
+  // but never a proof of a service-specific problem on their own (see
+  // service-evidence.ts — deliberately not consulted there).
+  | 'layoff_announcement'
+  | 'funding_announcement'
   | 'other'
 
 export type EvidenceStrength = 'very_high' | 'high' | 'medium' | 'low'
-export type QueryCategory = 'investor' | 'hiring' | 'expansion' | 'strategy' | 'leadership'
+// D.5: 'risk' added for layoffs/restructuring queries — funding queries
+// reuse 'investor' (same financial-position query intent as
+// earnings/annual-report queries already in that bucket).
+export type QueryCategory = 'investor' | 'hiring' | 'expansion' | 'strategy' | 'leadership' | 'risk'
 
 export interface DiscoveredSource {
   url: string
@@ -73,6 +82,13 @@ export function classifySourceType(url: string, title: string): SourceType {
   if (
     /appoints?\s+new\s+(ceo|cfo|coo|cto|md|president|managing director|chairman)|appointed\s+as\s+(ceo|cfo|coo|cto|president|md|managing director|chairman)|new\s+(ceo|cfo|coo|cto|md|president|managing director)\s+(announced|named|appointed)|steps?\s+down\s+as\s+(ceo|cfo|coo|cto|president|chairman)|resigns?\s+as\s+(ceo|cfo|coo|cto|president|chairman)|leadership\s+transition|management\s+change|names?\s+new\s+(ceo|cfo|coo|cto|president)|succeeds?\s+.{0,20}\s+as\s+(ceo|cfo|coo|cto|president)/.test(u + t)
   ) return 'executive_change_announcement'
+  // D.5: layoff/funding classification checked before the generic
+  // press_release branch, same precedent as executive_change_announcement
+  // above — a "Company X raises $10M Series A" or "Company X announces
+  // layoffs" article should classify by its actual content, not the
+  // generic press-release URL pattern.
+  if (/lay.?offs?|job.?cuts?|workforce.?reduction/.test(u + t)) return 'layoff_announcement'
+  if (/funding.?round|series.?[a-e].?funding|raises.{0,15}(?:million|billion|crore|funding)|secures.{0,15}(?:funding|investment)/.test(u + t)) return 'funding_announcement'
   if (/press.?release|press-release|newsroom|news-release/.test(u + t)) return 'press_release'
   if (/careers|jobs|hiring|vacancies|work-with-us|join-us/.test(u + t)) return 'careers_page'
   if (/blog|insights|perspectives|thought-leadership/.test(u + t)) return 'official_blog'
@@ -107,6 +123,8 @@ const SOURCE_STRENGTH: Record<SourceType, EvidenceStrength> = {
   // (sourceTypeLabel, evidenceStrengthTier, PrioritizedSource) already
   // knows how to render, same as every other type here.
   regulatory_filing:              'very_high',
+  layoff_announcement:            'high',
+  funding_announcement:           'high',
   other:                          'low',
 }
 
@@ -124,6 +142,8 @@ const PRIORITY_SCORE: Record<SourceType, number> = {
   sustainability_report:          40,
   corporate_website:              20,
   regulatory_filing:              98,
+  layoff_announcement:            80,
+  funding_announcement:           80,
   other:                          10,
 }
 
@@ -186,6 +206,14 @@ export function buildDiscoveryQueries(companyName: string): Array<{ query: strin
     { query: `"${c}" appoints new CEO`,                             category: 'leadership' },
     { query: `"${c}" CEO steps down leadership transition`,         category: 'leadership' },
     { query: `"${c}" management change appointment ${yr}`,          category: 'leadership' },
+
+    // ── D.5: Layoffs / restructuring & funding rounds ────────────
+    // Minimum necessary templates (D.5 audit) — real trigger-event content
+    // the pipeline had zero coverage for. Supporting timing/pressure
+    // triggers only; never wired into service-evidence.ts's detectors, so
+    // a hit here alone can never produce a deterministic opportunity.
+    { query: `"${c}" layoffs job cuts restructuring workforce reduction ${yr}`, category: 'risk' },
+    { query: `"${c}" raises funding Series A B C investment round ${yr}`,       category: 'investor' },
   ]
 }
 

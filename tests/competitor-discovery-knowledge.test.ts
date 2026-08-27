@@ -43,15 +43,20 @@ describe('discoverCompetitorsFromKnowledge', () => {
     expect(result.sufficiency).toBe('sufficient')
     expect(result.competitors).toHaveLength(2)
     expect(result.candidates).toEqual([])
+    // Reliability pass item 5: this tier has zero source_urls by
+    // construction (direct LLM knowledge, never search-grounded) — it can
+    // never legitimately claim 'high' confidence, which research-quality
+    // .ts's own audit asserts requires 2+ source URLs. well_known still
+    // conveys a real distinction, capped one notch below where it used to be.
     expect(result.competitors[0]).toMatchObject({
       name: 'ESAB India Ltd',
       market_position: 'Direct domestic competitor',
       why_they_compete: 'Welding consumables and arc equipment.',
-      confidence: 'high',
+      confidence: 'medium',
       source_urls: [],
       source: 'ai_knowledge',
     })
-    expect(result.competitors[1].confidence).toBe('medium')
+    expect(result.competitors[1].confidence).toBe('low')
   })
 
   it('caps results at 8 competitors, preserving order', async () => {

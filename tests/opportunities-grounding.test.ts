@@ -29,7 +29,7 @@ function baseRaw(ai_opportunities: unknown) {
 }
 
 describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)', () => {
-  it('surfaces an observed opportunity with a real quote as llm_verified', () => {
+  it('surfaces an observed opportunity with a real quote as llm_verified, titled with the confirmed service line (not the LLM\'s own free-text title)', () => {
     const result = normalizeAnalysisResult(baseRaw([{
       title: 'Predictive Maintenance for Jamnagar Refinery',
       service_line: 'AI-powered business applications',
@@ -38,11 +38,13 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
       confidence: 'high',
       description: 'x',
     }]))
-    const opp = result.opportunities.find(o => o.title === 'Predictive Maintenance for Jamnagar Refinery')
+    const opp = result.opportunities.find(o => o.service_line === 'AI-powered business applications')
     expect(opp?.source).toBe('llm_verified')
+    expect(opp?.title).toBe('AI-powered business applications')
+    expect(opp?.description).toContain('Predictive Maintenance for Jamnagar Refinery')
   })
 
-  it('surfaces an inferred opportunity with a substantive inferred_from as llm_inferred, relevance Low', () => {
+  it('surfaces an inferred opportunity with a substantive inferred_from as llm_inferred, relevance Low, titled with the confirmed service line', () => {
     const result = normalizeAnalysisResult(baseRaw([{
       title: 'Integrating new-energy assets with legacy oil-to-chemicals systems',
       service_line: 'Workflow automation systems',
@@ -52,9 +54,10 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
       confidence: 'medium',
       description: 'x',
     }]))
-    const opp = result.opportunities.find(o => o.title === 'Integrating new-energy assets with legacy oil-to-chemicals systems')
+    const opp = result.opportunities.find(o => o.service_line === 'Workflow automation systems')
     expect(opp?.source).toBe('llm_inferred')
     expect(opp?.relevance).toBe('Low')
+    expect(opp?.title).toBe('Workflow automation systems')
   })
 
   it('drops an inferred opportunity with no real inferred_from stated', () => {
@@ -110,7 +113,7 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
       description: 'x',
       // evidence_id deliberately omitted — this is the real-world shape.
     }]))
-    const opp = result.opportunities.find(o => o.title === 'Predictive Maintenance for Jamnagar Refinery')
+    const opp = result.opportunities.find(o => o.service_line === 'AI-powered business applications')
     expect(opp?.evidence_id).toBeTruthy()
   })
 
@@ -124,7 +127,8 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
       confidence: 'medium',
       description: 'x',
     }]))
-    const opp = result.opportunities.find(o => o.title === 'Integrating new-energy assets with legacy oil-to-chemicals systems')
+    const opp = result.opportunities.find(o => o.service_line === 'Workflow automation systems')
+    expect(opp).toBeDefined()
     expect(opp?.evidence_id).toBeFalsy()
   })
 
@@ -143,5 +147,47 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
       }],
     })
     expect(result.opportunities).toHaveLength(0)
+  })
+
+  // Scenario 5: fully-insufficient evidence -> the explicit, named "no
+  // relevant opportunity" outcome, not just an empty array a caller has to
+  // interpret.
+  it('scenario 5: sets opportunity_outcome_label to "no relevant opportunity found" when evidence is insufficient', () => {
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _extractor: { companySubjectCount: 0, signals: [], leadershipContacts: [], websitePreview: '' },
+      ai_opportunities: [],
+    })
+    expect(result.opportunities).toHaveLength(0)
+    expect(result.opportunity_outcome_label).toBe('no relevant opportunity found')
+  })
+
+  // Scenario 4: distinct from scenario 5 above — plenty of generic signal
+  // volume exists (companySubjectCount > 0, real signals), but nothing maps
+  // to a real Demaze capability: no deterministic service clears threshold,
+  // and the one LLM candidate never verifies (fabricated-looking quote) and
+  // has no non-8 service_line either. The correct outcome is still an empty,
+  // honestly-labeled opportunity list — not a padded one.
+  it('scenario 4: lots of generic signal but no Demaze-relevant problem -> no opportunities, not a forced one', () => {
+    const genericContent = 'We are a leading provider of quality solutions for our valued customers worldwide, committed to excellence and innovation.'
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _extractor: {
+        companySubjectCount: 2,
+        signals: [{ signal: 'generic marketing language' }],
+        leadershipContacts: [],
+        websitePreview: genericContent,
+      },
+      ai_opportunities: [{
+        title: 'Vague opportunity with no real evidence',
+        service_line: 'AI-powered business applications',
+        claim_type: 'observed',
+        evidence: 'This company has significant untapped AI potential across its operations',
+        confidence: 'medium',
+        description: 'x',
+      }],
+    })
+    expect(result.opportunities).toHaveLength(0)
+    expect(result.opportunity_outcome_label).toBe('no relevant opportunity found')
   })
 })

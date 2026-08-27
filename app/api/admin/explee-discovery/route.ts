@@ -89,6 +89,17 @@ interface HistoryEntry {
   // Wizard/Research) still correctly counts as "already researched" here,
   // it just has no on-demand result to fetch through this page.
   hasStoredResult: boolean
+  // Pulled straight out of the stored analysis's own computed fields
+  // (opportunity-engine.ts's per-opportunity evidence/fit model,
+  // normalize.ts) via a JSON-path select — never re-derived here, and
+  // never present for scraper_only/company_signals_research rows (their
+  // final_result has no such shape, so these come back null). No UI reads
+  // these yet; they ride along on the existing cross-reference so ranking
+  // "already researched" results by opportunity strength is possible
+  // without a second discovery-side scoring system.
+  opportunityOutcomeLabel: string | null
+  topOpportunityEvidenceStrength: string | null
+  topOpportunityConfidenceLabel: string | null
 }
 
 // Non-fatal on DB error — an unannotated result is far cheaper than the
@@ -97,23 +108,35 @@ async function annotateAlreadyResearched(companies: ExpleeCompany[]): Promise<Ex
   if (companies.length === 0) return companies
   try {
     const supabase = createServerClient()
+    // JSON-path select (PostgREST `column->path->>key`) pulls only the
+    // small scalar fields we need, not the full final_result blob — avoids
+    // loading every historical run's entire analysis JSON just to annotate
+    // a discovery list.
     const { data: history } = await supabase
       .from('pipeline_test_runs')
-      .select('company_url, domain, created_at, operation')
+      .select('company_url, domain, created_at, operation, opportunity_outcome_label:final_result->>opportunity_outcome_label, top_evidence_strength:final_result->opportunities->0->>evidence_strength, top_confidence_label:final_result->opportunities->0->>opportunity_confidence_label')
       .order('created_at', { ascending: false })
 
     const byDomain = new Map<string, HistoryEntry>()
     const byName = new Map<string, HistoryEntry>()
-    for (const h of history ?? []) {
-      const entry: HistoryEntry = { at: h.created_at as string, hasStoredResult: h.operation === 'company_signals_research' }
-      if (h.domain && !byDomain.has(normalizeDomain(h.domain))) byDomain.set(normalizeDomain(h.domain), entry)
-      if (h.company_url) {
-        const looksLikeDomainOrUrl = /^https?:\/\//i.test(h.company_url) || h.company_url.includes('.')
+    for (const h of (history ?? []) as unknown as Array<Record<string, unknown>>) {
+      const entry: HistoryEntry = {
+        at: h.created_at as string,
+        hasStoredResult: h.operation === 'company_signals_research',
+        opportunityOutcomeLabel: (h.opportunity_outcome_label as string) ?? null,
+        topOpportunityEvidenceStrength: (h.top_evidence_strength as string) ?? null,
+        topOpportunityConfidenceLabel: (h.top_confidence_label as string) ?? null,
+      }
+      const domain = h.domain as string | null
+      const companyUrl = h.company_url as string | null
+      if (domain && !byDomain.has(normalizeDomain(domain))) byDomain.set(normalizeDomain(domain), entry)
+      if (companyUrl) {
+        const looksLikeDomainOrUrl = /^https?:\/\//i.test(companyUrl) || companyUrl.includes('.')
         if (looksLikeDomainOrUrl) {
-          const key = normalizeDomain(h.company_url)
+          const key = normalizeDomain(companyUrl)
           if (!byDomain.has(key)) byDomain.set(key, entry)
         } else {
-          const key = normalizeName(h.company_url)
+          const key = normalizeName(companyUrl)
           if (key && !byName.has(key)) byName.set(key, entry)
         }
       }
@@ -121,7 +144,15 @@ async function annotateAlreadyResearched(companies: ExpleeCompany[]): Promise<Ex
 
     return companies.map(c => {
       const entry = (c.domain && byDomain.get(normalizeDomain(c.domain))) || (c.name && byName.get(normalizeName(c.name))) || null
-      return { ...c, alreadyResearched: !!entry, lastResearchedAt: entry?.at ?? null, hasStoredResult: entry?.hasStoredResult ?? false }
+      return {
+        ...c,
+        alreadyResearched: !!entry,
+        lastResearchedAt: entry?.at ?? null,
+        hasStoredResult: entry?.hasStoredResult ?? false,
+        opportunityOutcomeLabel: entry?.opportunityOutcomeLabel ?? null,
+        topOpportunityEvidenceStrength: entry?.topOpportunityEvidenceStrength ?? null,
+        topOpportunityConfidenceLabel: entry?.topOpportunityConfidenceLabel ?? null,
+      }
     })
   } catch (e) {
     logger.warn('ExpleeDiscovery', 'already-researched annotation skipped', e instanceof Error ? e.message : String(e))

@@ -908,7 +908,12 @@ export async function discoverCompetitorsFromKnowledge(
       name,
       why_they_compete: why || `AI-assessed competitor${marketSegment ? ` (${marketSegment})` : ''}.`,
       market_position: marketSegment || undefined,
-      confidence: item.well_known === true ? 'high' : 'medium',
+      // Reliability pass item 5: this tier has zero source_urls by
+      // construction (direct LLM knowledge, not search-grounded) — never
+      // 'high', which research-quality.ts's own audit already asserts
+      // requires 2+ source URLs. well_known still conveys a real, useful
+      // distinction, just one notch down from where it was.
+      confidence: item.well_known === true ? 'medium' : 'low',
       source_urls: [],
       source: 'ai_knowledge',
     })
@@ -1137,7 +1142,13 @@ export async function discoverCompetitorsViaSearchSynthesis(
     survivors.push({
       name,
       why_they_compete: why || `Found via search-grounded synthesis: "${quote.slice(0, 150)}"`,
-      confidence: tier === 'exact' ? 'high' : 'medium',
+      // Reliability pass item 5: 'high' now also requires 2+ corroborating
+      // source URLs (urls is already deduplicated real evidence from
+      // findSupportingSources — not invented), matching the same "2+
+      // mentions for high" rule the legacy tierConfidence() below already
+      // enforces and research-quality.ts's audit already asserts as the
+      // standard.
+      confidence: tier === 'exact' && urls.length >= 2 ? 'high' : 'medium',
       source_urls: urls,
       source: 'search_synthesis',
     })

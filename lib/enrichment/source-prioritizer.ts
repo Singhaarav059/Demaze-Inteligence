@@ -50,6 +50,7 @@ type CategoryCoverage = {
   expansion: number
   strategy: number
   leadership: number
+  risk: number
 }
 
 // ── Main export ───────────────────────────────────────────────
@@ -64,7 +65,7 @@ export function prioritizeSources(
 ): PrioritizedSource[] {
   const selected: PrioritizedSource[] = []
   const seenHosts = new Set<string>()
-  const coverage: CategoryCoverage = { investor: 0, hiring: 0, expansion: 0, strategy: 0, leadership: 0 }
+  const coverage: CategoryCoverage = { investor: 0, hiring: 0, expansion: 0, strategy: 0, leadership: 0, risk: 0 }
 
   // Pass 1: Ensure at least 1 investor + 1 hiring source (highest value)
   // Item 4 (2026-07-23): earnings_call_transcript added — it's the same
@@ -131,6 +132,8 @@ export function sourceTypeLabel(type: SourceType): string {
     sustainability_report:          'Sustainability Report',
     corporate_website:              'Corporate Website',
     regulatory_filing:              'SEC EDGAR Filing',
+    layoff_announcement:            'Layoff Announcement',
+    funding_announcement:           'Funding Announcement',
     other:                          'External Source',
   }
   return labels[type] ?? 'External Source'

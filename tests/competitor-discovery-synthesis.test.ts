@@ -89,12 +89,45 @@ describe('discoverCompetitorsViaSearchSynthesis', () => {
 
     expect(result.sufficiency).toBe('sufficient')
     expect(result.competitors).toHaveLength(1)
+    // Reliability pass item 5: 'high' now also requires 2+ corroborating
+    // source URLs, not just an exact quote match — a single source can only
+    // reach 'medium', matching the same rule the legacy tierConfidence()
+    // path already enforced.
     expect(result.competitors[0]).toMatchObject({
       name: 'Kalpataru Projects International Limited',
-      confidence: 'high',
+      confidence: 'medium',
       source: 'search_synthesis',
       source_urls: ['https://example.com/ace-pipeline-competitors'],
     })
+  })
+
+  it('reaches "high" confidence only when the same evidence quote is corroborated across 2+ distinct source URLs', async () => {
+    mockedSearchTavily.mockResolvedValue([
+      searchResult(
+        'Ace Pipeline vs Kalpataru Projects',
+        'https://example.com/ace-pipeline-competitors',
+        'Ace Pipeline competes directly with Kalpataru Projects International Limited on cross-country pipeline tenders in India.',
+      ),
+      searchResult(
+        'Industry report: pipeline EPC players',
+        'https://example.com/industry-report',
+        'Ace Pipeline competes directly with Kalpataru Projects International Limited on cross-country pipeline tenders in India.',
+      ),
+    ])
+    getCompletionMock.mockResolvedValue(mockResponse(JSON.stringify({
+      competitors: [
+        {
+          name: 'Kalpataru Projects International Limited',
+          why_they_compete: 'Direct EPC pipeline competitor.',
+          evidence_quote: 'Ace Pipeline competes directly with Kalpataru Projects International Limited on cross-country pipeline tenders in India.',
+        },
+      ],
+    })))
+
+    const result = await discoverCompetitorsViaSearchSynthesis('Ace Pipeline', 'acepipeline.co.in')
+
+    expect(result.competitors[0].confidence).toBe('high')
+    expect(result.competitors[0].source_urls).toHaveLength(2)
   })
 
   it('discards a competitor whose evidence_quote does not verify against the fetched content, even if the name is real', async () => {

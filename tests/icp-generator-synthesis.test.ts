@@ -96,12 +96,45 @@ describe('discoverICPSegmentsViaSearchSynthesis', () => {
 
     expect(result.sufficiency).toBe('sufficient')
     expect(result.segments).toHaveLength(1)
+    // Reliability pass item 5: 'high' now also requires 2+ corroborating
+    // source URLs, not just an exact quote match — a single source can only
+    // reach 'medium', matching the same rule the legacy tierConfidence()
+    // path already enforced.
     expect(result.segments[0]).toMatchObject({
       name: 'Commercial fish farmers',
-      confidence: 'high',
+      confidence: 'medium',
       source: 'search_synthesis',
       source_urls: ['https://example.com/asagriaqua-services'],
     })
+  })
+
+  it('reaches "high" confidence only when the same evidence quote is corroborated across 2+ distinct source URLs', async () => {
+    mockedSearchTavily.mockResolvedValue([
+      searchResult(
+        'AS Agri and Aqua services',
+        'https://example.com/asagriaqua-services',
+        'AS Agri and Aqua supplies cage-culture aquaculture setups to commercial fish farmers across the region.',
+      ),
+      searchResult(
+        'Aquaculture industry directory listing',
+        'https://example.com/directory-listing',
+        'AS Agri and Aqua supplies cage-culture aquaculture setups to commercial fish farmers across the region.',
+      ),
+    ])
+    getCompletionMock.mockResolvedValue(mockResponse(JSON.stringify({
+      segments: [
+        {
+          name: 'Commercial fish farmers',
+          reason: 'Cage-culture aquaculture customers.',
+          evidence_quote: 'AS Agri and Aqua supplies cage-culture aquaculture setups to commercial fish farmers across the region.',
+        },
+      ],
+    })))
+
+    const result = await discoverICPSegmentsViaSearchSynthesis('AS Agri and Aqua', 'sites.google.com/view/asagriaqua/home')
+
+    expect(result.segments[0].confidence).toBe('high')
+    expect(result.segments[0].source_urls).toHaveLength(2)
   })
 
   it('discards a segment whose evidence_quote does not verify against the fetched content', async () => {

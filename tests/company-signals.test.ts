@@ -68,4 +68,75 @@ describe('researchCompanySignals', () => {
     expect(r2.error).toBeTruthy()
     expect(r2.signals).toEqual([])
   })
+
+  // Scenario 10: the 4096 -> 6144 token retry-on-truncation path
+  // (callAndParse) — live-tested to fire on real, non-deterministic JSON
+  // truncation, but previously untested at unit level (company-signals
+  // .test.ts only mocked getGroundedCompletion itself, one layer above the
+  // retry). First call throws (simulating a truncated-JSON parse failure by
+  // returning invalid JSON), second call at the larger budget succeeds.
+  it('scenario 10: retries once at a larger token budget when the first response fails to parse, and succeeds', async () => {
+    mockGrounded
+      .mockResolvedValueOnce({ content: '{"signals": [truncated', model: 'm', providerName: 'p', tokensUsed: 0, latencyMs: 0 })
+      .mockResolvedValueOnce({
+        content: JSON.stringify({ signals: [], what_this_suggests: null, potential_pain_points: [], opportunities: [], why_contact_now: null }),
+        model: 'm', providerName: 'p', tokensUsed: 0, latencyMs: 0,
+      })
+
+    const result = await researchCompanySignals({ name: 'Retry Co' })
+
+    expect(mockGrounded).toHaveBeenCalledTimes(2)
+    expect(mockGrounded.mock.calls[0][0]).toMatchObject({ maxTokens: 4096 })
+    expect(mockGrounded.mock.calls[1][0]).toMatchObject({ maxTokens: 6144 })
+    expect(result.error).toBeUndefined()
+    expect(result.signals).toEqual([])
+  })
+
+  it('scenario 10: still returns an honest error if the retry at the larger budget also fails', async () => {
+    mockGrounded.mockResolvedValue({ content: 'still not json', model: 'm', providerName: 'p', tokensUsed: 0, latencyMs: 0 })
+    const result = await researchCompanySignals({ name: 'Still Broken Co' })
+    expect(mockGrounded).toHaveBeenCalledTimes(2)
+    expect(result.error).toBeTruthy()
+  })
+
+  // Scenario 11: sourceUrl is the model's own citation, never a mechanically
+  // verified one by default — sourceVerified is only ever set true when it
+  // genuinely matches a real groundingSources entry from the same response.
+  describe('sourceVerified — source URL handling', () => {
+    it('scenario 11: marks a signal verified only when its sourceUrl matches a real groundingSources entry', async () => {
+      mockGrounded.mockResolvedValue({
+        content: JSON.stringify({
+          signals: [
+            { title: 'Matches', description: 'd', sourceUrl: 'https://example.com/news/a', recency: 'recent', confidence: 'high' },
+            { title: 'No match', description: 'd', sourceUrl: 'https://unrelated.com/x', recency: 'recent', confidence: 'high' },
+            { title: 'No sourceUrl at all', description: 'd', recency: 'recent', confidence: 'high' },
+          ],
+          what_this_suggests: null, potential_pain_points: [], opportunities: [], why_contact_now: null,
+        }),
+        model: 'm', providerName: 'p', tokensUsed: 0, latencyMs: 0,
+        groundingSources: [{ uri: 'https://www.example.com/news/a/', title: 'Real source' }],
+      })
+
+      const result = await researchCompanySignals({ name: 'Verify Co' })
+      const matches = result.signals.find(s => s.title === 'Matches')
+      const noMatch = result.signals.find(s => s.title === 'No match')
+      const noUrl = result.signals.find(s => s.title === 'No sourceUrl at all')
+
+      expect(matches?.sourceVerified).toBe(true)
+      expect(noMatch?.sourceVerified).toBeUndefined()
+      expect(noUrl?.sourceVerified).toBeUndefined()
+    })
+
+    it('scenario 11: never fabricates sourceVerified when groundingSources is empty/absent', async () => {
+      mockGrounded.mockResolvedValue({
+        content: JSON.stringify({
+          signals: [{ title: 'Alone', description: 'd', sourceUrl: 'https://example.com/x', recency: 'recent', confidence: 'high' }],
+          what_this_suggests: null, potential_pain_points: [], opportunities: [], why_contact_now: null,
+        }),
+        model: 'm', providerName: 'p', tokensUsed: 0, latencyMs: 0,
+      })
+      const result = await researchCompanySignals({ name: 'No Grounding Co' })
+      expect(result.signals[0].sourceVerified).toBeUndefined()
+    })
+  })
 })

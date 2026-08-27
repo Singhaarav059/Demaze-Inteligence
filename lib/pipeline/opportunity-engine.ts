@@ -32,8 +32,9 @@
 // multiple services genuinely clear the bar would hide real signal.
 // ============================================================
 
-import type { CompanyProfile } from './evidence-extractor'
+import type { CompanyProfile, DetectedFactors, DetectedSignal, EvidenceOrigin } from './evidence-extractor'
 import { detectServiceEvidence, ServiceThresholdResult, ServiceThreshold } from './service-evidence'
+import { DEMAZE_SERVICE_PROFILES } from '@/lib/knowledge/demaze-service-profiles'
 
 export type OpportunityCategory = string  // slugified service name — see CONFIRMED_SERVICES below
 
@@ -52,57 +53,40 @@ export interface DeterministicOpportunity {
   // Debug/traceability — kept under the pre-existing field name so the admin
   // debug UI (app/admin/intelligence-lab/page.tsx) continues to render
   // something meaningful without requiring an immediate UI change.
-  triggered_by_clusters?: Array<{ id: string; name: string; confidence: string }>
+  triggered_by_clusters?: Array<{ id: string; name: string; confidence: string; origin: EvidenceOrigin }>
   priority_source?: string
+  // Where the evidence this opportunity is based on actually came from —
+  // the origin of its strongest (first) matched evidence item. own_site
+  // means the only support is the company's own marketing/careers/investor
+  // pages; filing/job_posting/news/other_external mean at least the
+  // top-ranked match was independently sourced. Does not change threshold/
+  // priority/relevance — purely a traceability field a salesperson (or a
+  // later scoring pass) can read.
+  evidence_origin: EvidenceOrigin
 }
 
 // ── The 8 confirmed services (verbatim from DEMAZE_CAPABILITY_MAP.md) ───────
-// Content (strategic_challenge / entry_point) sourced directly from
-// SERVICE_TO_OUTREACH_MAPPING.md's "Likely Pain" / "Outreach Angle" fields —
-// never paraphrased into a punchier invented title.
+// strategic_challenge/entry_point are DERIVED from
+// lib/knowledge/demaze-service-profiles.ts (problemsSolvedConfidently /
+// preferredOutreachAngle) instead of a second hardcoded copy of the same
+// text — that file is now the single source of truth for this content,
+// itself copied verbatim from SERVICE_TO_OUTREACH_MAPPING.md.
 
-const SERVICE_CONTENT: Record<string, { strategic_challenge: string; entry_point: string; slug: string }> = {
-  'AI-powered business applications': {
-    slug: 'ai_powered_business_applications',
-    strategic_challenge: 'Decisions (sales prioritization, lead scoring, resource allocation) made on gut feel or spreadsheets instead of systematic intelligence; field/dealer/distributed teams not getting consistent guidance from HQ.',
-    entry_point: 'With a network this size, how is lead/opportunity prioritization currently handled across regions — manually, or is there a system doing it?',
-  },
-  'Custom SaaS platforms': {
-    slug: 'custom_saas_platforms',
-    strategic_challenge: 'No software fits their specific operational model; using spreadsheets or disconnected tools to patch the gap, and growth is being slowed by a process that doesn’t scale without custom tooling.',
-    entry_point: 'Is [specific process you found evidence of] still running on spreadsheets, or has that moved to a dedicated tool?',
-  },
-  'Ecommerce ecosystems': {
-    slug: 'ecommerce_ecosystems',
-    strategic_challenge: 'Fragmented view across channels (own site, marketplaces, social); payment friction specific to the Indian market; no unified attribution/analytics across the funnel.',
-    entry_point: 'Running sales across [own site + marketplaces] usually means the revenue picture is scattered across three dashboards — worth seeing what a unified view looks like?',
-  },
-  'Marketplace platforms': {
-    slug: 'marketplace_platforms',
-    strategic_challenge: 'Managing a growing two-sided network without a platform built for it (onboarding, matching, payments, trust/reviews); manual vendor/partner coordination that doesn’t scale.',
-    entry_point: 'As the vendor/partner side grows, is onboarding and matching still handled manually, or is there a platform doing that already?',
-  },
-  'Workflow automation systems': {
-    slug: 'workflow_automation_systems',
-    strategic_challenge: 'Manual handoffs between teams/steps causing delay or errors; no visibility into where a request/ticket/order currently sits in the process; compliance/SLA tracking done manually.',
-    entry_point: 'How many hand-offs does a [complaint/order/ticket] go through before it’s resolved today — and is that tracked automatically or manually?',
-  },
-  'Internal operational software': {
-    slug: 'internal_operational_software',
-    strategic_challenge: 'HQ lacks real-time visibility into what’s happening at individual locations; reporting is manual, delayed, and inconsistent across sites; no single source of truth for operational status.',
-    entry_point: 'Coordinating reporting across [N] locations usually means someone’s stitching together updates manually each week — worth 15 minutes to see how that gets automated?',
-  },
-  'Analytics and reporting systems': {
-    slug: 'analytics_and_reporting_systems',
-    strategic_challenge: 'Data exists in silos (per-location, per-channel, per-department) with no unified view; decisions made without timely access to consolidated numbers.',
-    entry_point: 'How are you currently consolidating operational data across [locations/regions/dealers] — manually, or is there a system doing it?',
-  },
-  'AI integrations and intelligent automation': {
-    slug: 'ai_integrations_and_intelligent_automation',
-    strategic_challenge: 'Existing tools operate in isolation with no AI layer connecting or enhancing them; repetitive content/analysis work still done manually despite being automatable.',
-    entry_point: 'Is [named tool/process] connected to anything AI-driven yet, or still a manual step in the workflow?',
-  },
+function slugify(service: string): string {
+  return service.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 }
+
+const SERVICE_CONTENT: Record<string, { strategic_challenge: string; entry_point: string; slug: string }> =
+  Object.fromEntries(
+    Object.values(DEMAZE_SERVICE_PROFILES).map(p => [
+      p.service,
+      {
+        slug: slugify(p.service),
+        strategic_challenge: p.problemsSolvedConfidently.join('; ') + '.',
+        entry_point: p.preferredOutreachAngle,
+      },
+    ])
+  )
 
 // The literal 8 confirmed service-line names, exported for reuse as a
 // whitelist elsewhere (normalize.ts's evidence-grounded LLM opportunity path
@@ -127,8 +111,13 @@ function toOpportunity(r: ServiceThresholdResult): DeterministicOpportunity {
     relevance: r.threshold === 'strong' ? 'High' : 'Medium',
     threshold: r.threshold,
     disqualifier_matched: r.disqualifier_matched,
-    triggered_by_clusters: r.evidence.map(e => ({ id: e.pattern, name: e.matched, confidence: r.threshold })),
+    triggered_by_clusters: r.evidence.map(e => ({ id: e.pattern, name: e.matched, confidence: r.threshold, origin: e.origin })),
     priority_source: `Threshold: ${r.threshold} | Evidence: ${r.evidence.length} pattern(s) matched`,
+    // r.evidence is already ordered strong-patterns-first (service-evidence
+    // .ts's firstMatch() checks strong/medium/weak in that order) — the
+    // first item is the strongest-tier match, so its origin is the most
+    // representative single value for this opportunity.
+    evidence_origin: r.evidence[0]?.origin ?? 'unknown',
   }
 }
 
@@ -157,4 +146,249 @@ export function generateDeterministicOpportunities(
   })
 
   return qualifying.map(toOpportunity)
+}
+
+// ============================================================
+// v4 — per-opportunity evidence/fit model
+// ============================================================
+// Answers "why was this opportunity surfaced" with three separate,
+// explainable dimensions instead of one opaque number — per opportunity,
+// not per company (see sector-playbook/qualify.ts for the existing
+// per-COMPANY 4-pillar equivalent; this is deliberately not unified with
+// that system since it scores a different thing at a different grain).
+//
+// Nothing here adds a new evidence source or LLM call — every input is
+// already computed elsewhere in the pipeline (an opportunity's `source` +
+// `threshold`/verification tier from the existing merge in normalize.ts,
+// and the company's already-extracted DetectedFactors booleans).
+// ============================================================
+
+export type OpportunitySource = 'deterministic' | 'llm_verified' | 'llm_inferred' | 'llm'
+export type EvidenceStrength = 'CONFIRMED' | 'STRONG' | 'MODERATE' | 'WEAK' | 'NONE'
+export type CapabilityFit = 'high' | 'medium'
+export type TimingStrength = 'strong' | 'moderate' | 'weak' | 'none'
+
+/**
+ * How strong is the proof behind this specific opportunity?
+ *
+ * - deterministic: code-matched real content via service-evidence.ts's
+ *   regex ladder for this exact service — no LLM guess involved. `strong`
+ *   threshold + 2+ independent pattern matches (i.e. multiple sources of
+ *   support, not just one line of text) is the only path to CONFIRMED;
+ *   a single strong match, or several medium matches, is STRONG; a lone
+ *   medium match is MODERATE.
+ * - llm_verified: the LLM's claimed quote was independently checked
+ *   against real content (quote-verification.ts). An exact verbatim match
+ *   is MODERATE (a single real quote, but the LLM chose which one — less
+ *   rigorous than a code-driven multi-pattern match); a fuzzy/close match
+ *   is WEAK.
+ * - llm_inferred: no quote to verify at all, by definition — always WEAK.
+ * - anything disqualified or with no threshold match: NONE.
+ */
+export function deriveEvidenceStrength(
+  source: OpportunitySource | undefined,
+  threshold: ServiceThreshold | undefined,
+  evidenceCount: number,
+  quoteMatchTier?: 'exact' | 'close' | 'none',
+): EvidenceStrength {
+  if (source === 'deterministic') {
+    if (threshold === 'strong' && evidenceCount >= 2) return 'CONFIRMED'
+    if (threshold === 'strong' || (threshold === 'medium' && evidenceCount >= 2)) return 'STRONG'
+    if (threshold === 'medium') return 'MODERATE'
+    return 'NONE'
+  }
+  if (source === 'llm_verified') {
+    return quoteMatchTier === 'exact' ? 'MODERATE' : 'WEAK'
+  }
+  if (source === 'llm_inferred') {
+    return 'WEAK'
+  }
+  return 'NONE'
+}
+
+/**
+ * Does the identified problem actually map to a real Demaze capability?
+ *
+ * `deterministic` opportunities are 'high' by construction — code matched
+ * this exact service's own evidence ladder, not a free-text LLM guess.
+ * `llm_verified`/`llm_inferred` are 'medium' — the LLM chose the
+ * service_line itself; it's whitelist-checked against the 8 confirmed
+ * names (CONFIRMED_SERVICE_NAMES) so it can never invent a 9th service,
+ * but that specific service's own regex ladder never ran against this
+ * evidence, so it's a step below a code-verified match.
+ */
+export function deriveCapabilityFit(source: OpportunitySource | undefined): CapabilityFit {
+  return source === 'deterministic' ? 'high' : 'medium'
+}
+
+const TIMING_TRIGGER_FACTORS: Array<keyof DetectedFactors> = [
+  'recent_news_or_event',
+  'hiring_signal',
+  'capacity_expansion',
+  'growth_signal',
+  'digital_transformation',
+  'industry_40_initiative',
+]
+
+/**
+ * Is there a recent business change that makes now a sensible time to
+ * reach out? Reuses the already-extracted DetectedFactors booleans
+ * (evidence-extractor.ts) — no new signal detection. This is a
+ * company-wide signal, not opportunity-specific: today's evidence doesn't
+ * tie a given trigger to one particular service over another, so every
+ * opportunity for a given company shares the same timing_strength. That's
+ * an honest limitation, not a per-opportunity computation being faked.
+ */
+export function deriveTimingStrength(detectedFactors: Partial<DetectedFactors> | undefined): TimingStrength {
+  if (!detectedFactors) return 'none'
+  const firedCount = TIMING_TRIGGER_FACTORS.filter(f => detectedFactors[f]).length
+  if (firedCount >= 2) return 'strong'
+  if (firedCount === 1) return 'moderate'
+  return 'none'
+}
+
+const EVIDENCE_STRENGTH_SCORE: Record<EvidenceStrength, number> = {
+  CONFIRMED: 100, STRONG: 80, MODERATE: 55, WEAK: 30, NONE: 0,
+}
+const CAPABILITY_FIT_SCORE: Record<CapabilityFit, number> = { high: 90, medium: 55 }
+const TIMING_STRENGTH_SCORE: Record<TimingStrength, number> = { strong: 90, moderate: 60, weak: 30, none: 10 }
+
+function confidenceLabel(score: number): string {
+  if (score >= 75) return 'Strong'
+  if (score >= 50) return 'Moderate'
+  if (score >= 25) return 'Weak'
+  return 'Poor'
+}
+
+/**
+ * Overall opportunity confidence — a weighted composite of capability fit
+ * and evidence strength (co-primary, per the task's stated priority order),
+ * with timing as a secondary factor. Deliberately has NO company
+ * size/revenue/industry term: those are context, not proof a problem
+ * exists, and folding them in here would recreate exactly the "large
+ * company therefore opportunity" anti-pattern this model exists to avoid.
+ */
+export function computeOpportunityConfidence(
+  evidenceStrength: EvidenceStrength,
+  capabilityFit: CapabilityFit,
+  timingStrength: TimingStrength,
+): { score: number; label: string } {
+  const score = Math.round(
+    EVIDENCE_STRENGTH_SCORE[evidenceStrength] * 0.4 +
+    CAPABILITY_FIT_SCORE[capabilityFit] * 0.4 +
+    TIMING_STRENGTH_SCORE[timingStrength] * 0.2
+  )
+  return { score, label: confidenceLabel(score) }
+}
+
+// ============================================================
+// D.3 — evidence-traceable Why Now
+// ============================================================
+// Replaces free LLM narrative as the source of "why now" text with a
+// composed explanation built ONLY from real, code-verified evidence —
+// reuses factorSourceMap + signals (evidence-extractor.ts's own
+// mechanically-derived structures, no LLM involved in producing them) so
+// this never invents a trigger the extractor didn't actually find. Kept
+// deliberately separate from timing_strength (deriveTimingStrength above):
+// timing_strength reads the FINAL, business-model-filtered DetectedFactors
+// (which can include LLM-narrated contributions), while this reads ONLY
+// factorSourceMap — the subset of that same set of factors that trace to a
+// real, code-matched signal. The two can legitimately disagree (e.g.
+// timing_strength 'moderate' from an LLM-only factor, while this reports
+// "no verified timing signal") — that's an honest reflection of two
+// different confidence bars, not a bug.
+// ============================================================
+
+export type WhyNowStatus = 'traceable' | 'no_verified_signal'
+
+export interface WhyNowTrace {
+  status: WhyNowStatus
+  /** The factual trigger(s) — real, verbatim evidence quotes only. */
+  fact?: string
+  /** The interpretive hypothesis — clearly separated from `fact`, never presented as confirmed. */
+  inference?: string
+  /** Composed "WHY NOW: <fact>. <inference>" string, or the literal no-signal state. */
+  explanation: string
+  /** Real ExtractedEvidence ids the fact traces to — never manufactured. */
+  evidence_ids: string[]
+  /** Real ExtractedEvidence source_urls the fact traces to. */
+  source_urls: string[]
+}
+
+const NO_VERIFIED_TIMING_SIGNAL: WhyNowTrace = {
+  status: 'no_verified_signal',
+  explanation: 'no verified timing signal',
+  evidence_ids: [],
+  source_urls: [],
+}
+
+/** factorSourceMap entries can carry a " (secondary)"-style suffix (see evidence-extractor.ts's addFactorSource calls) — strip it to recover the real SignalType before looking the signal up. */
+function stripSecondaryTag(signalTypeLabel: string): string {
+  const idx = signalTypeLabel.indexOf(' (')
+  return idx === -1 ? signalTypeLabel : signalTypeLabel.slice(0, idx)
+}
+
+/**
+ * Builds an evidence-traceable "why now" explanation from ONLY the factors
+ * that trace to a real, code-matched signal (factorSourceMap), not the
+ * broader (possibly LLM-only) DetectedFactors set. Never invents a trigger:
+ * if nothing traces, returns the explicit NO_VERIFIED_TIMING_SIGNAL state
+ * rather than falling back to generic urgency language.
+ *
+ * "Old vs recent" weighting: this codebase has no real date/timestamp on
+ * any evidence item (website content and search-discovered content alike
+ * carry no reliable publication date today — see this function's own
+ * report writeup). As an honest, non-invented proxy, a signal's own
+ * `validated` flag (2+ independent pieces of company-subject evidence,
+ * already computed by evidence-extractor.ts) stands in for confidence: a
+ * single, unvalidated mention is hedged as "(single-mention, unconfirmed)"
+ * and produces a weaker inference sentence, rather than being presented
+ * with the same confidence as a validated, multi-evidence trigger.
+ */
+export function deriveWhyNowTrace(
+  factorSourceMap: Partial<Record<keyof DetectedFactors, string[]>> | undefined,
+  signals: DetectedSignal[] | undefined,
+): WhyNowTrace {
+  if (!factorSourceMap || !signals || signals.length === 0) return NO_VERIFIED_TIMING_SIGNAL
+
+  const cited: Array<{ quote: string; id: string; url: string; validated: boolean }> = []
+  const seenSignalTypes = new Set<string>()
+
+  for (const factor of TIMING_TRIGGER_FACTORS) {
+    const rawTypes = factorSourceMap[factor]
+    if (!rawTypes || rawTypes.length === 0) continue // not code-traceable for this factor — never invent one
+
+    for (const raw of rawTypes) {
+      const type = stripSecondaryTag(raw)
+      if (seenSignalTypes.has(type)) continue
+      const sig = signals.find(s => s.type === type)
+      // is_company_subject: false means this text was about a customer/
+      // partner/generic-marketing subject, not the researched company
+      // itself — not a real trigger for THIS company.
+      if (!sig || !sig.is_company_subject) continue
+      const ev = sig.evidence[0]
+      if (!ev) continue
+      seenSignalTypes.add(type)
+      cited.push({ quote: ev.quote, id: ev.id, url: ev.source_url, validated: sig.validated })
+    }
+  }
+
+  if (cited.length === 0) return NO_VERIFIED_TIMING_SIGNAL
+
+  const fact = cited
+    .map(c => c.validated ? `"${c.quote}"` : `"${c.quote}" (single-mention, unconfirmed)`)
+    .join('; ')
+  const anyValidated = cited.some(c => c.validated)
+  const inference = anyValidated
+    ? 'This is a concrete, evidence-backed timing trigger for raising the identified opportunity now.'
+    : 'This is a single, unconfirmed mention — a weaker timing cue, not a confirmed trigger.'
+
+  return {
+    status: 'traceable',
+    fact,
+    inference,
+    explanation: `WHY NOW: ${fact}. ${inference}`,
+    evidence_ids: [...new Set(cited.map(c => c.id))],
+    source_urls: [...new Set(cited.map(c => c.url).filter(Boolean))],
+  }
 }

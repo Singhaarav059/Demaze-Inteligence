@@ -43,6 +43,14 @@ export interface CompanySignal {
   sourceUrl?: string
   recency: SignalRecency
   confidence: SignalConfidence
+  // True only when sourceUrl genuinely matches one of the response's own
+  // mechanically-returned groundingSources (a real citation Gemini's search
+  // tool actually produced) — never set true on trust alone. Absent (not
+  // false) when there's nothing to cross-check against, so "unverified" and
+  // "checked and failed" aren't conflated. See this file's header: sourceUrl
+  // itself is still the model's own best-effort citation, not guaranteed
+  // accurate even when this is true.
+  sourceVerified?: boolean
 }
 
 export interface CompanyOpportunity {
@@ -195,7 +203,12 @@ export async function researchCompanySignals(input: CompanyResearchInput): Promi
     }
   }
 
-  const signals = (Array.isArray(p.signals) ? p.signals : []).map(sanitizeSignal).filter((s): s is CompanySignal => s !== null).slice(0, 5)
+  const groundingSources = response.groundingSources ?? []
+  const signals = (Array.isArray(p.signals) ? p.signals : [])
+    .map(sanitizeSignal)
+    .filter((s): s is CompanySignal => s !== null)
+    .slice(0, 5)
+    .map(s => (s.sourceUrl && groundingSources.some(g => g.uri && urlsMatch(g.uri, s.sourceUrl!))) ? { ...s, sourceVerified: true } : s)
   const opportunities = (Array.isArray(p.opportunities) ? p.opportunities : []).map(sanitizeOpportunity).filter((o): o is CompanyOpportunity => o !== null)
   const potentialPainPoints = Array.isArray(p.potential_pain_points) ? p.potential_pain_points.filter((s): s is string => typeof s === 'string' && s.trim().length > 0) : []
 
@@ -205,6 +218,14 @@ export async function researchCompanySignals(input: CompanyResearchInput): Promi
     potentialPainPoints,
     opportunities,
     whyContactNow: typeof p.why_contact_now === 'string' && p.why_contact_now.trim() ? p.why_contact_now.trim() : null,
-    groundingSources: response.groundingSources ?? [],
+    groundingSources,
   }
+}
+
+// Loose match (scheme/www/trailing-slash-insensitive) — grounding chunk URLs
+// and the model's own cited sourceUrl are the same underlying page but not
+// always byte-identical strings.
+function urlsMatch(a: string, b: string): boolean {
+  const normalize = (u: string) => u.trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')
+  return normalize(a) === normalize(b)
 }

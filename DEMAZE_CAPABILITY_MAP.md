@@ -113,6 +113,16 @@ Outreach Angle:
 Confidence:
 ```
 
+## Machine-readable counterpart
+`lib/knowledge/demaze-service-profiles.ts` is the typed, code-consumed version
+of this file's per-service content (problemsSolvedConfidently/
+typicalCompanyCharacteristics/preferredOutreachAngle, copied verbatim from
+SERVICE_TO_OUTREACH_MAPPING.md). It also has slots — explicitly marked
+`NEEDS_DEMAZE_INPUT` — for fields that don't exist anywhere yet: problems
+Demaze does NOT solve, ideal buyer persona, strongest triggers, project-size
+fit range, strongest industries, common objections. Fill those in there when
+answered; nothing else needs to change.
+
 ## What would move this from draft to confirmed
 Someone at Demaze (whoever owns this decision) reviewing:
 1. The "evidence_strength: high/medium/low" buckets above — correcting anything wrong

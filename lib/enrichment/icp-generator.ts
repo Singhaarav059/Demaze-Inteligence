@@ -808,7 +808,12 @@ export async function discoverICPSegmentsFromKnowledge(
       use_cases: useCase || undefined,
       market_attractiveness: priority,
       priority,
-      confidence: isConfident ? 'high' : 'medium',
+      // Reliability pass item 5: this tier has zero source_urls by
+      // construction (direct LLM knowledge, not search-grounded) — never
+      // 'high', which research-quality.ts's own audit already asserts
+      // requires 2+ source URLs. isConfident still conveys a real, useful
+      // distinction, just one notch down from where it was.
+      confidence: isConfident ? 'medium' : 'low',
       source_urls: [],
       source: 'ai_knowledge',
     })
@@ -1010,7 +1015,13 @@ export async function discoverICPSegmentsViaSearchSynthesis(
       name,
       reason: reason || `Found via search-grounded synthesis: "${quote.slice(0, 150)}"`,
       signals: [quote.slice(0, 300)],
-      confidence: tier === 'exact' ? 'high' : 'medium',
+      // Reliability pass item 5: 'high' now also requires 2+ corroborating
+      // source URLs (urls is already deduplicated real evidence from
+      // findSupportingICPSources — not invented), matching the same "2+
+      // mentions for high" rule the legacy tierConfidence() elsewhere in
+      // this file already enforces and research-quality.ts's audit already
+      // asserts as the standard.
+      confidence: tier === 'exact' && urls.length >= 2 ? 'high' : 'medium',
       source_urls: urls,
       source: 'search_synthesis',
     })

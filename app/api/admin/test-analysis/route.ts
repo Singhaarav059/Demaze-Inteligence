@@ -41,26 +41,12 @@ import { discoverICPSegments, discoverICPSegmentsFromOfferings, discoverICPSegme
 import { discoverMarketIntelligence, type MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
 import { extractBusinessProfile, emptyBusinessProfile, isEmptyBusinessProfile, type CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
 import { matchProofPoints } from '@/lib/knowledge/proof-point-matcher'
+import { guessCompanyNameFromDomain } from '@/lib/pipeline/company-name-guess'
 import { synthesizeIntelligence } from '@/lib/synthesis'
 import type { SynthesisResult } from '@/lib/synthesis'
 import { logger } from '@/lib/logger'
 
 function t(ms: number): string { return `${ms}ms` }
-
-// ── Company-name guess from a bare domain ──────────────────────
-// Used (a) as the pre-scrape company-name guess for kicking off enrichment
-// discovery before scraping starts (item 2, 2026-07-12), and (b) as the
-// empty-scrape stub-injection fallback. Word-boundary splitting on dashes/
-// underscores/camelCase — same discipline as matchesKeyword()'s short-keyword
-// substring-match fix, just for display quality here rather than correctness.
-function guessCompanyNameFromDomain(domain: string): string {
-  const words = domain
-    .replace(/\.(com|co\.in|in|net|org|io|biz|co|ltd)$/, '')
-    .replace(/[_\-]/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .trim()
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
 
 // ── JSON fence stripping ──────────────────────────────────────
 // Some models (glm-5.2, older GPT-4) wrap JSON in ```json … ```
@@ -234,7 +220,7 @@ export async function POST(req: NextRequest) {
   // stand-in for companyNameFromScrape (computed later, post-scrape, from
   // the actual page title) — accepted trade-off, not worth re-running
   // discovery once a better name is known.
-  const companyGuess = rawCompanyName?.trim() || guessCompanyNameFromDomain(domain)
+  const companyGuess = rawCompanyName?.trim() || guessCompanyNameFromDomain(domain, normalizedUrl ?? undefined)
   const discoveryStart = Date.now()
   let discoveryActualMs: number | null = null
   const discoveryPromise: Promise<{ discovered: DiscoveredSource[]; prioritized: PrioritizedSource[]; contextBlocks: string[] }> =
@@ -419,7 +405,7 @@ export async function POST(req: NextRequest) {
         const candidate = titleMatch[1].trim().replace(/\s+(ltd|limited|inc|corp|pvt|private|llc|plc|technologies|solutions|group)\.?\s*$/i, '').trim()
         if (candidate.length >= 3 && candidate.length <= 60) return candidate
       }
-      return guessCompanyNameFromDomain(domain)
+      return guessCompanyNameFromDomain(domain, normalizedUrl ?? undefined)
     })()
 
     // ── Stage 2.5: SCRAPE_RELEVANCE (Production Hardening Plan, Phase 3) ──

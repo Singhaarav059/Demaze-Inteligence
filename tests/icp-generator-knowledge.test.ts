@@ -43,18 +43,23 @@ describe('discoverICPSegmentsFromKnowledge', () => {
     expect(result.sufficiency).toBe('sufficient')
     expect(result.segments).toHaveLength(2)
     expect(result.candidates).toEqual([])
+    // Reliability pass item 5: this tier has zero source_urls by
+    // construction (direct LLM knowledge, never search-grounded) — it can
+    // never legitimately claim 'high' confidence, which research-quality
+    // .ts's own audit asserts requires 2+ source URLs. `confident` still
+    // conveys a real distinction, capped one notch below where it used to be.
     expect(result.segments[0]).toMatchObject({
       name: 'Automotive OEMs',
       reason: 'Ador Welding supplies consumables used in automotive assembly welding.',
       use_cases: 'Assembly-line arc welding consumables',
       priority: 'high',
       market_attractiveness: 'high',
-      confidence: 'high',
+      confidence: 'medium',
       signals: [],
       source_urls: [],
       source: 'ai_knowledge',
     })
-    expect(result.segments[1].confidence).toBe('medium')
+    expect(result.segments[1].confidence).toBe('low')
   })
 
   it('populates criteria and example_companies when the segment is confident', async () => {

@@ -35,6 +35,13 @@ export type SignalType =
   // Business events
   | 'ai_mention' | 'multi_location_operations' | 'acquisition'
   | 'quality_certification_pursuit' | 'sustainability_initiative'
+  // D.5: layoffs/restructuring and private-funding rounds — supporting
+  // timing/pressure triggers only (see TIMING_TRIGGER_FACTORS in
+  // opportunity-engine.ts), never independent service-evidence patterns.
+  // Deliberately NOT wired into service-evidence.ts's detectors — a company
+  // mentioning either alone must never surface a deterministic opportunity
+  // on its own (see D.5 task spec).
+  | 'layoffs_restructuring' | 'funding_round'
   // Evidence-source-strategy additions (see EVIDENCE_SOURCE_STRATEGY.md) — sourced
   // primarily from job postings and named-tool mentions, which the original 20
   // patterns above never covered (see: AITG benchmark case, 0 signals despite
@@ -54,6 +61,26 @@ export type EvidenceSubject =
 export type PageType =
   | 'careers' | 'investor' | 'press' | 'annual_report'
   | 'about' | 'products' | 'blog' | 'homepage' | 'other'
+
+// ── Evidence origin ─────────────────────────────────────────────
+// Where a piece of evidence actually came from — company-owned marketing
+// content (own_site) is not the same evidentiary weight as independent
+// external evidence (filing/job_posting/news/other_external). Derived from
+// the SAME marker vocabulary parseContentSegments() below already parses
+// (--- PAGE: ... --- = the company's own scraped pages, [SOURCE: type |
+// tier | url] = web-enricher.ts's externally-fetched content) — this is not
+// a second, independent evidence system, just a label on the one that
+// already exists. 'unknown' is only used when origin genuinely cannot be
+// determined (e.g. an out-of-range lookup) — never guessed.
+export type EvidenceOrigin = 'own_site' | 'filing' | 'job_posting' | 'news' | 'other_external' | 'unknown'
+
+/** Maps a web-enricher.ts [SOURCE: type | ...] type label to a coarse EvidenceOrigin bucket. */
+function classifySourceMarkerOrigin(typeLabel: string): EvidenceOrigin {
+  if (/annual.?report|investor|earnings|regulatory|filing/i.test(typeLabel)) return 'filing'
+  if (/careers|jobs/i.test(typeLabel)) return 'job_posting'
+  if (/press.?release|newsroom|news.?article|ceo.?interview|executive.?change|blog|layoff|funding/i.test(typeLabel)) return 'news'
+  return 'other_external'
+}
 
 export type EvidenceStrength = 'very_high' | 'high' | 'medium' | 'low'
 export type SignalStrength = 'strong' | 'moderate' | 'weak'
@@ -125,6 +152,7 @@ export interface ExtractedEvidence {
   source_tier: 'tier1' | 'tier2' | 'tier3'
   evidence_strength: EvidenceStrength
   pattern_matched: string   // which pattern triggered this
+  origin: EvidenceOrigin    // own_site vs. which external-source bucket — see EvidenceOrigin above
 }
 
 export interface DetectedSignal {
@@ -148,6 +176,13 @@ export interface DetectedFactors {
   multi_location_operations: boolean
   industry_40_initiative: boolean
   recent_news_or_event: boolean
+  // D.5: pressure/budget timing triggers — see TIMING_TRIGGER_FACTORS
+  // (opportunity-engine.ts). Not consulted by service-evidence.ts's
+  // detectors, business-model-classifier.ts's invalid_signal_types
+  // filtering, or signal-clustering.ts's cluster definitions (none list
+  // these keys), so they only ever affect the why-now/timing trace.
+  layoffs_signal: boolean
+  funding_signal: boolean
 }
 
 export interface ExtractorResult {
@@ -218,6 +253,8 @@ const SIGNAL_TO_FACTOR: Partial<Record<SignalType, keyof DetectedFactors>> = {
   acquisition:                    'recent_news_or_event',
   quality_certification_pursuit:  'recent_news_or_event',
   sustainability_initiative:       'recent_news_or_event',
+  layoffs_restructuring:          'layoffs_signal',
+  funding_round:                  'funding_signal',
   named_erp_crm_tool:             'technology_investment',
   // external_training_engagement and internal_workflow_description intentionally
   // have no DetectedFactors mapping — none of the 10 existing factor keys fit
@@ -257,6 +294,19 @@ const SIGNAL_PATTERNS: PatternDef[] = [
       /\bnew\s+production\s+(?:line|unit|facility|block)\b/i,
       /\bincreas(?:ing|ed|e)\s+(?:production|manufacturing|output)\s+capacity\b/i,
       /\badditional\s+(?:production|manufacturing)\s+(?:lines?|capacity|units?)\b/i,
+      // Financial/investor-relations register (2026-08-24) — externally-sourced
+      // content (investor presentations, earnings transcripts) tends to use
+      // this phrasing instead of website-marketing phrasing like "expanding
+      // our capacity". A live Bharat Forge benchmark run found real,
+      // externally-sourced evidence ("INR 2,500 crore fundraising plan...
+      // CapEx... expanding investments...") that matched none of the patterns
+      // above, producing zero signals despite real, corroborated evidence
+      // existing. See tests/evidence-extractor-financial-signals.test.ts.
+      /\bcapex\b[^.]{0,60}\b(?:plan|growth|invest\w*)\b/i,
+      /\b(?:plan|growth|invest\w*)\b[^.]{0,60}\bcapex\b/i,
+      /\bfundrais(?:ing|e)\s+plan\b/i,
+      /\bcapital\s+rais(?:e|ing)\b/i,
+      /\bexpanding\s+(?:its\s+|our\s+)?investments?\b/i,
     ],
   },
   {
@@ -519,6 +569,45 @@ const SIGNAL_PATTERNS: PatternDef[] = [
       /\b(?:conduct|conducted|organi[sz]ed?|organi[sz]ing)\s+(?:a\s+|an\s+)?(?:workshop|training\s+(?:program|session))\b/i,
       /\btraining\s+(?:program|session)\s+(?:on|for|to)\b/i,
       /\bengaged?\s+(?:a\s+|an\s+)?(?:consultant|trainer|facilitator)\b/i,
+    ],
+  },
+
+  // ── D.5: Layoffs / restructuring & funding rounds ──────────────────
+  // Supporting timing/pressure triggers only (see TIMING_TRIGGER_FACTORS,
+  // opportunity-engine.ts) — deliberately never wired into
+  // service-evidence.ts, so neither pattern group can, by itself, produce a
+  // deterministic opportunity for any of the 8 confirmed services.
+  {
+    signal: 'layoffs_restructuring',
+    patterns: [
+      /\blay(?:s|ing)?\s+offs?\b/i,
+      /\blayoffs?\b/i,
+      /\bjob\s+cuts?\b/i,
+      /\b(?:workforce|headcount)\s+reduction\b/i,
+      /\b(?:cutting|reducing|trimming|eliminating)\s+(?:its\s+|our\s+)?(?:workforce|staff|headcount|jobs|positions)\b/i,
+      /\b(?:corporate|organi[sz]ational|business)\s+restructur(?:ing|e)\b/i,
+      /\brestructur\w+\b[^.]{0,60}\b(?:workforce|staff|employees?|headcount|jobs|positions)\b/i,
+      /\bemployees?\s+(?:were\s+|being\s+)?(?:laid\s+off|let\s+go|terminated)\b/i,
+    ],
+  },
+  {
+    signal: 'funding_round',
+    patterns: [
+      /\braises?\s+(?:\$|usd|inr|rs\.?|€|£)?\s*[\d,.]+\s*(?:million|billion|crore|lakh|m|bn)\b/i,
+      /\b(?:secures?|closes?|completes?)\s+(?:\$|usd|inr|rs\.?|€|£)?\s*[\d,.]+\s*(?:million|billion|crore|lakh)\s+(?:in\s+)?(?:funding|investment|financing)\b/i,
+      /\bseries\s+[a-e]\s+(?:funding|round|financing)\b/i,
+      /\b(?:seed|pre-seed)\s+(?:funding|round|financing)\b/i,
+      /\bfunding\s+round\s+(?:led\s+by|from)\b/i,
+      /\bventure\s+capital\s+(?:funding|investment|round)\b/i,
+      /\bbacked\s+by\s+(?:leading\s+)?(?:venture\s+capital|investors?|vcs?)\b/i,
+    ],
+    // A company describing customer-facing financing/funding products or
+    // helping customers access funding is not a signal about its own
+    // budget — same "customer-facing evidence != internal pain/trigger"
+    // discipline as every other pattern in this file (CLAUDE.md rule #1/#4).
+    antiPatterns: [
+      /\b(?:financing|funding)\s+(?:options?|solutions?)\s+for\s+(?:you|your|customers?)\b/i,
+      /help(?:ing|s)?\s+(?:you|your)\s+(?:access|secure|find)\s+funding/i,
     ],
   },
 ]
@@ -1029,6 +1118,72 @@ export function buildCompanyProfile(content: string): { profile: CompanyProfile;
   return { profile, evidence }
 }
 
+// ── Supplemented Company Profile — website-primary, external-supplement ──
+// buildCompanyProfile() stays a pure single-content function (existing tests
+// and callers depend on that exact one-argument shape). This wraps it with a
+// trust hierarchy: the company's OWN site is the primary source for identity/
+// classification; external/enriched content may only fill in fields the
+// website left unestablished, never overwrite a classification the website
+// already made. Root cause this closes: buildCompanyProfile() was previously
+// called with websiteContent only inside extractSignals() while everything
+// else there (SIGNAL_PATTERNS, websitePreview) scanned website+enriched
+// combined content — so a thin/degraded website scrape could leave
+// primary_type 'unknown' even when the combined pool contained clear,
+// company-specific classification evidence (confirmed on Bharat Forge,
+// comparing the 2026-08-24 vs 2026-08-25 benchmark runs).
+export function buildSupplementedCompanyProfile(
+  websiteContent: string,
+  enrichedContent?: string,
+): { profile: CompanyProfile; evidence: CompanyProfileEvidence } {
+  const websiteResult = buildCompanyProfile(websiteContent)
+  if (!enrichedContent) return websiteResult
+
+  const combined = websiteContent + '\n\n' + enrichedContent
+  const combinedResult = buildCompanyProfile(combined)
+
+  // Classification (company_type + primary_type): trust the website fully
+  // once it has established ANY type — external content never overrides an
+  // already-confident website classification. Only when the website alone
+  // classified as 'unknown' does the combined pool's classification take
+  // over — and since `combined` contains the website text verbatim, this can
+  // only ADD evidence the website-only pass missed, never contradict it
+  // (there's nothing to contradict: the website-only pass found no type).
+  const websiteEstablishedType = websiteResult.profile.primary_type !== 'unknown'
+  const company_type = websiteEstablishedType ? websiteResult.profile.company_type : combinedResult.profile.company_type
+  const primary_type = websiteEstablishedType ? websiteResult.profile.primary_type : combinedResult.profile.primary_type
+  const profileEvidence = websiteEstablishedType ? websiteResult.evidence : combinedResult.evidence
+
+  // Operations/capabilities/selling_model: supplement only the specific
+  // fields the website left null/false — a website-established value (e.g.
+  // "six manufacturing facilities" stated on the About page) is never
+  // replaced by a different combined-pool number. Allowed independently of
+  // whether classification above was website- or combined-derived — filling
+  // in a missing facility/country count doesn't touch company identity.
+  const operations: CompanyProfile['operations'] = {
+    multi_location: websiteResult.profile.operations.multi_location || combinedResult.profile.operations.multi_location,
+    global_presence: websiteResult.profile.operations.global_presence || combinedResult.profile.operations.global_presence,
+    has_rd_center: websiteResult.profile.operations.has_rd_center || combinedResult.profile.operations.has_rd_center,
+    manufacturing_plants_count: websiteResult.profile.operations.manufacturing_plants_count ?? combinedResult.profile.operations.manufacturing_plants_count,
+    countries_present: websiteResult.profile.operations.countries_present ?? combinedResult.profile.operations.countries_present,
+  }
+  const capabilities: CompanyProfile['capabilities'] = {
+    has_robotics_or_automation: websiteResult.profile.capabilities.has_robotics_or_automation || combinedResult.profile.capabilities.has_robotics_or_automation,
+    has_software_platform: websiteResult.profile.capabilities.has_software_platform || combinedResult.profile.capabilities.has_software_platform,
+  }
+  const selling_model: CompanyProfile['selling_model'] = {
+    sells_to_industry: websiteResult.profile.selling_model.sells_to_industry || combinedResult.profile.selling_model.sells_to_industry,
+    sells_to_consumers: websiteResult.profile.selling_model.sells_to_consumers || combinedResult.profile.selling_model.sells_to_consumers,
+    sells_physical_product: websiteResult.profile.selling_model.sells_physical_product || combinedResult.profile.selling_model.sells_physical_product,
+    sells_software: websiteResult.profile.selling_model.sells_software || combinedResult.profile.selling_model.sells_software,
+    sells_services: websiteResult.profile.selling_model.sells_services || combinedResult.profile.selling_model.sells_services,
+  }
+
+  return {
+    profile: { company_type, operations, capabilities, selling_model, primary_type },
+    evidence: profileEvidence,
+  }
+}
+
 // ── Content parser ─────────────────────────────────────────────
 // Splits content into segments by --- PAGE: url --- markers.
 // Also handles [SOURCE: type | tier | url] markers from web-enricher.
@@ -1038,6 +1193,7 @@ interface ContentSegment {
   text: string
   pageType: PageType
   tier: 'tier1' | 'tier2' | 'tier3'
+  origin: EvidenceOrigin
 }
 
 function parseContentSegments(content: string): ContentSegment[] {
@@ -1065,7 +1221,7 @@ function parseContentSegments(content: string): ContentSegment[] {
     const path = urlMatch ? urlHeader.slice(0, urlMatch.index).trim() : url
     const pageType = detectPageType(path)
     const tier = tierFromPageType(pageType)
-    segments.push({ url, text, pageType, tier })
+    segments.push({ url, text, pageType, tier, origin: 'own_site' })
   }
 
   // Enriched source format: [SOURCE: type (confidence) | tier | url]
@@ -1081,18 +1237,67 @@ function parseContentSegments(content: string): ContentSegment[] {
 
     const pageType = /annual.?report|investor|earnings/i.test(typeLabel) ? 'investor'
       : /careers|jobs/i.test(typeLabel) ? 'careers'
-      : /press.?release|newsroom|news.?article|ceo.?interview|blog/i.test(typeLabel) ? 'press'
+      : /press.?release|newsroom|news.?article|ceo.?interview|blog|layoff|funding/i.test(typeLabel) ? 'press'
       : 'other'
 
-    segments.push({ url, text, pageType, tier: tierLabel })
+    segments.push({ url, text, pageType, tier: tierLabel, origin: classifySourceMarkerOrigin(typeLabel) })
   }
 
-  // If no markers found, treat entire content as homepage
+  // If no markers found, treat entire content as homepage — same fallback
+  // convention as origin's "own_site" default (this is unmarked scraped
+  // content, not enriched/external).
   if (segments.length === 0 && content.trim()) {
-    segments.push({ url: '', text: content, pageType: 'homepage', tier: 'tier3' })
+    segments.push({ url: '', text: content, pageType: 'homepage', tier: 'tier3', origin: 'own_site' })
   }
 
   return segments
+}
+
+// ── Evidence origin lookup by position ──────────────────────────
+// For callers that match directly against a raw content string outside
+// this file (service-evidence.ts's regex detectors run on the same
+// website+enriched pool; normalize.ts's llm_verified opportunity path
+// locates a quote-verified snippet in it) and need to know which segment a
+// given character offset falls in, without re-parsing full segment text.
+// Reuses the exact same marker vocabulary/classification
+// (classifySourceMarkerOrigin) as parseContentSegments() above — if the
+// marker format ever changes, both places need updating together.
+const PAGE_MARKER_START = /---\s*PAGE:\s*[^\n]+?\s*---\n/gi
+const SOURCE_MARKER_START = /\[SOURCE:\s*([^\n|]+)\|\s*tier\d\s*\|\s*[^\]]+\]\s*\n/gi
+
+/**
+ * Given raw content (the same website+enriched pool parseContentSegments()
+ * parses) and a character index into it, returns which segment's origin
+ * that index falls under. Content before the first marker, or content with
+ * no markers at all, defaults to 'own_site' — the same fallback
+ * parseContentSegments() uses for unmarked scraped content. Returns
+ * 'unknown' only for a genuinely invalid (out-of-range) index — never a
+ * guessed origin.
+ */
+export function deriveEvidenceOrigin(content: string, index: number): EvidenceOrigin {
+  if (!Number.isInteger(index) || index < 0 || index > content.length) return 'unknown'
+
+  const markers: Array<{ pos: number; origin: EvidenceOrigin }> = []
+
+  PAGE_MARKER_START.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = PAGE_MARKER_START.exec(content)) !== null) markers.push({ pos: m.index, origin: 'own_site' })
+
+  SOURCE_MARKER_START.lastIndex = 0
+  while ((m = SOURCE_MARKER_START.exec(content)) !== null) {
+    markers.push({ pos: m.index, origin: classifySourceMarkerOrigin(m[1].trim()) })
+  }
+
+  if (markers.length === 0) return 'own_site'
+
+  markers.sort((a, b) => a.pos - b.pos)
+
+  let current: EvidenceOrigin = 'own_site'
+  for (const marker of markers) {
+    if (marker.pos > index) break
+    current = marker.origin
+  }
+  return current
 }
 
 // ── Evidence extraction ────────────────────────────────────────
@@ -1147,6 +1352,7 @@ function extractJobPostingWorkflowEvidence(segments: ContentSegment[]): Extracte
       source_tier: seg.tier,
       evidence_strength: strengthFromTier(seg.tier),
       pattern_matched: 'internal_workflow_description',
+      origin: seg.origin,
     })
   }
 
@@ -1336,7 +1542,7 @@ export function extractSignals(
 
   // Build company profile before extraction so classifySubject can use it
   // for vendor-aware subject classification (industrial_vendor, services_provider)
-  const { profile: companyProfile, evidence: companyProfileEvidence } = buildCompanyProfile(websiteContent)
+  const { profile: companyProfile, evidence: companyProfileEvidence } = buildSupplementedCompanyProfile(websiteContent, enrichedContent)
 
   for (const seg of segments) {
     for (const def of SIGNAL_PATTERNS) {
@@ -1364,6 +1570,7 @@ export function extractSignals(
             source_tier: seg.tier,
             evidence_strength: strengthFromTier(seg.tier),
             pattern_matched: def.signal,
+            origin: seg.origin,
           })
 
           // Avoid extracting 5+ quotes for the same pattern on the same page
@@ -1489,6 +1696,8 @@ export function extractSignals(
     multi_location_operations: false,
     industry_40_initiative: false,
     recent_news_or_event: false,
+    layoffs_signal: false,
+    funding_signal: false,
   }
 
   // Track which signal(s) drove each factor — for score traceability

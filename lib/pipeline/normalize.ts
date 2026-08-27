@@ -37,6 +37,11 @@ import {
   generateDeterministicOpportunities,
   DeterministicOpportunity,
   CONFIRMED_SERVICE_NAMES,
+  deriveEvidenceStrength,
+  deriveCapabilityFit,
+  deriveTimingStrength,
+  computeOpportunityConfidence,
+  deriveWhyNowTrace,
 } from '@/lib/pipeline/opportunity-engine'
 import { verifyQuoteInContent, isQuoteGrounded } from '@/lib/pipeline/quote-verification'
 import {
@@ -45,7 +50,8 @@ import {
   type ServiceThreshold,
   type ServiceEvidenceMatch,
 } from '@/lib/pipeline/service-evidence'
-import type { CompanyProfile, ExtractorResult, LeadershipContact } from '@/lib/pipeline/evidence-extractor'
+import type { CompanyProfile, ExtractorResult, LeadershipContact, EvidenceOrigin } from '@/lib/pipeline/evidence-extractor'
+import { deriveEvidenceOrigin } from '@/lib/pipeline/evidence-extractor'
 import type { CompetitorProfile, CompetitorSufficiency, CompetitorDiscoveryResult } from '@/lib/enrichment/competitor-discovery'
 import type { ICPSegment, ICPSufficiency, ICPDiscoveryResult } from '@/lib/enrichment/icp-generator'
 import type { MarketIntelItem, MarketIntelSufficiency, MarketIntelligenceResult } from '@/lib/enrichment/market-intelligence'
@@ -361,7 +367,39 @@ export interface NormalizedAnalysis {
     inferred_from?: string
     opportunity_confidence?: string
     demaze_fit_score?: string
+    // v6: per-opportunity evidence/fit model (opportunity-engine.ts) — see
+    // that file's header for what each dimension means and why they're
+    // kept separate rather than folded into one number.
+    evidence_strength?: string
+    capability_fit?: string
+    timing_strength?: string
+    opportunity_confidence_score?: number
+    opportunity_confidence_label?: string
+    // Composed "WHY NOW: <fact>. <inference>" string, or the literal
+    // 'no verified timing signal' — see why_now_status/why_now_fact/
+    // why_now_inference below for the same content split into parts.
+    why_now_for_opportunity?: string
+    // v7 (D.2, evidence-origin tagging): own_site vs. which external-source
+    // bucket this opportunity's strongest supporting evidence actually came
+    // from — see EvidenceOrigin (evidence-extractor.ts). Company-owned
+    // marketing content is not the same evidentiary weight as independently
+    // sourced evidence; this makes that distinction traceable per
+    // opportunity without changing confidence weights or thresholds.
+    evidence_origin?: string
+    // v8 (D.3, evidence-traceable Why Now) — see opportunity-engine.ts's
+    // deriveWhyNowTrace(). why_now_status is 'traceable' only when a real,
+    // code-matched signal backs it; 'no_verified_signal' otherwise — never
+    // a guessed/generic urgency statement.
+    why_now_status?: 'traceable' | 'no_verified_signal'
+    why_now_fact?: string
+    why_now_inference?: string
+    why_now_evidence_ids?: string[]
   }>
+
+  // v6: 'opportunities found' unless the merge above produced nothing —
+  // named explicitly so "no relevant opportunity" doesn't have to be
+  // inferred from an empty array.
+  opportunity_outcome_label: 'opportunities found' | 'no relevant opportunity found'
 
   // v4: Deterministic opportunities from opportunity engine
   deterministic_opportunities: DeterministicOpportunity[]
@@ -776,6 +814,15 @@ export function normalizeAnalysisResult(
     why_now_score_raw   = num(flat.why_now_score)
   }
 
+  // D.3: replace the raw LLM why_now narrative with a composed explanation
+  // traceable to real, code-matched evidence (factorSourceMap + signals —
+  // see opportunity-engine.ts's deriveWhyNowTrace header for why this is
+  // deliberately stricter than, and kept separate from, timing_strength).
+  // why_now.score/urgency_label are untouched — only the explanation text
+  // changes source; no confidence weight is affected.
+  const whyNowTrace = deriveWhyNowTrace(extractorData?.factorSourceMap, extractorData?.signals)
+  why_now_explanation = whyNowTrace.explanation
+
   // ── Score explanations ───────────────────────────────────────
   const rawScoreExpl = flat.score_explanations
   let scoreExpl = { company_fit: '', automation_opportunity: '', outreach_priority: '' }
@@ -939,6 +986,10 @@ export function normalizeAnalysisResult(
   const opportunitiesFromDeterministic: NormalizedAnalysis['opportunities'] = deterministic_opportunities.map(d => {
     const llmMatch = llmOpportunities.find(l => titleMatch(d.title, l.title))
     if (llmMatch) matchedLlmOpportunities.add(llmMatch)
+    const evidence_strength = deriveEvidenceStrength('deterministic', d.threshold, d.triggered_by_clusters?.length ?? 0)
+    const capability_fit = deriveCapabilityFit('deterministic')
+    const timing_strength = deriveTimingStrength(detected_factors)
+    const confidence = computeOpportunityConfidence(evidence_strength, capability_fit, timing_strength)
     return {
       title:             d.title,                                         // canonical from OPPORTUNITY_CATALOG
       description:       llmMatch?.description || d.strategic_challenge,  // LLM narrative; catalog challenge as fallback
@@ -964,6 +1015,17 @@ export function normalizeAnalysisResult(
       inferred_from:     llmMatch?.inferred_from,
       opportunity_confidence: llmMatch?.opportunity_confidence ?? llmMatch?.confidence,
       demaze_fit_score:  llmMatch?.demaze_fit_score,
+      evidence_strength,
+      capability_fit,
+      timing_strength,
+      opportunity_confidence_score: confidence.score,
+      opportunity_confidence_label: confidence.label,
+      why_now_for_opportunity: whyNowTrace.explanation,
+      evidence_origin: d.evidence_origin,
+      why_now_status: whyNowTrace.status,
+      why_now_fact: whyNowTrace.fact,
+      why_now_inference: whyNowTrace.inference,
+      why_now_evidence_ids: whyNowTrace.evidence_ids,
     }
   })
 
@@ -978,19 +1040,32 @@ export function normalizeAnalysisResult(
   //
   // Common gate for both sub-paths below: never already matched by Path A,
   // service_line must be exactly one of the 8 confirmed Demaze services
-  // (never a 9th invented one), and the whole path is suppressed entirely
-  // when insufficientEvidence fires, same as Path A.
+  // (never a 9th invented one), the whole path is suppressed entirely when
+  // insufficientEvidence fires (same as Path A), and — reliability pass
+  // item 2 — a service service-evidence.ts's own disqualifier already fired
+  // for (serviceEvidenceDebugResults, computed above for the debug field)
+  // is excluded here too. Before this fix, Path A's deterministic catalog
+  // was the only path disqualifiers applied to; a company matching e.g.
+  // "company IS a SaaS company itself" for Custom SaaS Platforms could
+  // still get that exact opportunity via Path B, since Path B never
+  // consulted service-evidence.ts at all — confirmed live (Chargebee).
+  // Reuses the SAME already-computed disqualifier result, not a new check.
+  const disqualifiedServiceLines = new Set(
+    serviceEvidenceDebugResults.filter(r => r.disqualified).map(r => r.service)
+  )
   const opportunityCandidates = insufficientEvidence
     ? []
     : llmOpportunities
         .filter(l => !matchedLlmOpportunities.has(l))
         .filter(l => l.service_line && CONFIRMED_SERVICE_NAMES.includes(l.service_line))
+        .filter(l => !disqualifiedServiceLines.has(l.service_line!))
 
   function shapeOpportunity(
     l: NormalizedAnalysis['opportunities'][number],
     relevance: string,
     evidence_anchor: string | undefined,
     source: 'llm_verified' | 'llm_inferred',
+    quoteMatchTier?: 'exact' | 'close' | 'none',
   ): NormalizedAnalysis['opportunities'][number] {
     // 'llm_verified' means l.evidence already passed verifyQuoteInContent
     // (see the B1 filter below) — genuine, code-checked evidence, so it
@@ -1000,9 +1075,34 @@ export function normalizeAnalysisResult(
     const evidenceId = source === 'llm_verified' && l.evidence
       ? stableEvidenceId('opp', l.evidence)
       : l.evidence_id
+    const evidence_strength = deriveEvidenceStrength(source, undefined, 0, quoteMatchTier)
+    const capability_fit = deriveCapabilityFit(source)
+    const timing_strength = deriveTimingStrength(detected_factors)
+    const confidence = computeOpportunityConfidence(evidence_strength, capability_fit, timing_strength)
+    // D.2: origin lookup uses serviceEvidenceContent (the marker-preserving
+    // website+enriched pool), not llmContentPool (evidence_anchor's own
+    // source) — websitePreview strips --- PAGE:/[SOURCE: ...] markers before
+    // reaching the LLM (see evidence-extractor.ts), so origin can't be
+    // determined from llmContentPool itself. 'llm_inferred' has no verbatim
+    // anchor to locate at all, so it's honestly 'unknown', never guessed.
+    const evidence_origin: EvidenceOrigin = evidence_anchor
+      ? deriveEvidenceOrigin(serviceEvidenceContent, serviceEvidenceContent.indexOf(evidence_anchor))
+      : 'unknown'
+    // Reliability pass item 3: title must be exactly one of the 8 confirmed
+    // Demaze service lines, same convention Path A (deterministic) already
+    // uses — never the LLM's own free-text title (e.g. "Custom LLM
+    // Integrations for Revenue Intelligence"), which reads as an invented
+    // Demaze product/service name even though `category`/`service_line`
+    // were already correctly constrained. The LLM's own title still
+    // explains the specific use case — kept in `description` (prefixed)
+    // rather than discarded, so nothing about the LLM's framing is lost.
+    const llmTitle = l.title?.trim()
+    const description = llmTitle && llmTitle !== l.service_line
+      ? `${llmTitle} — ${l.description ?? ''}`.trim().replace(/\s+—\s+$/, '')
+      : l.description
     return {
-      title:             l.title,
-      description:       l.description,
+      title:             l.service_line!,
+      description,
       confidence:        l.confidence,
       evidence_id:       evidenceId,
       evidence:          l.evidence,
@@ -1022,6 +1122,17 @@ export function normalizeAnalysisResult(
       opportunity_confidence: l.opportunity_confidence ?? l.confidence,
       demaze_fit_score:  l.demaze_fit_score,
       service_line:      l.service_line,
+      evidence_strength,
+      capability_fit,
+      timing_strength,
+      opportunity_confidence_score: confidence.score,
+      opportunity_confidence_label: confidence.label,
+      why_now_for_opportunity: whyNowTrace.explanation,
+      evidence_origin,
+      why_now_status: whyNowTrace.status,
+      why_now_fact: whyNowTrace.fact,
+      why_now_inference: whyNowTrace.inference,
+      why_now_evidence_ids: whyNowTrace.evidence_ids,
     }
   }
 
@@ -1038,7 +1149,7 @@ export function normalizeAnalysisResult(
     .map(l => ({ opp: l, verification: verifyQuoteInContent(l.evidence ?? '', llmContentPool) }))
     .filter(({ verification }) => verification.tier !== 'none')
     .map(({ opp: l, verification }) =>
-      shapeOpportunity(l, verification.tier === 'exact' ? 'Medium' : 'Low', verification.matchedSnippet, 'llm_verified')
+      shapeOpportunity(l, verification.tier === 'exact' ? 'Medium' : 'Low', verification.matchedSnippet, 'llm_verified', verification.tier)
     )
 
   // Sub-path B2 (found+fixed 2026-07-22, same day as B1, via live RIL usage):
@@ -1067,6 +1178,8 @@ export function normalizeAnalysisResult(
     ...opportunitiesFromLlmVerified,
     ...opportunitiesFromLlmInferred,
   ]
+  const opportunity_outcome_label: NormalizedAnalysis['opportunity_outcome_label'] =
+    opportunities.length > 0 ? 'opportunities found' : 'no relevant opportunity found'
   console.log(`[normalize:opps] deterministic=${deterministic_opportunities.length} | llm_parsed=${llmOpportunities.length} | llm_enriched=${opportunitiesFromDeterministic.filter(o => o.evidence).length} | llm_verified=${opportunitiesFromLlmVerified.length} | llm_inferred=${opportunitiesFromLlmInferred.length}`)
 
   // ── Competitors (Phase 2 item 1, business-understanding rebuild 2026-07-16) ──
@@ -1354,6 +1467,7 @@ export function normalizeAnalysisResult(
     reasoning_chains,
     strategic_challenges,
     opportunities,
+    opportunity_outcome_label,
     deterministic_opportunities,
     evidence_sufficiency,
     competitors,

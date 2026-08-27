@@ -118,12 +118,24 @@ function buildPlaybookSalesIntelligence(data: Record<string, unknown>): EmailGen
   const qualification = qualifyCompany(data)
   if (!qualification.playbook || qualification.classification.confidence === 'none') return undefined
 
+  // A sector/industry match alone is never sufficient to inject positioning,
+  // a value proposition, or a CTA — matchedOpportunities is empty unless a
+  // real service-evidence-confirmed hit or an already-evidence-backed pain
+  // point actually matched one of the playbook's opportunity patterns (see
+  // qualify.ts). Without that, this used to still return the playbook's
+  // generic valueProposition/cta on sector classification alone — exactly
+  // the "fit because the industry matches" pattern this pipeline is
+  // supposed to avoid, and it reached real outreach copy via prompts.ts's
+  // "use it as the email's core angle" instruction. Bail out entirely
+  // instead.
   const topMatch = qualification.matchedOpportunities[0]
+  if (!topMatch) return undefined
+
   const playbook = qualification.playbook
 
   return {
-    problemLabel: topMatch?.possibleProblem ?? playbook.outreachAngle,
-    evidenceSentence: topMatch ? `${topMatch.tier === 'confirmed' ? 'Confirmed' : 'Inferred'}: ${topMatch.evidence}` : undefined,
+    problemLabel: topMatch.possibleProblem,
+    evidenceSentence: `${topMatch.tier === 'confirmed' ? 'Confirmed' : 'Inferred'}: ${topMatch.evidence}`,
     // DRAFT — see lib/sector-playbook/types.ts. The email-generation rules
     // in lib/outbound/generation/prompts.ts already instruct the model to
     // use this as the core angle/CTA rather than inventing its own.

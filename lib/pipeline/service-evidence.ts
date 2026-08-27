@@ -26,7 +26,8 @@
 // explicitly in code comments as unenforced, not silently dropped.
 // ============================================================
 
-import type { CompanyProfile } from './evidence-extractor'
+import type { CompanyProfile, EvidenceOrigin } from './evidence-extractor'
+import { deriveEvidenceOrigin } from './evidence-extractor'
 
 export type ServiceThreshold = 'none' | 'weak' | 'medium' | 'strong'
 
@@ -34,6 +35,10 @@ export interface ServiceEvidenceMatch {
   pattern: string
   matched: string
   snippet: string
+  // own_site vs. which external-source bucket this match came from — see
+  // EvidenceOrigin (evidence-extractor.ts). Purely additive metadata; does
+  // not change which patterns match, thresholds, or disqualifiers.
+  origin: EvidenceOrigin
 }
 
 export interface ServiceThresholdResult {
@@ -54,7 +59,12 @@ function firstMatch(content: string, patterns: Pattern[]): ServiceEvidenceMatch[
     if (m) {
       const start = Math.max(0, m.index - 45)
       const end = Math.min(content.length, m.index + m[0].length + 55)
-      out.push({ pattern: label, matched: m[0], snippet: content.slice(start, end).replace(/\s+/g, ' ').trim() })
+      out.push({
+        pattern: label,
+        matched: m[0],
+        snippet: content.slice(start, end).replace(/\s+/g, ' ').trim(),
+        origin: deriveEvidenceOrigin(content, m.index),
+      })
     }
   }
   return out
@@ -69,6 +79,41 @@ function checkDisqualifiers(content: string, disqualifiers: Pattern[]): string |
     if (new RegExp(re.source, re.flags.replace('g', '')).test(content)) return label
   }
   return undefined
+}
+
+// ── D.5: layoffs/restructuring & funding-round support signals ──────────
+// Mirrors, rather than imports, the same concept evidence-extractor.ts's
+// layoffs_restructuring/funding_round SIGNAL_PATTERNS detect (SIGNAL_PATTERNS
+// isn't exported — same "conceptual reuse, not literal import" precedent
+// this file's own detectAIIntegrations() already uses for its namedTools
+// list vs. evidence-extractor.ts's named_erp_crm_tool pattern).
+//
+// These are presence-only gates, never their own evidence tier and never
+// their own service. A layoff/restructuring or funding mention alone can
+// never produce a threshold on any of the 8 services — every use below is
+// an `&&` alongside evidence that already independently qualifies for a
+// tier (weak-tier operational language, multi-location structure, a
+// medium-tier pattern, a named tool in active use). Disqualifiers are
+// still checked first, before any of this runs, same as every other tier.
+const LAYOFF_RESTRUCTURING_PATTERNS: Pattern[] = [
+  [/\blay(?:s|ing)?\s+offs?\b/i, 'layoffs language'],
+  [/\blayoffs?\b/i, 'layoffs language'],
+  [/\bjob\s+cuts?\b/i, 'job cuts language'],
+  [/\b(?:workforce|headcount)\s+reduction\b/i, 'workforce/headcount reduction language'],
+  [/\b(?:corporate|organi[sz]ational|business)\s+restructur(?:ing|e)\b/i, 'corporate restructuring language'],
+]
+const FUNDING_ROUND_PATTERNS: Pattern[] = [
+  [/\braises?\s+(?:\$|usd|inr|rs\.?|€|£)?\s*[\d,.]+\s*(?:million|billion|crore|lakh|m|bn)\b/i, 'funding raise language'],
+  [/\bseries\s+[a-e]\s+(?:funding|round|financing)\b/i, 'Series funding round language'],
+  [/\bfunding\s+round\b/i, 'funding round language'],
+  [/\b(?:secures?|closes?)\s+.{0,30}(?:funding|investment|financing)\b/i, 'secures funding language'],
+]
+
+function hasLayoffSignal(content: string): boolean {
+  return anyMatches(content, LAYOFF_RESTRUCTURING_PATTERNS)
+}
+function hasFundingSignal(content: string): boolean {
+  return anyMatches(content, FUNDING_ROUND_PATTERNS)
 }
 
 // ── 1. AI-powered business applications ─────────────────────────
@@ -136,8 +181,20 @@ function detectCustomSaaSPlatforms(content: string, profile: CompanyProfile, gro
       'generic spreadsheet-management mention'],
   ]
 
-  const mediumHit = anyMatches(content, medium) && growthOrHiringSignal
-  const evidence = [...firstMatch(content, strong), ...(mediumHit ? firstMatch(content, medium) : []), ...firstMatch(content, weak)]
+  // D.5: a funding-round mention is an additional, alternative way to
+  // satisfy the same gate growthOrHiringSignal already provides — never a
+  // requirement on top of it, never a substitute for the medium-tier
+  // pattern itself. A company with proprietary-tool evidence but neither
+  // growth/hiring NOR funding language still stays below medium, exactly
+  // as before this change.
+  const fundingBoost = hasFundingSignal(content)
+  const mediumHit = anyMatches(content, medium) && (growthOrHiringSignal || fundingBoost)
+  const evidence = [
+    ...firstMatch(content, strong),
+    ...(mediumHit ? firstMatch(content, medium) : []),
+    ...(mediumHit && fundingBoost ? firstMatch(content, FUNDING_ROUND_PATTERNS) : []),
+    ...firstMatch(content, weak),
+  ]
   const threshold: ServiceThreshold =
     anyMatches(content, strong) ? 'strong' :
     mediumHit                   ? 'medium' :
@@ -242,11 +299,23 @@ function detectWorkflowAutomation(content: string): ServiceThresholdResult {
     [/\bcustomer\s+service\s+process\b/i, 'generic customer service process mention'],
   ]
 
-  const evidence = [...firstMatch(content, strong), ...firstMatch(content, medium), ...firstMatch(content, weak)]
+  // D.5: a layoffs/restructuring mention (cost/operational pressure) can
+  // upgrade an already-present but merely weak process mention to medium —
+  // it never creates evidence on its own; without a real weak-tier match,
+  // this has no effect and threshold still falls to 'none'.
+  const hasWeakEvidence = anyMatches(content, weak)
+  const layoffBoost = hasWeakEvidence && hasLayoffSignal(content)
+  const evidence = [
+    ...firstMatch(content, strong),
+    ...firstMatch(content, medium),
+    ...(layoffBoost ? firstMatch(content, LAYOFF_RESTRUCTURING_PATTERNS) : []),
+    ...firstMatch(content, weak),
+  ]
   const threshold: ServiceThreshold =
     anyMatches(content, strong) ? 'strong' :
     anyMatches(content, medium) ? 'medium' :
-    anyMatches(content, weak)   ? 'weak'   : 'none'
+    layoffBoost                 ? 'medium' :
+    hasWeakEvidence             ? 'weak'   : 'none'
 
   return { service, threshold, disqualified: false, evidence }
 }
@@ -283,10 +352,23 @@ function detectInternalOperationalSoftware(content: string, profile: CompanyProf
   else if (facilityCount >= 3 || countryCount >= 3) threshold = 'medium'
   else if (profile.operations.multi_location) threshold = 'weak'
 
+  // D.5: a layoffs/restructuring mention can upgrade weak -> medium, but
+  // only when profile.operations.multi_location already put it at weak —
+  // a single-location company mentioning layoffs gets no boost at all,
+  // since there's no real structural evidence to strengthen.
+  const layoffBoost = threshold === 'weak' && hasLayoffSignal(content)
+  if (layoffBoost) threshold = 'medium'
+
+  // origin: 'unknown' for these two — they're pulled from the pre-computed
+  // CompanyProfile.operations aggregate count, not a live position match
+  // against `content`, so there's no specific source location to trace.
+  // Honest per EvidenceOrigin's contract: never guess own_site/external
+  // when the real origin isn't actually known here.
   const evidence: ServiceEvidenceMatch[] = []
-  if (facilityCount > 0) evidence.push({ pattern: 'manufacturing_plants_count', matched: String(facilityCount), snippet: `${facilityCount} facilities (from CompanyProfile.operations)` })
-  if (countryCount > 0) evidence.push({ pattern: 'countries_present', matched: String(countryCount), snippet: `${countryCount} countries (from CompanyProfile.operations)` })
+  if (facilityCount > 0) evidence.push({ pattern: 'manufacturing_plants_count', matched: String(facilityCount), snippet: `${facilityCount} facilities (from CompanyProfile.operations)`, origin: 'unknown' })
+  if (countryCount > 0) evidence.push({ pattern: 'countries_present', matched: String(countryCount), snippet: `${countryCount} countries (from CompanyProfile.operations)`, origin: 'unknown' })
   evidence.push(...firstMatch(content, reportingGapPatterns))
+  if (layoffBoost) evidence.push(...firstMatch(content, LAYOFF_RESTRUCTURING_PATTERNS))
 
   return { service, threshold, disqualified: false, evidence }
 }
@@ -319,8 +401,10 @@ function detectAnalyticsReporting(content: string, profile: CompanyProfile): Ser
     threshold = 'weak'
   }
 
+  // origin: 'unknown' — same CompanyProfile.operations-aggregate reasoning
+  // as detectInternalOperationalSoftware() above.
   const evidence: ServiceEvidenceMatch[] = []
-  if (facilityCount > 0) evidence.push({ pattern: 'manufacturing_plants_count', matched: String(facilityCount), snippet: `${facilityCount} facilities/units (from CompanyProfile.operations)` })
+  if (facilityCount > 0) evidence.push({ pattern: 'manufacturing_plants_count', matched: String(facilityCount), snippet: `${facilityCount} facilities/units (from CompanyProfile.operations)`, origin: 'unknown' })
   if (hasDealerNetwork) evidence.push(...firstMatch(content, [[/\b(?:dealer|distributor|franchise)\s+network\b/i, 'dealer/distributor/franchise network mentioned']]))
   evidence.push(...firstMatch(content, weak))
 
@@ -361,12 +445,23 @@ function detectAIIntegrations(content: string): ServiceThresholdResult {
 
   const hasRepetitiveTask = anyMatches(content, repetitiveTaskPatterns)
 
+  // D.5: a funding-round mention alongside a named tool ALREADY in active
+  // use is an additional path to 'strong' (budget exists to integrate AI
+  // into infrastructure that's confirmed to already be there) — never a
+  // path to 'medium'/'strong' on its own; hasNamedTool is still required.
+  const fundingBoost = hasNamedTool && hasFundingSignal(content)
+
   let threshold: ServiceThreshold = 'none'
-  if (hasNamedTool && hasRepetitiveTask) threshold = 'strong'
+  if (hasNamedTool && (hasRepetitiveTask || fundingBoost)) threshold = 'strong'
   else if (hasNamedTool) threshold = 'medium'
   else if (anyMatches(content, weak)) threshold = 'weak'
 
-  const evidence = [...firstMatch(content, namedTools), ...firstMatch(content, repetitiveTaskPatterns), ...firstMatch(content, weak)]
+  const evidence = [
+    ...firstMatch(content, namedTools),
+    ...firstMatch(content, repetitiveTaskPatterns),
+    ...(fundingBoost ? firstMatch(content, FUNDING_ROUND_PATTERNS) : []),
+    ...firstMatch(content, weak),
+  ]
 
   return { service, threshold, disqualified: false, evidence }
 }
