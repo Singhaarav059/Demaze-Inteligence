@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import { extractSignals } from '../lib/pipeline/evidence-extractor'
 import type { DetectedSignal, DetectedFactors } from '../lib/pipeline/evidence-extractor'
-import { deriveWhyNowTrace } from '../lib/pipeline/opportunity-engine'
+import { deriveWhyNowTrace, narrowWhyNowToOpportunity } from '../lib/pipeline/opportunity-engine'
 import { normalizeAnalysisResult } from '../lib/pipeline/normalize'
 
 describe('deriveWhyNowTrace', () => {
@@ -144,6 +144,69 @@ describe('deriveWhyNowTrace', () => {
   })
 })
 
+describe('narrowWhyNowToOpportunity (2026-08-27 fix: per-opportunity, not one-size-fits-all)', () => {
+  // Reproduces the exact live pattern found in the 2026-08-27 quality
+  // audit: Ador Welding's 6 opportunities — visibility dashboards,
+  // predictive maintenance, inventory automation, and two genuinely
+  // AI-related ones — all shared the identical "hiring an AI Engineer"
+  // trigger unconditionally.
+  const aiHiringTrace = deriveWhyNowTrace(
+    { hiring_signal: ['ai_ml_hiring'] },
+    [{
+      type: 'ai_ml_hiring',
+      strength: 'strong',
+      is_company_subject: true,
+      validated: true,
+      best_quote: 'We are seeking a skilled AI Engineer to join our dynamic technology team.',
+      evidence: [{
+        id: 'e1',
+        quote: 'We are seeking a skilled AI Engineer to join our dynamic technology team.',
+        signal_type: 'ai_ml_hiring',
+        subject: 'company_operations',
+        source_url: 'https://example.com/careers',
+        page_type: 'careers',
+        source_tier: 'tier2',
+        evidence_strength: 'medium',
+        pattern_matched: 'ai_ml_hiring',
+        origin: 'own_site',
+      }],
+    }],
+  )
+
+  it('drops the company-wide trigger for an opportunity with no real topical overlap', () => {
+    const result = narrowWhyNowToOpportunity(
+      aiHiringTrace,
+      'Internal operational software HQ lacks real-time visibility into what is happening at individual locations, reporting is manual and delayed across sites.',
+    )
+    expect(result.status).toBe('no_verified_signal')
+  })
+
+  it('keeps the trigger for an opportunity that genuinely shares vocabulary with it', () => {
+    const result = narrowWhyNowToOpportunity(
+      aiHiringTrace,
+      'AI-powered business applications: deploy computer vision models to detect defects in real time.',
+    )
+    expect(result.status).toBe('traceable')
+    expect(result.fact).toContain('AI Engineer')
+  })
+
+  it('passes through unchanged when the trace is already no_verified_signal', () => {
+    const noSignal = deriveWhyNowTrace(undefined, undefined)
+    const result = narrowWhyNowToOpportunity(noSignal, 'Any opportunity text at all')
+    expect(result.status).toBe('no_verified_signal')
+  })
+
+  it('does not false-positive on a short, unrelated shared filler word', () => {
+    // "team" alone would be too easy to coincidentally share — use text
+    // that only overlaps via filler words already excluded from the check.
+    const result = narrowWhyNowToOpportunity(
+      aiHiringTrace,
+      'Workflow automation for consumable inventory and reorder points.',
+    )
+    expect(result.status).toBe('no_verified_signal')
+  })
+})
+
 describe('normalizeAnalysisResult — Why Now propagation (scenario 8: no regression)', () => {
   const content = `--- PAGE: / (https://example.com) ---\n\nOur team manually reviews and prioritizes every lead before it reaches sales. We are expanding our capacity at our main plant. This capacity expansion follows strong demand growth.\n`
 
@@ -208,5 +271,49 @@ describe('normalizeAnalysisResult — Why Now propagation (scenario 8: no regres
     const opp = result.opportunities.find(o => o.title === 'AI-powered business applications')
     expect(opp?.why_now_status).toBe('no_verified_signal')
     expect(opp?.why_now_for_opportunity).toBe('no verified timing signal')
+  })
+
+  // 2026-08-27 fix: end-to-end through normalizeAnalysisResult — an LLM-
+  // proposed opportunity genuinely unrelated to the traced trigger must NOT
+  // inherit it, even though the company-wide top-level why_now.explanation
+  // (a different, legitimate use case) still reports it.
+  it('an unrelated LLM-proposed opportunity does not inherit the company-wide trigger', () => {
+    // Two genuinely distinct pieces of real content — the AI-hiring quote
+    // feeds the company-wide Why-Now trace; the multi-plant quote is this
+    // specific opportunity's OWN, separately quote-verified evidence.
+    // Mirrors the real Ador Welding case: one company-wide timing trigger,
+    // multiple opportunities each grounded in their own different evidence.
+    const content =
+      `--- PAGE: /careers (https://example.com/careers) ---\n\nWe are also hiring an AI engineer for our new initiative.\n\n` +
+      `--- PAGE: / (https://example.com) ---\n\nOur six manufacturing plants each report performance separately with no unified system.\n`
+    const extracted = extractSignals(content, undefined, 'Test Co')
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _service_evidence_content: content,
+      _extractor: {
+        companySubjectCount: 1,
+        signals: extracted.signals,
+        factorSourceMap: extracted.factorSourceMap,
+        leadershipContacts: [],
+        websitePreview: content,
+      },
+      ai_opportunities: [{
+        title: 'Unified cross-plant visibility dashboard',
+        service_line: 'Internal operational software',
+        claim_type: 'observed',
+        evidence: 'Our six manufacturing plants each report performance separately with no unified system.',
+        description: 'HQ lacks real-time visibility into individual plant locations.',
+        confidence: 'high',
+      }],
+    })
+    expect(result.why_now.explanation).toContain('AI engineer') // company-wide field: unaffected, legitimate
+    const opp = result.opportunities.find(o => o.service_line === 'Internal operational software')
+    expect(opp).toBeDefined()
+    expect(opp?.source).toBe('llm_verified') // its own evidence really did quote-verify
+    // Its own evidence/title/description ("visibility dashboard", "plant
+    // locations") share no real vocabulary with the AI-hiring trigger, so
+    // Why-Now must be honest about that rather than broadcasting the same
+    // fact regardless of fit.
+    expect(opp?.why_now_status).toBe('no_verified_signal')
   })
 })

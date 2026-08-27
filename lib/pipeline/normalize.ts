@@ -42,6 +42,7 @@ import {
   deriveTimingStrength,
   computeOpportunityConfidence,
   deriveWhyNowTrace,
+  narrowWhyNowToOpportunity,
 } from '@/lib/pipeline/opportunity-engine'
 import { verifyQuoteInContent, isQuoteGrounded } from '@/lib/pipeline/quote-verification'
 import {
@@ -1035,9 +1036,17 @@ export function normalizeAnalysisResult(
     const capability_fit = deriveCapabilityFit('deterministic')
     const timing_strength = deriveTimingStrength(detected_factors)
     const confidence = computeOpportunityConfidence(evidence_strength, capability_fit, timing_strength)
+    const description = llmMatch?.description || d.strategic_challenge   // LLM narrative; catalog challenge as fallback
+    // 2026-08-27 fix: narrow the company-wide Why-Now trace down to what's
+    // actually relevant to THIS opportunity — see narrowWhyNowToOpportunity()'s
+    // own header for why this isn't a new invented factor-to-service mapping.
+    const opportunityWhyNow = narrowWhyNowToOpportunity(
+      whyNowTrace,
+      `${d.title} ${description} ${llmMatch?.evidence ?? ''}`,
+    )
     return {
       title:             d.title,                                         // canonical from OPPORTUNITY_CATALOG
-      description:       llmMatch?.description || d.strategic_challenge,  // LLM narrative; catalog challenge as fallback
+      description,
       confidence:        llmMatch?.confidence,
       // d.id is a real, stable id from a regex-matched, code-verified
       // service-evidence hit (opportunity-engine.ts) — the strongest-grounded
@@ -1065,12 +1074,12 @@ export function normalizeAnalysisResult(
       timing_strength,
       opportunity_confidence_score: confidence.score,
       opportunity_confidence_label: confidence.label,
-      why_now_for_opportunity: whyNowTrace.explanation,
+      why_now_for_opportunity: opportunityWhyNow.explanation,
       evidence_origin: d.evidence_origin,
-      why_now_status: whyNowTrace.status,
-      why_now_fact: whyNowTrace.fact,
-      why_now_inference: whyNowTrace.inference,
-      why_now_evidence_ids: whyNowTrace.evidence_ids,
+      why_now_status: opportunityWhyNow.status,
+      why_now_fact: opportunityWhyNow.fact,
+      why_now_inference: opportunityWhyNow.inference,
+      why_now_evidence_ids: opportunityWhyNow.evidence_ids,
     }
   })
 
@@ -1149,6 +1158,15 @@ export function normalizeAnalysisResult(
     const description = llmTitle && llmTitle !== l.service_line
       ? `${llmTitle} — ${l.description ?? ''}`.trim().replace(/\s+—\s+$/, '')
       : l.description
+    // 2026-08-27 fix: same per-opportunity narrowing as Path A above —
+    // includes the LLM's own raw title (llmTitle) since that often carries
+    // more topical specificity than the constrained service-line title
+    // (e.g. "Predictive Maintenance for Press & Heat Treatment Equipment"),
+    // plus inferred_from for the llm_inferred sub-path, which has no quote.
+    const opportunityWhyNow = narrowWhyNowToOpportunity(
+      whyNowTrace,
+      `${llmTitle ?? ''} ${description ?? ''} ${l.evidence ?? ''} ${l.inferred_from ?? ''}`,
+    )
     return {
       title:             l.service_line!,
       description,
@@ -1176,12 +1194,12 @@ export function normalizeAnalysisResult(
       timing_strength,
       opportunity_confidence_score: confidence.score,
       opportunity_confidence_label: confidence.label,
-      why_now_for_opportunity: whyNowTrace.explanation,
+      why_now_for_opportunity: opportunityWhyNow.explanation,
       evidence_origin,
-      why_now_status: whyNowTrace.status,
-      why_now_fact: whyNowTrace.fact,
-      why_now_inference: whyNowTrace.inference,
-      why_now_evidence_ids: whyNowTrace.evidence_ids,
+      why_now_status: opportunityWhyNow.status,
+      why_now_fact: opportunityWhyNow.fact,
+      why_now_inference: opportunityWhyNow.inference,
+      why_now_evidence_ids: opportunityWhyNow.evidence_ids,
     }
   }
 

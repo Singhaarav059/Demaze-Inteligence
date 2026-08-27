@@ -392,3 +392,61 @@ export function deriveWhyNowTrace(
     source_urls: [...new Set(cited.map(c => c.url).filter(Boolean))],
   }
 }
+
+// ── Per-opportunity Why-Now narrowing (2026-08-27 fix) ───────────────────
+// deriveWhyNowTrace() above is computed ONCE per company — "today's
+// evidence doesn't tie a given trigger to one particular service over
+// another" (see deriveTimingStrength()'s own header, a few lines up) — so
+// building a new factor-to-service mapping table to fix this would be
+// exactly the kind of invented taxonomy that comment already declines to
+// fabricate. What's real and available instead: does the trigger's own
+// quoted fact text actually share any vocabulary with THIS opportunity's
+// own title/description/evidence? Confirmed live (2026-08-27 quality
+// audit): Ador Welding's 6 opportunities — visibility dashboards,
+// predictive maintenance, inventory automation, two genuinely AI-related
+// ones — all shared the identical "hiring an AI Engineer" trigger
+// unconditionally, reading as generic urgency-inflation on the unrelated
+// ones rather than a reason to act on that specific opportunity now.
+//
+// A minimal connector-word list — NOT a general NLP stopword library, just
+// enough to stop "we"/"our"/"the" from creating a false-positive overlap
+// between two otherwise-unrelated sentences. Deliberately no length
+// threshold (unlike some word-filtering elsewhere in this codebase) — a
+// short but meaningful token like "AI" must survive, matching this
+// codebase's established precedent (matchesKeyword()'s word-boundary
+// handling for short keywords) rather than being dropped as "too short to
+// matter."
+const WHY_NOW_FILLER_WORDS = new Set([
+  'a', 'an', 'the', 'to', 'in', 'on', 'at', 'we', 'us', 'of', 'is', 'are',
+  'was', 'were', 'be', 'been', 'by', 'or', 'and', 'our', 'its', 'it', 'no',
+  'not', 'as', 'has', 'have', 'had', 'this', 'that', 'these', 'those',
+  'from', 'will', 'would', 'can', 'could', 'so', 'if', 'do', 'does', 'did',
+  'for', 'with', 'into', 'about',
+])
+
+function significantWhyNowWords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 0 && !WHY_NOW_FILLER_WORDS.has(w))
+  )
+}
+
+/**
+ * Narrows a company-wide WhyNowTrace down to what's genuinely relevant to
+ * ONE specific opportunity. When the trace's fact shares no real word with
+ * this opportunity's own text, this opportunity honestly reports
+ * no_verified_signal instead of inheriting a company-wide fact that isn't
+ * actually about it — same "prefer under-confidence" discipline as every
+ * other evidence gate in this file.
+ */
+export function narrowWhyNowToOpportunity(trace: WhyNowTrace, opportunityText: string): WhyNowTrace {
+  if (trace.status !== 'traceable' || !trace.fact) return trace
+  const factWords = significantWhyNowWords(trace.fact)
+  if (factWords.size === 0) return trace // nothing meaningful to check against — don't block
+  const oppWords = significantWhyNowWords(opportunityText)
+  const overlaps = [...oppWords].some(w => factWords.has(w))
+  return overlaps ? trace : NO_VERIFIED_TIMING_SIGNAL
+}
