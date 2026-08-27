@@ -18,6 +18,7 @@ import { createServerClient } from '@/lib/supabase/server'
 
 interface Opportunity {
   title?: string
+  description?: string
   evidence?: string
   reasoning?: string
   relevance?: string
@@ -107,8 +108,14 @@ export async function GET(req: NextRequest) {
       topOpportunity: topOpportunity
         ? {
             title: topOpportunity.title ?? null,
+            // description: the catalog/LLM-written human-readable rationale.
+            // Deliberately not exposing the opportunity's `reasoning` field
+            // here — for a deterministic (catalog) opportunity that's an
+            // internal, unanswered LLM prompt string, never meant to be
+            // read by a person (2026-08-27 fix — it used to be rendered
+            // directly on this page as a fallback).
+            description: topOpportunity.description ?? null,
             evidence: topOpportunity.evidence ?? null,
-            reasoning: topOpportunity.reasoning ?? null,
             relevance: topOpportunity.relevance ?? null,
           }
         : null,

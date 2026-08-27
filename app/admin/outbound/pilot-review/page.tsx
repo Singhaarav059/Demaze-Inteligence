@@ -50,7 +50,7 @@ interface PilotCompany {
   overallConfidence: string | null
   evidenceSufficiency: string | null
   opportunityCount: number
-  topOpportunity: { title: string | null; evidence: string | null; reasoning: string | null; relevance: string | null } | null
+  topOpportunity: { title: string | null; description: string | null; evidence: string | null; relevance: string | null } | null
   contacts: PilotContact[]
   reviewStatus: ReviewStatus
   reviewNote: string | null
@@ -138,8 +138,14 @@ function ReviewCard({
           {company.topOpportunity.evidence && (
             <p className="text-xs text-muted-foreground/80 mt-0.5 italic">&ldquo;{company.topOpportunity.evidence}&rdquo;</p>
           )}
-          {!company.topOpportunity.evidence && company.topOpportunity.reasoning && (
-            <p className="text-xs text-muted-foreground/80 mt-0.5">{company.topOpportunity.reasoning}</p>
+          {/* 2026-08-27 fix: this used to fall back to .reasoning, which for
+              a deterministic (catalog) opportunity is an internal, unanswered
+              LLM prompt string ("Explain why X is relevant given this
+              evidence... Quote specific evidence, don't restate
+              generically.") — never meant to be read by a person. .description
+              is the real, human-readable rationale. */}
+          {!company.topOpportunity.evidence && company.topOpportunity.description && (
+            <p className="text-xs text-muted-foreground/80 mt-0.5">{company.topOpportunity.description}</p>
           )}
         </div>
       )}

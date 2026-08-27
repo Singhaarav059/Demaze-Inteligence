@@ -61,6 +61,40 @@ describe('GET /api/admin/outbound/pilot-review', () => {
     expect(json.success).toBe(true)
     expect(json.companies).toEqual([])
   })
+
+  // 2026-08-27 fix: topOpportunity.reasoning used to be exposed and rendered
+  // directly on the pilot-review page as a fallback when .evidence was
+  // absent — for a deterministic opportunity that field is an internal,
+  // unanswered LLM prompt string ("Explain why X is relevant given this
+  // evidence... Quote specific evidence, don't restate generically."),
+  // never meant to be read by a person. Now exposes .description (the real,
+  // human-readable rationale) instead, and drops .reasoning entirely.
+  it('surfaces description, not the internal reasoning prompt string, on topOpportunity', async () => {
+    const supa = new FakeSupabase()
+    supa.seed('pipeline_test_runs', [{
+      id: 'run-det', domain: 'd.com', company_url: 'https://d.com', created_at: '2026-08-17T09:00:00Z',
+      pilot_icp_segment: 'Manufacturing', pilot_source_list: 'Stage 1', pilot_review_status: 'pending', pilot_review_note: null, pilot_reviewed_at: null,
+      final_result: {
+        company_name: 'D Corp',
+        evidence_sufficiency: 'sufficient',
+        opportunities: [{
+          title: 'Internal operational software',
+          description: 'HQ lacks real-time visibility into what\'s happening at individual locations.',
+          reasoning: 'Explain why "Internal operational software" is relevant given this evidence from the company\'s own content: "6" (manufacturing_plants_count). Quote specific evidence, don\'t restate generically.',
+          relevance: 'High',
+        }],
+      },
+    }])
+    state.supabase = supa
+
+    const res = await GET(new NextRequest('https://example.com/api/admin/outbound/pilot-review'))
+    const json = await res.json()
+    const topOpp = json.companies[0].topOpportunity
+
+    expect(topOpp.description).toBe('HQ lacks real-time visibility into what\'s happening at individual locations.')
+    expect(topOpp.reasoning).toBeUndefined()
+    expect(JSON.stringify(topOpp)).not.toContain('Quote specific evidence')
+  })
 })
 
 describe('PATCH /api/admin/outbound/pilot-review/[runId]', () => {
