@@ -124,4 +124,74 @@ describe('normalizeAnalysisResult — pain_points structured grounding', () => {
     const result = normalizeAnalysisResult(baseRaw(['A plain string pain point (observed)']))
     expect(result.pain_points).toEqual(['A plain string pain point (observed)'])
   })
+
+  // ── 2026-08-27 fix: quote-verified 'observed' claims must survive
+  // insufficientEvidence ────────────────────────────────────────────────
+  // Regression for the highest-value bug found in a post-Phase-4 diagnosis
+  // pass: this exact shape reproduced live on Ace Pipeline — the regex-based
+  // extractor found companySubjectCount=0 (its finite SIGNAL_PATTERNS
+  // vocabulary doesn't cover the company's real industry terminology), but
+  // the LLM independently produced a real, quote-verifiable 'observed' pain
+  // point. The old code discarded it unconditionally before quote
+  // verification ever ran, purely because of the unrelated regex miss.
+  it('keeps a quote-verified observed pain point even when the deterministic extractor found insufficient evidence', () => {
+    const result = normalizeAnalysisResult(baseRaw(
+      [{
+        title: 'Manual coordination with the regional dealer network',
+        claim_type: 'observed',
+        evidence: 'the regional dealer network still coordinates orders manually via phone and email each week',
+        confidence: 'high',
+        reasoning: 'x',
+      }],
+      { companySubjectCount: 0, signals: [], leadershipContacts: [] },
+    ))
+    expect(result.evidence_sufficiency).toBe('insufficient')
+    expect(result.pain_points).toEqual(['Manual coordination with the regional dealer network'])
+    expect(result.pain_points_structured[0].evidence_id).toBeTruthy()
+  })
+
+  // Adversarial: the fix must not weaken fabrication detection. A claim
+  // tagged 'observed' whose quote does NOT actually appear in the content
+  // the LLM was shown must still be dropped, insufficientEvidence or not —
+  // exempting 'observed' claims from the blanket gate only works because
+  // isQuoteGrounded() still runs and still rejects an ungrounded quote.
+  it('still drops a fabricated observed pain point under insufficientEvidence (verification still blocks it)', () => {
+    const result = normalizeAnalysisResult(baseRaw(
+      [{
+        title: 'Fabricated claim',
+        claim_type: 'observed',
+        evidence: 'The company recently announced a major new partnership with a global cloud computing provider',
+        confidence: 'high',
+        reasoning: 'x',
+      }],
+      { companySubjectCount: 0, signals: [], leadershipContacts: [] },
+    ))
+    expect(result.pain_points).toEqual([])
+  })
+
+  // Adversarial: an 'inferred' claim (no quote to verify by definition) must
+  // stay suppressed under insufficientEvidence — only genuinely verified
+  // 'observed' claims are exempt, never unverifiable speculation.
+  it('still drops an inferred pain point under insufficientEvidence even alongside a verified observed one', () => {
+    const result = normalizeAnalysisResult(baseRaw(
+      [
+        {
+          title: 'Verified one',
+          claim_type: 'observed',
+          evidence: 'the regional dealer network still coordinates orders manually via phone and email each week',
+          confidence: 'high',
+          reasoning: 'x',
+        },
+        {
+          title: 'Unverifiable inference',
+          claim_type: 'inferred',
+          evidence: 'Multi-plant operations typically face this without a dedicated system',
+          confidence: 'medium',
+          reasoning: 'x',
+        },
+      ],
+      { companySubjectCount: 0, signals: [], leadershipContacts: [] },
+    ))
+    expect(result.pain_points).toEqual(['Verified one'])
+  })
 })

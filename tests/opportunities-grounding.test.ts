@@ -190,4 +190,93 @@ describe('normalizeAnalysisResult — opportunities Path B (observed + inferred)
     expect(result.opportunities).toHaveLength(0)
     expect(result.opportunity_outcome_label).toBe('no relevant opportunity found')
   })
+
+  // ── 2026-08-27 fix: quote-verified 'observed' opportunities must survive
+  // insufficientEvidence ──────────────────────────────────────────────────
+  // Same root cause and same live confirmation as the parallel pain_points
+  // fix: opportunityCandidates used to be forced to [] whenever
+  // insufficientEvidence fired, discarding every candidate before B1's own
+  // independent verifyQuoteInContent() check ever ran. Confirmed live on
+  // Ace Pipeline — real quote-verifiable opportunities existed in the LLM's
+  // raw output but were unconditionally dropped.
+  it('surfaces a quote-verified observed opportunity even when the deterministic extractor found insufficient evidence', () => {
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _extractor: { companySubjectCount: 0, signals: [], leadershipContacts: [], websitePreview: REAL_CONTENT },
+      ai_opportunities: [{
+        title: 'Predictive Maintenance for Jamnagar Refinery',
+        service_line: 'AI-powered business applications',
+        claim_type: 'observed',
+        evidence: 'Our refinery at Jamnagar is the world\'s largest, integrated, single-location refining complex',
+        confidence: 'high',
+        description: 'x',
+      }],
+    })
+    const opp = result.opportunities.find(o => o.service_line === 'AI-powered business applications')
+    expect(opp?.source).toBe('llm_verified')
+    expect(opp?.evidence_id).toBeTruthy()
+  })
+
+  // Adversarial: exempting 'observed' from the blanket gate must not weaken
+  // fabrication detection — a fabricated quote is still dropped by B1's own
+  // verifyQuoteInContent(), insufficientEvidence or not.
+  it('still drops a fabricated observed opportunity under insufficientEvidence (verification still blocks it)', () => {
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _extractor: { companySubjectCount: 0, signals: [], leadershipContacts: [], websitePreview: REAL_CONTENT },
+      ai_opportunities: [{
+        title: 'Fabricated opportunity',
+        service_line: 'AI-powered business applications',
+        claim_type: 'observed',
+        evidence: 'The company recently announced a major new partnership with a global cloud computing provider',
+        confidence: 'high',
+        description: 'x',
+      }],
+    })
+    expect(result.opportunities.find(o => o.title === 'Fabricated opportunity')).toBeUndefined()
+  })
+
+  // Adversarial: an 'inferred' opportunity (no quote to verify by
+  // definition) must stay suppressed under insufficientEvidence even
+  // alongside a verified 'observed' one in the same batch.
+  it('still drops an inferred opportunity under insufficientEvidence even alongside a verified observed one', () => {
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _extractor: { companySubjectCount: 0, signals: [], leadershipContacts: [], websitePreview: REAL_CONTENT },
+      ai_opportunities: [
+        {
+          title: 'Predictive Maintenance for Jamnagar Refinery',
+          service_line: 'AI-powered business applications',
+          claim_type: 'observed',
+          evidence: 'Our refinery at Jamnagar is the world\'s largest, integrated, single-location refining complex',
+          confidence: 'high',
+          description: 'x',
+        },
+        {
+          title: 'Integrating new-energy assets with legacy oil-to-chemicals systems',
+          service_line: 'Workflow automation systems',
+          claim_type: 'inferred',
+          evidence: '',
+          inferred_from: 'deployment of Green Energy Giga Complex alongside existing hydrocarbon operations',
+          confidence: 'medium',
+          description: 'x',
+        },
+      ],
+    })
+    expect(result.opportunities.find(o => o.service_line === 'AI-powered business applications')).toBeDefined()
+    expect(result.opportunities.find(o => o.service_line === 'Workflow automation systems')).toBeUndefined()
+  })
+
+  // deterministic_opportunities (Path A, regex-service-evidence based) must
+  // stay untouched by this fix — it's correctly gated purely on the
+  // deterministic extractor, unlike Path B's independently-verified claims.
+  it('does not resurrect deterministic_opportunities under insufficientEvidence', () => {
+    const result = normalizeAnalysisResult({
+      company_name: 'Test Co',
+      _extractor: { companySubjectCount: 0, signals: [], leadershipContacts: [], websitePreview: REAL_CONTENT },
+      _service_evidence_content: REAL_CONTENT,
+      ai_opportunities: [],
+    })
+    expect(result.deterministic_opportunities).toEqual([])
+  })
 })

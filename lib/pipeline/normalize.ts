@@ -915,14 +915,28 @@ export function normalizeAnalysisResult(
   let pain_points_structured: StructuredPainPoint[] = []
   let pain_points: string[] = []
   const painPointWarnings: string[] = []
-  if (insufficientEvidence) {
-    // pain_points stays [] — same suppression discipline as
-    // deterministic_opportunities above; genuinely thin evidence gets an
-    // honest empty result, not a padded generic list.
-  } else if (Array.isArray(rawPainPoints)) {
+  // 2026-08-27 fix: insufficientEvidence used to gate this WHOLE block —
+  // discarding a real, individually quote-verified 'observed' pain point
+  // purely because the SEPARATE regex-based extractor (companySubjectCount/
+  // signals/leadershipContacts/facility evidence) happened to find nothing.
+  // Confirmed live on Ace Pipeline: the LLM produced 3 well-formed 'observed'
+  // pain points, each grounded in a real quote from the actual scraped
+  // content (HDD, hydrostatic testing, fabrication — terminology outside
+  // SIGNAL_PATTERNS' finite vocabulary), all silently dropped despite
+  // passing isQuoteGrounded() below. A verbatim match against content the
+  // LLM was actually shown IS evidence, by this file's own quote-
+  // verification discipline (see EVIDENCE_SOURCE_STRATEGY.md's Insufficient
+  // Evidence outcome — designed for "nothing to go on", e.g. AS Agri's
+  // single-page site, not for "real evidence a coarser regex vocabulary
+  // missed"). insufficientEvidence still applies to 'inferred' claims (no
+  // quote exists to verify) and the legacy flat-string shape (no evidence
+  // field to check at all) — only a genuinely verified 'observed' claim is
+  // exempt.
+  if (Array.isArray(rawPainPoints)) {
     if (rawPainPoints.length > 0 && typeof rawPainPoints[0] === 'object') {
       const structuredRaw = rawPainPoints as Array<Record<string, unknown>>
       let droppedUngrounded = 0
+      let droppedInsufficientEvidence = 0
       pain_points_structured = structuredRaw
         .map((p): StructuredPainPoint | null => {
           const title = str(p.title) || str(p)
@@ -934,6 +948,9 @@ export function normalizeAnalysisResult(
               droppedUngrounded++
               return null
             }
+          } else if (insufficientEvidence) {
+            droppedInsufficientEvidence++
+            return null
           }
           // Genuinely quote-verified ('observed', already passed isQuoteGrounded
           // above) gets a real, code-derived id — never the LLM's own
@@ -958,11 +975,17 @@ export function normalizeAnalysisResult(
           `pain_points: dropped ${droppedUngrounded} item(s) claiming an observed quote that wasn't found in source content`
         )
       }
+      if (droppedInsufficientEvidence > 0) {
+        painPointWarnings.push(
+          `pain_points: dropped ${droppedInsufficientEvidence} unverifiable inferred item(s) — deterministic extraction also found insufficient evidence`
+        )
+      }
       pain_points = pain_points_structured.map(p => p.title)
-    } else {
+    } else if (!insufficientEvidence) {
       // Backward-compat: old flat-string shape from a caller/cached run that
-      // predates this session's schema change. No evidence field exists on
-      // a bare string, so it can't be quote-gated — passed through as-is.
+      // predates the structured schema. No evidence field exists on a bare
+      // string, so it can't be quote-gated — the original blanket
+      // insufficientEvidence suppression still applies to this legacy path.
       pain_points = rawPainPoints.map(p => str(p))
     }
   }
@@ -1053,12 +1076,16 @@ export function normalizeAnalysisResult(
   const disqualifiedServiceLines = new Set(
     serviceEvidenceDebugResults.filter(r => r.disqualified).map(r => r.service)
   )
-  const opportunityCandidates = insufficientEvidence
-    ? []
-    : llmOpportunities
-        .filter(l => !matchedLlmOpportunities.has(l))
-        .filter(l => l.service_line && CONFIRMED_SERVICE_NAMES.includes(l.service_line))
-        .filter(l => !disqualifiedServiceLines.has(l.service_line!))
+  // 2026-08-27 fix: this used to be forced to [] whenever insufficientEvidence
+  // fired, discarding every candidate BEFORE sub-path B1 below ever got a
+  // chance to independently quote-verify it against llmContentPool (via
+  // verifyQuoteInContent) — same root cause as the pain_points fix above.
+  // insufficientEvidence still suppresses B2 ('inferred', no quote to check)
+  // below; B1's own verification is what now gates 'observed' candidates.
+  const opportunityCandidates = llmOpportunities
+    .filter(l => !matchedLlmOpportunities.has(l))
+    .filter(l => l.service_line && CONFIRMED_SERVICE_NAMES.includes(l.service_line))
+    .filter(l => !disqualifiedServiceLines.has(l.service_line!))
 
   function shapeOpportunity(
     l: NormalizedAnalysis['opportunities'][number],
@@ -1168,10 +1195,18 @@ export function normalizeAnalysisResult(
   // discipline as everything else in this merge, just without a literal
   // quote to check. relevance is always 'Low' — a step below even the
   // fuzzy-matched observed tier, since this is reasoning, not evidence.
-  const opportunitiesFromLlmInferred: NormalizedAnalysis['opportunities'] = opportunityCandidates
-    .filter(l => l.claim_type === 'inferred')
-    .filter(l => (l.inferred_from ?? '').trim().length >= 15)
-    .map(l => shapeOpportunity(l, 'Low', undefined, 'llm_inferred'))
+  // insufficientEvidence still applies here (unlike opportunityCandidates
+  // above) — an 'inferred' claim has no quote to independently verify, so
+  // when the deterministic extractor also found essentially nothing, there's
+  // no grounding to trust it on. Preserves the exact conservative behavior
+  // EVIDENCE_SOURCE_STRATEGY.md's Insufficient Evidence outcome was written
+  // for (a single "coming soon" mention, not real quoted content).
+  const opportunitiesFromLlmInferred: NormalizedAnalysis['opportunities'] = insufficientEvidence
+    ? []
+    : opportunityCandidates
+        .filter(l => l.claim_type === 'inferred')
+        .filter(l => (l.inferred_from ?? '').trim().length >= 15)
+        .map(l => shapeOpportunity(l, 'Low', undefined, 'llm_inferred'))
 
   const opportunities: NormalizedAnalysis['opportunities'] = [
     ...opportunitiesFromDeterministic,
