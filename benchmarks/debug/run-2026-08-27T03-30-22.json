@@ -1,0 +1,245 @@
+{
+  "runAt": "2026-08-27T03:30:22.296Z",
+  "companies": [
+    {
+      "name": "A-1 Fence Products",
+      "url": "https://www.a-1fenceproducts.com",
+      "durationMs": 650,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Ace Pipeline",
+      "url": "https://acepipeline.co.in",
+      "durationMs": 13,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Ador Welding",
+      "url": "https://adorwelding.com",
+      "durationMs": 12,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "AITG",
+      "url": "https://www.aitg.co",
+      "durationMs": 14,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "AS Agri and Aqua",
+      "url": "https://sites.google.com/view/asagriaqua/home",
+      "durationMs": 17,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "ATE Group",
+      "url": "https://www.ategroup.com",
+      "durationMs": 15,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 14,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Chargebee",
+      "url": "https://www.chargebee.com",
+      "durationMs": 14,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Lechler",
+      "url": "https://www.lechler.com/de-en",
+      "durationMs": 13,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Muthoot Finance",
+      "url": "https://www.muthootfinance.com",
+      "durationMs": 12,
+      "overall": "FAIL",
+      "validationOverall": "FAIL",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "FAIL",
+          "actual": "false",
+          "expected": "true",
+          "note": "fetch failed"
+        }
+      ],
+      "profileEvidence": {},
+      "error": "fetch failed",
+      "failureCategories": [
+        "RETRIEVAL_FAILURE"
+      ]
+    }
+  ]
+}
