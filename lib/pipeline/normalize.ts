@@ -1387,13 +1387,22 @@ export function normalizeAnalysisResult(
       if (typeof r === 'string') return r
       if (r && typeof r === 'object') {
         const ro = r as Record<string, unknown>
+        // 2026-08-27 fix: unlike opportunities[].service_line (whitelist-
+        // checked against CONFIRMED_SERVICE_NAMES so it can never invent a
+        // 9th service — see opportunity-engine.ts's own header), this
+        // free-narrative field passed straight through with no check at
+        // all. Never fabricate a substitute here — a why_demaze reason is
+        // about one specific signal, with no natural "closest real
+        // opportunity" to borrow a service name from the way the top-level
+        // outreach_intelligence.recommended_service can below.
+        const roRecommendedService = str(ro.recommended_service)
         return {
           signal:               str(ro.signal),
           evidence:             str(ro.evidence),
           evidence_tier:        ro.evidence_tier ? str(ro.evidence_tier) : undefined,
           business_implication: str(ro.business_implication),
           strategic_challenge:  ro.strategic_challenge ? str(ro.strategic_challenge) : undefined,
-          recommended_service:  str(ro.recommended_service),
+          recommended_service:  CONFIRMED_SERVICE_NAMES.includes(roRecommendedService) ? roRecommendedService : '',
           confidence:           (str(ro.confidence) || 'medium') as 'high' | 'medium' | 'low',
         } satisfies WhyDemazeReason
       }
@@ -1413,10 +1422,24 @@ export function normalizeAnalysisResult(
   }
   if (rawOI && typeof rawOI === 'object') {
     const oi = rawOI as Record<string, unknown>
+    // 2026-08-27 fix: unlike opportunities[].service_line (whitelist-checked
+    // against CONFIRMED_SERVICE_NAMES so it can never invent a 9th service —
+    // see opportunity-engine.ts's own header), this free-narrative field
+    // passed straight through with no check at all. Confirmed live: AITG's
+    // recommended_service came back "AI-powered quality control and defect
+    // detection", which isn't one of Demaze's real 8 services. Falls back to
+    // the top opportunity's own already-validated service name (opportunities
+    // is built earlier in this function) rather than an empty string — that
+    // opportunity IS what the rest of the report already considers the best
+    // match, so recommending it instead of an invented service is grounded,
+    // not an arbitrary default.
+    const oiRecommendedService = str(oi.recommended_service)
     outreach_intelligence = {
       why_contact:         str(oi.why_contact),
       likely_problem:      str(oi.likely_problem),
-      recommended_service: str(oi.recommended_service),
+      recommended_service: CONFIRMED_SERVICE_NAMES.includes(oiRecommendedService)
+        ? oiRecommendedService
+        : (opportunities[0]?.title ?? ''),
       conversation_angle:  str(oi.conversation_angle),
       why_now:             str(oi.why_now),
     }
