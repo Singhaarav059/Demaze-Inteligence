@@ -110,6 +110,7 @@ describe('deriveWhyNowTrace', () => {
         evidence_strength: 'low',
         pattern_matched: 'capacity_expansion',
         origin: 'own_site',
+        retrieved_at: '2026-08-27T00:00:00.000Z',
       }],
     }
     const trace = deriveWhyNowTrace({ capacity_expansion: ['capacity_expansion'] }, [fakeSignal])
@@ -169,6 +170,7 @@ describe('narrowWhyNowToOpportunity (2026-08-27 fix: per-opportunity, not one-si
         evidence_strength: 'medium',
         pattern_matched: 'ai_ml_hiring',
         origin: 'own_site',
+        retrieved_at: '2026-08-27T00:00:00.000Z',
       }],
     }],
   )

@@ -153,6 +153,8 @@ export interface ExtractedEvidence {
   evidence_strength: EvidenceStrength
   pattern_matched: string   // which pattern triggered this
   origin: EvidenceOrigin    // own_site vs. which external-source bucket — see EvidenceOrigin above
+  retrieved_at: string      // ISO timestamp, always known at extraction time
+  published_at?: string     // ISO date, only when a real date is extractable from the source — never guessed. No upstream source currently threads a real publish date into segments, so this stays undefined until one does (EDGAR filingDate / news metadata).
 }
 
 export interface DetectedSignal {
@@ -1511,6 +1513,7 @@ function extractJobPostingWorkflowEvidence(segments: ContentSegment[]): Extracte
       evidence_strength: strengthFromTier(seg.tier),
       pattern_matched: 'internal_workflow_description',
       origin: seg.origin,
+      retrieved_at: new Date().toISOString(),
     })
   }
 
@@ -1762,6 +1765,7 @@ export function extractSignals(
             evidence_strength: strengthFromTier(seg.tier),
             pattern_matched: def.signal,
             origin: seg.origin,
+            retrieved_at: new Date().toISOString(),
           })
 
           // Avoid extracting 5+ quotes for the same pattern on the same page
