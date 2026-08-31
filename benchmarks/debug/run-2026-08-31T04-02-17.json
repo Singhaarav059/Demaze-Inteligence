@@ -1,0 +1,1197 @@
+{
+  "runAt": "2026-08-31T04:02:17.908Z",
+  "companies": [
+    {
+      "name": "A-1 Fence Products",
+      "url": "https://www.a-1fenceproducts.com",
+      "durationMs": 32642,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 4,
+      "opportunities": 5,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 5,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "manufacturer",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "manufactur* + company/facilit/plant/unit",
+            "matched": "manufacturing unit",
+            "snippet": ". A-1 Fence’s operations are spread over six manufacturing units – Khopoli (Maharashtra, India), Umbergaon (Gujarat, I"
+          },
+          {
+            "pattern": "N manufacturing facilit/plant/unit",
+            "matched": "six manufacturing unit",
+            "snippet": "etc. A-1 Fence’s operations are spread over six manufacturing units – Khopoli (Maharashtra, India), Umbergaon (Gujarat, I"
+          },
+          {
+            "pattern": "manufactures and exports",
+            "matched": "manufacturing and exporting",
+            "snippet": "security solutions. A-1 Fence started off by manufacturing and exporting concertina coils and with persistence & commitment tow"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "CLASSIFICATION_FAILURE",
+        "RELEVANCE_FAILURE"
+      ]
+    },
+    {
+      "name": "Ace Pipeline",
+      "url": "https://acepipeline.co.in",
+      "durationMs": 27886,
+      "overall": "WARN",
+      "validationOverall": "WARN",
+      "signals": 0,
+      "opportunities": 0,
+      "challenges": 0,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "WARN",
+          "actual": 0,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "WARN",
+          "actual": 0,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "WARN",
+          "actual": 0,
+          "expected": ">= 3"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null,
+      "failureCategories": [
+        "EVIDENCE_FAILURE",
+        "EXTERNAL_PROVIDER_FAILURE",
+        "EXTRACTION_FAILURE",
+        "RETRIEVAL_FAILURE"
+      ]
+    },
+    {
+      "name": "Ador Welding",
+      "url": "https://adorwelding.com",
+      "durationMs": 34610,
+      "overall": "PASS",
+      "validationOverall": "PASS",
+      "signals": 6,
+      "opportunities": 6,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "PASS",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 6,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 6,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "industrial_vendor_manufacturer",
+          "expected": "industrial_vendor_manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "manufactur* + company/facilit/plant/unit",
+            "matched": "manufacturing plant",
+            "snippet": "Oil & Gas sectors, Ador operates world-class manufacturing plants and a DSIR-recognized R&D center. A pioneer of the Ma"
+          },
+          {
+            "pattern": "N manufacturing facilit/plant/unit",
+            "matched": "six manufacturing facilit",
+            "snippet": ",” Ador produces world-class products across six manufacturing facilities nationwide. Its Research and Development Centre, re"
+          }
+        ],
+        "industrial_vendor": [
+          {
+            "pattern": "welding equipment/solution/machine/system",
+            "matched": "welding solution",
+            "snippet": "burdi Dimetrics to accelerate automation-led welding solutions in India\\\\ \\\\ July 31, 2026](https://adorwelding.com/"
+          },
+          {
+            "pattern": "automation/robotic/welding/cutting solution(s)",
+            "matched": "cutting solution",
+            "snippet": "Limited (AWL) is India’s leading welding and cutting solutions company, offering a comprehensive range of welding co"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": []
+    },
+    {
+      "name": "AITG",
+      "url": "https://www.aitg.co",
+      "durationMs": 29668,
+      "overall": "WARN",
+      "validationOverall": "WARN",
+      "signals": 1,
+      "opportunities": 4,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "WARN",
+          "actual": 1,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "no_profile_flag:healthcare_provider",
+          "status": "PASS",
+          "actual": "false",
+          "expected": "false"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "manufacturer",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "production facility/plant/line",
+            "matched": "production line",
+            "snippet": "have an advantage over others for setting up production lines fast. [Read More >](https://www.aitg.co/key-capabili"
+          }
+        ],
+        "conglomerate": [
+          {
+            "pattern": "group/holding/conglomerate company/with diverse...",
+            "matched": "group compan",
+            "snippet": "synergy in administrative activities of the group companies. With time and experience, AITG has gained command"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "CLASSIFICATION_FAILURE",
+        "EVIDENCE_FAILURE",
+        "EXTERNAL_PROVIDER_FAILURE",
+        "IDENTITY_FAILURE"
+      ]
+    },
+    {
+      "name": "AS Agri and Aqua",
+      "url": "https://sites.google.com/view/asagriaqua/home",
+      "durationMs": 38144,
+      "overall": "PASS",
+      "validationOverall": "PARTIAL",
+      "signals": 2,
+      "opportunities": 4,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "PARTIAL",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 2,
+          "expected": ">= 0"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 2"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "unknown",
+          "expected": "unknown"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {},
+      "error": null,
+      "failureCategories": [
+        "EVIDENCE_FAILURE",
+        "EXTERNAL_PROVIDER_FAILURE"
+      ]
+    },
+    {
+      "name": "ATE Group",
+      "url": "https://www.ategroup.com",
+      "durationMs": 32990,
+      "overall": "WARN",
+      "validationOverall": "WARN",
+      "signals": 2,
+      "opportunities": 3,
+      "challenges": 2,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 2,
+          "expected": ">= 2"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 3"
+        },
+        {
+          "check": "min_challenges",
+          "status": "WARN",
+          "actual": 2,
+          "expected": ">= 3"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "manufacturer",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "Brand/Subsidiary manufactures (third-person, qualified)",
+            "matched": "AxisValence manufactures high-quality",
+            "snippet": "[Visit Website](https://hmx-cooling.com/) AxisValence manufactures high-quality equipment that enhances safety, productivity, and envi"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "EVIDENCE_FAILURE",
+        "RELEVANCE_FAILURE"
+      ]
+    },
+    {
+      "name": "Bharat Forge",
+      "url": "https://www.bharatforge.com",
+      "durationMs": 37918,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 6,
+      "opportunities": 3,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 6,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 1"
+        },
+        {
+          "check": "profile_flag:manufacturer",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "manufacturer",
+          "expected": "manufacturer"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "manufacturer": [
+          {
+            "pattern": "forging/casting company/business/operations",
+            "matched": "forging company",
+            "snippet": "g spirit that have shaped our journey from a forging company to a global engineering powerhouse.This milestone, mor"
+          },
+          {
+            "pattern": "N years/decades/century of manufactur*",
+            "matched": "years of manufacturing",
+            "snippet": "industrial ecosystem at a global level. 60 years of manufacturing excellence As we celebrate Bharat Forge's 60th annive"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "RELEVANCE_FAILURE"
+      ]
+    },
+    {
+      "name": "Chargebee",
+      "url": "https://www.chargebee.com",
+      "durationMs": 27269,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 2,
+      "opportunities": 3,
+      "challenges": 2,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 2,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 2,
+          "expected": ">= 1"
+        },
+        {
+          "check": "profile_flag:software_saas",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "primary_type",
+          "status": "PASS",
+          "actual": "software_saas",
+          "expected": "software_saas"
+        },
+        {
+          "check": "no_forbidden:\"manufacturing plant\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"assembly line\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"raw material sourcing\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"factory floor\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"welding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"conveyor belt\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"loan\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"banking\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"insurance\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "software_saas": [
+          {
+            "pattern": "SaaS / software-as-a-service",
+            "matched": "SaaS",
+            "snippet": "gebee.com/solutions/industry/gen-ai/) - [B2B SaaS & SoftwareSeats, tiers and enterprise contracts in one"
+          },
+          {
+            "pattern": "subscription billing/management/platform",
+            "matched": "subscription billing",
+            "snippet": "will be reaching out to you to discuss your subscription billing needs ## Hate waiting? Book a call Chargebee is **n"
+          },
+          {
+            "pattern": "recurring billing/revenue/payments",
+            "matched": "Recurring Billing",
+            "snippet": "in the 2026 **Gartner® Magic Quadrant™** for Recurring Billing Applications. [Learn more](https://www.chargebee.com/r"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "CLASSIFICATION_FAILURE",
+        "RELEVANCE_FAILURE"
+      ]
+    },
+    {
+      "name": "Lechler",
+      "url": "https://www.lechler.com/de-en",
+      "durationMs": 32335,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 1,
+      "opportunities": 1,
+      "challenges": 2,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 1,
+          "expected": ">= 0"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 1,
+          "expected": ">= 1"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 2,
+          "expected": ">= 1"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "pharma_biotech": [
+          {
+            "pattern": "pharmaceutical/pharma/biotech/drug manufactur/api manufactur",
+            "matched": "pharmaceutical",
+            "snippet": "food grade for use in the beverage, food and pharmaceutical industries. Depending on the application area, the mat"
+          },
+          {
+            "pattern": "clinical trial / FDA / USFDA / ANDA",
+            "matched": "FDA",
+            "snippet": "nozzles comply with the requirements of the FDA or conform to (EC) 1935/2004. | | | | --- | -"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "EVIDENCE_FAILURE",
+        "EXTERNAL_PROVIDER_FAILURE"
+      ]
+    },
+    {
+      "name": "Muthoot Finance",
+      "url": "https://www.muthootfinance.com",
+      "durationMs": 48463,
+      "overall": "PASS",
+      "validationOverall": "WARN",
+      "signals": 1,
+      "opportunities": 4,
+      "challenges": 3,
+      "checks": [
+        {
+          "check": "pipeline_success",
+          "status": "PASS",
+          "actual": "true",
+          "expected": "true"
+        },
+        {
+          "check": "validation_not_failed",
+          "status": "PASS",
+          "actual": "WARN",
+          "expected": "!= FAIL"
+        },
+        {
+          "check": "min_signals",
+          "status": "PASS",
+          "actual": 1,
+          "expected": ">= 0"
+        },
+        {
+          "check": "min_opportunities",
+          "status": "PASS",
+          "actual": 4,
+          "expected": ">= 0"
+        },
+        {
+          "check": "min_challenges",
+          "status": "PASS",
+          "actual": 3,
+          "expected": ">= 0"
+        },
+        {
+          "check": "no_forbidden:\"SaaS onboarding\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"subscription churn\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"monthly recurring revenue\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"churn rate\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"software subscription\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"user acquisition\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"manufacturing plant\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"assembly line\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        },
+        {
+          "check": "no_forbidden:\"factory floor\"",
+          "status": "PASS",
+          "actual": "absent",
+          "expected": "absent"
+        }
+      ],
+      "profileEvidence": {
+        "financial_institution": [
+          {
+            "pattern": "insurance/NBFC/mutual fund/asset management/investment bank",
+            "matched": "Insurance",
+            "snippet": "oan - Loan Against Property - Vehicle Loan - Insurance - Mutual Fund - Money Transfer - PAN Card - NCD - Micr"
+          },
+          {
+            "pattern": "loan/deposit/credit card/mortgage/NPA",
+            "matched": "Loan",
+            "snippet": "ent) Cancel ### Search Suggestions - Gold Loan - Money Transfer - Mutual Funds - Enquiry - [\\\\ iMut"
+          }
+        ]
+      },
+      "error": null,
+      "failureCategories": [
+        "EVIDENCE_FAILURE",
+        "EXTERNAL_PROVIDER_FAILURE",
+        "IDENTITY_FAILURE"
+      ]
+    }
+  ]
+}

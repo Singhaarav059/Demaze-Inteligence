@@ -154,7 +154,7 @@ export interface ExtractedEvidence {
   pattern_matched: string   // which pattern triggered this
   origin: EvidenceOrigin    // own_site vs. which external-source bucket — see EvidenceOrigin above
   retrieved_at: string      // ISO timestamp, always known at extraction time
-  published_at?: string     // ISO date, only when a real date is extractable from the source — never guessed. No upstream source currently threads a real publish date into segments, so this stays undefined until one does (EDGAR filingDate / news metadata).
+  published_at?: string     // ISO date, only when a real date is extractable from the source — never guessed. Currently populated only for evidence matched inside a SEC EDGAR filing segment (see nearestFilingDate() below) — no other upstream source threads a real publish date in yet.
 }
 
 export interface DetectedSignal {
@@ -1360,7 +1360,17 @@ function parseContentSegments(content: string): ContentSegment[] {
   const segments: ContentSegment[] = []
 
   // Website content format: --- PAGE: /path (https://url) ---
-  const pageRegex = /---\s*PAGE:\s*([^\n]+?)\s*---\n([\s\S]*?)(?=---\s*PAGE:|$)/gi
+  // Lookahead must also stop at a following [SOURCE: ...] marker, not just
+  // another --- PAGE: --- or end-of-string: extractSignals() builds `combined`
+  // as `websiteContent + '\n\n' + enrichedContent`, so the LAST own-site page
+  // has no further --- PAGE: --- after it — without this, its text greedily
+  // swallowed the entire rest of the string (all enriched-source content),
+  // which then got extracted a second time as 'own_site' evidence (duplicate,
+  // and mis-attributed — real filing/news/job_posting content wrongly counted
+  // as the company's own scraped page) on top of its correct, separately-
+  // parsed [SOURCE:...] segment below. Found while adding published_at
+  // threading for EDGAR evidence (2026-08-31); same bug independent of that.
+  const pageRegex = /---\s*PAGE:\s*([^\n]+?)\s*---\n([\s\S]*?)(?=---\s*PAGE:|\[SOURCE:|$)/gi
   let pageMatch: RegExpExecArray | null
 
   while ((pageMatch = pageRegex.exec(content)) !== null) {
@@ -1385,7 +1395,12 @@ function parseContentSegments(content: string): ContentSegment[] {
   }
 
   // Enriched source format: [SOURCE: type (confidence) | tier | url]
-  const sourceRegex = /\[SOURCE:\s*([^\n|]+)\|\s*(tier\d)\s*\|\s*([^\]]+)\]\s*\n([\s\S]*?)(?=\[SOURCE:|$)/gi
+  // Same stop-at-either-marker fix as pageRegex above, kept symmetric in
+  // case a future caller ever interleaves --- PAGE: --- content after a
+  // [SOURCE:...] block (current callers always put all --- PAGE: --- content
+  // first, so this half doesn't fire today, but nothing should ever rely on
+  // that ordering silently).
+  const sourceRegex = /\[SOURCE:\s*([^\n|]+)\|\s*(tier\d)\s*\|\s*([^\]]+)\]\s*\n([\s\S]*?)(?=\[SOURCE:|---\s*PAGE:|$)/gi
   let srcMatch: RegExpExecArray | null
 
   while ((srcMatch = sourceRegex.exec(content)) !== null) {
@@ -1458,6 +1473,34 @@ export function deriveEvidenceOrigin(content: string, index: number): EvidenceOr
     current = marker.origin
   }
   return current
+}
+
+// ── Real published dates (Epitaxy vNext Phase 1 follow-up) ─────────────
+// edgar-client.ts's contextBlock lists one bullet per filing, each carrying
+// its own real SEC filingDate ("- 8-K filed 2026-03-15 ... — url"), but
+// parseContentSegments() above keeps the whole EDGAR block as ONE segment —
+// restructuring that into per-filing segments would be a bigger, riskier
+// change than needed here. Cheaper and just as correct: when a match lands
+// inside a 'filing'-origin segment, re-derive which filing bullet it's
+// closest to and reuse THAT bullet's real date — never a guess, and
+// undefined (not fabricated) when no "filed <date>" text exists nearby,
+// e.g. a non-EDGAR 'filing'-origin segment (a search-fetched "Annual
+// Report" page) that never contains this exact EDGAR-only phrase.
+const FILING_DATE_PATTERN = /filed\s+(\d{4}-\d{2}-\d{2})/g
+
+function nearestFilingDate(text: string, matchIndex: number): string | undefined {
+  const re = new RegExp(FILING_DATE_PATTERN.source, FILING_DATE_PATTERN.flags)
+  let best: string | undefined
+  let bestDist = Infinity
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const dist = Math.abs(m.index - matchIndex)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = m[1]
+    }
+  }
+  return best
 }
 
 // ── Evidence extraction ────────────────────────────────────────
@@ -1766,6 +1809,7 @@ export function extractSignals(
             pattern_matched: def.signal,
             origin: seg.origin,
             retrieved_at: new Date().toISOString(),
+            published_at: seg.origin === 'filing' ? nearestFilingDate(seg.text, match.index) : undefined,
           })
 
           // Avoid extracting 5+ quotes for the same pattern on the same page

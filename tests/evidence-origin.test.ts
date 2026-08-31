@@ -86,6 +86,32 @@ describe('deriveEvidenceOrigin', () => {
   })
 })
 
+describe('parseContentSegments (via extractSignals) — segment boundaries do not leak across markers', () => {
+  // Regression (found 2026-08-31 while adding published_at threading): the
+  // --- PAGE: --- regex's lookahead used to stop only at another --- PAGE:
+  // --- or end-of-string, never at a following [SOURCE:...] marker.
+  // extractSignals() builds its combined content as
+  // `websiteContent + '\n\n' + enrichedContent`, so the LAST own-site page
+  // segment has no further --- PAGE: --- after it — its .text greedily
+  // swallowed the ENTIRE enriched-content block too, which then got
+  // extracted a SECOND time, mis-tagged 'own_site', on top of its correct
+  // 'filing'/'news'/'job_posting' copy from the real [SOURCE:...] segment.
+  it('does not duplicate/mis-tag enriched-source evidence as own_site when it directly follows the last scraped page', () => {
+    const websiteContent = `--- PAGE: / (https://example.com) ---\n\nWelcome to Acme Industries.\n`
+    const enrichedContent =
+      `[SOURCE: press_release | tier2 | https://reuters.com/acme]\n` +
+      `Acme Industries operates six manufacturing facilities across the region, serving customers worldwide.\n`
+    const result = extractSignals(websiteContent, enrichedContent, 'Acme Industries')
+    const signal = result.signals.find(s => s.type === 'multi_location_operations')
+    expect(signal).toBeDefined()
+    // Exactly one piece of evidence for this claim, correctly tagged 'news'
+    // — not also duplicated as a bogus 'own_site' hit.
+    const matching = signal!.evidence.filter(e => e.quote.includes('six manufacturing facilities'))
+    expect(matching).toHaveLength(1)
+    expect(matching[0].origin).toBe('news')
+  })
+})
+
 describe('extractSignals — ExtractedEvidence.origin propagation', () => {
   it('tags evidence found on the company\'s own scraped page as own_site', () => {
     const content = `--- PAGE: / (https://example.com) ---\n\nAcme Industries operates six manufacturing facilities across the region, serving customers worldwide.\n`
