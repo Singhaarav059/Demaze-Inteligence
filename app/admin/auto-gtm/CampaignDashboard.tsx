@@ -103,7 +103,7 @@ export function CampaignDashboard({
 
   return (
     <div className="space-y-3">
-      <div role="group" aria-label="Campaign status - select a card to see the contacts behind it" className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+      <div role="group" aria-label="Outreach status - select a card to see the contacts behind it" className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
         {cards.map(c => {
           const isActive = selected === c.key
           const count = buckets[c.key].length

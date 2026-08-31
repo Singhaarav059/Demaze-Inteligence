@@ -67,7 +67,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Workflow, Radar, ArrowRight, Lightbulb, Users, Mail } from 'lucide-react'
+import { Workflow, ArrowRight, Lightbulb, Users, Mail } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -338,7 +338,7 @@ export default function AutoGtmFlowPage() {
   let nextAction: { label: string; onClick: () => void; disabled: boolean; loading?: boolean } | null = null
   if (flow.step === 1 && flow.inputMode === 'single') {
     nextAction = {
-      label: 'Continue to Decision Makers',
+      label: 'Continue to People',
       onClick: () => flow.setStep(2),
       disabled: !hasResearch || flow.researching,
     }
@@ -364,7 +364,7 @@ export default function AutoGtmFlowPage() {
     // could show a misleading count even though the dedup itself is safe.
     const willCommit = flow.inputMode === 'single' && !flow.resuming && dmSelectedCount > 0
     nextAction = {
-      label: `Continue to Contact Info (${willCommit ? flow.contacts.length + dmSelectedCount : flow.contacts.length})`,
+      label: `Continue to Contact (${willCommit ? flow.contacts.length + dmSelectedCount : flow.contacts.length})`,
       onClick: async () => {
         // Single-company mode: whoever's currently checked in the Decision
         // Makers list gets added as a contact right here, as part of moving
@@ -385,19 +385,19 @@ export default function AutoGtmFlowPage() {
       loading: committingDm,
     }
   } else if (flow.step === 3) {
-    nextAction = { label: 'Continue to Campaign & Outreach', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
+    nextAction = { label: 'Continue to Message', onClick: () => flow.setStep(4), disabled: flow.contacts.length === 0 }
   } else if (flow.step === 4) {
     // Same simple "contacts exist" gate step 3→4 already uses, not a
     // draft-readiness count - Review & Send (the destination) is itself
     // where "0 ready to send" is shown and handled honestly, same
     // don't-hard-block-forward-navigation precedent as every other step
     // transition in this flow.
-    nextAction = { label: 'Continue to Review & Send', onClick: () => flow.setStep(5), disabled: flow.contacts.length === 0 }
+    nextAction = { label: 'Continue to Send', onClick: () => flow.setStep(5), disabled: flow.contacts.length === 0 }
   } else if (flow.step === 5) {
     // Always enabled once reached - "0 sent" is still a valid, visitable
     // state on Track & Follow Up (it shows its own honest empty state),
     // same reasoning the old step gate's comment already documented.
-    nextAction = { label: 'Continue to Track & Follow Up', onClick: () => flow.setStep(6), disabled: false }
+    nextAction = { label: 'Continue to Follow-up', onClick: () => flow.setStep(6), disabled: false }
   }
 
   // Real, per-step progress detail for the compact StepIndicator strip below
@@ -455,11 +455,11 @@ export default function AutoGtmFlowPage() {
             <Workflow className="size-3.5" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-base font-semibold tracking-tight text-foreground">Auto Flow</h1>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">Work</h1>
             <p className="truncate text-xs text-muted-foreground">
-              One guided flow from company research to conversation.{' '}
+              Research a company, find who to contact, and send outreach.{' '}
               <Link href="/admin/wizard" className="underline hover:text-foreground">
-                Manual tools
+                Manual research tools
               </Link>
             </p>
           </div>
@@ -520,11 +520,15 @@ export default function AutoGtmFlowPage() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <MetricTile icon={Radar} label="Signals" value={researchData.signalCount} />
-              <MetricTile icon={Lightbulb} label="Opportunities" value={researchData.opportunities.length} />
-              <MetricTile icon={Users} label="Decision Makers" value={flow.contacts.length} />
-              <MetricTile icon={Mail} label="Verified Contacts" value={emailsFoundCount} />
+            {/* Outcome-oriented, not system-oriented (2026-08-31 IA redesign) -
+                "Signals" (an internal detection concept feeding opportunities)
+                dropped as its own tile; Decision Makers/Verified Contacts
+                collapsed into People found/Emails found, matching the
+                wording used on the People and Contact steps below. */}
+            <div className="grid grid-cols-3 gap-2">
+              <MetricTile icon={Users} label="People found" value={flow.contacts.length} />
+              <MetricTile icon={Mail} label="Emails found" value={emailsFoundCount} />
+              <MetricTile icon={Lightbulb} label="Potential opportunities" value={researchData.opportunities.length} />
             </div>
           </CardContent>
         </Card>
@@ -781,7 +785,7 @@ export default function AutoGtmFlowPage() {
                     </Button>
                   ) : (
                     <Button size="sm" onClick={flow.runBatchThroughDecisionMakers} disabled={batchSelectedCount === 0}>
-                      Research + Find Decision Makers ({batchSelectedCount})
+                      Research + Find People ({batchSelectedCount})
                     </Button>
                   )}
                 </div>
@@ -854,9 +858,9 @@ export default function AutoGtmFlowPage() {
       {flow.step === 3 && (
         <>
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Contact Information</h2>
+            <h2 className="text-sm font-semibold text-foreground">Contact Details</h2>
             <p className="text-xs text-muted-foreground/70 mt-0.5">
-              Email, phone, and LinkedIn are looked up automatically below.
+              {sortedContacts.length} people · {emailsFoundCount} email{emailsFoundCount === 1 ? '' : 's'} found · {sortedContacts.filter(c => c.linkedin_url).length} LinkedIn profile{sortedContacts.filter(c => c.linkedin_url).length === 1 ? '' : 's'} found · 0 phone numbers found
             </p>
           </div>
 
@@ -942,7 +946,7 @@ export default function AutoGtmFlowPage() {
         >
           <div>
             <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              Decision Makers
+              People
               <InfoTooltip>
                 Titles searched: CEO, CTO, VP Operations, Plant Head, and similar roles.
               </InfoTooltip>
@@ -1010,7 +1014,7 @@ export default function AutoGtmFlowPage() {
             campaignId={flow.campaignId}
             ensureCampaignId={flow.ensureCampaignId}
             resuming={flow.resuming}
-            defaultCampaignName={flow.inputMode === 'batch' ? `Batch (${flow.contacts.length} contacts) - Auto Flow` : `${flow.companyName} - Auto Flow`}
+            defaultCampaignName={flow.inputMode === 'batch' ? `Batch (${flow.contacts.length} contacts)` : flow.companyName}
             updateContactEmail={flow.updateContactEmail}
             initialActiveContactId={focusContactId}
             onDraftingSettled={() => setDraftingSettled(true)}

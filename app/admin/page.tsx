@@ -25,7 +25,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import {
   Search, Users, Send, Clock, TrendingUp, ArrowRight, Sparkles, History as HistoryIcon, ArrowUpRight, Plus,
-  UserSearch, Radar, Lightbulb, Mail, CheckCircle2,
+  UserSearch,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -136,18 +136,6 @@ const ACTIVITY_ICON: Record<ActivityItem['kind'], { Icon: typeof Search; tone: s
   outreach: { Icon: Send, tone: 'bg-signal-strong/15 text-signal-strong' },
 }
 
-// Real Auto Flow steps (see StepIndicator.tsx's own STEPS list) - purely
-// descriptive orientation content, no numbers/metrics claimed, so it's safe
-// to always show regardless of how much real data exists yet.
-const PIPELINE_STAGES: { title: string; description: string; href: string; Icon: typeof Search }[] = [
-  { title: 'Research', description: 'Deep company intelligence: real signals, pain points, and opportunities, not a generic profile.', href: '/admin/wizard', Icon: Radar },
-  { title: 'Decision Makers', description: 'Automatically finds the people most likely to care about this, no manual search.', href: '/admin/auto-gtm', Icon: UserSearch },
-  { title: 'Contact Info', description: 'Email, phone, and LinkedIn looked up automatically for each person found.', href: '/admin/outbound/contacts', Icon: Mail },
-  { title: 'Personalized Outreach', description: 'AI-drafted messages grounded in real evidence, not a filled-in template.', href: '/admin/auto-gtm', Icon: Lightbulb },
-  { title: 'Review & Send', description: 'One explicit confirmation before anything goes out, every time.', href: '/admin/outbound/campaigns', Icon: CheckCircle2 },
-  { title: 'Track & Follow Up', description: 'Opens, replies, and automatic follow-ups, tracked per contact.', href: '/admin/outbound/followups', Icon: Clock },
-]
-
 // Handles both directions (a past activity timestamp, or a future
 // follow-up due date) with one function instead of two near-duplicates.
 function relativeTime(iso: string, nowMs: number): string {
@@ -180,7 +168,7 @@ export default function WorkspaceOverviewPage() {
     setNowMs(Date.now())
     void (async () => {
       const [runsRes, contactsRes, overviewRes, pipelineRes, segmentsRes] = await Promise.allSettled([
-        fetch('/api/admin/test-runs?limit=100').then(r => r.json()),
+        fetch('/api/admin/test-runs?limit=100&summary=true').then(r => r.json()),
         fetch('/api/admin/outbound/contacts').then(r => r.json()),
         // limit=200 (the endpoint's max) so the returned `emails` rows carry
         // enough real per-day timestamps to bucket a trend/delta from -
@@ -255,8 +243,8 @@ export default function WorkspaceOverviewPage() {
   // this card never reads as near-empty when there's little overdue.
   const newlyResearched = (runs ?? []).filter(r => nowMs - new Date(r.created_at).getTime() < 48 * 60 * 60 * 1000)
   const attentionItems: AttentionItem[] = [
-    ...dueNow.map(c => ({ kind: 'due' as const, key: `due-${c.runId}`, companyName: c.companyName, ts: c.nextFollowupDueAt!, href: '/admin/outbound/followups', cta: 'Review' })),
-    ...upcoming.map(c => ({ kind: 'upcoming' as const, key: `upcoming-${c.runId}`, companyName: c.companyName, ts: c.nextFollowupDueAt!, href: '/admin/outbound/followups', cta: 'Review' })),
+    ...dueNow.map(c => ({ kind: 'due' as const, key: `due-${c.runId}`, companyName: c.companyName, ts: c.nextFollowupDueAt!, href: '/admin/followups', cta: 'Review' })),
+    ...upcoming.map(c => ({ kind: 'upcoming' as const, key: `upcoming-${c.runId}`, companyName: c.companyName, ts: c.nextFollowupDueAt!, href: '/admin/followups', cta: 'Review' })),
     ...newlyResearched.map(r => ({
       kind: 'new_research' as const,
       key: `research-${r.id}`,
@@ -360,56 +348,67 @@ export default function WorkspaceOverviewPage() {
         <EmptyState
           icon={Sparkles}
           title="No companies researched yet"
-          description="Start by discovering companies that match your target market, or research one directly."
+          description="Start by finding companies that match your target market."
           action={
-            <div className="flex items-center justify-center gap-2">
-              <Button size="sm" render={<Link href="/admin/company-discovery" />}>Discover Companies</Button>
-              <Button size="sm" variant="outline" render={<Link href="/admin/wizard" />}>Research a Company</Button>
+            <div className="flex flex-col items-center gap-2">
+              <Button size="sm" render={<Link href="/admin/company-discovery" />}>Find Companies</Button>
+              <Link href="/admin/auto-gtm" className="text-xs text-muted-foreground underline hover:text-foreground">
+                Or work on one company directly
+              </Link>
             </div>
           }
         />
       ) : (
         <>
-          {/* KPI row */}
-          {loading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex h-[70px] items-center rounded-lg border border-border bg-card px-4"><Spinner className="size-4" /></div>
-              ))}
+          {/* Continue where you left off - real saved-search progress, powered by
+              company_discovery_segments (see app/admin/company-discovery/page.tsx's
+              Segment type and /api/admin/company-discovery/segments). Omitted
+              entirely while segments are still loading (null) so it never
+              flashes an empty state before the real data arrives. Leads the
+              page - "what should I do now?" comes before any metrics. */}
+          {segments !== null && segments.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Continue Where You Left Off</h2>
+              {/* auto-fit (not auto-fill/a fixed column count) so a short
+                  list - e.g. 1 real segment + the "start new" card - stretches
+                  to fill the row instead of leaving a dead empty column. */}
+              <motion.div variants={staggerList} initial="hidden" animate="visible" className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
+                {segments.map(seg => {
+                  const pct = seg.totalCount > 0 ? Math.round((seg.researchedCount / seg.totalCount) * 100) : 0
+                  return (
+                    <motion.div key={seg.id} variants={listItem}>
+                      <Card size="sm">
+                        <CardContent className="space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{seg.name}</p>
+                              <p className="text-xs text-muted-foreground/70 mt-0.5">{seg.totalCount} compan{seg.totalCount === 1 ? 'y' : 'ies'}</p>
+                            </div>
+                            <CircularProgress value={pct} size={36} thickness={3.5} />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground/60">{seg.researchedCount} of {seg.totalCount} researched</p>
+                          <Button size="sm" className="w-full" render={<Link href={`/admin/company-discovery?resumeSegmentId=${seg.id}`} />}>Continue</Button>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+                <motion.div variants={listItem}>
+                  <Card size="sm">
+                    <CardContent className="flex h-full flex-col items-center justify-center gap-2 text-center py-6">
+                      <div className="flex size-8 items-center justify-center rounded-full bg-accent text-muted-foreground">
+                        <Plus className="size-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Start a new search</p>
+                        <p className="text-xs text-muted-foreground/70 mt-0.5">Find new companies to target</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="w-full" render={<Link href="/admin/company-discovery" />}>New Search</Button>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
             </div>
-          ) : (
-            <motion.div
-              variants={staggerList}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-            >
-              <motion.div variants={listItem}>
-                <Link href="/admin/run-history" className="block">
-                  <MetricTile icon={Search} label="Companies Researched" value={researchedCount} sub={researchedSub} trend={researchedTrend} delta={researchedDelta} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
-                </Link>
-              </motion.div>
-              <motion.div variants={listItem}>
-                <Link href="/admin/run-history?fit=Strong,Good" className="block">
-                  <MetricTile icon={TrendingUp} label="High-Fit Companies" value={highFitCount} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
-                </Link>
-              </motion.div>
-              <motion.div variants={listItem}>
-                <Link href="/admin/outbound/contacts" className="block">
-                  <MetricTile icon={Users} label="People Identified" value={contacts?.length ?? '-'} trend={contactTrend} delta={contactDelta} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
-                </Link>
-              </motion.div>
-              <motion.div variants={listItem}>
-                <Link href="/admin/outbound/overview" className="block">
-                  <MetricTile icon={Send} label="Outreach Sent" value={stats?.totalContacted ?? '-'} trend={sentTrend} delta={sentDelta} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
-                </Link>
-              </motion.div>
-              <motion.div variants={listItem}>
-                <Link href="/admin/outbound/followups" className="block">
-                  <MetricTile icon={Clock} label="Follow-ups Due" value={stats?.followupDueNow ?? '-'} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
-                </Link>
-              </motion.div>
-            </motion.div>
           )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
@@ -499,111 +498,80 @@ export default function WorkspaceOverviewPage() {
             </Card>
           </div>
 
-          {/* Continue where you left off - real saved-search progress, powered by
-              company_discovery_segments (see app/admin/company-discovery/page.tsx's
-              Segment type and /api/admin/company-discovery/segments). Omitted
-              entirely while segments are still loading (null) so it never
-              flashes an empty state before the real data arrives. */}
-          {segments !== null && (
-            <div className="space-y-2">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Continue Where You Left Off</h2>
-              {/* auto-fit (not auto-fill/a fixed column count) so a short
-                  list - e.g. 1 real segment + the "start new" card - stretches
-                  to fill the row instead of leaving a dead empty column. */}
-              <motion.div variants={staggerList} initial="hidden" animate="visible" className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
-                {segments.map(seg => {
-                  const pct = seg.totalCount > 0 ? Math.round((seg.researchedCount / seg.totalCount) * 100) : 0
-                  return (
-                    <motion.div key={seg.id} variants={listItem}>
-                      <Card size="sm">
-                        <CardContent className="space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">{seg.name}</p>
-                              <p className="text-xs text-muted-foreground/70 mt-0.5">{seg.totalCount} compan{seg.totalCount === 1 ? 'y' : 'ies'}</p>
-                            </div>
-                            <CircularProgress value={pct} size={36} thickness={3.5} />
-                          </div>
-                          <p className="text-[11px] text-muted-foreground/60">{seg.researchedCount} of {seg.totalCount} researched</p>
-                          <Button size="sm" className="w-full" render={<Link href={`/admin/company-discovery?resumeSegmentId=${seg.id}`} />}>Continue</Button>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  )
-                })}
+          {/* Secondary: activity numbers and trend charts. Deliberately below
+              the fold relative to "what should I do now?" - useful context,
+              not the first thing a user needs to decide anything from. */}
+          <div className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">At a Glance</h2>
+            {loading ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex h-[70px] items-center rounded-lg border border-border bg-card px-4"><Spinner className="size-4" /></div>
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                variants={staggerList}
+                initial="hidden"
+                animate="visible"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+              >
                 <motion.div variants={listItem}>
-                  <Card size="sm">
-                    <CardContent className="flex h-full flex-col items-center justify-center gap-2 text-center py-6">
-                      <div className="flex size-8 items-center justify-center rounded-full bg-accent text-muted-foreground">
-                        <Plus className="size-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Start a new search</p>
-                        <p className="text-xs text-muted-foreground/70 mt-0.5">Find new companies to target</p>
-                      </div>
-                      <Button size="sm" variant="outline" className="w-full" render={<Link href="/admin/company-discovery" />}>New Search</Button>
-                    </CardContent>
-                  </Card>
+                  <Link href="/admin/run-history" className="block">
+                    <MetricTile icon={Search} label="Companies Researched" value={researchedCount} sub={researchedSub} trend={researchedTrend} delta={researchedDelta} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
+                  </Link>
+                </motion.div>
+                <motion.div variants={listItem}>
+                  <Link href="/admin/run-history?fit=Strong,Good" className="block">
+                    <MetricTile icon={TrendingUp} label="High-Fit Companies" value={highFitCount} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
+                  </Link>
+                </motion.div>
+                <motion.div variants={listItem}>
+                  <Link href="/admin/outbound/contacts" className="block">
+                    <MetricTile icon={Users} label="People Identified" value={contacts?.length ?? '-'} trend={contactTrend} delta={contactDelta} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
+                  </Link>
+                </motion.div>
+                <motion.div variants={listItem}>
+                  <Link href="/admin/outbound/overview" className="block">
+                    <MetricTile icon={Send} label="Outreach Sent" value={stats?.totalContacted ?? '-'} trend={sentTrend} delta={sentDelta} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
+                  </Link>
+                </motion.div>
+                <motion.div variants={listItem}>
+                  <Link href="/admin/followups" className="block">
+                    <MetricTile icon={Clock} label="Follow-ups Due" value={stats?.followupDueNow ?? '-'} className="transition-colors hover:border-border-strong hover:bg-accent/40" />
+                  </Link>
                 </motion.div>
               </motion.div>
-            </div>
-          )}
+            )}
 
-          {/* Intelligence at a glance - omitted entirely if nothing here clears the real-data bar.
-              Desktop keeps the 3-up grid; mobile swaps to a tab switcher (same 3 pieces, one
-              content function each) instead of 3 stacked charts down the page. */}
-          {hasGlanceData && (
-            <Card>
-              <CardHeader className="border-b border-border">
-                <CardTitle className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Intelligence at a Glance</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="hidden gap-6 md:grid md:grid-cols-3">
-                  {renderResearchActivity()}
-                  {renderOpportunityDistribution()}
-                  {renderOutreachPerformance()}
-                </div>
-                <Tabs defaultValue="research" className="md:hidden">
-                  <TabsList>
-                    <TabsTrigger value="research">Research</TabsTrigger>
-                    <TabsTrigger value="fit">Fit</TabsTrigger>
-                    <TabsTrigger value="outreach">Outreach</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="research" className="pt-4">{renderResearchActivity()}</TabsContent>
-                  <TabsContent value="fit" className="pt-4">{renderOpportunityDistribution()}</TabsContent>
-                  <TabsContent value="outreach" className="pt-4">{renderOutreachPerformance()}</TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* How Auto Flow works - static, descriptive (no numbers claimed),
-              same real 6 steps StepIndicator.tsx already defines for Auto
-              Flow itself. Not gated on any data threshold - it's product
-              orientation, not a data panel, so it's fine to always show. */}
-          <Card>
-            <CardHeader className="border-b border-border">
-              <CardTitle className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">How Auto Flow Works</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <motion.div variants={staggerList} initial="hidden" animate="visible" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {PIPELINE_STAGES.map(stage => (
-                  <motion.div key={stage.title} variants={listItem}>
-                    <Link
-                      href={stage.href}
-                      className="flex h-full flex-col gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:border-border-strong hover:bg-accent/40"
-                    >
-                      <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                        <stage.Icon className="size-3.5" />
-                      </span>
-                      <span className="text-sm font-medium text-foreground">{stage.title}</span>
-                      <span className="text-xs leading-relaxed text-muted-foreground/70">{stage.description}</span>
-                    </Link>
-                  </motion.div>
-                ))}
-              </motion.div>
-            </CardContent>
-          </Card>
+            {/* Omitted entirely if nothing here clears the real-data bar.
+                Desktop keeps the 3-up grid; mobile swaps to a tab switcher (same 3 pieces, one
+                content function each) instead of 3 stacked charts down the page. */}
+            {hasGlanceData && (
+              <Card>
+                <CardHeader className="border-b border-border">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Intelligence at a Glance</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="hidden gap-6 md:grid md:grid-cols-3">
+                    {renderResearchActivity()}
+                    {renderOpportunityDistribution()}
+                    {renderOutreachPerformance()}
+                  </div>
+                  <Tabs defaultValue="research" className="md:hidden">
+                    <TabsList>
+                      <TabsTrigger value="research">Research</TabsTrigger>
+                      <TabsTrigger value="fit">Fit</TabsTrigger>
+                      <TabsTrigger value="outreach">Outreach</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="research" className="pt-4">{renderResearchActivity()}</TabsContent>
+                    <TabsContent value="fit" className="pt-4">{renderOpportunityDistribution()}</TabsContent>
+                    <TabsContent value="outreach" className="pt-4">{renderOutreachPerformance()}</TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </>
       )}
     </div>

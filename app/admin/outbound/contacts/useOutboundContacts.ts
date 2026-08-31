@@ -73,7 +73,7 @@ export function useOutboundContacts() {
   const loadRuns = useCallback(async () => {
     setLoadingRuns(true)
     try {
-      const res = await fetch('/api/admin/test-runs?limit=50')
+      const res = await fetch('/api/admin/test-runs?limit=50&summary=true')
       const data = await res.json()
       if (data.success) setRuns(data.runs)
       else toast.error(data.error ?? 'Failed to load runs')

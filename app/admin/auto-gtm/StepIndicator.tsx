@@ -33,21 +33,41 @@
 // component is now pure progress display.
 // ============================================================
 
-import { Search, Users, IdCard, Mail, ClipboardCheck, Clock, Check } from 'lucide-react'
+import { Search, Users, Mail, ClipboardCheck, Clock, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Exported so page.tsx can reuse the same labels for its step-change
-// screen-reader announcement instead of duplicating this list.
+// screen-reader announcement instead of duplicating this list. Kept 1:1
+// with the real 6-step flow state (useAutoGtmFlow's flow.step) - the
+// underlying automation is unchanged, this is display text only.
 export const STEPS = [
-  'Research',
-  'Decision Makers',
-  'Contact Info',
-  'Campaign & Outreach',
-  'Review & Send',
-  'Track & Follow Up',
+  'Company',
+  'People',
+  'Contact',
+  'Message',
+  'Send',
+  'Follow-up',
 ] as const
 
-const STEP_ICONS = [Search, Users, IdCard, Mail, ClipboardCheck, Clock] as const
+// Visual grouping only (2026-08-31 UX restructuring): the flow still has 6
+// real steps (contact-info lookup is its own step because it's a separate
+// async lookup with its own settle signal - see page.tsx's step 3->4
+// effect), but showing it as a 6th top-level stage asks a non-technical
+// user to track a distinction ("People" vs "Contact") that isn't a
+// decision they make - it happens automatically. Grouped into the 5 stages
+// a user actually thinks in: Company -> People (+ finding their contact
+// info) -> Message -> Send -> Follow-up. Clicking a merged pill jumps to
+// its first underlying step, same as before. `meta` passed in from
+// page.tsx is still the full 6-length array - grouping/aggregating it
+// happens only here, so page.tsx's real step-transition logic never
+// changes.
+const DISPLAY_GROUPS = [
+  { label: 'Company', steps: [1], icon: Search },
+  { label: 'People', steps: [2, 3], icon: Users },
+  { label: 'Message', steps: [4], icon: Mail },
+  { label: 'Send', steps: [5], icon: ClipboardCheck },
+  { label: 'Follow-up', steps: [6], icon: Clock },
+] as const
 
 export type StepStatus = 'complete' | 'active' | 'waiting' | 'not_started'
 
@@ -79,22 +99,28 @@ export function StepIndicator({
     <ol
       className="flex items-start gap-0 overflow-x-auto"
       role="group"
-      aria-label="Auto Flow progress"
+      aria-label="Work progress"
     >
-      {STEPS.map((label, i) => {
-        const stepNum = i + 1
-        const isCurrent = stepNum === current
-        const isReached = stepNum <= maxReached
-        const isComplete = meta[i]?.status === 'complete'
-        const isLast = stepNum === STEPS.length
-        const Icon = STEP_ICONS[i]
-        const m = meta[i] ?? { status: 'not_started' as StepStatus }
+      {DISPLAY_GROUPS.map((group, gi) => {
+        const firstStep = group.steps[0]
+        const isCurrent = (group.steps as readonly number[]).includes(current)
+        const isReached = firstStep <= maxReached
+        const groupMeta = group.steps.map(s => meta[s - 1] ?? { status: 'not_started' as StepStatus })
+        const isComplete = groupMeta.every(m => m.status === 'complete')
+        // The active sub-step's detail if one's in flight, else whichever
+        // group member has a real detail to show (last one wins - the
+        // furthest-along sub-step is the most relevant to report).
+        const activeMeta = groupMeta.find(m => m.status === 'active')
+        const detailMeta = activeMeta ?? [...groupMeta].reverse().find(m => m.detail) ?? groupMeta[groupMeta.length - 1]
+        const status: StepStatus = isComplete ? 'complete' : activeMeta ? 'active' : groupMeta[0].status
+        const isLast = gi === DISPLAY_GROUPS.length - 1
+        const Icon = group.icon
         return (
-          <li key={label} className="flex shrink-0 flex-1 items-start">
+          <li key={group.label} className="flex shrink-0 flex-1 items-start">
             <button
               type="button"
               disabled={!isReached}
-              onClick={() => isReached && onStepClick(stepNum)}
+              onClick={() => isReached && onStepClick(firstStep)}
               aria-current={isCurrent ? 'step' : undefined}
               className={cn(
                 'flex min-w-[104px] flex-col items-center gap-1.5 rounded-md px-1.5 py-1 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
@@ -114,9 +140,9 @@ export function StepIndicator({
                 {isComplete && !isCurrent ? <Check className="size-4" /> : <Icon className="size-4" />}
               </span>
               <span className={cn('text-[11px] font-medium leading-tight', isCurrent ? 'text-foreground' : 'text-muted-foreground')}>
-                {label}
+                {group.label}
               </span>
-              <span className="text-[10px] text-muted-foreground/60">{m.detail ?? defaultDetail(m.status)}</span>
+              <span className="text-[10px] text-muted-foreground/60">{detailMeta.detail ?? defaultDetail(status)}</span>
             </button>
             {!isLast && <div className="mt-[18px] h-px flex-1 shrink-0 bg-border" aria-hidden="true" />}
           </li>

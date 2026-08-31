@@ -643,18 +643,18 @@ export default function SalesKnowledgePage() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Sales Knowledge</h2>
+        <h1 className="text-base font-semibold text-foreground">Sales Playbook</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Industries, problems, capabilities, and case studies used to generate sales positioning.
+          What Demaze sells, who it sells to, and the proof - used to shape outreach.
         </p>
       </div>
 
       <GuideNote>
         <p>
           This is Demaze's own sales playbook - what we sell, who we sell it to, and the proof we have.
-          It&apos;s not currently used by Auto Flow - that wiring was removed until an official,
+          It&apos;s not currently used by Work - that wiring was removed until an official,
           approved sector playbook is ready. Editing anything here is safe to do ahead of that: it has
-          no effect on Auto Flow today.
+          no effect on outreach today.
         </p>
       </GuideNote>
 

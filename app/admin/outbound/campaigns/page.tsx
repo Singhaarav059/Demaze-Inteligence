@@ -207,8 +207,8 @@ function OutboundCampaignsPageInner() {
       <motion.div variants={fadeSlideUp} initial="hidden" animate="visible" className="space-y-6">
       <GuideNote>
         <p>
-          This is the manual/debug version of sending - most of the time you&apos;ll create and send a
-          campaign from Auto Flow instead, right after preparing outreach. Come here to inspect a
+          This is the manual/debug version of sending - most of the time you&apos;ll create and send
+          from Work instead, right after preparing outreach. Come here to inspect a
           queue, pause/resume, or trigger a send by hand.
         </p>
         <p>

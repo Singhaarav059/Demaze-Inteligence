@@ -9,10 +9,9 @@
 // NAV.length). A persistent bottom tab bar, not a drawer you have to open,
 // is the single most recognizable native-app navigation pattern (iOS Tab
 // Bar / Android Bottom Navigation) - MobileNav's drawer pattern is more
-// "mobile website" than "app". SECONDARY_NAV (Overview, Contacts,
-// Campaigns, etc.) still goes through TopBar's existing "More tools"
-// dropdown - this bar is only for the primary NAV entries, same scope
-// MobileNav used to cover.
+// "mobile website" than "app". SECONDARY_NAV (History, Connected Tools,
+// Mailbox Health, etc.) is one tap deeper, under the "More" tab's own
+// page - this bar is only for the 5 primary NAV entries.
 //
 // pb-safe (env(safe-area-inset-bottom)) keeps tab labels clear of the iOS
 // home-indicator gesture area - see app/globals.css and the viewport-fit=
@@ -25,10 +24,10 @@ import { cn } from '@/lib/utils'
 import { NAV, isNavActive } from './nav-config'
 
 // Tab-bar-specific short labels - nav-config.ts's canonical labels (used by
-// Sidebar/TopBar/command palette) stay unchanged; "Outbound Tools" alone
-// doesn't fit a 5-way bottom tab without wrapping or truncating awkwardly.
+// Sidebar/TopBar/command palette) stay unchanged; "Find Companies" alone
+// doesn't fit a 6-way bottom tab without wrapping or truncating awkwardly.
 const SHORT_LABEL: Record<string, string> = {
-  'Outbound Tools': 'Outbound',
+  'Find Companies': 'Find',
 }
 
 export function BottomTabBar() {
@@ -39,7 +38,7 @@ export function BottomTabBar() {
       aria-label="Primary"
       className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar/95 backdrop-blur md:hidden"
     >
-      <div className="grid grid-cols-6">
+      <div className="grid grid-cols-5">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = isNavActive(pathname, href)
           return (

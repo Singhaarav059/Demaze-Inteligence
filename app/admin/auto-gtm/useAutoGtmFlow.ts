@@ -79,6 +79,19 @@ export function deriveCompanyName(domain: string, analysisResult: Record<string,
 
 export function useAutoGtmFlow() {
   const router = useRouter()
+  // Set true when landing via Company Discovery's "Find decision makers"
+  // handoff (?url=..., no runId) - a separate effect below (after
+  // runResearch is defined) fires the actual research call once `url`
+  // state reflects the handoff value. Without this, arriving from that
+  // link only prefilled the URL box and left the user to click Research
+  // themselves - a redundant-feeling extra step given they'd just clicked
+  // an action that already named the company. The lightweight signals scan
+  // Company Discovery itself ran (lib/research/company-signals.ts, a single
+  // grounded search call, no scrape) is a genuinely different, shallower
+  // product than this page's full scrape+analysis pipeline - this doesn't
+  // skip or cache-share anything, it just removes the extra click for work
+  // that always needed to happen.
+  const handoffAutoResearchRef = useRef(false)
 
   const [step, setStepState] = useState<FlowStep>(1)
   // Flips true once the URL has been read client-side (see the effect
@@ -383,6 +396,7 @@ export function useAutoGtmFlow() {
     if (!resumeRunId && handoffUrl) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrl(handoffUrl)
+      handoffAutoResearchRef.current = true
     }
     setStepSynced(true)
     // resumeFromRun sets `resuming` itself (as its first line, before any
@@ -585,6 +599,18 @@ export function useAutoGtmFlow() {
       setResearching(false)
     }
   }, [url, mode, router, restoreContactsAndCampaign])
+
+  // Fires the handoff-triggered research once `url` state actually reflects
+  // the prefilled value (see handoffAutoResearchRef's own comment above) -
+  // runResearch reads `url` from its own closure, so this has to wait for
+  // the state update from the mount effect to land rather than calling
+  // runResearch() directly from that same effect.
+  useEffect(() => {
+    if (handoffAutoResearchRef.current && url) {
+      handoffAutoResearchRef.current = false
+      void runResearch()
+    }
+  }, [url, runResearch])
 
   const addContactRow = useCallback((contact: OutboundContact) => {
     setContacts(prev => [contact, ...prev])

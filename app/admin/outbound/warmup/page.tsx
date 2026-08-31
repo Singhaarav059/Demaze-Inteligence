@@ -404,9 +404,9 @@ function OutboundWarmupPageInner() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Warm-Up</h2>
+        <h1 className="text-base font-semibold text-foreground">Mailbox Health</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Mailbox warm-up status and metrics.
+          How ready your sending mailbox is to send in volume without landing in spam.
         </p>
       </div>
 

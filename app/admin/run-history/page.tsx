@@ -675,7 +675,7 @@ export default function RunHistoryPage() {
                                   className="border-border bg-card text-foreground/90 hover:bg-accent"
                                   onClick={(e) => { e.stopPropagation(); router.push(`/admin/auto-gtm?runId=${run.id}&step=2`) }}
                                 >
-                                  Resume in Auto Flow
+                                  Resume in Work
                                 </Button>
                               )}
                               <button
@@ -824,8 +824,8 @@ export default function RunHistoryPage() {
           ) : discoveryContacts.length === 0 ? (
             <EmptyState
               icon={UserSearch}
-              title="No decision makers found yet"
-              description="Run Decision-Maker Discovery from a company's Auto Flow to see results here."
+              title="No people found yet"
+              description="Find people to contact for a company in Work to see results here."
             />
           ) : (
             <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
@@ -860,7 +860,7 @@ export default function RunHistoryPage() {
             <EmptyState
               icon={Send}
               title="No outreach sent yet"
-              description="Send a campaign from Auto Flow or the Campaigns page to see activity here."
+              description="Send outreach to a company in Work to see activity here."
             />
           ) : (
             <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">

@@ -119,7 +119,7 @@ export default function OutboundContactsPage() {
         <EmptyState
           icon={Search}
           title="No researched companies yet"
-          description="Research a company first (Auto Flow or Research), then come back here to add contacts."
+          description="Research a company first (in Work or Research), then come back here to add contacts."
           className="border-none py-4"
         />
       )}

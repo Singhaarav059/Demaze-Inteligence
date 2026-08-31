@@ -1,41 +1,41 @@
 // ============================================================
-// Outbound Tools section layout - /admin/outbound/*
+// /admin/outbound/* section layout
 // ============================================================
-// Just a section header + the page content - no second in-page nav rail.
-// Used to render AdminOutboundNav (a persistent left sub-nav) alongside the
-// content, but that duplicated the exact same 9-link list the Sidebar's own
-// "Outbound" dropdown already shows - on every single sub-page, with zero
-// added information over the sidebar copy. Removed 2026-08-23; the real
-// "what does each tool do" content still lives on the hub page's own
-// Execution/Configuration rows (app/admin/outbound/page.tsx), which add
-// genuine explanatory text the sidebar doesn't - that one wasn't touched.
+// Just a back link + the page content. Used to carry a big "Outbound
+// Tools" banner (title + jargon-heavy description) repeated on every
+// sub-page above that page's own real header - dropped in the 2026-08-31
+// UX restructuring: every child page already has its own clear header
+// (see e.g. suppression/page.tsx, integrations/page.tsx), so the banner
+// was pure duplication, and its wording ("outbound send pipeline",
+// "Auto Flow") was exactly the kind of internal/developer framing that
+// restructuring removed. This directory now holds a mix of Settings
+// pages (reached via /admin/settings) and a few pages kept for internal/
+// debug use only (Contacts, Campaigns, Overview, Pilot Review - no
+// longer linked from any nav surface, still fully functional by direct
+// URL) - a single generic "back" link covers both cases well enough
+// without pretending they're one coherent section.
 // ============================================================
+
+'use client'
 
 import Link from 'next/link'
-import { OutboundToolsIcon } from '@/components/shell/nav-icons'
+import { usePathname } from 'next/navigation'
 
-export default function OutboundToolsLayout({ children }: { children: React.ReactNode }) {
+export default function OutboundSectionLayout({ children }: { children: React.ReactNode }) {
+  // /admin/outbound itself (the More landing page) has nowhere useful to
+  // "go back" to within this same section - only its sub-pages need the link.
+  const isIndex = usePathname() === '/admin/outbound'
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
-      <Link
-        href="/admin/auto-gtm"
-        className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        ← Back to Auto Flow
-      </Link>
-      <div className="mb-8 flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <OutboundToolsIcon className="size-5" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">Outbound Tools</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manual and debug controls for the outbound send pipeline - contacts, campaigns,
-            mailbox warm-up, and vendor integrations. Auto Flow covers the guided version of
-            most of this inline; come here to inspect, override, or configure things directly.
-          </p>
-        </div>
-      </div>
+      {!isIndex && (
+        <Link
+          href="/admin/outbound"
+          className="mb-6 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          ← Back
+        </Link>
+      )}
 
       {children}
     </div>

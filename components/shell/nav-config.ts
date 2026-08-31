@@ -1,58 +1,37 @@
 // ============================================================
-// Shared nav config - used by both the desktop Sidebar and the
-// mobile drawer so the two never drift out of sync.
+// Shared nav config - used by the desktop Sidebar, BottomTabBar,
+// TopBar's quick-jump menu, and CommandPalette so they never drift
+// out of sync.
 // ============================================================
 
-import { Users, Send, Flame, Plug, LayoutDashboard, Clock, Ban, Library, ClipboardCheck, Home } from 'lucide-react'
-import { ResearchIcon, HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIcon } from './nav-icons'
+import { Clock, Ban, Flame, Plug, Library, Home } from 'lucide-react'
+import { HistoryIcon, DiscoveryIcon, AutoFlowIcon, OutboundToolsIcon } from './nav-icons'
 
-// Contacts / Campaigns / Warm-Up / Integrations were removed from nav
-// (2026-07-18) once Auto Flow covered their core job inline - the pages
-// themselves are untouched and still reachable directly by URL
-// (/admin/outbound/contacts, /campaigns, /warmup, /integrations), e.g. for
-// a campaign's pause/resume controls or changing the active provider.
 //
-// 2026-07-31: re-added a single "Outbound Tools" entry pointing at the new
-// /admin/outbound hub (app/admin/outbound/page.tsx) - these pages were only
-// reachable via a direct URL, the TopBar "More" menu, or Cmd+K, which meant
-// no on-screen path into them at all from a cold start. The individual
-// pages stay out of primary NAV (SECONDARY_NAV below, unchanged) - the hub
-// plus its own persistent sub-nav (AdminOutboundNav) is the one-click path
-// in now, same list just presented as a proper section instead of a flat
-// nav slot each.
-//
-// 2026-08-03: reordered so "Outbound Tools" sits above "History" - History
-// is a look-back/reference page (past runs), so it now sits last in the
-// primary flow ordering instead of splitting Discover from Outbound Tools.
+// 2026-08-31 UX restructuring: collapsed to the 5 destinations a
+// non-technical user actually needs - Home, Find Companies, Work,
+// Follow-ups, More. Research/Contacts/Campaigns/Overview/Pilot Review
+// are implementation-shaped duplicates of what Work already does end
+// to end (see auto-gtm/page.tsx) or internal QA tooling - they keep
+// their routes and keep working, they're just no longer presented as
+// destinations a normal user needs to choose between. Follow-ups is
+// promoted out of the old "Outbound Tools" hub into primary nav (a
+// real recurring cross-company job); Warm-Up/Suppression/Integrations/
+// Sales Knowledge regrouped under Settings, one level under More.
 export const NAV = [
   { href: '/admin', label: 'Home', icon: Home, hint: 'Your workspace overview' },
-  { href: '/admin/auto-gtm', label: 'Auto Flow', icon: AutoFlowIcon, hint: 'Start here: research a company, find who to contact, and prepare outreach, one guided flow' },
-  { href: '/admin/wizard', label: 'Research', icon: ResearchIcon, hint: 'Research a single company, or upload a spreadsheet of many' },
-  { href: '/admin/company-discovery', label: 'Discover', icon: DiscoveryIcon, hint: 'Define your target market and let Demaze find companies that match' },
-  { href: '/admin/outbound', label: 'Outbound Tools', icon: OutboundToolsIcon, hint: 'Manual controls: contacts, campaigns, warm-up, and vendor integrations' },
-  { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: 'Past research runs you\'ve saved' },
+  { href: '/admin/company-discovery', label: 'Find Companies', icon: DiscoveryIcon, hint: 'Search for companies that match a market you define' },
+  { href: '/admin/auto-gtm', label: 'Work', icon: AutoFlowIcon, hint: 'Research a company, find who to contact, and send outreach' },
+  { href: '/admin/followups', label: 'Follow-ups', icon: Clock, hint: "Who's due for a follow-up, and what to do about it" },
+  { href: '/admin/outbound', label: 'More', icon: OutboundToolsIcon, hint: 'History and settings' },
 ] as const
 
-// 2026-08-22 redesign: purely a display grouping for Sidebar (which NAV
-// entries render under which section header) - does not change routes,
-// order, or the flat NAV array every other consumer (TopBar, command
-// palette, BottomTabBar) already relies on.
+// Sidebar renders NAV flat now (5 items needs no grouping) - kept as a
+// named export in case a future addition needs sectioning again.
 export const NAV_GROUPS = [
-  { label: 'Workspace', hrefs: ['/admin', '/admin/auto-gtm', '/admin/wizard', '/admin/company-discovery'] },
-  { label: 'Outbound', hrefs: ['/admin/outbound'] },
-  { label: 'System', hrefs: ['/admin/run-history'] },
+  { label: 'Workspace', hrefs: NAV.map((n) => n.href) },
 ] as const
 
-// Pages pulled out of primary nav on 2026-07-18 - still real, still linked
-// to directly (a campaign's pause/resume controls, changing an active
-// provider). Shared by the TopBar "More" menu, the Cmd+K command palette,
-// and (2026-08-23) Sidebar's own "Outbound" dropdown - clicking it reveals
-// this full list inline instead of requiring a click into the
-// /admin/outbound hub page first. All 9 entries live under Outbound in the
-// sidebar now, including Integrations (previously a separate one-off
-// quick-link under System) - it's a genuinely outbound-scoped setting
-// ("vendor providers for each outbound capability"), so this is a better
-// home for it, not just a dedup.
 // Shared active-route check for Sidebar/TopBar/BottomTabBar. A plain
 // `pathname.startsWith(href + '/')` breaks for '/admin' specifically -
 // it's a prefix of every other admin route, so without this special case
@@ -61,14 +40,15 @@ export function isNavActive(pathname: string, href: string): boolean {
   return pathname === href || (href !== '/admin' && pathname.startsWith(href + '/'))
 }
 
+// Quick-jump list for TopBar's "..." menu and Cmd+K - the same
+// destinations reachable from the More page one click deeper, surfaced
+// here for anyone who wants to skip straight there. Contacts/Campaigns/
+// Overview/Pilot Review are deliberately absent - they're internal/debug
+// tools, not something to advertise in a "jump to a page" list.
 export const SECONDARY_NAV = [
-  { href: '/admin/outbound/overview', label: 'Overview', icon: LayoutDashboard, hint: 'Cross-campaign stats and every email queued or sent, in one table' },
-  { href: '/admin/outbound/pilot-review', label: 'Pilot Review', icon: ClipboardCheck, hint: 'Human quality review of a researched pilot batch - approve, reject, or flag before outreach is generated' },
-  { href: '/admin/outbound/contacts', label: 'Contacts', icon: Users, hint: 'Manually-entered or discovered contacts, grouped by researched company' },
-  { href: '/admin/outbound/campaigns', label: 'Campaigns', icon: Send, hint: 'Outreach campaign queues and send history' },
-  { href: '/admin/outbound/followups', label: 'Follow-ups', icon: Clock, hint: 'What follow-up is due for whom, send now / stop, and the follow-up cadence' },
-  { href: '/admin/outbound/sales-knowledge', label: 'Sales Knowledge', icon: Library, hint: 'Industries, problems, capabilities, and case studies used to generate sales positioning' },
-  { href: '/admin/outbound/suppression', label: 'Suppression', icon: Ban, hint: 'Bounced, unsubscribed, and manually excluded addresses - never sent to again' },
-  { href: '/admin/outbound/warmup', label: 'Warm-Up', icon: Flame, hint: 'Mailbox warm-up status and metrics' },
-  { href: '/admin/outbound/integrations', label: 'Integrations', icon: Plug, hint: 'Vendor providers for each outbound capability' },
+  { href: '/admin/run-history', label: 'History', icon: HistoryIcon, hint: "Every company you've researched, saved" },
+  { href: '/admin/outbound/integrations', label: 'Connected Tools', icon: Plug, hint: 'The outside tools Demaze uses to find people and send email' },
+  { href: '/admin/outbound/warmup', label: 'Mailbox Health', icon: Flame, hint: 'How ready your sending mailbox is' },
+  { href: '/admin/outbound/suppression', label: 'Do-not-contact List', icon: Ban, hint: "Addresses that never get emailed again" },
+  { href: '/admin/outbound/sales-knowledge', label: 'Sales Playbook', icon: Library, hint: 'What Demaze sells, to whom, and the proof' },
 ] as const

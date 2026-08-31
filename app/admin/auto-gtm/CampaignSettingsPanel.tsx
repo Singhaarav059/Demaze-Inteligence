@@ -262,7 +262,7 @@ export function CampaignSettingsPanel({
       summary={
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Campaign Settings</h3>
+            <h3 className="text-sm font-semibold text-foreground">Sending Settings</h3>
             <p className="text-xs text-muted-foreground/70 mt-0.5">Who sends, how fast, and what happens if nobody replies</p>
           </div>
           {settings?.dailyLimit && <Badge variant="outline" className="shrink-0 text-[10px]">{settings.dailyLimit}/day</Badge>}
@@ -278,31 +278,31 @@ export function CampaignSettingsPanel({
           {/* A. CAMPAIGN */}
           <div className="space-y-4">
             <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground uppercase tracking-wide">
-              <Rocket className="size-3.5 text-muted-foreground/70" /> Campaign
+              <Rocket className="size-3.5 text-muted-foreground/70" /> Details
             </h4>
             <div className="space-y-1">
-              <Label htmlFor="campaign-name">Campaign name</Label>
+              <Label htmlFor="campaign-name">Name</Label>
               <Input
                 id="campaign-name"
                 value={settings.name}
                 onChange={e => setSettings(s => (s ? { ...s, name: e.target.value } : s))}
               />
-              <p className="text-xs text-muted-foreground/60">Used to identify this campaign in your workspace.</p>
+              <p className="text-xs text-muted-foreground/60">Used to identify this outreach in your workspace.</p>
             </div>
 
             <div className="space-y-1">
-              <Label>Send from</Label>
+              <Label>Sending from your Gmail account</Label>
               <p className="text-xs text-foreground">
                 {sendingAccount
                   ? sendingAccount.email
                     ? <><CheckCircle2 className="inline size-3.5 mr-1 text-signal-strong align-[-2px]" />{sendingAccount.email}</>
                     : sendingAccount.isReal
                       ? <>Connected - <span className="font-medium">{sendingAccount.provider}</span></>
-                      : 'Demo mode (no real sending account connected yet)'
+                      : 'Demo mode (no Gmail account connected yet)'
                   : 'Checking…'}
                 {' '}
                 <a href="/admin/outbound/integrations" className="underline underline-offset-2 hover:text-foreground text-muted-foreground/70">
-                  change in Integrations
+                  change account
                 </a>
               </p>
               <p className="text-xs text-muted-foreground/60">Emails will be sent from this account.</p>

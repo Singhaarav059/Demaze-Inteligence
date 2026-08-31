@@ -72,7 +72,7 @@ export default function SuppressionListPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Suppression List</h2>
+        <h1 className="text-base font-semibold text-foreground">Do-not-contact List</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Bounced, unsubscribed, and manually excluded addresses - never sent to again.
         </p>
@@ -129,14 +129,14 @@ export default function SuppressionListPage() {
           </div>
           <Button size="sm" disabled={adding || !email.trim()} onClick={handleAdd}>
             {adding ? <Spinner className="size-3.5" /> : null}
-            Add to Suppression List
+            Add to Do-not-contact List
           </Button>
       </CollapsibleRow>
 
       <Card className="border-border bg-card">
         <CardContent className="px-5 py-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Suppressed ({entries.length})</h2>
+            <h2 className="text-sm font-semibold text-foreground">On the list ({entries.length})</h2>
             <div className="relative w-48">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
               <Input className="pl-8 h-8" placeholder="Filter by email…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -148,7 +148,7 @@ export default function SuppressionListPage() {
               <Spinner className="size-4" /> Loading…
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState icon={Ban} title={entries.length === 0 ? 'No suppressed addresses yet' : 'No matches'} className="border-none py-6" />
+            <EmptyState icon={Ban} title={entries.length === 0 ? 'No addresses on the list yet' : 'No matches'} className="border-none py-6" />
           ) : (
             <div className="space-y-2">
               {filtered.map(entry => (

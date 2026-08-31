@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { MoreHorizontal, Search, ChevronLeft } from 'lucide-react'
 import { BrandMark } from './BrandMark'
-import { NAV, SECONDARY_NAV, isNavActive } from './nav-config'
+import { NAV, SECONDARY_NAV } from './nav-config'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -25,8 +25,17 @@ export function TopBar() {
   // was enough).
   const entry =
     NAV.find((n) => n.href === pathname) ??
-    NAV.find((n) => n.href !== '/admin' && pathname.startsWith(n.href + '/'))
-  const meta = { section: entry?.label ?? 'Workspace', hint: entry?.hint ?? '' }
+    NAV.find((n) => n.href !== '/admin' && pathname.startsWith(n.href + '/')) ??
+    SECONDARY_NAV.find((n) => n.href === pathname) ??
+    SECONDARY_NAV.find((n) => pathname.startsWith(n.href + '/'))
+  // /admin/settings sits one level under "More" with no NAV entry of its
+  // own - a small local fallback beats stretching NAV/SECONDARY_NAV's
+  // shared shape for one page.
+  const isSettingsHub = pathname === '/admin/settings'
+  const meta = {
+    section: isSettingsHub ? 'Settings' : entry?.label ?? 'Workspace',
+    hint: isSettingsHub ? 'Configuration that rarely needs to change' : entry?.hint ?? '',
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-5 backdrop-blur">
@@ -87,12 +96,6 @@ export function TopBar() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        {/* Hidden on the narrowest phones - with BottomTabBar covering
-            primary nav now, TopBar's mobile row only has real room for the
-            brand mark + section label + the two buttons above. */}
-        <span className="hidden shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline-block">
-          Internal
-        </span>
       </div>
     </header>
   )
