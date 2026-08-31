@@ -11,6 +11,19 @@
 // additionally checks outbound_campaign_contacts to catch a contact that
 // was already sent to in an earlier partial send of this same campaign
 // (e.g. a resumed session).
+//
+// Cross-campaign check (added — batch/shared-campaign hardening pass):
+// the outbound_campaign_contacts uniqueness guarantee (and claimCampaignContact's
+// atomic claim) is scoped to ONE (campaign_id, contact_id) pair — nothing
+// stops the SAME contact_id from being enqueued into a SECOND, different
+// campaign (e.g. a client-side bug that creates a duplicate campaign for
+// the same batch, or an operator manually creating a second campaign for
+// contacts that already have one). If that ever happens, a contact who was
+// already sent to under campaign A would show as plain "ready" under
+// campaign B with zero warning. This now checks ALL of this contact's
+// outbound_campaign_contacts rows, not just the current campaign's, so a
+// real prior send anywhere blocks as 'already_sent' regardless of which
+// campaign the caller is reviewing.
 // ============================================================
 
 import type { createServerClient } from '@/lib/supabase/server'
@@ -79,27 +92,41 @@ export async function classifyCampaignContacts(
   const [{ data: contacts }, { data: generatedRows }, { data: campaignContactRows }] = await Promise.all([
     supabase.from('outbound_contacts').select('id, person_name, email, email_confidence, discovery_grounding_status, discovery_grounding_reason').in('id', contactIds),
     supabase.from('outbound_generated_content').select('contact_id, selected_subject_line, email_draft').in('contact_id', contactIds),
-    supabase.from('outbound_campaign_contacts').select('id, contact_id, status').eq('campaign_id', campaignId).in('contact_id', contactIds),
+    // No campaign_id filter here (deliberate, see file header) — needs every
+    // campaign this contact_id appears in, not just the one being reviewed.
+    supabase.from('outbound_campaign_contacts').select('id, campaign_id, contact_id, status').in('contact_id', contactIds),
   ])
 
   const generatedByContact = new Map((generatedRows ?? []).map(g => [g.contact_id, g]))
-  const campaignContactByContact = new Map((campaignContactRows ?? []).map(cc => [cc.contact_id, cc]))
+  const ccRowsByContact = new Map<string, Array<{ id: string; campaign_id: string; contact_id: string; status: string }>>()
+  for (const cc of campaignContactRows ?? []) {
+    const arr = ccRowsByContact.get(cc.contact_id) ?? []
+    arr.push(cc)
+    ccRowsByContact.set(cc.contact_id, arr)
+  }
 
   const rows: ContactReviewRow[] = []
   for (const contactId of contactIds) {
     const contact = (contacts ?? []).find(c => c.id === contactId)
     const personName = contact?.person_name ?? 'Unknown contact'
     const email = contact?.email ?? null
-    const existingCc = campaignContactByContact.get(contactId)
+    const ccRows = ccRowsByContact.get(contactId) ?? []
+    // A real prior send under ANY campaign blocks — not just this one.
+    const sentElsewhere = ccRows.find(cc => cc.status !== 'queued')
+    // Still tracked for the ready/missing_email/blocked rows below so their
+    // campaignContactId keeps pointing at THIS campaign's own queued row
+    // (if any), same as before this change.
+    const sameCampaignRow = ccRows.find(cc => cc.campaign_id === campaignId)
 
-    if (existingCc && existingCc.status !== 'queued') {
+    if (sentElsewhere) {
       rows.push({
         contactId, personName, email, status: 'already_sent',
-        reason: `Already ${existingCc.status === 'sent' ? 'sent' : existingCc.status}.`,
-        campaignContactId: existingCc.id, campaignContactStatus: existingCc.status,
+        reason: `Already ${sentElsewhere.status === 'sent' ? 'sent' : sentElsewhere.status}${sentElsewhere.campaign_id === campaignId ? '' : ' (under a different campaign)'}.`,
+        campaignContactId: sentElsewhere.id, campaignContactStatus: sentElsewhere.status,
       })
       continue
     }
+    const existingCc = sameCampaignRow
 
     if (!email) {
       rows.push({ contactId, personName, email, status: 'missing_email', reason: 'No email address on file.', campaignContactId: existingCc?.id })

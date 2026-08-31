@@ -123,9 +123,40 @@ export async function POST(
     return NextResponse.json({ success: false, error: fetchError.message }, { status: 500 })
   }
 
+  // Cross-campaign already-sent guard (batch/shared-campaign hardening
+  // pass) — the atomic claim below only protects against two callers
+  // racing on the SAME campaign_contacts row. Nothing stops the same real
+  // contact_id from also being enqueued into a DIFFERENT campaign (a
+  // duplicate-campaign client bug, or an operator manually creating a
+  // second campaign for contacts that already have one) — without this,
+  // that second campaign's "queued" row would sail through the claim and
+  // genuinely send a duplicate real email. One batch query up front, same
+  // "resolve shared context once" discipline as the window/limit checks
+  // above.
+  const candidateContactIds = (queued ?? []).map(q => q.contact_id)
+  const sentElsewhereByContact = new Map<string, string>()
+  if (candidateContactIds.length > 0) {
+    const { data: otherCampaignRows } = await supabase
+      .from('outbound_campaign_contacts')
+      .select('contact_id, status')
+      .in('contact_id', candidateContactIds)
+      .neq('campaign_id', campaignId)
+    for (const row of otherCampaignRows ?? []) {
+      if (row.status !== 'queued') sentElsewhereByContact.set(row.contact_id, row.status)
+    }
+  }
+
   const outcomes: SendOutcome[] = []
 
   for (const item of queued ?? []) {
+    const sentElsewhereStatus = sentElsewhereByContact.get(item.contact_id)
+    if (sentElsewhereStatus) {
+      outcomes.push({
+        campaignContactId: item.id, status: 'blocked',
+        reason: `This contact was already ${sentElsewhereStatus === 'sent' ? 'sent to' : sentElsewhereStatus} under a different campaign.`,
+      })
+      continue
+    }
     if (!withinWindow) {
       outcomes.push({ campaignContactId: item.id, status: 'skipped', reason: 'Outside this campaign\'s configured sending window.' })
       continue

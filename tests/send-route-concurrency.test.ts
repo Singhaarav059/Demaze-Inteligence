@@ -156,6 +156,45 @@ describe('POST campaigns/[id]/send — Phase B safety-policy hard blocks (server
   })
 })
 
+describe('POST campaigns/[id]/send — batch/shared-campaign hardening: cross-campaign already-sent guard', () => {
+  it('a contact already sent under a DIFFERENT campaign is blocked here too, sendEmail is never called', async () => {
+    const supa = seed('active')
+    // Same real contact_id, already 'sent' under a completely different
+    // campaign (e.g. a duplicate batch campaign got created for contacts
+    // that already have one) — this campaign's own row is still 'queued'.
+    supa.seed('outbound_campaign_contacts', [
+      { id: 'cc1', campaign_id: 'camp1', contact_id: 'contact1', status: 'queued' },
+      { id: 'cc-other', campaign_id: 'camp-other', contact_id: 'contact1', status: 'sent' },
+    ])
+    useSupabase(supa)
+
+    const res = await POST(makeReq(), { params: Promise.resolve({ id: 'camp1' }) })
+    const json = await res.json()
+
+    expect(json.blocked).toBe(1)
+    expect(json.sent).toBe(0)
+    expect(sendEmail).not.toHaveBeenCalled()
+    // Never claimed — still sitting 'queued' under camp1, not consumed.
+    expect(supa.table('outbound_campaign_contacts').find((r: any) => r.id === 'cc1')?.status).toBe('queued')
+  })
+
+  it('a queued-but-unsent row in a different campaign does NOT block a real send', async () => {
+    const supa = seed('active')
+    supa.seed('outbound_campaign_contacts', [
+      { id: 'cc1', campaign_id: 'camp1', contact_id: 'contact1', status: 'queued' },
+      { id: 'cc-other', campaign_id: 'camp-other', contact_id: 'contact1', status: 'queued' },
+    ])
+    useSupabase(supa)
+    vi.mocked(sendEmail).mockResolvedValue({ status: 'sent', providerMessageId: 'm1', providerUsed: 'gmail' })
+
+    const res = await POST(makeReq(), { params: Promise.resolve({ id: 'camp1' }) })
+    const json = await res.json()
+
+    expect(json.sent).toBe(1)
+    expect(sendEmail).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('POST campaigns/[id]/send — ambiguous timeout does not roll back to queued', () => {
   it('leaves the contact claimed and reports it separately from a definite failure', async () => {
     const supa = seed('active')

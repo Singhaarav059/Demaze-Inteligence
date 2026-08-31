@@ -100,6 +100,44 @@ describe('classifyCampaignContacts — Phase B blocking checks', () => {
     expect(summary.rows[0].status).toBe('missing_email')
   })
 
+  it('a contact already sent under THIS campaign is already_sent', async () => {
+    const supabase = new FakeSupabase()
+    seedContact(supabase)
+    supabase.seed('outbound_campaign_contacts', [
+      { id: 'cc1', campaign_id: 'camp1', contact_id: 'c1', status: 'sent' },
+    ])
+    const summary = await classifyCampaignContacts(supabase as any, 'camp1', ['c1'])
+    expect(summary.rows[0].status).toBe('already_sent')
+    expect(summary.rows[0].reason).toBe('Already sent.')
+    expect(summary.alreadySent).toBe(1)
+  })
+
+  it('batch/shared-campaign hardening: a contact already sent under a DIFFERENT campaign also blocks as already_sent', async () => {
+    const supabase = new FakeSupabase()
+    seedContact(supabase)
+    // This contact has no row in camp1 (the campaign being reviewed) at
+    // all, but was already sent to under camp0 — e.g. a duplicate batch
+    // campaign got created for contacts that already have one. Without the
+    // cross-campaign check this would show as plain 'ready'.
+    supabase.seed('outbound_campaign_contacts', [
+      { id: 'cc0', campaign_id: 'camp0', contact_id: 'c1', status: 'sent' },
+    ])
+    const summary = await classifyCampaignContacts(supabase as any, 'camp1', ['c1'])
+    expect(summary.rows[0].status).toBe('already_sent')
+    expect(summary.rows[0].reason).toBe('Already sent (under a different campaign).')
+    expect(summary.rows[0].campaignContactId).toBe('cc0')
+  })
+
+  it('a queued-but-unsent row in a different campaign does NOT block — only a real prior send does', async () => {
+    const supabase = new FakeSupabase()
+    seedContact(supabase)
+    supabase.seed('outbound_campaign_contacts', [
+      { id: 'cc0', campaign_id: 'camp0', contact_id: 'c1', status: 'queued' },
+    ])
+    const summary = await classifyCampaignContacts(supabase as any, 'camp1', ['c1'])
+    expect(summary.rows[0].status).toBe('ready')
+  })
+
   it('an unresolved suppression check (fail-closed) surfaces as suppressed, not ready', async () => {
     suppressionState.result = {
       suppressed: true,

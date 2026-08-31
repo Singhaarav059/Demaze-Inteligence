@@ -914,6 +914,38 @@ export function useAutoGtmFlow() {
           }
         }
 
+        // Batch mode has no source_run_id to look up by (a shared batch
+        // campaign is always created with source_run_id: null) - added
+        // (batch/shared-campaign hardening pass) so this function isn't the
+        // one place in the file that skips the existing-campaign check
+        // entirely for batch mode. Without this, any re-invocation with
+        // campaignId back at null (e.g. a remounted component that still
+        // has `contacts` loaded) would create a genuinely duplicate batch
+        // campaign for contacts that already have one - same failure shape
+        // as the two bugs already fixed above for single mode, just via a
+        // different trigger. Uses the same contact_ids lookup
+        // restoreContactsAndCampaign() already relies on, since batch
+        // contacts carry no shared identifier of their own.
+        if (inputMode === 'batch' && contacts.length > 0) {
+          try {
+            // ponytail: query-string contact_ids, same as the existing
+            // single-mode lookup this mirrors - fine at current pilot scale
+            // (dozens of contacts), but a very large batch's full contact
+            // list could theoretically exceed a URL length limit. Upgrade
+            // to a POST-body lookup if a real batch ever gets that big.
+            const ids = contacts.map(c => c.id).join(',')
+            const existingRes = await fetch(`/api/admin/outbound/campaigns?contact_ids=${ids}`)
+            const existingData = await existingRes.json()
+            const existing = existingData.success ? existingData.campaigns?.[0] : null
+            if (existing) {
+              setCampaignId(existing.id)
+              return existing.id
+            }
+          } catch {
+            // Same fail-open discipline as the single-mode lookup above.
+          }
+        }
+
         const campaignName =
           inputMode === 'batch'
             ? `Batch (${batchCompanies.filter(c => c.status === 'done').length} companies) - Auto Flow`
@@ -940,7 +972,7 @@ export function useAutoGtmFlow() {
 
     ensureCampaignIdInFlight.current = promise
     return promise
-  }, [campaignId, inputMode, batchCompanies, companyName, runId])
+  }, [campaignId, inputMode, batchCompanies, companyName, runId, contacts])
 
   // Enqueues the given contact ids and sends whatever is queued - the send
   // route only ever touches rows still 'queued', so calling this repeatedly
