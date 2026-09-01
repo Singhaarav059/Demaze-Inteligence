@@ -12,9 +12,8 @@
 // ============================================================
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { SearchX, ArrowRight, Building2 } from 'lucide-react'
+import { SearchX, Building2, Globe, ExternalLink, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -24,6 +23,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Avatar } from '@/components/ui/avatar'
 import { IntelStatus, type IntelStatusKind } from '@/components/ui/intel-status'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { DecisionMakerFinder } from '@/app/admin/outbound/contacts/DecisionMakerFinder'
 import { CompanyResearchCard } from './CompanyResearchCard'
 import { staggerList, listItem } from '@/lib/motion'
 import { formatRevenue, countryLabel } from './search-options'
@@ -269,35 +269,29 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                       {result.signals.length} signal{result.signals.length === 1 ? '' : 's'} · {result.opportunities.length} opportunit{result.opportunities.length === 1 ? 'y' : 'ies'}
                     </p>
                   )}
-                  {(status === 'done' || status === 'already_researched') && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {result ? (
-                        <button
-                          onClick={() => setExpandedId(expandedId === company.id ? null : company.id)}
-                          className="text-muted-foreground hover:text-foreground/90 text-xs px-2 py-1 rounded border border-border hover:border-border-strong transition-colors"
-                        >
-                          {expandedId === company.id ? 'Hide' : 'View report'}
-                        </button>
-                      ) : status === 'already_researched' && match.hasStoredResult ? (
-                        // Result exists (a prior visit to this page researched
-                        // this company) but hasn't been fetched into state yet
-                        // - see useCompanyDiscoverySearch.ts's viewStoredResult().
-                        <button
-                          onClick={async () => { await viewStoredResult(company.id); setExpandedId(company.id) }}
-                          disabled={viewingId === company.id}
-                          className="text-muted-foreground hover:text-foreground/90 text-xs px-2 py-1 rounded border border-border hover:border-border-strong transition-colors disabled:opacity-60"
-                        >
-                          {viewingId === company.id ? <Spinner className="size-3 inline" /> : 'View report'}
-                        </button>
-                      ) : null}
-                      <Link
-                        href={`/admin/auto-gtm?url=${encodeURIComponent(match.domain || match.name)}`}
-                        className="inline-flex items-center gap-1 text-primary hover:text-primary text-xs px-2 py-1 rounded border border-primary/40 hover:bg-primary/10 transition-colors"
-                      >
-                        Find decision makers <ArrowRight className="size-3" />
-                      </Link>
-                    </div>
-                  )}
+                  <button
+                    onClick={async () => {
+                      const next = expandedId === company.id ? null : company.id
+                      setExpandedId(next)
+                      // Result exists (a prior visit to this page researched
+                      // this company) but hasn't been fetched into state yet -
+                      // see useCompanyDiscoverySearch.ts's viewStoredResult().
+                      if (next && !result && status === 'already_researched' && match.hasStoredResult) {
+                        await viewStoredResult(company.id)
+                      }
+                    }}
+                    disabled={viewingId === company.id}
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground/90 text-xs px-2 py-1 rounded border border-border hover:border-border-strong transition-colors disabled:opacity-60"
+                  >
+                    {viewingId === company.id ? (
+                      <Spinner className="size-3" />
+                    ) : (
+                      <>
+                        {expandedId === company.id ? 'Hide details' : 'Details'}
+                        <ChevronRight className={`size-3 transition-transform ${expandedId === company.id ? 'rotate-90' : ''}`} />
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -308,7 +302,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
               )}
 
               <AnimatePresence initial={false}>
-                {expandedId === company.id && result && (
+                {expandedId === company.id && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
@@ -316,17 +310,29 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
                     transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                     className="overflow-hidden border-t border-border bg-background/30"
                   >
-                    <div className="px-4 py-4">
-                      <CompanyResearchCard
-                        result={result}
-                        firmographics={{
-                          industry: match.industry,
-                          employeeCount: match.employeeCount,
-                          hqLocation: match.hqLocation,
-                          founded: match.founded,
-                          revenueAnnual: match.revenueAnnual,
-                        }}
+                    <div className="px-4 py-4 space-y-4">
+                      <CompanyQuickFacts match={match} />
+                      {/* Search runs only when the user clicks "Find People"
+                          inside this component - never automatically, and
+                          never for every row at once (real per-lookup cost). */}
+                      <DecisionMakerFinder
+                        companyName={match.name}
+                        domain={match.domain || ''}
+                        sourceRunId={company.id}
+                        onContactAdded={() => {}}
                       />
+                      {result && (
+                        <CompanyResearchCard
+                          result={result}
+                          firmographics={{
+                            industry: match.industry,
+                            employeeCount: match.employeeCount,
+                            hqLocation: match.hqLocation,
+                            founded: match.founded,
+                            revenueAnnual: match.revenueAnnual,
+                          }}
+                        />
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -347,6 +353,45 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
           <Button size="sm" variant="outline" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? <><Spinner /> Loading…</> : 'Load more'}
           </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Description/funding stage/website/LinkedIn - already returned by the same
+// Explee company-search call that supplied everything else in the row
+// (see useCompanyDiscoverySearch.ts's DiscoveredMatch), just never surfaced
+// before. No network call here, no additional cost.
+function CompanyQuickFacts({ match }: { match: DiscoveredMatch }) {
+  const hasLinks = match.websiteUrl || match.linkedinUrl
+  if (!match.description && !match.fundingStage && !hasLinks) return null
+  return (
+    <div className="space-y-2">
+      {match.description && <p className="text-sm text-foreground/90">{match.description}</p>}
+      {(match.fundingStage || hasLinks) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {match.fundingStage && <Badge variant="secondary" className="text-[10px]">{match.fundingStage}</Badge>}
+          {match.websiteUrl && (
+            <a
+              href={match.websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover"
+            >
+              <Globe className="size-3" /> Website
+            </a>
+          )}
+          {match.linkedinUrl && (
+            <a
+              href={match.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover"
+            >
+              <ExternalLink className="size-3" /> LinkedIn
+            </a>
+          )}
         </div>
       )}
     </div>

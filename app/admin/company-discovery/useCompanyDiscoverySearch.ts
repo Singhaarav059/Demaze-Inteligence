@@ -31,6 +31,15 @@ export interface DiscoveredMatch extends CompanyMatch {
   founded?: number | null
   revenueAnnual?: number | null
   lastResearchedAt?: string | null
+  // Already returned by the same Explee company-search call that populates
+  // everything above (no extra credit spent) but previously dropped on the
+  // floor - description/funding_stage/linkedin_id/url all come straight off
+  // ExpleeCompany, same "nothing invented" discipline as every other field
+  // on this type.
+  description?: string | null
+  fundingStage?: string | null
+  linkedinUrl?: string | null
+  websiteUrl?: string | null
   // True when a prior result exists AND was produced by this same page's
   // research call (operation='company_signals_research') - see
   // explee-discovery/route.ts's annotateAlreadyResearched. Only then can
@@ -171,6 +180,10 @@ export function useCompanyDiscoverySearch() {
         hqCountryCode: c.geo,
         founded: c.founded,
         revenueAnnual: c.revenue_annual,
+        description: c.description ?? null,
+        fundingStage: c.funding_stage ?? null,
+        linkedinUrl: c.linkedin_id ? `https://www.linkedin.com/company/${c.linkedin_id}` : null,
+        websiteUrl: c.url ?? null,
         lastResearchedAt: (c as ExpleeCompany & { lastResearchedAt?: string | null }).lastResearchedAt ?? null,
         hasStoredResult: (c as ExpleeCompany & { hasStoredResult?: boolean }).hasStoredResult ?? false,
       }))
