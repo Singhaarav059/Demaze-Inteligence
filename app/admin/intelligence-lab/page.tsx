@@ -1757,7 +1757,7 @@ function SourcesPanel({ result }: { result: RunResult | null }) {
       ) : null}
       {sources.length === 0 ? (
         <div className="rounded-lg border border-border bg-card px-4 py-8 text-center text-muted-foreground text-sm">
-          No external sources discovered. Set TAVILY_API_KEY or SERPER_API_KEY to enable source discovery.
+          No external sources discovered. Set TAVILY_API_KEY to enable source discovery.
         </div>
       ) : (
         <>

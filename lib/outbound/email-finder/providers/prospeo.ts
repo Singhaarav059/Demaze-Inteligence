@@ -12,7 +12,10 @@ import type { EmailFinderProvider, EmailFinderRequest, EmailFinderResult } from 
 
 function mapConfidence(status: string | undefined): EmailFinderResult['confidence'] {
   if (!status) return 'medium'
-  return /verif/i.test(status) ? 'high' : 'medium'
+  // A real Prospeo status containing "verif" is an actual SMTP-verification
+  // signal from the provider, not an inference — the only place in this
+  // codebase allowed to produce 'verified'.
+  return /verif/i.test(status) ? 'verified' : 'medium'
 }
 
 // Pure interpreter — derives an EmailFinderResult from any Prospeo

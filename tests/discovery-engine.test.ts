@@ -5,8 +5,8 @@
 // Covers the pure, network-free pieces added for Phase 1 Item 4:
 // executive-change-announcement + earnings-call-transcript/investor-call
 // query templates (buildDiscoveryQueries) and their corresponding
-// classifySourceType() detection. The search calls themselves
-// (searchTavily/searchSerper) are not unit-tested here — same reasoning as
+// classifySourceType() detection. The search calls themselves (searchTavily)
+// are not unit-tested here — same reasoning as
 // competitor-discovery.test.ts/company-discovery.test.ts: real HTTP belongs
 // in a live verification run, not a unit test.
 

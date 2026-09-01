@@ -1353,3 +1353,116 @@ real follow-up, and the same contact, once marked opened, gets withheld.
 
 All three fixes: `tsc --noEmit` clean, full suite passing, committed
 individually.
+
+## Exa made primary for company discovery and decision-maker discovery; Prospeo stays primary for email + enrichment (2026-09-01)
+
+Capability-based provider decision, not a wholesale vendor swap. Built on a
+real, evidence-gathering benchmark (`benchmarks/exa/REPORT.md`, 112 live
+calls across Explee/Prospeo/Exa) followed by an architecture pass that
+routed each capability to whichever provider the evidence actually
+supported (`benchmarks/exa/ROLLOUT.md` has the full capability matrix,
+architecture diff, cost analysis, and rollback instructions — this entry
+is the pointer, not a duplicate).
+
+**Company discovery**: `COMPANY_DISCOVERY_PROVIDER` default flipped
+`explee` → `exa`. Explee had reproducible problems that showed up live,
+not just in theory: a US company returned under a Europe-only geo filter,
+identical revenue figures duplicated across unrelated companies, ~9
+wrong-domain results in one 40-result page, heavy internal duplication,
+and — the most decisive finding — its own relevance ranking missed 8 of 9
+companies known to be real, findable-by-name businesses; Exa found all 9
+at #1. Explee's code is untouched and still fully selectable for rollback.
+Added conservative, deterministic, **annotate-don't-drop** post-processing
+to Exa's results (exact-domain/name dedup, generic-name flag, no-real-
+domain flag) — deliberately not another min-relevance-style hard
+threshold, which is exactly the mistake that broke Explee's recall.
+
+**Decision-maker discovery**: `outbound_integrations`'s active provider
+for this capability flipped from `prospeo` to `exa` (Prospeo's credential
+row deactivated, not deleted). Prospeo's own code documents its title
+filter as literal, not semantic — confirmed real, not a fluke, by
+re-testing Prospeo with its own shorter default title vocabulary (which
+recovered its hit rate from 2/10 to 8/10 companies); under Demaze's actual
+desired role vocabulary (Head of Operations, Head of Digital
+Transformation, etc.) it found candidates for only 2/10 real companies,
+while Exa found candidates for 10/10. Also fixed a real precision bug this
+surfaced: Exa's provider was silently dropping a correctly-found,
+correctly-senior person (Amit Kalyani, Bharat Forge) because his real
+title didn't literally match one of the requested phrases. Fixed by
+separating discovery from role classification — reusing the pre-existing
+`classifyRoleCategory()` (previously UI-only) as a new, uniformly-applied
+ranking layer (`lib/outbound/decision-maker-discovery/ranking.ts`) rather
+than requiring a literal phrase match to keep a candidate.
+
+**Email finding stays Prospeo** — the clearest non-decision in the whole
+exercise. 13/18 real emails found in the benchmark, 100% SMTP-verified.
+Exa's only email path (Websets) is Pro-gated on this account, confirmed
+via a direct API error, not assumed — no claim either way about whether
+Exa can do email once/if Pro access is obtained. Added `'verified'` as a
+genuinely new, 5th tier on `outbound_contacts.email_confidence`
+(migration `029_email_confidence_verified_tier.sql`) so a real
+provider-confirmed verification is never conflated with a confident
+guess — it can only ever come from Prospeo's actual SMTP-verification
+signal, never inferred from existence alone, never produced by any other
+provider or heuristic.
+
+**Contact enrichment stays Prospeo-primary**, with Exa wired in as a
+selective, one-time supplement (not a second call on every contact) —
+only triggered when Prospeo's result is genuinely thin (department,
+seniority, AND location all empty), merged with Prospeo's fields always
+winning, and the contributing provider(s) surfaced in the response
+(`enrichmentSources`) rather than silently combined.
+
+**Not done this round, deliberately**: no change to web
+search/evidence/deep-research (the 7-stage pipeline stays as-is — that
+was explicitly out of scope and unbenchmarked); no Exa Pro/Websets
+purchase; no monitoring capability (confirmed, still doesn't exist).
+
+Verification: `tsc --noEmit` clean, full suite (108 files / 1216 tests)
+passing, plus a small live validation (not another full benchmark) — 3
+company searches and 3 full company→decision-maker→email→enrichment
+chains run against the actual new production defaults, checked by hand
+for identity consistency at every hop.
+
+## Serper — REMOVED (2026-09-01)
+
+Following the web-research-stack benchmark
+(`benchmarks/exa/web-search-benchmark/WEB_RESEARCH_BENCHMARK_REPORT.md`),
+a direct diagnostic found the Serper account out of credits (`400
+"Not enough credits"`) — confirmed via a raw API call, not assumed.
+`searchSerper()`'s existing `if (!resp.ok) return []` error handling made
+this indistinguishable from "Serper genuinely found nothing" everywhere
+it was called, including in production's live Tavily→Serper fallback —
+meaning the fallback had already been silently non-functional for an
+unknown period before this was found.
+
+**Decision**: remove Serper completely rather than fund/revive it.
+Explicit user instruction, not derived — no benchmark evidence exists
+either way about Serper's actual result quality (it could never be
+exercised), so this is a cost/complexity call, not a quality one.
+
+**What changed**: `searchSerper()` deleted from
+`lib/enrichment/discovery-engine.ts`; every duplicated `searchWithFallback`
+copy (`website-discovery.ts`, `icp-generator.ts`, `competitor-discovery.ts`,
+`market-intelligence.ts`) and `linkedin-search.ts`'s decision-maker
+provider now call Tavily only, no fallback provider. `SERPER_API_KEY`
+removed from `lib/env.ts`'s optional-vars list and `.env.example`.
+`SearchCacheProvider` narrowed to `'tavily'` — old cached `'serper'` rows
+in `search_query_cache` are inert, not deleted (migration
+`012_search_query_cache.sql` is already-applied and not rewritten, per
+this repo's standing precedent).
+
+**A real, related gap fixed in the same pass**: `searchTavily()` was
+silently converting every failure (bad key, quota exhausted, network
+error) into the same `[]` a genuine zero-result query returns — exactly
+the shape that let Serper's outage go unnoticed. It now logs a distinct
+warning (`Tavily request FAILED (not a zero-result query) — ...`) on
+both the non-ok-response and thrown-error paths, while still returning
+`[]` to every caller (no return-type/signature change, so no ripple
+through the ~6 call sites) — preserves the existing graceful-degradation
+contract while making a real failure observable in logs going forward.
+
+**Not done**: no replacement fallback provider added (not Exa, not
+anything else) — the fallback slot is simply gone, per explicit
+instruction, pending the separate capability analysis in
+`benchmarks/exa/web-search-benchmark/WEB_RESEARCH_STACK_DECISION.md`.

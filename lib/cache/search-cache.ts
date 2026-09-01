@@ -2,19 +2,26 @@
 // Search Query Cache — server-side helper
 // ============================================================
 // Reads and writes the search_query_cache table in Supabase.
-// Wired into searchTavily()/searchSerper() (lib/enrichment/discovery-engine.ts)
-// so every discovery module (Enrichment Discovery, Competitor Discovery, ICP
+// Wired into searchTavily() (lib/enrichment/discovery-engine.ts) so every
+// discovery module (Enrichment Discovery, Competitor Discovery, ICP
 // Generator, Market Intelligence, Website Discovery, Company Discovery)
-// benefits automatically — they all funnel through those two functions.
+// benefits automatically — they all funnel through that one function.
 // Same non-fatal-on-failure discipline as lib/cache/scrape-cache.ts: a cache
 // read/write failure never blocks a live search call.
+//
+// 'serper' stays a valid value in the underlying DB CHECK constraint
+// (supabase/migrations/012_search_query_cache.sql, an already-applied
+// migration this repo doesn't rewrite after the fact) even though Serper
+// was removed 2026-09-01 — any old cached 'serper' rows are just inert data,
+// never written to or read again now that SearchCacheProvider no longer
+// includes it here.
 // ============================================================
 
 import { createServerClient } from '@/lib/supabase/server'
 
 export const SEARCH_CACHE_TTL_HOURS = 24 * 30 // 30 days
 
-export type SearchCacheProvider = 'tavily' | 'serper'
+export type SearchCacheProvider = 'tavily'
 
 export interface CachedSearchResult {
   title: string

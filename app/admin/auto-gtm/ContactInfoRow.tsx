@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 import type { OutboundContact } from '@/app/admin/outbound/contacts/useOutboundContacts'
 
 function emailConfidenceBadgeVariant(confidence: OutboundContact['email_confidence']) {
-  if (confidence === 'high') return 'default' as const
+  if (confidence === 'verified' || confidence === 'high') return 'default' as const
   if (confidence === 'medium' || confidence === 'low') return 'secondary' as const
   return 'outline' as const
 }

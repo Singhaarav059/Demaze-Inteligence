@@ -59,7 +59,7 @@ describe('ProspeoEmailFinderProvider', () => {
     expect(result.reason).toBe('INSUFFICIENT_CREDITS')
   })
 
-  it('maps a verified email to status found, confidence high', async () => {
+  it('maps a real verified email to status found, confidence verified — the only place this codebase produces "verified"', async () => {
     vi.mocked(getProspeoApiKey).mockResolvedValue('key')
     vi.mocked(callProspeoEnrichPerson).mockResolvedValue({
       ok: true,
@@ -69,7 +69,7 @@ describe('ProspeoEmailFinderProvider', () => {
     const result = await ProspeoEmailFinderProvider.findEmail({ personName: 'Jane Doe', companyName: 'Acme', domain: 'acme.com' })
     expect(result.status).toBe('found')
     expect(result.email).toBe('jane@acme.com')
-    expect(result.confidence).toBe('high')
+    expect(result.confidence).toBe('verified')
   })
 
   it('maps a non-verified email status to confidence medium', async () => {

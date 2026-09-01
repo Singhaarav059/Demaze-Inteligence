@@ -52,7 +52,7 @@ Every claim in a report traces back to something real: a scraped page, a search 
 | Styling | Tailwind CSS v4, `@base-ui/react` primitives |
 | Motion | Framer Motion |
 | Data | Supabase (Postgres) |
-| Search / scrape | Firecrawl, Tavily, Serper, Jina Reader |
+| Search / scrape | Firecrawl, Tavily, Jina Reader |
 | LLM | NVIDIA NIM / OpenRouter (provider-agnostic) |
 | Testing | Vitest |
 
@@ -72,7 +72,7 @@ Open [http://localhost:3000/admin/intelligence-lab](http://localhost:3000/admin/
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | Run history, saved research |
 | `FIRECRAWL_API_KEY` | Primary scraper |
-| `TAVILY_API_KEY` / `SERPER_API_KEY` | Search-grounded discovery + enrichment |
+| `TAVILY_API_KEY` | Search-grounded discovery + enrichment |
 | `NVIDIA_NIM_API_KEY` / `NVIDIA_NIM_MODEL` or `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | LLM provider (either works) |
 | `ADMIN_SECRET` | Admin route auth |
 

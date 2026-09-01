@@ -27,8 +27,8 @@
 //
 // Scope: operates on ScrapeResult.pages — the target company's OWN domain,
 // already scraped. Does NOT touch enrichment's externally-fetched sources
-// (Tavily/Serper/PDF, a separate, larger cross-domain contamination risk,
-// out of scope here) and does NOT change what gets scraped — classifyUrl()/
+// (Tavily/PDF, a separate, larger cross-domain contamination risk, out of
+// scope here) and does NOT change what gets scraped — classifyUrl()/
 // selectUrlsToScrape() in scraper.ts (pre-scrape "what to fetch" decision)
 // are untouched. This only changes what gets INCLUDED in the content passed
 // downstream to evidence extraction.

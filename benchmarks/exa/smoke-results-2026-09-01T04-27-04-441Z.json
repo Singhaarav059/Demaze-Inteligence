@@ -1,0 +1,1871 @@
+[
+  {
+    "capability": "company_discovery",
+    "input": "Indian manufacturing companies with significant manufacturing operations",
+    "latencyMs": 5767,
+    "ok": true,
+    "summary": "20 companies, enforced=[geo_include], hinted=[definition]",
+    "raw": {
+      "companies": [
+        {
+          "name": "Bajaj Auto Ltd",
+          "domain": "bajajauto.com",
+          "url": "https://bajajauto.com/",
+          "description": "A journey that began 75 years ago in a corner of India and has since traversed the world over. Uniting people from across countries, cultures, and customs over the years with a multitude of different dreams, there's power in an idea. An idea that gave rise to brands that stood the test of time, with partnerships it inspired, and the people who made it all happen. One idea that sparked a legacy - this is the story of Bajaj Auto. \n\n“Do what you think is best, but be the best in what you do.” - Kamalnayan Bajaj\n\nThese words embody the spirit of Bajaj Auto. From 1945 to today, from “Hamara Bajaj” to “The World’s Favourite Indian”- the most loved motorcycle brand in almost 80 countries, Bajaj Auto carries its rich legacy and unconventional thinking, with a penchant for staunch differentiation.\n\nThis philosophy has helped us be No.1 or No.2 in over 20 countries with industry-leading EBITDA of ~20%. Some statistics that reflect our strength:\n\n•\tA Zero Debt 5.5 Billion Dollar Company\n•\tWorld’s largest three-wheeler and third-largest two-wheeler manufacturer\n•\tIndia’s Number 1 motorcycle exporter – 2 out of every 3 motorcycles exported are Bajaj\n•\tThe largest exporter of Branded Goods – exporting over half of India’s two and three-wheelers\n•\tOver 33% of revenue from International markets with 15+ million motorcycles sold\n\nWith powerful brands, our spectrum ranges from Boxer in Africa to KTM in Europe, from Rouser in Latin America to Pulsar in India, our versatility is evident. International alliances with KTM, Husqvarna, and Triumph have ensured that our horizons are broadened.\n\nA pioneer in motorcycle technology, our R&D is world-class with talent from all corners of the globe with TPM being the prime mover of productivity for the last 25+ years. From lean manufacturing, we have now moved to lean engineering & lean marketing, which has led to globally competitive fixed costs.\n\nWith ever-expanding plans to win over the world, the sun truly never sets on a Bajaj Motorcycle.",
+          "industry": "Manufacturing",
+          "geo": "India",
+          "geo_city": "Pune",
+          "size": 5817,
+          "founded": 1945,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/bajaj-auto-ltd",
+          "provider": "exa",
+          "source_urls": [
+            "https://bajajauto.com/"
+          ]
+        },
+        {
+          "name": "Hindalco Industries Limited",
+          "domain": "hindalco.com",
+          "url": "https://hindalco.com/",
+          "description": "Hindalco Industries Limited is the metals flagship company of the Aditya Birla Group. A $31 billion metals powerhouse, Hindalco is the world’s largest aluminium company by revenues, and the world’s second largest Copper rods manufacturer (outside China).\n\nHindalco operates across the value chain, from bauxite mining, alumina refining, coal mining, captive power plants and aluminium smelting to downstream rolling, extrusions, and foils. Along with its subsidiary Novelis, Hindalco is the global leader in flat rolled products and the world’s largest recycler of aluminium.\n\nHindalco is India’s largest copper producer, serving more than half the country’s copper requirements. Its copper facility in Gujarat, India, comprises a world-class copper smelter and refinery complex, downstream facilities, and a captive jetty.\n\nHindalco’s global footprint spans 48 manufacturing units across 10 countries. Hindalco has been ranked the world’s most sustainable aluminium company in the Dow Jones Sustainability Indices (DJSI) for six consecutive years – 2020, 2021, 2022, 2023, 2024, and 2025.",
+          "industry": "Mining",
+          "geo": "India",
+          "geo_city": "Mumbai",
+          "size": 6367,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/hindalcoindustrieslimited",
+          "provider": "exa",
+          "source_urls": [
+            "https://hindalco.com/"
+          ]
+        },
+        {
+          "name": "Bharat Heavy Electricals Limited",
+          "domain": "bhel.com",
+          "url": "https://bhel.com/",
+          "description": "Established in 1964, BHEL is one of India's largest engineering and manufacturing enterprises in the energy and infrastructure sectors, and a leading power equipment manufacturer globally. BHEL serves the core sectors of the economy and provides a comprehensive portfolio of products, systems and services to customers in power, transmission, transportation, renewables, water, defence & aerospace, oil & gas, and industry. BHEL has created value for its stakeholders due to the scale and depth of its operations, rich experience, competent manpower, innovative ecosystem, diverse product-mix and focus on sustainable business solutions. BHEL’s greatest asset- its highly skilled and committed workforce of more than 34,000 employees is the cornerstone of its success.\n\nBHEL’s commitment to nation building reflects in many ways- in its contribution to the country’s installed power generation capacity; bringing the latest state-of-the-art technology to the country; consistent highest expenditure of more than 2.5% of its turnover on R&D and innovation in the Indian engineering segment; pan-India presence; establishment of world-class assets with presence in over 84 country across the globe, and contribution to the society at large through initiatives in skilling youth, health & hygiene, education, cleanliness and environment protection, to name a few.\n\nWith a widespread network of 16 manufacturing facilities, 2 repair units, 4 regional offices, 8 service centres, 1 subsidiary, 3 active joint ventures, 15 regional marketing centres, 3 overseas offices and current project execution at more than 150 project sites across India and abroad, BHEL manufactures a wide range of high quality & reliable products adhering to national & international standards. \n\nBHEL has installed over 1000 utility sets worldwide with its installed base of supplied power generating equipment exceeding 185 GW. BHEL has also commissioned 200+ electric substations & 5 major HVDC projects in the country.",
+          "industry": "Appliances, Electrical, and Electronics Manufacturing",
+          "geo": "India",
+          "geo_city": "New Delhi",
+          "size": 6472,
+          "founded": 1964,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/bhel",
+          "provider": "exa",
+          "source_urls": [
+            "https://bhel.com/"
+          ]
+        },
+        {
+          "name": "CEAT Limited",
+          "domain": "ceat.com",
+          "url": "https://ceat.com/",
+          "description": "CEAT, the flagship company of RPG Enterprises, was established in 1958. Today, CEAT is one of India’s leading tyre manufacturers and has a strong presence in global markets. CEAT achieved the distinction of being the first tyre brand worldwide to be awarded the \"Lighthouse Designation” by the World Economic Forum, recognizing its Halol plant in Gujarat. Additionally, it is the sole tyre brand outside Japan to have earned the prestigious Deming Grand Prize from JUSE.\nHeadquartered in Mumbai, CEAT has six state-of-the-art and technologically advanced manufacturing plants and drives the ambition to contribute to the global agenda of sustainable development through R&D centres at Halol, Gujarat, and Frankfurt, Germany, which are the epitome of innovation and sustainable solutions.\nCEAT produces more than 41 million high-performance tyres, serving both domestic as well as international markets with export to 110+ countries. It caters to diverse segments like 2-3 Wheelers, Passenger and Utility Vehicles, Commercial Vehicles and Off-Highway Vehicles.",
+          "industry": "Motor Vehicle Manufacturing",
+          "geo": "India",
+          "geo_city": "Mumbai",
+          "size": 3478,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/ceat-tyres-limited",
+          "provider": "exa",
+          "source_urls": [
+            "https://ceat.com/"
+          ]
+        },
+        {
+          "name": "Varroc",
+          "domain": "varroc.com",
+          "url": "https://varroc.com/",
+          "description": "Varroc Group is a global tier-1 automotive component manufacturer and supplier of exterior lighting systems, plastic and polymer components, electrical-electronics components, and precision metallic components to two-wheeler, three-wheeler, passenger cars, commercial vehicles and off-highway vehicle OEMs. \n\nWith 36 world-class manufacturing facilities, 7 R&D centers and over 6500 employees across 8 countries, Varroc is on an exponential growth trajectory, clocking net revenues in excess of ₹58,000 million in FY 22. \n\nWith 3 decades of relentless commitment to excellence and value-based performance, Varroc offers the best design solutions that gives its customers a competitive edge in their markets.",
+          "industry": "Motor Vehicle Parts Manufacturing",
+          "geo": "India",
+          "geo_city": "Aurangabad",
+          "size": 2592,
+          "founded": 1990,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/varroc-global",
+          "provider": "exa",
+          "source_urls": [
+            "https://varroc.com/"
+          ]
+        },
+        {
+          "name": "Exide Industries Limited",
+          "domain": "exideindustries.com",
+          "url": "https://exideindustries.com/",
+          "description": "For more than seven decades, Exide has been one of India's most reliable brands, enjoying unrivalled reputation and recall. Our constant emphasis on innovation, extensive geographic footprint, strong relationship with marquee clients and steady technology upgradations with global business partners have made us a distinct frontrunner in the lead-acid storage batteries space for both automotive and industrial applications.\n\nExide designs, manufactures, markets and sells the widest range of lead acid storage batteries in the world from 2.5Ah to 20,600Ah capacity, to cover the broadest spectrum of applications. Using the latest technological inputs, we manufacture batteries for the automotive, power, telecom, infrastructure projects, computer industries, as well as the railways, mining and defence sectors.",
+          "industry": "Manufacturing",
+          "geo": "India",
+          "geo_city": "Kolkata",
+          "size": 3017,
+          "founded": 1947,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/exide-industries-limited",
+          "provider": "exa",
+          "source_urls": [
+            "https://exideindustries.com/"
+          ]
+        },
+        {
+          "name": "Graphite India Limited",
+          "domain": "graphiteindia.com",
+          "url": "https://graphiteindia.com/",
+          "description": "Graphite India Limited (GIL) is the pioneer in India for manufacture of Graphite Electrodes as well as Carbon and Graphite Speciality products. GIL’s manufacturing facilities are spread across 6 plants in India and it has also got a 100% owned subsidiary at Nuremberg, Germany, by name Graphite COVA GmbH.\n\nHaving started in 1967 in collaboration with erstwhile Great Lakes Carbon Corporation (GLCC) of USA, GIL has been continually improving its product quality and services thereby scaling newer heights of excellence and customer recognition. This journey has been fueled by our reliance on cutting-edge technology, a natural penchant for innovation and creativity, eco-friendly approach in production process, consistency of product quality and services as well as productivity and cost optimization.\n\nSince the inception of Graphite India in the 1960s, we have come a long way. The evolution from 5000 MT to 98000 MT of graphite electrodes along with its accompanying challenges have moulded the core calibre of the Company as a whole into a respected and a responsible global corporate.\n\nGIL’s product range today extends from electrodes – “the main stay“ to a wide spectrum of products covering Impervious Graphite Equipments, Graphite Speciality Products, High Speed Steel, Glass Reinforced Plastic Pipes, Calcined Petroleum Coke and Hydel Power Generation. Our recent initiative for investment in a US based Company in the development of Graphene Sheets with all its innumerable potential applications could take the Company to a new trajectory.\n\nAt GIL, we lay emphasis on inducting, rewarding and retaining the right talent. \n\nWe regularly upgrade knowledge in order to keep abreast of the contemporary developments and to offer the best output for the Company.\n\nWe are committed to being proficient in the field of our core competence- Carbon and Graphite.",
+          "industry": "Machinery Manufacturing",
+          "geo": "India",
+          "geo_city": "Kolkata",
+          "size": 229,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/graphiteindialimited",
+          "provider": "exa",
+          "source_urls": [
+            "https://graphiteindia.com/"
+          ]
+        },
+        {
+          "name": "PI Industries Ltd",
+          "domain": "piindustries.com",
+          "url": "https://piindustries.com/",
+          "description": "Founded in 1946, PI Industries Ltd. (BSE: 523642, NSE: PIIND, ISIN ID: INE603J01030) is one of India’s leading Agrisciences and Fine Chemical companies with a unique business model of providing innovative farm solutions to farmers. Simultaneously, we partner with global innovator companies across the value chain - Custom Synthesis to manufacturing to co-marketing & distribution of their products. \n\nPowered by deep R&D expertise, PI has a significant footprint in the Indian crop protection market and a strong legacy of leading brands that bring value-added offerings to over 3 million farmers and retailers in India and globally. \n\nWith a strong belief in technology and IP protection as the key pillar, PI has been investing ahead of time and has established a large-scale manufacturing infrastructure focused on Industry 4.0 standards. We have built robust capabilities in each part of the value chain - process synthesis, scaling up, and commercialisation. With strength of over 3,000 employees, the Company currently operates five formulation facilities and 15 multipurpose plants under its four manufacturing locations. These state-of-art facilities have integrated process development teams with in-house engineering capabilities. \n\nPI’s world-class R&D facility at Udaipur has a dedicated team of 400+ scientists and researchers and includes advanced research and development labs, kilo plants, and pilot plants with NABL certification. Founded on seven decades of trust and customer-centricity, our teams have a proven track record of delivering transformative solutions, timely product supplies, and cost efficiencies and have established deep symbiotic relationships with over 20 global innovators. \n\nPI Industries is broadening its horizons across chemistry platforms to address the challenges of food security, nutrition, and latent health needs of the planet to create shared value for all and reimagine a healthier planet. \n\nTo know more about PI, log on to www.piindustries.com",
+          "industry": "Chemical Manufacturing",
+          "geo": "India",
+          "geo_city": "Gurgaon",
+          "size": 2668,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/pi-industries-ltd",
+          "provider": "exa",
+          "source_urls": [
+            "https://piindustries.com/"
+          ]
+        },
+        {
+          "name": "National Plastic Technologies Limited",
+          "domain": "nationalgroup.in",
+          "url": "https://nationalgroup.in/",
+          "description": "National Plastics Group, established in 1951 and headquartered in Chennai, India, operates 13 manufacturing plants across the country. We specialize in , Auto Components,Two wheeler,four wheeler and EVehicles ,White Goods industries and F&B Packaging With a lifetime revenue of INR 5793 crores, we've manufactured over 7000 SKUs and sold more than 65 billion products. Serving over 1200 clients, with a 34% repeat order conversion, we cater to customers in 29 Indian states and export to 18 countries globally. Join us in our journey of innovation and excellence",
+          "industry": "Plastics Manufacturing",
+          "geo": "India",
+          "geo_city": "Chennai",
+          "size": 33,
+          "founded": 1951,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/national-plastics-technologies-ltd",
+          "provider": "exa",
+          "source_urls": [
+            "https://nationalgroup.in/"
+          ]
+        },
+        {
+          "name": "Jaquar & Company Private Limited",
+          "domain": "jaquar.com",
+          "url": "https://jaquar.com/",
+          "description": "Mastering the Art of Sculpting Water and Light for Over 65 Years\n\nFrom our International Headquarters in Manesar, Gurgaon, Jaquar Group has established itself as a leading innovator in bathroom and lighting solutions, serving customers across 55+ countries with a commitment to design excellence and engineering precision.\n\nComprehensive Brand Portfolio: \n\nOur three brands - Jaquar, Artize, and Essco - deliver integrated solutions across diverse market segments, combining aesthetic innovation with functional performance.\n\nTwo Core Business Verticals: \n\nBath Division: Advanced faucets, wellness products, shower systems, and sanitaryware that integrate cutting-edge technology with contemporary design principles. \n\nLighting Division: Comprehensive LED lighting portfolio with decorative, architectural , Facade and LED lights for energy efficiency and enhanced user experience.\n\nGlobal Infrastructure & Quality Excellence: 22 Jaquar Worlds and Orientation Centres across India providing immersive customer experiences\nState-of-the-art manufacturing facilities with rigorous quality standards maintaining <0.1% defect rates\nInternational presence spanning 55+ countries with localized service capabilities\n\nPerformance Leadership: Our scale of impact includes 3.3M+ bathrooms equipped, 45.9M bath fittings delivered, 24.6M lighting products manufactured, and 4.2M sanitaryware units distributed globally.\n\nOur future is defined by sustainability and innovation. We prioritize environmental responsibility through efficient practices and resource-optimized products, visible in our global installations. This success is built on organizational excellence, investing in talent and fostering an innovation-driven culture. Jaquar Group is building a sustainable legacy of excellence, \n\nMade in India, For the World.",
+          "industry": "Manufacturing",
+          "geo": "India",
+          "geo_city": "Gurgaon",
+          "size": 2335,
+          "founded": 1960,
+          "revenue_annual": 787721220,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/jaquargroup",
+          "provider": "exa",
+          "source_urls": [
+            "https://jaquar.com/"
+          ]
+        },
+        {
+          "name": "Jayaswal Neco Industries Limited - India",
+          "domain": "necoindia.com",
+          "url": "https://necoindia.com/",
+          "description": "Jayaswal Neco Industries Limited (JNIL), the flagship company of the NECO group in India, is the largest producer of Iron and Steel Castings, Pipes and Fittings. Originally incorporated as a small scale Iron Foundry Unit at Nagpur in 1976, it has grown to be a pioneer in the Steel Production Industry.\n\nFounded in 1976 by Shri Basant Lall Shaw Ji, Jayaswal Neco Industries Ltd. is a leader in the manufacturing of a comprehensive variety of iron & specialist steel. At the age of 16, Mr. Shaw dreamt of a self-reliant India in the steel industry, therefore he used his depth of knowledge in the industry to innovate and deliver world class-quality products by adopting the latest technologies from time to time. \n\nIn no time, JNIL expanded to multiple businesses including NSSL Private Limited, Neco Heavy Engineering and Casting Limited and Neco Defence System Limited.\n\nNECO established a 1,000,000 MTPA Integrated Steel Plant at Sitara Growth Centre, Raipur, in 1996, located on 1600 acres of land in the reputed Steel belt of the country. It is Number One in India for making Alloys Steel.\n\nEach business is committed to achieving absolute excellence and currently is the leader in its precise industry. We are a proud partner of the multiple projects that enabled us to contribute in strengthening the future of the nation like airports, defence sector and AIIMS hospitals to name a few.\nOver the last few years, we have undertaken initiatives towards ensuring a sustainable world with our in-house CSR policies. Our leaders are believers in conscious business as we aim to achieve financial success along with a sustainable future. Today, multiple distinguished businesses are a part of JNIL's legacy.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": null,
+          "size": 515,
+          "founded": 1976,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://necoindia.com/"
+          ]
+        },
+        {
+          "name": "The KCP Limited",
+          "domain": "kcp.co.in",
+          "url": "https://kcp.co.in/",
+          "description": "The KCP Limited (KCP) is a 80+ year old diversified Indian multinational with interests in Cement, Heavy Engineering, Sugar, Power and Hospitality. It has 9 manufacturing locations over various geographies in India and Vietnam.\n\nKCP started as a small cooperative sugar plant in 1941 by its founder Sri. V. Ramakrishna; it has over the years expanded rapidly inspired by the leadership of its founder into areas like Heavy Engineering (1955), Cement (1958), Power (1998) and Hospitality (2016).\n\nTechnology has always provided the cutting edge to our services, state of the art facilities and latest process trends that are applied in areas such as the manufacture of critical industrial equipment for mining & mineral processing, cement, sugar, chemical, steel plants, space research applications and Defence & Nuclear installations. With technology & mature project management capability, KCP has set up over 40 sugar plants and 12 cement factories in India and overseas.\n\nKCP's focus has always been towards contributing to the nation's infrastructure. The Cement Plant at Macherla was setup to supply cement for the construction of the Nagarjunasagar Dam. This dam stands as a testimony to the quality of KCP Cement and it continues to provide irrigation and power to state of Telangana & Andhra Pradesh.\n\nFives - Cail KCP Limited is a Joint Venture with Fives Group, France to execute turnkey Sugar Plants.\n\nKCP has been a pioneer in developing the Sugar industry in Vietnam since early 1990's as a Industrial supplier of sugar machinery to plants in Vietnam. On the invitation of the Government of Vietnam to develop sugar cane in rural areas, a 2,500 TCD sugar plant was commissioned by KCP Vietnam Limited a sugar manufacturing subsidiary located in Vietnam in 1999. Since then it has expanded its capacity to 11,000 TCD.\n\nQuality is a underlying final word for all the products we produce and all Our Businesses are ISO 9000 certified.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Egmore",
+          "size": 256,
+          "founded": 1941,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://kcp.co.in/"
+          ]
+        },
+        {
+          "name": "Durgapur Steel Plant",
+          "domain": "sail.co.in",
+          "url": "https://sail.co.in/durgapur-steel-plant/about-durgapur-steel-plant",
+          "description": "Durgapur steel plant was set up in the late fifties with an initial production capacity of 1 MPTA (million ton per annum) crude steel which was progressively increased to 1.8 MTPA during the last modernization in nineties with the prime objective of achieving higher level of production, improvement in productivity and quality, conservation of energy, reduction in cost of production & minimization of environmental pollution.\n\nDSP is currently implementing its Modernisation & Expansion Plan (Phase-I) with main objectives:\n\nConversion of available semis into value added rolled products\nNear 100% concast production with phasing out of top pouring ingot- Blooming Mill route\nSustenance/De-bottlenecking of existing facilities to overcome present constraints \nCapacity of the plant will increase in hot metal at 2.40 MTPA, Crude Steel at 2.20 MTPA and Saleable Steel at 2.12 MTPA\nBroad facilities:\nPlant is equipped with CO-BF-BOF process of steel making. New facilities have been added after the last modernization in nineties – two new rebuilt coke oven batteries, CDI in Blast Furnaces, three Ladle Furnaces, one Bloom caster, one bloom-cum-round caster and a new Medium Structural Mill. Plant is poised for crude steel production almost 100% through concast route.\n\nUnique feature of this plant is its Wheel & Axle Plant for making forged wheels and axles catering to Indian Railways. Wheels are tested in International Test House and found of higher standard. Over the years plant has developed various types of wheels as per need of Railways.\n\nDSP is certified under the ISO 9001: 2008 standard of Quality Management System (QMS), ISO 14001: 2004 standard of Environment Management System (EMS), OHSAS 18001: 2007, SA 8000: 2008, ISO 27001:2013 Information Security Management System (ISMS) and ISO 50001:2011 Energy management System.\n\nThe plant is performing beyond its rated capacities consistently and the production and TE parameters are at best ever levels.\n\nLocation:\nSituated at a distance of 158 km from Calcutta, its geographical location is defined as 23. 27'​ North and 88. 29'​ East. It is situated on the banks of the Damodar river. The Grand Trunk Road and the main Calcutta-Delhi railway line pass through Durgapur.\n\nTownship: \nThe Durgapur Steel Plant Township is spread over a sprawling 40 sq. kms and has more than 25,000 dwelling units. And it has housing facilities for the employees of DSP, ASP and other business associates. The other amenities include schools, both primary and secondary, a 640 bed hospital with modern medical facilities, the picturesque park, a number of cultural centres, a stadium with a sitting capacity of 15,000, etc.\n\nContribution to the region's development \nOver the years, DSP has contributed in a major way which has produced social, environmental and economic benefits to the communities in which it operates. CSR projects are carried out in and steel townships and other close locations in the areas of education, providing medical and health care facilities, village development, access to water facilities, infrastructural development, environment conservation, women empowerment, assistance to people with disabilities, sustainable income generation, through self-help groups, promotion of sports, art, culture etc. Durgapur Steel Plant is also playing major role in encouraging and developing small-scale industries in the region.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Durgapur",
+          "size": 84,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://sail.co.in/durgapur-steel-plant/about-durgapur-steel-plant"
+          ]
+        },
+        {
+          "name": "Godrej & Boyce Mfg. Co. Ltd.",
+          "domain": "godrejandboyce.com",
+          "url": "https://godrejandboyce.com/",
+          "description": "Godrej is one of India’s most trusted brands serving over 1.1bn customers worldwide, every day.\n \nGodrej & Boyce, a Godrej group company, began it's journey in 1897 with the manufacture of high quality locks and continues with its outstanding engineering capabilities across diverse categories – from consumer goods and furniture, precision manufacturing and aerospace, infrastructure development, and industrial logistics to real estate and power distribution.\n\nAt Godrej, we enable you to do work that’s good for you, your customers, your community and good for the people around you - essentially, work that you can be proud of.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Mumbai",
+          "size": 8026,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://godrejandboyce.com/"
+          ]
+        },
+        {
+          "name": "Godrej Enterprises Group",
+          "domain": "godrejenterprises.com",
+          "url": "https://godrejenterprises.com/",
+          "description": "Since 1897, Godrej Enterprises Group (which includes Godrej & Boyce and its affiliates) has contributed significantly to India’s economic growth and self-reliance by providing complex engineering, design led innovation, and sustainable manufacturing solutions. From the world’s first patented springless lock, and safes to pioneering Indian made typewriters and refrigerators, the conglomerate has also paved the way for the growth of key sectors like aerospace, energy, and security.\n\nToday, Godrej Enterprises Group, has presence across 5 continents with a market-leading presence across diverse consumer and industrial businesses spanning Aerospace, Aviation, Defence, Energy, Locks & Security Solutions, Green Building Consulting, Construction and EPC Services, Intralogistics, Tooling, Healthcare Equipment, Consumer Durables, Furniture, Architectural Fittings, IT Solutions and Vending Machines. \n\nAt Godrej Enterprises, we enable you to do work that’s good for you, your customers, your community and good for the people around you - essentially, work that you can be proud of.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Mumbai",
+          "size": 846,
+          "founded": 1897,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://godrejenterprises.com/"
+          ]
+        },
+        {
+          "name": "Kalyani Group",
+          "domain": "kalyanigroup.com",
+          "url": "https://kalyanigroup.com/",
+          "description": "Kalyani Group is an Indian multinational conglomerate, headquartered in Pune, India, founded in 1961. It operates in various key sectors including engineering, steel, automotive and non-automotive components, renewable energy and infrastructure, and specialty chemicals. The group has also expanded its operations into the defense manufacturing sector, which was showcased at the DefExpo 2020. The group's annual turnover exceeded USD 2.5 billion as of 2011 and has established joint ventures with companies such as Alstom, Carpenter Technology Corporation, Iochpe-Maxion, Meritor, Sharp Corporation, and Rafael Advanced Defense Systems.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Bhopal",
+          "size": 4,
+          "founded": null,
+          "revenue_annual": 10000000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://kalyanigroup.com/"
+          ]
+        },
+        {
+          "name": "Aditya Birla Group",
+          "domain": "adityabirla.com",
+          "url": "https://adityabirla.com/",
+          "description": "With a rich legacy spanning over 165 years, Aditya Birla Group is a story of enriching lives, pioneering change, and leaving an indelible mark globally. \n\nOur success aligns with our philosophy of being A Force for Good. \n\nOperating in over 41 countries, we’re a powerhouse of innovation and customer-centricity. Our businesses have flourished into global leaders in key industries such as aluminium rolling, viscose staple fibre, carbon black, cement, financial services, fashion, hospitality, jewellery, entertainment and more.\n\nToday, we are a US$ 65Bn global conglomerate with a market cap of over US$ 100Bn*. \n\nSome of our recent achievements:\n\nOur journey of expansion continues with significant milestones achieved in 2024. We have ventured into branded retail jewellery with Indriya.\nOur recent foray into paints sector, under the brand name, Birla Opus, demonstrates our commitment to exploring new horizons across 300 towns. With our expansion into the premium casual dining segment through our new-age hospitality arm we are celebrating the power of global cuisines in bringing people together. Birla Pivot, our B2B e-commerce platform, a major extension to the building materials sector, serving as a comprehensive hub for all building material needs.\n\nWith unwavering dedication, we endeavour to uplift communities socially and economically, enveloping them in the compassionate embrace of our commitment. Our efforts extend to 9,000 villages, impacting 11 million people annually. This includes providing skill based training for 100,000 individuals and immunizing with 100 million polio vaccinations.\n\nLearn more about who we are: www.adityabirla.com\n\n*End of Q3FY25 \n \nFollow us on:\nTwitter: @AdityaBirlaGrp \nLinkedin : @aditya-birla-group\nInstagram: @AdityaBirlaGrp\nYouTube: adityabirlagroup",
+          "industry": null,
+          "geo": "India",
+          "geo_city": null,
+          "size": 7420,
+          "founded": 1857,
+          "revenue_annual": 67000000512,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://adityabirla.com/"
+          ]
+        },
+        {
+          "name": "Godrej Industries Group",
+          "domain": "godrejindustries.com",
+          "url": "https://godrejindustries.com/",
+          "description": "At the Godrej Industries Group, we serve over 1.1 billion people globally through a diverse portfolio of businesses, united by our purpose of Crafting tomorrow. With revenues of USD 6.1 billion in FY25 and a market capitalisation of USD 27.5 billion as of 31 March 2025, we operate across FMCG, real estate, financial services, agriculture, and chemicals. We are the leading player in India across several business categories, including residential real estate, animal feed, crude palm oil, oleochemicals, household insecticides, hair colour, and air care.\n\nWe are committed to building a more sustainable future through our Good & Green programme, with ambitions of net-zero operations by 2035 and responsible supply chains by 2047. In 2025, Godrej Consumer Products and Godrej Properties were both ranked number one globally in their respective categories on the Dow Jones Best-in-Class Sustainability Indices.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Mumbai",
+          "size": 842,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://godrejindustries.com/"
+          ]
+        },
+        {
+          "name": "AKSH Group of Companies",
+          "domain": "akshudyog.com",
+          "url": "https://akshudyog.com/",
+          "description": "Established in 2005 as a small workshop by a young engineer, Pritam Bahirat, AKSH has grown into a multi-activity group. Today, we are renowned for manufacturing high-precision Slew Ring Bearings and Drives, Crane Wheel Assemblies, and executing turnkey heavy fabrication projects—offering our clients a seamless, one-stop solution. \nWe offer a range of slew bearings from 120 mm to 2 m in diameter and above in standard sizes. Customised slew ring bearing solutions are our speciality and we are among the leading manufacturers of slew ring bearings in India, with a production capacity of 10,000 bearings per year. We supply slew bearings and slew drives for critical applications such as material handling crane Industries, Water treatment, constriction equipment, defence, solar trackers and earth-moving equipment. We have developed a specialised in-house slew ring bearing using Criss-Cross technology.\n\nOne of our divisions has been engaged in the manufacture of crane wheel assemblies for EOT cranes for the last 15 years. Our wheel assemblies are an integral part of EOT cranes supplied by several leading crane manufacturers in India. We have a production capacity of over 12,000 assemblies per year, ranging from 160 mm to 1000 mm in diameter.\nOur large fabrication unit has a capacity of 1200 MT, which is complemented by an in-house machine units, jigs and fixtures required for precision fabrication are developed in-house at our design centre. We have a team of skilled, trained and certified welders to handle critical welding jobs, ensuring precision, safety and long-term reliability. \nFor more details, please visit our website.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Pune",
+          "size": 22,
+          "founded": 2005,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://akshudyog.com/"
+          ]
+        },
+        {
+          "name": "Adani Group",
+          "domain": "adani.com",
+          "url": "https://adani.com/",
+          "description": "Adani Group is a diversified organisation in India comprising 10 publicly traded companies. It has created a world class transport and utility infrastructure portfolio that has a pan-India presence. Adani Group is headquartered in Ahmedabad, in the state of Gujarat, India. Over the years, Adani Group has positioned itself to be the market leader in its transport logistics and energy utility portfolio businesses focusing on large scale infrastructure development in India with O & M practices benchmarked to global standards. With four IG rated businesses, it is the only Infrastructure Investment Grade issuer in India.\n\nAdani owes its success and leadership position to its core philosophy of ‘Nation Building’ driven by ‘Growth with Goodness’ - a guiding principle for sustainable growth. Adani is committed to increase its ESG footprint by realigning its businesses with emphasis on climate protection and increasing community outreach through its CSR programme based on the principles of sustainability, diversity and shared values.\n\nWatch Pehle Pankha Ayega | Phir Bijli Aayegi : https://www.youtube.com/watch?v=1orXXuPzNmY",
+          "industry": null,
+          "geo": "India",
+          "geo_city": null,
+          "size": 6847,
+          "founded": 1988,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://adani.com/"
+          ]
+        }
+      ],
+      "meta": {
+        "total": 20,
+        "results_count": 20
+      },
+      "enforcedFilters": [
+        "geo_include"
+      ],
+      "hintedFilters": [
+        "definition"
+      ]
+    }
+  },
+  {
+    "capability": "company_discovery",
+    "input": "Automotive component manufacturers",
+    "latencyMs": 3876,
+    "ok": true,
+    "summary": "14 companies, enforced=[geo_include], hinted=[definition]",
+    "raw": {
+      "companies": [
+        {
+          "name": "TATA AutoComp Systems Ltd",
+          "domain": "tataautocomp.com",
+          "url": "https://tataautocomp.com/",
+          "description": "Established in 1995, Tata AutoComp Systems plays a key role in introducing advanced auto-component technologies to the evolving Indian & Global automotive market. We specialize in the design, development, manufacturing, and supply of a broad range of automotive products and services. These offerings support OEMs across passenger vehicles, commercial vehicles, two- and three-wheelers, tractors, off-road vehicles, allied industrial segments, and the aftermarket.\n \nTata AutoComp Systems operates through multiple divisions, including subsidiaries and joint ventures. It comprises 20 business units (10 fully owned, of which 3 are service units, and 10 joint ventures), established in partnership with leading global auto-component companies. With a global footprint of 74 manufacturing facilities across India, North America, Latin America, Europe, and China, Tata AutoComp ensures high-quality automotive solutions at a global scale, supported by a workforce of over 22,000+ employees.\n \nTata AutoComp has established an independent Electric Vehicle Component Business Vertical that delivers a comprehensive range of products, from battery packs and e-traction motors to battery cooling systems, electric compressors, and EV chargers. Tata AutoComp has expanded its presence across passenger, commercial, two- and three-wheeler, and industrial segments. Strategic partnerships with Gotion for battery packs and Prestolite for powertrain solutions have strengthened our position in the EV component market. We are at the forefront of the EV transformation journey, developing components for the emerging EV market and offering lightweighting solutions.\n \nVision: To be the Most Trusted Mobility Components and Systems Partner.\n \nMission: Deliver value to all stakeholders by differentiation through safety, quality, and constant innovation.\n \nOur Values: Integrity, Pioneering, Excellence, Unity, Responsibility.",
+          "industry": "Motor Vehicle Manufacturing",
+          "geo": "India",
+          "geo_city": "Pune",
+          "size": 2145,
+          "founded": 1995,
+          "revenue_annual": null,
+          "funding_stage": "Privately Held",
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/tata-autocomp-systems-ltd",
+          "provider": "exa",
+          "source_urls": [
+            "https://tataautocomp.com/"
+          ]
+        },
+        {
+          "name": "Varroc",
+          "domain": "varroc.com",
+          "url": "https://varroc.com/",
+          "description": "Varroc Group is a global tier-1 automotive component manufacturer and supplier of exterior lighting systems, plastic and polymer components, electrical-electronics components, and precision metallic components to two-wheeler, three-wheeler, passenger cars, commercial vehicles and off-highway vehicle OEMs. \n\nWith 36 world-class manufacturing facilities, 7 R&D centers and over 6500 employees across 8 countries, Varroc is on an exponential growth trajectory, clocking net revenues in excess of ₹58,000 million in FY 22. \n\nWith 3 decades of relentless commitment to excellence and value-based performance, Varroc offers the best design solutions that gives its customers a competitive edge in their markets.",
+          "industry": "Motor Vehicle Parts Manufacturing",
+          "geo": "India",
+          "geo_city": "Aurangabad",
+          "size": 2592,
+          "founded": 1990,
+          "revenue_annual": null,
+          "funding_stage": "Public Company",
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/varroc-global",
+          "provider": "exa",
+          "source_urls": [
+            "https://varroc.com/"
+          ]
+        },
+        {
+          "name": "Sanjeev Auto-Parts Manufacturers Pvt. Ltd.",
+          "domain": "sanjeevauto.com",
+          "url": "https://sanjeevauto.com/",
+          "description": "Sanjeev Group is renowned for manufacturing Quality components and assemblies for motion control applications. We are focused on implementing latest technologies for manufacturing with continual improvement of Quality, Productivity, and Customer satisfaction. \nOur core values Passion, Innovation, Transparency, Challenge & Honesty “PITCH” are ingrained in the Sanjeev’s culture.Our Product portfolio caters to a variety of applications like Automotive two, three and four wheelers, commercial vehicles, Farm equipments, off road & Industrial Equipment. Precisely gears, shafts, Shifter forks, Sub – assemblies & precision components. \n Located at Granollers, Spain & Aurangabad, India –catering to the different sector & segments of the industries offering expertise in the field of plant structures for manufacturing parts.\nSanjeev Group’s technology strength constitutes a strategic mix of in-house Research & Development and the expertise in its quality delivered to customers. \n We are “IATF 16949” & “OHSAS 18001” certified company. Our manufacturing hub enables us to provide best-in-class services to our customers. We assure high-quality products at competitive price amongst all auto components manufacturing industries.\n While building a high-performance organization at Sanjeev Group, we also believe in our responsibility towards the society that has helped shape us. Over the last few years, we have helped create Irrigation Facilities in Koradi Village, given Donations to Hedgewar Hospital, and organized Annual Blood Donation camps with Dattaji Bhale Blood Bank.",
+          "industry": "Motor Vehicle Manufacturing",
+          "geo": "India",
+          "geo_city": "Aurangabad",
+          "size": 325,
+          "founded": 1988,
+          "revenue_annual": null,
+          "funding_stage": "Privately Held",
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/sanjeev-group-sanjeev-auto-parts-manufacturers-pvt-ltd-",
+          "provider": "exa",
+          "source_urls": [
+            "https://sanjeevauto.com/"
+          ]
+        },
+        {
+          "name": "Roots Industries India Limited",
+          "domain": "rootsautomotives.com",
+          "url": "https://rootsautomotives.com/",
+          "description": "Roots Industries India Limited (RIL) established in 1970 is the flagship company of the Roots Group and its products find pride of place in some of the world’s most respected automobile brands. RIL has a full-fledged manufacturing facility in India, Malaysia, Russia and has offices in strategic locations across the world.\n\nThe company manufactures a wide range of Electric Horns, backup alarm and electronic horns with multi-functional capabilities for passenger vehicles, off-road vehicles and material handling equipment.\n\nIt has subsequently added to its product offerings with halogen bulbs, disc brake pads, brake shoes, clutch plates, batteries and reverse sensors.\n\nRIL established a High Precision Engineering Division (HPED) in 2005 to manufacture Highly Critical Parts, Sub Assemblies and High Level Assemblies for the Medical, Aerospace, Flow Control, Automobile & Other Engineering Industries.\n\nRIL established ROOTS METROLOGY and got accredited by NABL in 2005. It also addresses the Group’s calibration requirements and opened up branches in Chennai and Bangalore. In addition to calibration other services rendered by metrology division are Third Party inspection and Training & Development.\n\nRIL established a commercial furniture manufacturing division ROOTS SYONA in 2013 to manufacture ergonomically designed furniture’s. Syona currently has more than 5 models of commercial chairs and will unveil other furniture products in a phased manner.\n\nIn the dynamic world that is driven by technology, a successful presence depends on the way you mould that technology to fit popular needs, Indigenous talent, a daring attitude, courage to accept and learn new things and the simple spark of an idea. That is the genesis of ROOTS.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": null,
+          "size": 480,
+          "founded": 1970,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://rootsautomotives.com/"
+          ]
+        },
+        {
+          "name": "Gabriel India Limited",
+          "domain": "anandgroupindia.com",
+          "url": "https://anandgroupindia.com/",
+          "description": "Gabriel India Limited, established in 1961, is the flagship company of the ANAND Group and a publicly listed auto ancillary manufacturer in India. Over the past six decades, the company has built state of the art integrated manufacturing operations spanning nine plants and three satellite facilities. These are supported by a strong R&D team of over 80 specialists, among the largest in the industry with 87 patents filed. Gabriel serves every major mobility segment, from two-and three-wheelers to passenger cars, commercial vehicles, railways, and e-bikes. \nIn addition to supplying components to leading OEMs, Gabriel is also a leading player in the aftermarket segment, with a presence in over 25 countries. \n\nThe company’s innovation ecosystem is supported by advanced technology and engineering centres in India and Europe, focused on developing next-generation solution, including suspension, automotive fasteners, and sunroof, across vehicle segments. The Gabriel Europe Engineering Centre (GEEC) in Belgium plays a key role in enhancing global engineering capabilities, fostering international collaboration, and aligning product development with evolving global mobility trends.\nAs part of its strategic expansion, Gabriel is actively diversifying its portfolio through strategic partnerships, including collaborations with Inalfa Roof Systems, Netherlands, for premium sunroof systems; SK Enmove, South Korea, for lubricants and EV fluids; and Jinhap Co, South Korea, for automotive fasteners. These partnerships are aimed at strengthening Gabriel’s capabilities and reinforcing dedication to shaping the future of mobility.",
+          "industry": "Motor Vehicle Manufacturing",
+          "geo": "India",
+          "geo_city": "Pune",
+          "size": 1509,
+          "founded": 1961,
+          "revenue_annual": 90486313,
+          "funding_stage": "Public Company",
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/gabriel-india-limited",
+          "provider": "exa",
+          "source_urls": [
+            "https://anandgroupindia.com/"
+          ]
+        },
+        {
+          "name": "Besmak Components Private Limited",
+          "domain": "besmakindia.com",
+          "url": "https://besmakindia.com/",
+          "description": "We, BESMAK COMPONENTS PVT LTD are an IATF 16949:2016 certified manufacturers of injection moulds and Precision Plastic Components for Automobile and other industries. Besmak Components was established in the year 1994. Besmak is one of the leading manufacturers of wide verity of automotive connectors and has had a sustained growth in the past 15 years.\n Our Quality system has certified to QS 9000 standard in 2000 and upgraded to ISO/TS 16949:2002 standard in 2005 and we certified to ISO/TS 16949:2009 standards in 2010.\n \nThe Company was started by Technocrats well qualified and experienced in Injection Mould Design and Manufacture. Late Mr C.N Hari a qualified expert in Tool Manufacturing set the directions for the Company. With his Marketing skills and excellent Customer relations he built a strong brand image for BESMAK. This also gave the Company a very good edge in localization and more than 250 types of connectors were developed to catering to the needs of the customer. From a sale of Rs.25 lacs in the year 1994 the sales grew to Rs.22 Crores in the year 2010. The Company is currently headed by Mrs Hemahari wife of our founder Late Sri CN Hari, graduate, in the capacity of CMD.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": null,
+          "size": 214,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://besmakindia.com/"
+          ]
+        },
+        {
+          "name": "AUTOCOMP CORPORATION PANSE PRIVATE LIMITED",
+          "domain": "pansegroup.co.in",
+          "url": "https://pansegroup.co.in/",
+          "description": "Autocomp Corporation Panse Pvt Ltd is well-known for producing high-quality components and assemblies for OEMs all over the world. As a leading tier 1 automotive manufacturer, we serve a range of applications in the field of sheet metal, tubular parts and assemblies, with backward integration in product design, validation & testing, process design and manufacturing of dies and fixtures. \n\nWith more than 30 years of unwavering dedication to excellence and performance, Panse delivers the most innovative technology-oriented solutions that provide its customers a competitive edge in their respective sectors.\n\nWe are driven to adopting cutting-edge manufacturing technology while continuously enhancing Quality, Performance, and Customer Satisfaction.\n\nPanse is on an exponential growth trajectory, with 10 plants in 4 locations across India and a wide range of products such as BIW parts and assemblies, seating structures, chassis parts & frames, tubular assemblies, and light-weight aluminium parts for passenger cars, SUVs, commercial vehicles, agricultural equipment, and two-wheelers.\n\nAt Panse, we are devoted to giving back to society while fostering a high-performance culture. As a result, we conduct regular community service events to promote positivity and do our best to set an example of generosity that gets ingrained in our workplace culture.\n\nBecause we fully believe that \"To win in the marketplace you must first win in the workplace,\" we gladly support office activities that are fun and cognitively challenging and boost morale.\n\nIf you're looking to work with more potential,\nJoin us!\n\nFor any enquiry, contact us:\nsales@pansegroup.com",
+          "industry": "Motor Vehicle Manufacturing",
+          "geo": "India",
+          "geo_city": "Pune",
+          "size": 333,
+          "founded": 1983,
+          "revenue_annual": null,
+          "funding_stage": "Privately Held",
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/autocomp-corporation-panse-private-limited",
+          "provider": "exa",
+          "source_urls": [
+            "https://pansegroup.co.in/"
+          ]
+        },
+        {
+          "name": "Toyoda Gosei South India",
+          "domain": "tgsin.in",
+          "url": "https://tgsin.in/",
+          "description": "Toyoda Gosei South India is a leading player in the automotive components industry. Established in 1998, we are a joint venture between Toyoda Gosei Japan, Uno Minda and Toyota Tsusho in India. We develop, manufacture, and market high-quality systems such as interior and exterior components, safety systems, functional components and sealing systems for major automotive manufacturers worldwide. Our innovative solutions enhance vehicle safety, comfort, and environmental sustainability.\n\nOur dedicated team of employees in India is driven by our mission of excellence and quality. We are committed to continuous improvement and innovation, ensuring our products meet the highest standards in the industry. Our state-of-the-art facilities enable us to stay at the forefront of automotive technology.\n\nFor more information, visit our website at http://www.tgsin.in",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Bengaluru",
+          "size": 226,
+          "founded": 1998,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://tgsin.in/"
+          ]
+        },
+        {
+          "name": "Poona Shims Pvt. Ltd",
+          "domain": "poshindia.com",
+          "url": "https://poshindia.com/",
+          "description": "Poona Shims Private Limited (POSH) is India's largest Manufacturers of Oil Coolers & Exhaust Gas Recirculation (EGR) Coolers & Fuel Rails for Multi Point Fuel Injection System. POSH is Pioneer in India and leader in Oil Coolers Manufacturing. The company is Single source Supplier to many Indian OEMs due to Excellent Quality, Competitive Price, On time delivery and Prompt Service.\nEstablished in 1981, by Mr. Anil S. Gupte & Mrs. Shubha A. Gupte, since inception, POSH emerged as one of the leading Suppliers to Major OEM's in India.",
+          "industry": "Motor Vehicle Manufacturing",
+          "geo": "India",
+          "geo_city": "Pune",
+          "size": 74,
+          "founded": 1981,
+          "revenue_annual": null,
+          "funding_stage": "Privately Held",
+          "linkedin_id": null,
+          "linkedin_url": "linkedin.com/company/poona-shims-pvt.-ltd",
+          "provider": "exa",
+          "source_urls": [
+            "https://poshindia.com/"
+          ]
+        },
+        {
+          "name": "R. E. Components Pvt. Ltd.",
+          "domain": "recpl.co.in",
+          "url": "https://recpl.co.in/",
+          "description": "R E COMPONENTS PVT. LTD. (RECPL) is one of the leading Manufacturer & Exporter for various automotive components for trucks, trailers and buses, preferred by OEM, Tier 1 , Tier 2, and also After Market. We are IATF 16949 and ISO 9001:2015 Certified Company.\n\n\tOur parts are suitable for below :\nTruck Range: - DAF, IVECO, MAN, MERCEDES, RENAULT (RVI), SCANIA, VOLVO and many more. \n\nTrailers Range: - BPW, FRUEHAUF, KASSBOHRER, MERITOR-ROR, SAF, SMB, TRAILER, YORK, ADIGE VIBERTI, STEFEN and many more. \n\nIndian Range: - TATA, Ashok Leyland, Eicher, Mahindra, Bharat Benz, Force Motors, AMW, Swaraj Mazda and many more. \n\n\tOur Product Range Include : \n•\tKing Pin Repair Kits / Trailer King Pin – Self Steering Axle\n•\tSpring Pin / Spring pin repair kits\n•\tSpring Bushes \n•\tABS Rings\n•\tHub Cap\n•\tWheel Hub Repair Kits \n•\tThrust Rings\n•\tAxle Rod Kits \n•\tAxle Nuts\n•\tBrake Shoe Pin, Bushing Brake camshaft and Brake shoe pin repair kits\n•\tCamshaft Repair Kits \n•\tV-Stay Repair Kits \n•\tCabin Repair kit, and many more...\n\n\t We can also develop new products based on drawings & samples - through reverse engineering. \n\n•\tCasting \n•\tForged machined parts\n•\tAluminium – Casting & Pressure Die Cast components\n•\tBronze components\n•\tShafts\n•\tWelding parts\n•\tbolts\n•\tSheet Metal Components, etc.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Rajkot",
+          "size": 14,
+          "founded": 1997,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://recpl.co.in/"
+          ]
+        },
+        {
+          "name": "Sigma Corporation India Ltd.",
+          "domain": "sigmacorporation.com",
+          "url": "https://sigmacorporation.com/",
+          "description": "Sigma Group is a global manufacturer of automotive NVH and suspension components, serving OEMs and the international aftermarket for over 60 years.\n\nFounded in Delhi, Sigma has grown into an IATF 16949 and ISO-certified manufacturing group with exports to 50+ countries. Our components support millions of vehicles worldwide, meeting international standards for durability, precision, and performance. Our products support over 500 million vehicles worldwide.\n\nOur portfolio spans 8,000+ product lines, including Engine & Transmission Mounts, Strut Mounts, Engine Pulleys, Suspension Bushings, Shaft Couplings, Shaft Supports, and Torque Rod Kits for passenger and commercial vehicles.\n\nWith advanced R&D, precision machining, and rubber-to-metal bonding capabilities, we engineer solutions that reduce noise and vibration, enhance ride comfort, and improve structural reliability.\n\nWith a workforce of 3,000+ professionals, Sigma operates with a “Quality First” philosophy focused on innovation, operational excellence, and long-term partnerships.\n\nSigma Group represents engineering expertise, manufacturing scale, and dependable performance in the global automotive industry.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "New Delhi",
+          "size": 162,
+          "founded": 1964,
+          "revenue_annual": 10000000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://sigmacorporation.com/"
+          ]
+        },
+        {
+          "name": "Madras Engineering Industries Private Limited",
+          "domain": "mei.co.in",
+          "url": "https://mei.co.in/",
+          "description": "Madras Engineering Industries Pvt. Ltd. (MEI) is India’s largest manufacturer and one of the leading global producers of Slack Adjusters. With a market legacy spanning six decades, MEI pioneered the indigenous development of SASA for both the Indian and international markets.\n\nMEI’s Automatic Slack Adjusters are exported to Europe, North America, South Africa, Brazil, Korea, Mexico, and Russia, reinforcing its global reputation for performance and reliability.\n\nMarket Leadership\nCommands an 80%+ fitment share with top Indian OEMs including Tata Motors (TML), Ashok Leyland (AL), VE Commercial Vehicles (VECV), Bharat Benz, Mahindra Trucks & Buses (MTBL), among others.\n\nActs as the exclusive SASA supplier to major trailer axle manufacturers such as YORK, JOST, and ADR.\n\nOffers the widest product range in the category, covering Straight Arm, Offset, and Crank types to suit all axle platforms.\n\nR&D and Innovation\nOperates a state-of-the-art R&D center at Maraimalai Nagar, Chennai, accredited by the Government of India.\n\nSASA is an entirely in-house developed product, backed by five global patents.\n\nMEI’s Clutch Boosters, designed for Light, Medium & Heavy Commercial Vehicles, are also developed in-house and are a key offering to TML and other OEMs.\n\nGlobal Presence & Product Expansion\nRecognized as a preferred development partner by all major Indian OEMs.\n\nMEI has expanded into Air Disc Brake (ADB) assemblies, exporting to Europe and retrofitting in Indian bus fleets. These assemblies are type-approved by KBA.\n\nAll exported SASA units are certified by Link Labs (USA) and TÜV (Germany).\n\nManufacturing Excellence\nOperates a modern SG Iron Foundry equipped with:\n\nDISA high-pressure flask-less vertical molding lines\n\nAdvanced dust and fume extraction systems\n\nAll MEI plants hold certifications including:\n\nIATF / TS 16949\n\nISO 14001",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Ambattur",
+          "size": 253,
+          "founded": 1966,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://mei.co.in/"
+          ]
+        },
+        {
+          "name": "Talbros Automotive Component Limited",
+          "domain": "linkedin.com",
+          "url": "https://linkedin.com/company/talbros-automotive-component-limited",
+          "description": "Talbros Automotive Components Limited. the flagship manufacturing company of the Group was established in the year 1956 to manufacture Automotive Industrial Gaskets in collaboration with Coopers Payen of UK.Today after 50 successful years Talbros stands proud and tall as a mother brand of gaskets steering suspension components stampings rubber products and forgings.Talbros Group has strong partnerships formed with global giants. Notable among the joint venture partners are Affinia Group USA Sanwa Packaging Japan and Interface Solutions USA.While our symbiotic relationship with our Global partners have kept us abreast with innovations within the field our long and fruitful association with them bears witness to the trust and solidarity that Talbros name is synonymous with.Our Research Development Centres showcase our design capabilities including endurance static and simulated environment testing. Today our manufacturing prowess spans over 6 business and 12 facilities.The largest OEMs like Ashok Leyland Bajaj Auto Cummins Group Eicher India Escorts Group Force Motors General Motors Hero Honda Honda Hyundai John Deere Mahindra Mahindra Maruti Suzuki Suzuki TAFE Tata Motors Tata Cummins Simpsons and international corporates like Affinia Automotive are our proud customers.The Group companies are TS 16949 and ISO 14001 certified.Talbros Group portfolio also includes Mercedes Benz dealership for passenger cars.Talbros where it is today is due to the excellence of its product offerings commitment to quality attention to detail and professional approach.We today can design develop and manufacture products as per customer requirements competitively.",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Rewari",
+          "size": 2,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://linkedin.com/company/talbros-automotive-component-limited"
+          ]
+        },
+        {
+          "name": "ACMA India",
+          "domain": "acma.in",
+          "url": "https://www.acma.in/",
+          "description": "Official LinkedIn page of The Automotive Component Manufacturers Association of India (ACMA), the apex body representing the Indian Auto Component Industry.\r\n\r\nACMA’s charter is to develop a globally competitive Indian Auto Component Industry and strengthen its role in national economic development as also promote business through international alliances. \r\n\r\nThe Auto Component industry in India, with a strong positive multiplier effect, is one of key drivers of India’s economic growth. The well-developed Indian auto component industry manufactures a wide variety of products including engine parts, drive transmission and steering parts, body and chassis, suspension and braking parts, equipment and electrical parts, besides others. \r\n\r\nACMA has played a pivotal role in growth and development of the auto component industry in India. Its active involvement in trade promotion, technology up-gradation, quality enhancement and collection and dissemination of information has made it a vital catalyst for this industry’s development. Its other activities include participation in international trade fairs, sending trade delegations overseas and bringing out publications on various subjects related to the automotive industry. \r\n\r\nKnow more: www.acma.in",
+          "industry": null,
+          "geo": "India",
+          "geo_city": "Delhi",
+          "size": 74,
+          "founded": 1959,
+          "revenue_annual": 45313550,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://www.acma.in/"
+          ]
+        }
+      ],
+      "meta": {
+        "total": 14,
+        "results_count": 14
+      },
+      "enforcedFilters": [
+        "geo_include"
+      ],
+      "hintedFilters": [
+        "definition"
+      ]
+    }
+  },
+  {
+    "capability": "company_discovery",
+    "input": "E-commerce companies",
+    "latencyMs": 3607,
+    "ok": true,
+    "summary": "19 companies, enforced=[geo_include], hinted=[definition]",
+    "raw": {
+      "companies": [
+        {
+          "name": "Newegg",
+          "domain": "newegg.com",
+          "url": "https://newegg.com/",
+          "description": "Newegg Commerce, Inc. (NASDAQ: NEGG) is a leading global e-commerce retailer founded in 2001 and headquartered in Diamond Bar, California. Newegg specializes in PC hardware, consumer electronics, gaming peripherals, home appliances, automotive, and lifestyle technology, and offers B2B e-commerce solutions including marketing, supply chain, and technical services. \n\nInterested in selling on Newegg.com? We offer robust fulfillment and marketing services to our Marketplace vendors. Learn more: newegg.io/sellers",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "Diamond Bar",
+          "size": 502,
+          "founded": 2001,
+          "revenue_annual": 1444468000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://newegg.com/"
+          ]
+        },
+        {
+          "name": "L.L.Bean",
+          "domain": "llbean.com",
+          "url": "https://llbean.com/",
+          "description": "Welcome to the outside. The official LinkedIn for L.L.Bean. #BeanOutsider\n\nL.L.Bean, Inc. is a leading multi-channel merchant of quality outdoor gear and apparel. Founded in 1912 by Leon Leonwood Bean, the company began as a one-room operation selling a single product, the Maine Hunting Shoe. \n\nWhile its business has grown substantially, the company remains committed to the same honest principles upon which it was built – a focus on the customer, continuous product improvement and innovation, respect for people, and preservation of the natural environment. The 220,000 sq. ft. Flagship campus of stores in Freeport, Maine is open 24 hours a day, 365 days a year and welcomes more than three million visitors each year. \n\nL.L.Bean can be found worldwide on http://www.llbean.com/ and in over 160 countries via the catalog and website.\n\nhttp://www.llbeancareers.com\nhttp://www.llbeanbusiness.com\n\nWhile exploring job opportunities, we recommend you use caution to prevent against internet, email and telephone scams which have become increasingly prevalent. Some of these scams seek to entice victims to pay money or divulge sensitive personal information via fake interviews, employment applications or even offer letters. \nPlease keep the following in mind if you are seeking employment with L.L.Bean:\n•\tAn L.L.Bean employee will not solicit candidates through a non-L.L.Bean email address or phone number (such as Yahoo, Hotmail or Gmail).\n \n•\tPositions posted on external sites (such as LinkedIn or Indeed) should also appear on llbeancareers.com, if legitimate. \n\n•\tL.L.Bean will never ask for personal information early in the interview process (such as your social security number, national insurance number, date of birth, bank account information, or other sensitive personal information). This information is only required after L.L.Bean offers you a job and you accept the position.\nrecruit@llbean.com\n•\tBank information will not be collected prior to the first day of employment.",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "Freeport",
+          "size": 1838,
+          "founded": 1912,
+          "revenue_annual": 1800000000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://llbean.com/"
+          ]
+        },
+        {
+          "name": "Evike.com Inc.",
+          "domain": "evike.com",
+          "url": "https://evike.com/",
+          "description": "The LARGEST Airsoft Walk-in Store and Warehouse in the USA!\r\n\r\n100,000+ sq ft. warehouse.\r\n9,000+ sq ft walk in showroom.\r\nLive Shooting Range \r\nIndustry leading Technical Support Team\r\nIndustry leading Customer Service Team\r\nYou want it? We got it!\r\nThe #1 Airsoft retailer in the USA.\r\nNo one can compare, we guarantee!",
+          "industry": "Sporting Goods Manufacturing",
+          "geo": "United States",
+          "geo_city": "Alhambra",
+          "size": 35,
+          "founded": 2000,
+          "revenue_annual": 4989630,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://evike.com/"
+          ]
+        },
+        {
+          "name": "Beyond, Inc.",
+          "domain": "beyond.com",
+          "url": "https://beyond.com/",
+          "description": "Beyond, Inc. (NYSE:BYON), based in Murray, Utah, is an ecommerce-focused retailer with an affinity model that owns or has ownership interests in various retail brands, offering a comprehensive array of products and services that enable its customers to enhance everyday life through quality, style, and value. The Company currently owns Bed Bath & Beyond, Overstock, buybuy BABY, and other related brands and websites as well as a blockchain asset portfolio. The Company regularly posts information and updates on its Newsroom and Investor Relations pages on its website, Beyond.com.\n\nIn 2023, Overstock acquired the Bed Bath & Beyond brand and associated intellectual property. Following the acquisition, the company was renamed to Beyond, Inc. and relisted on the NYSE with the stock ticker symbol BYON.",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "Murray",
+          "size": 284,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://beyond.com/"
+          ]
+        },
+        {
+          "name": "Oriental Trading Company, A Berkshire Hathaway Company",
+          "domain": "orientaltrading.com",
+          "url": "https://orientaltrading.com/",
+          "description": "Oriental Trading Company has one simple mission: to make life more fun. For individuals, nonprofits, churches and schools, we provide countless reasons to share smiles while making all of life's moments more special.\n\nWith more than 40,000 unique products, we're the nation's largest direct retailer of value-priced party supplies, toys and crafts as well as a leading provider of fundraising products. Headquartered in Omaha, Nebraska, Oriental Trading has continued its long-standing commitment to excellent customer service, even being recognized by Foresee as one of the Top 20 Internet Retailers based on customer satisfaction. Additionally, Oriental Trading has been rated one of the Top 100 Online Retailers by Internet Retailer. \n\nOur history with fun is one that spans for the better part of the last century. Founded in 1932, we became a major supplier of novelties to the U.S. carnival trade in the 1950s before expanding in the succeeding decades through catalogs, direct marketing and eventually the internet in 1999.\n\nIn 2012, Warren Buffett's Berkshire Hathaway saw tremendous value and growth opportunity in Oriental Trading and made the decision to purchase our company. Shortly after, Oriental Trading acquired two companies that aligned with our mission: MindWare, a manufacturer, wholesaler and direct retailer of “brainy toys for kids of all ages,” and SmileMakers, a leading brand specializing in patient giveaways and promotion products for dental and healthcare markets. To better meet the needs of our customers, Oriental Trading created several new brands in 2017; Marry Me, Fun365, and CustomFun365. \n\nFor over 85 years, we've helped friends and families around the world spark imaginations and celebrate special moments. Spreading fun one smile at a time? That's our specialty!\n\nReady to Make Your Career More Fun? Learn more at MyOTCCareer.com.",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "Omaha",
+          "size": 376,
+          "founded": 1932,
+          "revenue_annual": 750000000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://orientaltrading.com/"
+          ]
+        },
+        {
+          "name": "Spanx",
+          "domain": "spanx.com",
+          "url": "https://spanx.com/",
+          "description": "SPANX founder Sara Blakely was getting ready for a party when she realized she didn’t have the right undergarment to provide a smooth look under white pants. Armed with scissors and sheer genius, she cut the feet off her control top pantyhose and the SPANX revolution began! With a focus on solving wardrobe woes, the SPANX brand has grown to offer bras, underwear, leggings, active and more. SPANX has secured its place in women's hearts and in pop-culture with daily mentions everywhere from CNN to SNL.\n\nIn March of 2012, Founder Sara was named the world's youngest, self-made female billionaire by Forbes Magazine and one of TIME's 100 Most Influential People. Headquartered in Atlanta, GA and opening retail shops across the United States, SPANX can now be found worldwide in more than 50 countries. In addition to keeping butts covered from Savannah to Singapore, SPANX also shapes the world by focusing on our mission: To help women feel great about themselves and their potential.",
+          "industry": "Retail Apparel and Fashion",
+          "geo": "United States",
+          "geo_city": "atlanta",
+          "size": 241,
+          "founded": 2000,
+          "revenue_annual": 450000000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://spanx.com/"
+          ]
+        },
+        {
+          "name": "American Girl",
+          "domain": "americangirl.com",
+          "url": "https://americangirl.com/",
+          "description": "The story of American Girl started in 1986 with Pleasant Rowland, a writer and retired teacher from Chicago with a brilliant idea. Pleasant found inspiration to create educational dolls with historic backstories after a visit to Colonial Williamsburg, Virginia. \n\nOriginally known as Pleasant Company, American Girl started with sending out catalogues until we opened our first retail location in Chicago in 1996. Pleasant Company was purchased by Mattel in 1998 and renamed American Girl in 2003. American Girl offers an inspiring world of dolls, content, and experiences that nourish a girl’s spirit and helps develop her strength of character. American Girl has earned the loyalty of millions and the praise and trust of parents and educators. \n\nWith best-selling lines including Truly Me™, Girl of the Year™, Bitty Baby™, WellieWishers™, and the classic historical character line BeForever™, American Girl sells products through its award-winning catalogue, on americangirl.com, and in its proprietary U.S. experiential retail stores. \n\nAmerican Girl is a subsidiary of Mattel, Inc. (NASDAQ:MAT). For more information, visit www.americangirl.com or connect with American Girl on YouTube and Facebook.",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "Middleton",
+          "size": 448,
+          "founded": 1986,
+          "revenue_annual": 226900000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://americangirl.com/"
+          ]
+        },
+        {
+          "name": "Porsche Design of America",
+          "domain": "porsche-design.com",
+          "url": "https://porsche-design.com/",
+          "description": "In 1963, Professor Ferdinand Alexander Porsche created one of the most iconic design objects in contemporary history: the Porsche 911. Following his vision to take the principles and myth of Porsche beyond the automotive world, he created the exclusive lifestyle brand Porsche Design in 1972. His philosophy and design language can still be seen in all Porsche Design products today. Every Porsche Design product stands for extraordinary precision and perfection, boasts a high level of technological innovation and seamlessly combines intelligent functionality and puristic design. Created by Studio F. A. Porsche in Austria, our products are sold worldwide in over 130 Porsche Design stores, high-end department stores, exclusive specialist retailers and the official online store (www.porsche-design.us).\n\n\nFor regular updates on Porsche Design, follow:\n\nFacebook: http://facebook.com/PorscheDesignGroup\nInstagram: https://instagram.com/PorscheDesignOfficial\nTwitter: http://twitter.com/PorscheDesign",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "Costa Mesa",
+          "size": 47,
+          "founded": 1972,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://porsche-design.com/"
+          ]
+        },
+        {
+          "name": "Online Stores, Inc.",
+          "domain": "onlinestores.com",
+          "url": "https://onlinestores.com/",
+          "description": "Online Stores, Inc. was founded in 2002 with a single online store, and has since grown to be the parent company to 8 distinct e-commerce niche retail websites, which include: United-States-Flag.com, NorthlineExpress.com, EnglishTeaStore.com, DiscountSafetyGear.com, ConstructionGear.com, SafetyGirl.com, Lightup.com, and OnlineStores.com Our broad categories of products and diverse assortments separate us from the competition. \n\nWe know you have a lot of options these days when it comes to online shopping. That's why we've invested heavily in our award winning websites to make sure that the buying experience you have on any of our stores is absolutely perfect. We have been consistently ranked by Newsweek as a Newsweek Best Online Shops, and we will continue to make improvements to our website technology, as well as continue to source new, trendy, and popular items to enrich our product assortment. To assist you with your online shopping experience, all of our stores have a dedicated and knowledgeable Customer Service team that you can reach by phone or email at any time, unlike many of our online shopping competitors. \n\nNot only are we extremely proud to distribute some of the most well known national brands across a broad array of industries, but we also manufacture our own proprietary brands for each of our stores, including: Super Tough Flags & Flagpoles, Lumegen LED Lighting, English Tea Store (ETS) Tea, Rugged Blue Men's Workwear & Boots, and Safety Girl Work Apparel & Boots. \n\nOnline Stores, Inc. currently employs over 130 people across all of our locations. Our headquarters and largest warehouse is in New Stanton, PA and we also have warehouses in Youngwood, PA and a west coast location in Sparks, NV to better serve customers all over the country. Orders typically ship within 24 to 48 hours, and with multiple warehouse locations, we are able to reach most areas of the country within 2 to 3 days.",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "New Stanton",
+          "size": 46,
+          "founded": 2002,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://onlinestores.com/"
+          ]
+        },
+        {
+          "name": "US Direct",
+          "domain": "gousdirect.com",
+          "url": "https://gousdirect.com/",
+          "description": "US Direct allows online retailers to source quality products and leading brands from top US dropship suppliers with quick shipping and delivery.\n\nWe partner with reliable US suppliers. Why join US Direct as a supplier? We have quite a few benefits including:\n\n*Driving new sales\n*Flat-rate shipping for resellers\n*Enforcing MAP\n*Managing marketplaces\n*No dealer applications to manage\n*Customer service management\n*No tech headaches\n*Returns management\n\nIf you would like to learn more about becoming a US Direct supplier, visit our website here: https://gousdirect.com/become-a-supplier/",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "Jacksonville Beach",
+          "size": 3,
+          "founded": 2018,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://gousdirect.com/"
+          ]
+        },
+        {
+          "name": "Intrinsic",
+          "domain": "intrinsic.us",
+          "url": "https://intrinsic.us/",
+          "description": "We buy and build consumer brands that put women’s health first.",
+          "industry": "Retail Health and Personal Care Products",
+          "geo": "United States",
+          "geo_city": "New York",
+          "size": 4,
+          "founded": 2021,
+          "revenue_annual": 4500000,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://intrinsic.us/"
+          ]
+        },
+        {
+          "name": "TxtCart 💬",
+          "domain": "txtcart.ai",
+          "url": "https://txtcart.ai/",
+          "description": "TxtCart® is a leading Conversational SMS platform for empowering e-commerce businesses. Our humanized SMS marketing approaches are designed to revolutionize customer communication. As pioneers in Conversational SMS, we excel in implementing highly effective abandoned cart recovery and marketing strategies. Our mission is to actively engage your customers, enabling them to make well-informed purchasing decisions and driving substantial revenue growth for your business.\n\nTrusted by over 3,000 companies, TxtCart is a top revenue channel for industry leaders such as TOROE Eyewear, CROSSNET, JoyRide, OBVI, Chaser Brands & Eternal Roses. Headquartered in NYC, we have a global presence with offices and talent worldwide.\n\nTo learn more about TxtCart and discover how we can elevate your business, visit us at www.txtcartapp.com.\n\nRequest a demo today and unlock the full potential of Conversational SMS marketing.",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "New York",
+          "size": 10,
+          "founded": 2019,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://txtcart.ai/"
+          ]
+        },
+        {
+          "name": "1Commerce",
+          "domain": "1-commerce.com",
+          "url": "https://1-commerce.com/",
+          "description": "We grow when you grow.\n\n1Commerce is the growth engine for high-performing DTC brands. We’ve built and scaled our own e-commerce business to 1M SKUs and $100M+ in revenue — and now we’re bringing that playbook to companies currently running $5 - 50 million and want to scale to $100 million and beyond.\n\nOur end-to-end platform unlocks new sales channels, optimizes fulfillment costs, and accelerates revenue growth. From product syndication to major marketplaces like Amazon, Walmart, Target, and Kohl’s, to fast, AI-powered fulfillment and streamlined operations, we handle the heavy lifting — so you can focus on building your brand.\n\nUnder the hood, we integrate:\nProduct Experience Management (PxM)\nOrder Management System (OMS)\nOmni-Channel Fulfillment\nMulti-Channel Integrations\nAI/ML-Powered Analytics for forecasting & growth\n\nAnd because our revenue-share model means we win only when you do, we’re truly in this together.\n\nExpand. Fulfill. Grow.\n🚀 Multi-channel marketplace expansion\n 📦 Streamlined fulfillment & inventory management\n 📊 AI-powered insights for smarter scaling\n 💰 Risk-free, growth-aligned partnership",
+          "industry": null,
+          "geo": null,
+          "geo_city": null,
+          "size": 11,
+          "founded": 2024,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://1-commerce.com/"
+          ]
+        },
+        {
+          "name": "The Woobles",
+          "domain": "thewoobles.com",
+          "url": "https://thewoobles.com/",
+          "description": "Learn to crochet with The Woobles",
+          "industry": "Retail",
+          "geo": "United States",
+          "geo_city": "cary",
+          "size": 42,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://thewoobles.com/"
+          ]
+        },
+        {
+          "name": "Boxed Ventures LLC",
+          "domain": "linkedin.com",
+          "url": "https://linkedin.com/company/boxed-ventures-llc",
+          "description": "Headquartered in Santa Monica, California, Boxed Ventures is a growing startup that specializes in the development and launch of various subscription-based, direct-to-consumer e-commerce companies, as well as private branded products sold through Amazon Marketplace. \n\nOur more notable offerings include:\n• Karma Candle Club: Good Karma. Great Candles. Premium candles delivered monthly. With every candle box sent, Karma Candle Club donates to the charity of your choosing. \n• Boxed Wingman: a monthly subscription aimed at delivering monthly date nights to couples across the US.\n• Taste It Wines: Taste It is a monthly wine subscription that delivers 8 mini bottles of wine to your door for only $39.99/month. Discover the stories behind our partner wineries as you taste your way through their 90+ Points rated wines.",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "Los Angeles",
+          "size": null,
+          "founded": 2016,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://linkedin.com/company/boxed-ventures-llc"
+          ]
+        },
+        {
+          "name": "Just One LLC",
+          "domain": "justonellc.com",
+          "url": "https://justonellc.com/",
+          "description": "Just One LLC is a family-owned business based in New York City, proudly serving our customers since 2007. With a rich history in the fashion industry, we've evolved to become a dynamic importer of various brands in apparel, hosiery, fragrances, and cosmetics.\n\nOur commitment to staying ahead of the curve led us to introduce 'Curve Necessities,' a leading shapewear brand that empowers women to embrace their curves with confidence. We're also thrilled to introduce 'Juicy Couture Eyelashes' to our portfolio, adding a touch of glamour to our cosmetics lineup.\n\nAs trendsetters, our unique designs and exemplary fabrication have earned us a global presence, with our garments adorning stores worldwide. At Just One LLC, we're dedicated to inspiring fashionable young women to transform effortlessly from sporty to spicy in one evening because, in fashion, there is never Just One state of mind.\n\nConnect with us and explore our diverse product offerings:\n\nAmazon Shop: www.amazon.com/shops/ovoloo\nInstagram: @ovoloo\nInstagram: @cai.cosmetics\nJoin us on this exciting journey of style and confidence!",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "New York",
+          "size": 18,
+          "founded": 2007,
+          "revenue_annual": 82791345,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://justonellc.com/"
+          ]
+        },
+        {
+          "name": "Fun Express, A Berkshire Hathaway Company",
+          "domain": "funexpress.com",
+          "url": "https://funexpress.com/",
+          "description": "Fun Express, a wholesale/B2B subsidiary of Oriental Trading Co., a Berkshire Hathaway Company, is a leading supplier of consumer packaged goods. We offer a wide variety of toys, novelties, party supplies, and holiday/seasonal products. We are also well known for our educational assortment, crafts, games, retail ready and impulse products, redemption prizes and kids'​ meal supplies as well as promotional products.\r\n\r\nWe are pleased to offer more than 40,000 items in our product line. Our products range from traditional favorites to today’s trends. We maintain a 95% order fill rate and offer the best value and selection in the industry.\r\n\r\nMake an impression. Utilize our award-winning artists and designers to develop products that will separate you from the competition. We have developed thousands of products exclusively presented by Fun Express. Take advantage of our one–stop shop. Save time and money by incorporating our full range of services including artistic design, product development, production and distribution.\r\n\r\nWith over 1.5 million square feet of warehouse space, we can quickly fill your order and ship it to any destination worldwide. Contact one of our representatives at 800-875-8494 to place your order and learn more about our international shipping capabilities.",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "Omaha",
+          "size": 26,
+          "founded": 1997,
+          "revenue_annual": 28342861,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://funexpress.com/"
+          ]
+        },
+        {
+          "name": "Gary Fong, Inc.",
+          "domain": "garyfongestore.com",
+          "url": "https://garyfongestore.com/",
+          "description": "Gary Fong, Inc. develops and manufactures accessories and educational materials for professional and advanced amateur photographers. Headquartered in British Columbia, Canada, it also operates subsidiary companies, \"EcoPlastics, Inc.\" in Columbus, Indiana, and \"Consolidated Fulfillment Services, Inc.\" in Wisconsin Rapids, Wisconsin, and a subsidiary production and fulfillment facility in Kübach, Germany",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "New York",
+          "size": 2,
+          "founded": 2000,
+          "revenue_annual": 8537034,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://garyfongestore.com/"
+          ]
+        },
+        {
+          "name": "The LANG Companies, Inc.",
+          "domain": "thelangcompanies.com",
+          "url": "https://thelangcompanies.com/",
+          "description": "Headquartered in Waukesha, Wisconsin, The LANG Companies, Inc., is an industry leader with over 30 years of experience producing art and design driven, exceptional quality gift and specialty products, indoor and outdoor home décor, and sports licensed products including greeting cards, calendars, drinkware, tableware, puzzles and games, and stationery. Our diversified product portfolio is marketed under three widely-recognized, company-owned brands; LANG®, Wells Street by LANG® and Turner Licensing™. Each unique brand has a long-standing heritage, is differentiated in the marketplace and dominant in the most attractive segments of the market. The LANG Companies, Inc. is a division of IG Design Group.",
+          "industry": null,
+          "geo": "United States",
+          "geo_city": "Waukesha",
+          "size": 19,
+          "founded": null,
+          "revenue_annual": null,
+          "funding_stage": null,
+          "linkedin_id": null,
+          "linkedin_url": null,
+          "provider": "exa",
+          "source_urls": [
+            "https://thelangcompanies.com/"
+          ]
+        }
+      ],
+      "meta": {
+        "total": 19,
+        "results_count": 19
+      },
+      "enforcedFilters": [
+        "geo_include"
+      ],
+      "hintedFilters": [
+        "definition"
+      ]
+    }
+  },
+  {
+    "capability": "decision_maker_discovery",
+    "input": "Bharat Forge",
+    "latencyMs": 4141,
+    "ok": true,
+    "summary": "status=found, 4 candidate(s) e.g. Baba Kalyani (Managing Director)",
+    "raw": {
+      "candidates": [
+        {
+          "personName": "Baba Kalyani",
+          "title": "Managing Director",
+          "linkedinUrl": "https://www.linkedin.com/in/amit-kalyani-3806375",
+          "confidence": "high"
+        },
+        {
+          "personName": "Krishnan Iyer",
+          "title": "COO",
+          "linkedinUrl": "https://www.linkedin.com/in/krishnanriyer",
+          "confidence": "high"
+        },
+        {
+          "personName": "Kedar Dixit",
+          "title": "CFO",
+          "linkedinUrl": "https://www.linkedin.com/in/kedar-dixit-222aaa14",
+          "confidence": "high"
+        },
+        {
+          "personName": "Sanjeev Joglekar",
+          "title": "CFO",
+          "linkedinUrl": "https://www.linkedin.com/in/sanjeev-joglekar-0b057895",
+          "confidence": "high"
+        }
+      ],
+      "providerUsed": "exa",
+      "status": "found"
+    }
+  },
+  {
+    "capability": "decision_maker_discovery",
+    "input": "Chargebee",
+    "latencyMs": 3024,
+    "ok": true,
+    "summary": "status=found, 3 candidate(s) e.g. Krish Subramanian (CEO)",
+    "raw": {
+      "candidates": [
+        {
+          "personName": "Krish Subramanian",
+          "title": "CEO",
+          "linkedinUrl": "https://nl.linkedin.com/in/krishs",
+          "confidence": "high"
+        },
+        {
+          "personName": "Guy Marion",
+          "title": "CEO",
+          "linkedinUrl": "https://www.linkedin.com/in/guymarion",
+          "confidence": "medium"
+        },
+        {
+          "personName": "Murtaza Bawahir",
+          "title": "VP Operations",
+          "linkedinUrl": "https://www.linkedin.com/in/bawahir",
+          "confidence": "medium"
+        }
+      ],
+      "providerUsed": "exa",
+      "status": "found"
+    }
+  },
+  {
+    "capability": "decision_maker_discovery",
+    "input": "Ador Welding",
+    "latencyMs": 3353,
+    "ok": true,
+    "summary": "status=found, 4 candidate(s) e.g. Aditya Malkani (CEO)",
+    "raw": {
+      "candidates": [
+        {
+          "personName": "Aditya Malkani",
+          "title": "CEO",
+          "linkedinUrl": "https://www.linkedin.com/in/aditya-malkani-7491581b1",
+          "confidence": "high"
+        },
+        {
+          "personName": "Lajpat Yadav",
+          "title": "COO",
+          "linkedinUrl": "https://in.linkedin.com/in/lajpat-yadav-46142647",
+          "confidence": "high"
+        },
+        {
+          "personName": "Krishnamurthy Suryanarayan",
+          "title": "CFO",
+          "linkedinUrl": "https://www.linkedin.com/in/krishnamurthy-suryanarayan-1a86a04",
+          "confidence": "high"
+        },
+        {
+          "personName": "Sundar Lakshmanan",
+          "title": "CEO",
+          "linkedinUrl": "https://in.linkedin.com/in/sundar-lakshmanan-07b260a1",
+          "confidence": "medium"
+        }
+      ],
+      "providerUsed": "exa",
+      "status": "found"
+    }
+  },
+  {
+    "capability": "email_finder",
+    "input": "Krishnan Iyer @ Chargebee",
+    "latencyMs": 496,
+    "ok": true,
+    "summary": "status=error, email=null, confidence=none, reason=\"Exa API 401: Your team does not have access to the API. Upgrade to a Pro plan to get access.\"",
+    "raw": {
+      "email": null,
+      "confidence": "none",
+      "providerUsed": "exa",
+      "status": "error",
+      "reason": "Exa API 401: Your team does not have access to the API. Upgrade to a Pro plan to get access."
+    }
+  },
+  {
+    "capability": "email_finder",
+    "input": "B N Kalyani @ Bharat Forge",
+    "latencyMs": 413,
+    "ok": true,
+    "summary": "status=error, email=null, confidence=none, reason=\"Exa API 401: Your team does not have access to the API. Upgrade to a Pro plan to get access.\"",
+    "raw": {
+      "email": null,
+      "confidence": "none",
+      "providerUsed": "exa",
+      "status": "error",
+      "reason": "Exa API 401: Your team does not have access to the API. Upgrade to a Pro plan to get access."
+    }
+  },
+  {
+    "capability": "enrichment",
+    "input": "Krishnan Iyer @ Chargebee",
+    "latencyMs": 1370,
+    "ok": true,
+    "summary": "status=enriched, confidence=medium, dept=Operations (Revenue Operations), seniority=Manager",
+    "raw": {
+      "department": "Operations (Revenue Operations)",
+      "seniority": "Manager",
+      "location": "Chennai, Tamil Nadu, India",
+      "roleCategory": "Management",
+      "linkedinSummary": "Gopala Krishnan S is a Manager of Revenue Operations at Chargebee based in India. He specializes in reporting, visualization, and business intelligence using SQL and Tableau to support data-driven decision-making and revenue optimization.",
+      "companySize": "Approximately 1,300 employees",
+      "industry": "Financial Services / Financial Software (SaaS)",
+      "confidence": "medium",
+      "providerUsed": "exa",
+      "status": "enriched"
+    }
+  },
+  {
+    "capability": "enrichment",
+    "input": "B N Kalyani @ Bharat Forge",
+    "latencyMs": 2068,
+    "ok": true,
+    "summary": "status=enriched, confidence=medium, dept=Executive Leadership (Chairman and Managing Director), seniority=Chairman and Managing Director",
+    "raw": {
+      "department": "Executive Leadership (Chairman and Managing Director)",
+      "seniority": "Chairman and Managing Director",
+      "location": "Pune, Maharashtra, India",
+      "roleCategory": "Executive Management / Corporate Officer",
+      "linkedinSummary": "B. N. Kalyani is the Chairman and Managing Director of Bharat Forge Limited, the flagship company of the Kalyani Group. With over five decades of leadership, he has transformed the company into a global leader in forging and precision engineering.",
+      "companySize": "approximately 4,000 employees in India",
+      "industry": "Forging and precision engineering (automotive, aerospace, defense, energy, and infrastructure)",
+      "confidence": "medium",
+      "providerUsed": "exa",
+      "status": "enriched"
+    }
+  },
+  {
+    "capability": "raw_cost_sample",
+    "input": "raw exaSearch, category=company, numResults=10",
+    "latencyMs": 319,
+    "ok": true,
+    "summary": "10 results, costDollars={\"total\":0.007,\"search\":{\"neural\":0.007}}",
+    "raw": {
+      "requestId": "6f48f2572fd6862ea41b77c9488e3386",
+      "resolvedSearchType": "",
+      "results": [
+        {
+          "id": "https://exa.ai/library/organization/sc9t2rjbj3p",
+          "title": "Sanjeev Auto-Parts Manufacturers Pvt. Ltd.",
+          "url": "https://sanjeevauto.com/",
+          "publishedDate": "2026-06-23T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D4D0BAQE7iGawxGWPmg/company-logo_200_200/B4DZidtOBtG8AI-/0/1754992534116/sanjeev_group_sanjeev_auto_parts_manufacturers_pvt_ltd__logo?e=2147483647&v=beta&t=cTBEjBrRlacgACebNsP_oYbZSP16SPIJudauO7uXiog",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/sc9t2rjbj3p",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "Sanjeev Auto-Parts Manufacturers Pvt. Ltd.",
+                "foundedYear": 1988,
+                "description": "Sanjeev Group is renowned for manufacturing Quality components and assemblies for motion control applications. We are focused on implementing latest technologies for manufacturing with continual improvement of Quality, Productivity, and Customer satisfaction. \nOur core values Passion, Innovation, Transparency, Challenge & Honesty “PITCH” are ingrained in the Sanjeev’s culture.Our Product portfolio caters to a variety of applications like Automotive two, three and four wheelers, commercial vehicles, Farm equipments, off road & Industrial Equipment. Precisely gears, shafts, Shifter forks, Sub – assemblies & precision components. \n Located at Granollers, Spain & Aurangabad, India –catering to the different sector & segments of the industries offering expertise in the field of plant structures for manufacturing parts.\nSanjeev Group’s technology strength constitutes a strategic mix of in-house Research & Development and the expertise in its quality delivered to customers. \n We are “IATF 16949” & “OHSAS 18001” certified company. Our manufacturing hub enables us to provide best-in-class services to our customers. We assure high-quality products at competitive price amongst all auto components manufacturing industries.\n While building a high-performance organization at Sanjeev Group, we also believe in our responsibility towards the society that has helped shape us. Over the last few years, we have helped create Irrigation Facilities in Koradi Village, given Donations to Hedgewar Hospital, and organized Annual Blood Donation camps with Dattaji Bhale Blood Bank.",
+                "workforce": {
+                  "total": 325
+                },
+                "headquarters": {
+                  "address": "C 7, Waluj MIDC,, Aurangabad, Maharashtra 431 136, IN",
+                  "city": "Aurangabad",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 1135,
+                  "countryRank": 776888,
+                  "avgDurationSeconds": 43,
+                  "history": [
+                    {
+                      "value": 298,
+                      "dateFrom": "2026-02",
+                      "dateTo": "2026-02"
+                    },
+                    {
+                      "value": 573,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 781,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 2035,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 1468,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 1135,
+                      "dateFrom": "2026-06",
+                      "dateTo": "2026-06"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/myr9vnknhyb",
+          "title": "Jaya Hind Industries Private Limited",
+          "url": "https://jayahind.com/",
+          "publishedDate": "2026-06-25T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D4D0BAQHAwKozucVVvA/company-logo_200_200/company-logo_200_200/0/1689655622623?e=2147483647&v=beta&t=HdeK63ThxHPOo06HlYf_p7WGMUwF5lxw_G5PiQpbdoQ",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/myr9vnknhyb",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "Jaya Hind Industries Private Limited",
+                "foundedYear": 1947,
+                "description": "Jaya Hind Industries Private Limited (part of the Dr. Abhay Firodia Group of Companies),established in 1947, is one of the first companies in India to start manufacturing of Aluminum die-castings in 1964. JHI is one of India’s largest and most trusted, end-to-end solution provider for aluminium castings for global and domestic OEMs today.\nJaya Hind Industries is a fully vertically integrated company with world class tool manufacturing capabilities and downstream machining facilities. It has one of the largest in-house tool design and manufacturing set ups in the Indian die-casting industry. JHI has manufacturing facilities at Akurdi and Urse in Maharashtra, at Chennai in Tamil Nadu and another unit near Indore in Madhya Pradesh.\nRecently, JHI acquired an Automotive Component manufacturing business, LMG Manufacturing GmbH, located in East Germany to cater to High Precision Electro Mobility Parts for its European customers.\nJaya Hind Industries also has a Technical Licensing Agreement with KS-Huayu for development and manufacturing of Cylinder Blocks and Structural parts in India. JHI’s customer base consists of world renowned OEMs like BMW, Volkswagen, Cummins, Ford, PSA, Daimler, Volvo, Renault Nissan, Maruti Suzuki, ISUZU, Mahindra, Tata Motors, Bosch, to name a few. \nJaya Hind Industries is the only company to have won the “Best Foundry in India – Large Sector” Award instituted by the Association of Aluminum Die-casters and Equipment Manufacturers of India six times, viz., 2008, 2010, 2014, 2016, 2018 and 2022.",
+                "workforce": {
+                  "total": 283
+                },
+                "headquarters": {
+                  "address": "Pune, Pune, IN",
+                  "city": "Pune",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": null,
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/308s8p0kgv5",
+          "title": "ACCURATE PRODUCTS CORPORATION PVT LTD",
+          "url": "https://accurateproducts.com/",
+          "publishedDate": "2026-06-29T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/C560BAQFnRupsdYTNYQ/company-logo_200_200/company-logo_200_200/0/1638956839758?e=2147483647&v=beta&t=gdALkJi0PmszwevJAqv7YF0f75y26CfDCJ855Uyqo6A",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/308s8p0kgv5",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "ACCURATE PRODUCTS CORPORATION PVT LTD",
+                "foundedYear": 1960,
+                "description": "ABOUT US\nThe brand Accurate is well known in the market as one of the leading manufacturers of Automotive components. Our process design expertise and flexibility to complete the development cycle rapidly from design to sampling stage and then to on-time delivery of serial production makes us one of the best companies to work with. We have more than 60 years of experience in manufacturing Precision components in IATF 16949 and ISO 14001 certified facilities through Bar Turning, Stamping, and Cold forging processes all under a single roof.\n\nFACTS\n • 60+ Years of Manufacturing Excellences\n • 7 out of 10 Vehicle running on Indian roads today will have our parts assembled in it \n • 240,000 Sqft. Manufacturing Area with an annual capacity of 130 Million Parts.\n • Part of GROZ group companies\n\nOUR PRIDE \nAccurate is one of the preferred suppliers of key components and sub-assemblies to the automotive & non-automotive vehicles, Textile Industries, engineering, and Construction Equipment industries. We always go with extra mile for our customers and accelerate their journey. We have a State-of-art manufacturing facility with an engineering & design center that caters to services our esteemed customers. ”OUR NAME SAYS IT ALL”\n\nOUR VALUE\nAccurate believes that success depends on collective competencies, technical abilities, and commitment of human capital. Accurate has set up its own Skill Development Centers to enhance employability in the society thereby increasing the availability of skilled personnel for its own business requirements.",
+                "workforce": {
+                  "total": 63
+                },
+                "headquarters": {
+                  "address": "AC-22A AC24 & AC-25A, 5th Cross Street, SIDCO Industrial Estate, Thirumudivakkam, Chennai, Tamil Nadu 600132, IN",
+                  "city": "Chennai",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 650,
+                  "countryRank": null,
+                  "avgDurationSeconds": 9,
+                  "history": [
+                    {
+                      "value": 1738,
+                      "dateFrom": "2026-01",
+                      "dateTo": "2026-01"
+                    },
+                    {
+                      "value": 1738,
+                      "dateFrom": "2026-02",
+                      "dateTo": "2026-02"
+                    },
+                    {
+                      "value": 1047,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 1353,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 1428,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 650,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/kgshlq0zyrm",
+          "title": "SuMax Enterprises Pvt. Ltd.",
+          "url": "https://sumaxenterprises.com/",
+          "publishedDate": "2026-06-29T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/C4D0BAQF7-Yr6Ujxa-w/company-logo_200_200/company-logo_200_200/0/1631319948409?e=2147483647&v=beta&t=fWi_2sNUkfPWYCfio009ooalDSpncRVnuGjUP6-Y5nM",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/kgshlq0zyrm",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "SuMax Enterprises Pvt. Ltd.",
+                "foundedYear": 1979,
+                "description": "SuMax is a part of the Suttatti Group established in the early 1960's by Mr. C.G. Suttatti.\n\nWe are currently engaged in:\n\n- Precision Machining of Castings and Forgings for diverse applications like Transmission parts, Turbocharger parts, Steering Systems, Hydraulic Pump parts, Piston Pump parts etc.\n- Manufacturing of Hydraulic Fittings.\n- Manufacturing of Alternator Parts such as Stator Core including post processes.\n\nSuMax is an ISO 9001:2015, IATF 16949:2016 certified company and is in process of getting certified for ISO 14001 and OHSAS 18001.",
+                "workforce": {
+                  "total": 77
+                },
+                "headquarters": {
+                  "address": "Plot No: 111, Lane No: 4, Ramtekadi Industrial Estate,, Hadapsar., Pune, Maharashtra 411028, IN",
+                  "city": "Pune",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 506,
+                  "countryRank": null,
+                  "avgDurationSeconds": 90,
+                  "history": [
+                    {
+                      "value": 581,
+                      "dateFrom": "2026-02",
+                      "dateTo": "2026-02"
+                    },
+                    {
+                      "value": 226,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 595,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 595,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 506,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 506,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/2zzdl3xmj1f",
+          "title": "Rapsri Engineering Products Company Pvt. Ltd.",
+          "url": "https://rapsri.com/",
+          "publishedDate": "2026-06-24T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D560BAQH9YAr0PSLV2A/company-logo_200_200/company-logo_200_200/0/1735619768863/rapsri_logo?e=2147483647&v=beta&t=81D-PwEJ_3AuOn1hQClDrPHgHl6_Mxif-91hsQiMLDc",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/2zzdl3xmj1f",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "Rapsri Engineering Products Company Pvt. Ltd.",
+                "foundedYear": 1971,
+                "description": "Rapsri is a 50 year old Copper, Brass and Bronze foundry making precision machined, electroplated or brazed value added components or subassemblies. We supply to diverse engineering industries such as construction machinery, off highway vehicles, hydraulic pumps valves and cylinders, energy. We deliver product JIT to various OEMs to their global locations in North America, EU, UK and Asia through supply chain partnerships in each geography. We are an ISO 9001:2015 certified company providing world-class quality to global OEMs.\n\nWe are a high mix medium volume job shop that can handle 20 – 10,000 nos. per month in the 100 gm to 15 kg weight range. Our precision machines and robust processes are capable of machining parts to close tolerances of up to 15 microns. \n\nOur commitment to innovation and technology has kept us preferred choice to our customers wherein we bring in our expertise in material, process, application and design. \n\nFor more details, please visit us at www.rapsri.com",
+                "workforce": {
+                  "total": 45
+                },
+                "headquarters": {
+                  "address": "Plot No. - 318F, Harohalli Industrial Area 2nd Phase, Bannikuppe Village, Harohalli, Kanakapura Taluk, Ramanagara, Karnataka 562112, IN",
+                  "city": "Ramanagara",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 228,
+                  "countryRank": null,
+                  "avgDurationSeconds": 0,
+                  "history": [
+                    {
+                      "value": 1011,
+                      "dateFrom": "2026-02",
+                      "dateTo": "2026-02"
+                    },
+                    {
+                      "value": 644,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 1029,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 269,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 228,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 228,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/fp72zwql0k0",
+          "title": "Mangal Industries",
+          "url": "https://mangalindustries.com/",
+          "publishedDate": "2026-06-17T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/C560BAQG1UWgiXpSbXA/company-logo_200_200/company-logo_200_200/0/1662614634608/mangal_industries_logo?e=2147483647&v=beta&t=6tmJ0GbKJWBmp2yFLdpNxzKAHmwLJ2nPhhzmKmlGyX4",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/fp72zwql0k0",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "Mangal Industries",
+                "foundedYear": null,
+                "description": "Mangal Industries, a design-led manufacturing company, is part of the USD 2 Billion Amara Raja Group. With a diverse portfolio including Precision Components, Metal Fabrication, Storage Solutions, Toolworks, Plastic Components, and Custom Fabrication, we serve a wide range of industries with tailored solutions.\n\nGuided by visionary leadership, we leverage advanced infrastructure, engineering expertise, a robust supply chain, and a steadfast commitment to quality. This strategic focus has positioned us as a trusted partner, delivering innovative solutions that drive value across sectors.\n\nBy prioritizing agility, speed, and efficiency, we embrace technology to foster innovation and exceed customer expectations, solidifying our role as a leader in design led manufacturing.\n",
+                "workforce": {
+                  "total": 117
+                },
+                "headquarters": {
+                  "address": "Terminal a 1 18 1 Amr Nr Nanakramguda; Hyderabad, 500032, India",
+                  "city": "Hyderabad",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": null,
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/v0x9tq5bsjt",
+          "title": "Preet Brothers Limited | A Preet Enterprise.",
+          "url": "https://preetgroup.com/",
+          "publishedDate": "2026-06-22T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D4D0BAQH8RjRHbyb_3Q/company-logo_200_200/company-logo_200_200/0/1681036050367?e=2147483647&v=beta&t=X36SeRzLKkqdErj7AJkxoX5YuAdcQ4k7jqv4ZAyHm3Q",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/v0x9tq5bsjt",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "Preet Brothers Limited | A Preet Enterprise.",
+                "foundedYear": 1976,
+                "description": "🚀 Proud to Lead PREET GROUP — Largest Builder of Rolling Mills & CNC Solutions for Global Steelmakers 🌍\n\nAt Preet Group, we don’t just manufacture machines — we power the steel industry with bold innovation, unmatched scale, and uncompromising quality.\n\nWe are:\n\n🏗️ The largest machine builder for Long Product Rolling Mills (up to 1,000,000 TPA)\n🛢️ A global leader in Flat Product Rolling Mills (up to 3,000,000 TPA)\n🛠️ India’s largest CNC machine builder — Roll Turning Lathes, VMCs, VTLs, and SPMs\n⚙️ Makers of Sanjog Cranes for Steel Melt Shops\n🤝 Licensed manufacturer of Sendzimir Z-High®, 20-High Cluster & Hot Planetary Mills\n\nWe proudly serve clients in 60+ countries — including USA, Germany, Italy, Turkey, Saudi Arabia, UAE, South Korea, Mexico, Egypt, South Africa, Thailand, Brazil, Vietnam, Indonesia, Malaysia, Bangladesh, Argentina, and Australia, among many others across Europe, North America, Latin America, the Middle East, Africa, and Asia-Pacific.\n\n🔧 What We Do\n✔️ Long Product Rolling Mills (Bar, Wire Rod, Rebar, Structural – up to 1 MTPA)\n✔️ Flat Product Rolling Mills (Strip, Coil, Sheet – up to 3 MTPA)\n✔️ CNC Roll Turning Machines, VTLs, VMCs & SPMs\n✔️ Roll Shop Equipment & Handling Systems\n✔️ Steel Melt Shop Cranes by Sanjog Cranes\n✔️ Sendzimir Mill Manufacturing under Global License\n\n💪 Why Choose Preet Group\n✅ End-to-End Turnkey Execution\n✅ 2,650+ Engineers, Designers & Technicians\n✅ 17+ Projects Delivered Annually — Among the Fastest Worldwide\n✅ Heaviest CNC Machines Built In-House\n✅ Trusted by Leading Steel Producers Worldwide\n\n#PreetGroup #RollingMillBuilder #SteelIndustry #CNCmachines #LongProductMill\n#FlatProductMill #HeavyEngineering #SendzimirMills #SanjogCranes #IkjotUnited\n#BarMill #WireRodMill #StripMill #SteelPlantMachinery #EngineeringExcellence\n#SmartManufacturing #GlobalSteelSolutions #HeavyMachineryExports #ArcelorMittal #POSCO #TataSteel #JSWSteel #SAIL #Severstal #USSteel\n#Nucor #Baosteel #HyundaiSteel #Gerdau #ThyssenkruppSteel",
+                "workforce": {
+                  "total": 122
+                },
+                "headquarters": {
+                  "address": "Tronica City Road, Ghaziabad, Uttar Pradesh, IN",
+                  "city": "Ghaziabad",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 2005,
+                  "countryRank": 412528,
+                  "avgDurationSeconds": 57,
+                  "history": [
+                    {
+                      "value": 1867,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 7340,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 7340,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 3279,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 3279,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 2005,
+                      "dateFrom": "2026-06",
+                      "dateTo": "2026-06"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/9dvxz4sch5f",
+          "title": "KAKATI KARSHAK INDUSTRIES",
+          "url": "https://kakatipumps.com/",
+          "publishedDate": "2026-06-27T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D560BAQGSmP5_p2XSKw/company-logo_200_200/B56ZtKr_SBGsAI-/0/1766484604476/kakati_karshak_industries_logo?e=2147483647&v=beta&t=OoeqoNuzYoQl6Rj2LMchWRd9iBcriJ2NsxmvKa9lI_s",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/9dvxz4sch5f",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "KAKATI KARSHAK INDUSTRIES",
+                "foundedYear": 1965,
+                "description": "For over six decades, Kakati Karshak Industries Pvt. Ltd. has been powering industries with innovation, precision, and trust. Established in 1965, we are South Asia’s leading manufacturer of Liquid Ring Vacuum Pumps, Compressors, and Engineered Vacuum Systems — serving diverse sectors such as power, paper, petrochemical, and process industries.\n\nAt Kakati, we don’t just build machines — we engineer performance. Every product we design reflects our commitment to efficiency, reliability, and sustainability. From heavy-duty vacuum systems to custom-built compressor solutions, our technologies are crafted to deliver consistent results even in the most demanding environments.\n\nWhat sets us apart is our blend of experience and innovation. With a strong in-house engineering team and advanced testing facilities, we ensure that every system meets international standards and exceeds customer expectations.\n\nOver the years, Kakati has grown from a trusted manufacturer to a long-term partner for industries seeking smarter, energy-efficient solutions.\n\nDriven by quality, powered by innovation — Kakati continues to create systems that keep industries running stronger, cleaner, and more efficiently than ever before.",
+                "workforce": {
+                  "total": 41
+                },
+                "headquarters": {
+                  "address": "NACHARAM INDUSTRIAL AREA, NACHARAM,, HYDERABAD, Telangana 500076, IN",
+                  "city": null,
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 1410,
+                  "countryRank": 593654,
+                  "avgDurationSeconds": 53,
+                  "history": [
+                    {
+                      "value": 786,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 1139,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 2248,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 1240,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 1240,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 1410,
+                      "dateFrom": "2026-06",
+                      "dateTo": "2026-06"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/fd5nd5fh43k",
+          "title": "AKSH Group of Companies",
+          "url": "https://akshudyog.com/",
+          "publishedDate": "2026-06-23T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D560BAQGpRtSy-ikQDw/company-logo_200_200/B56Z5FgedUJgAE-/0/1779282602057/aksh_manufacturing_pvt_ltd_logo?e=2147483647&v=beta&t=GLgUipTZFZwt6THHFK6Vg-2DdPiOSsu-pb51lH3iKXk",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/fd5nd5fh43k",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "AKSH Group of Companies",
+                "foundedYear": 2005,
+                "description": "Established in 2005 as a small workshop by a young engineer, Pritam Bahirat, AKSH has grown into a multi-activity group. Today, we are renowned for manufacturing high-precision Slew Ring Bearings and Drives, Crane Wheel Assemblies, and executing turnkey heavy fabrication projects—offering our clients a seamless, one-stop solution. \nWe offer a range of slew bearings from 120 mm to 2 m in diameter and above in standard sizes. Customised slew ring bearing solutions are our speciality and we are among the leading manufacturers of slew ring bearings in India, with a production capacity of 10,000 bearings per year. We supply slew bearings and slew drives for critical applications such as material handling crane Industries, Water treatment, constriction equipment, defence, solar trackers and earth-moving equipment. We have developed a specialised in-house slew ring bearing using Criss-Cross technology.\n\nOne of our divisions has been engaged in the manufacture of crane wheel assemblies for EOT cranes for the last 15 years. Our wheel assemblies are an integral part of EOT cranes supplied by several leading crane manufacturers in India. We have a production capacity of over 12,000 assemblies per year, ranging from 160 mm to 1000 mm in diameter.\nOur large fabrication unit has a capacity of 1200 MT, which is complemented by an in-house machine units, jigs and fixtures required for precision fabrication are developed in-house at our design centre. We have a team of skilled, trained and certified welders to handle critical welding jobs, ensuring precision, safety and long-term reliability. \nFor more details, please visit our website.",
+                "workforce": {
+                  "total": 22
+                },
+                "headquarters": {
+                  "address": "Lavasa Link Road, Gat No. 401 Urawade, Beside Narendra Industries, Pune, Maharashtra 412 115, IN",
+                  "city": "Pune",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 985,
+                  "countryRank": null,
+                  "avgDurationSeconds": 74,
+                  "history": [
+                    {
+                      "value": 1237,
+                      "dateFrom": "2026-02",
+                      "dateTo": "2026-02"
+                    },
+                    {
+                      "value": 1256,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    },
+                    {
+                      "value": 1058,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 819,
+                      "dateFrom": "2026-04",
+                      "dateTo": "2026-04"
+                    },
+                    {
+                      "value": 1148,
+                      "dateFrom": "2026-05",
+                      "dateTo": "2026-05"
+                    },
+                    {
+                      "value": 985,
+                      "dateFrom": "2026-06",
+                      "dateTo": "2026-06"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://exa.ai/library/organization/xxh5cmq69hh",
+          "title": "Akay Industries Pvt Ltd",
+          "url": "https://akayind.co.in/",
+          "publishedDate": "2026-06-28T00:00:00.000Z",
+          "author": "Exa",
+          "image": "https://media.licdn.com/dms/image/v2/D4D0BAQEKCTLCPOiKog/company-logo_200_200/company-logo_200_200/0/1690967813907/akay_industries_pvt_ltd_logo?e=2147483647&v=beta&t=7RKKl2CsBAP-iJBXZRCdSrd7XwxORpkK_tw5VSCR510",
+          "entities": [
+            {
+              "id": "https://exa.ai/library/organization/xxh5cmq69hh",
+              "type": "company",
+              "version": 1,
+              "properties": {
+                "name": "Akay Industries Pvt Ltd",
+                "foundedYear": 1929,
+                "description": "Akay, established in 1929, is a privately held Indian company that has built its business through commitment to provide customer value. Its world class engineering, materials management and manufacturing team operates through a network of sales and service offices to provide equipment solutions to our industrial clients.\n\nAt Akay, we understand the critical role our products serve in your process. For over 50 years and under the toughest conditions, Chemflo products have functioned in numerous industries around the world with maximum efficiency and safety.\n\nResearch and development have played critical roles in bringing new products into the world market place. Beyond the technology is a more important asset at Akay… Our People. For it is their commitment to provide the widest selection of the highest quality products in the world.\n\nAkays’ expansion into world markets is an exciting challenge. We envision tremendous growth in all our markets and have laid the foundation to become a world manufacturer of our high quality products. ",
+                "workforce": {
+                  "total": 5
+                },
+                "headquarters": {
+                  "address": "CTS No: 611 - 612 - 1  Station Road Hubli, HUBLI - 580020, Hubli, Karnataka 580020, IN",
+                  "city": "Hubli",
+                  "postalCode": null,
+                  "country": "India"
+                },
+                "financials": null,
+                "webTraffic": {
+                  "visitsMonthly": 9,
+                  "countryRank": null,
+                  "avgDurationSeconds": 204,
+                  "history": [
+                    {
+                      "value": 1398,
+                      "dateFrom": "2025-10",
+                      "dateTo": "2025-10"
+                    },
+                    {
+                      "value": 268,
+                      "dateFrom": "2025-11",
+                      "dateTo": "2025-11"
+                    },
+                    {
+                      "value": 268,
+                      "dateFrom": "2025-12",
+                      "dateTo": "2025-12"
+                    },
+                    {
+                      "value": 246,
+                      "dateFrom": "2026-01",
+                      "dateTo": "2026-01"
+                    },
+                    {
+                      "value": 246,
+                      "dateFrom": "2026-02",
+                      "dateTo": "2026-02"
+                    },
+                    {
+                      "value": 9,
+                      "dateFrom": "2026-03",
+                      "dateTo": "2026-03"
+                    }
+                  ]
+                },
+                "research": null
+              }
+            }
+          ]
+        }
+      ],
+      "searchTime": 8.5,
+      "costDollars": {
+        "total": 0.007,
+        "search": {
+          "neural": 0.007
+        }
+      }
+    }
+  }
+]

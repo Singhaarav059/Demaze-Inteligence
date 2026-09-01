@@ -3,8 +3,8 @@
 // ============================================================
 // Covers both the pure, network-free scoring/guard helpers directly
 // (scoreCandidate, isKnownNonCorporateDomain, wordsAppearTogether) and the
-// full discoverCompanyWebsite() flow with searchTavily/searchSerper and
-// global.fetch mocked — same "mocked global.fetch" precedent as
+// full discoverCompanyWebsite() flow with searchTavily and global.fetch
+// mocked — same "mocked global.fetch" precedent as
 // tests/prospeo-client.test.ts, applied here to also mock the
 // discovery-engine search module (file-scoped vi.mock, hoisted).
 //
@@ -22,7 +22,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../lib/enrichment/discovery-engine', () => ({
   searchTavily: vi.fn(),
-  searchSerper: vi.fn(),
 }))
 
 import { searchTavily } from '../lib/enrichment/discovery-engine'
@@ -69,7 +68,6 @@ let pages: Record<string, { title: string; description: string; body: string }>
 beforeEach(() => {
   pages = {}
   process.env.TAVILY_API_KEY = 'test-tavily-key'
-  delete process.env.SERPER_API_KEY
   delete process.env.FIRECRAWL_API_KEY
   mockedSearchTavily.mockReset()
 
@@ -91,7 +89,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   delete process.env.TAVILY_API_KEY
-  delete process.env.SERPER_API_KEY
   delete process.env.FIRECRAWL_API_KEY
 })
 

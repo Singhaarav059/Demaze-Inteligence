@@ -32,7 +32,7 @@ export interface OutboundContact {
   title_hint: string | null
   linkedin_url: string | null
   email: string | null
-  email_confidence: 'high' | 'medium' | 'low' | 'none' | null
+  email_confidence: 'verified' | 'high' | 'medium' | 'low' | 'none' | null
   email_finder_provider: string | null
   email_finder_status: 'pending' | 'found' | 'not_found' | 'error'
   enrichment: Record<string, unknown> | null

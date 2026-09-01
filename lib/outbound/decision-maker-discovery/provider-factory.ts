@@ -13,7 +13,9 @@ import { MockDecisionMakerDiscoveryProvider } from './providers/mock'
 import { ProspeoDecisionMakerDiscoveryProvider } from './providers/prospeo'
 import { ExpleeDecisionMakerDiscoveryProvider } from './providers/explee'
 import { LinkedInSearchDecisionMakerDiscoveryProvider } from './providers/linkedin-search'
+import { ExaDecisionMakerDiscoveryProvider } from './providers/exa'
 import { groundCandidates } from './grounding'
+import { rankCandidates } from './ranking'
 import type {
   DecisionMakerDiscoveryProvider,
   DecisionMakerDiscoveryRequest,
@@ -25,6 +27,7 @@ const PROVIDERS: Record<string, DecisionMakerDiscoveryProvider> = {
   prospeo: ProspeoDecisionMakerDiscoveryProvider,
   explee: ExpleeDecisionMakerDiscoveryProvider,
   'linkedin-search': LinkedInSearchDecisionMakerDiscoveryProvider,
+  exa: ExaDecisionMakerDiscoveryProvider,
 }
 
 async function resolveProvider(): Promise<DecisionMakerDiscoveryProvider> {
@@ -55,11 +58,13 @@ export async function discoverDecisionMakers(
   try {
     const result = await provider.discoverDecisionMakers(request)
     // Applied uniformly here (not inside each provider) so mock and every
-    // real vendor get the same website-grounding cross-check for free —
-    // see grounding.ts. No-ops when the caller didn't thread
-    // leadershipContacts through.
+    // real vendor get the same website-grounding cross-check and seniority
+    // ranking for free — see grounding.ts / ranking.ts. No-ops (grounding)
+    // when the caller didn't thread leadershipContacts through; ranking
+    // always applies since it needs no external input.
     if (result.status === 'found' && result.candidates.length > 0) {
-      return { ...result, candidates: groundCandidates(result.candidates, request.leadershipContacts) }
+      const grounded = groundCandidates(result.candidates, request.leadershipContacts)
+      return { ...result, candidates: rankCandidates(grounded) }
     }
     return result
   } catch (e) {

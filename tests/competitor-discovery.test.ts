@@ -4,7 +4,7 @@
 // Covers the pure, network-free pieces of discoverCompetitors() (see
 // lib/enrichment/competitor-discovery.ts): name extraction, self-name /
 // disqualifier rejection, and confidence tiering. The search calls
-// themselves (searchTavily/searchSerper via searchWithFallback) are not
+// themselves (searchTavily via searchWithFallback) are not
 // unit-tested here — same reasoning as enrichment-pdf.test.ts skipping
 // fetchPdfText: real HTTP belongs in a live verification run, not a unit
 // test, and this repo has no test-quota-spending convention.

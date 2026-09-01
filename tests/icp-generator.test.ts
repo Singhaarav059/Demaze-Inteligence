@@ -4,7 +4,7 @@
 // Covers the pure, network-free pieces of discoverICPSegments() (see
 // lib/enrichment/icp-generator.ts): segment extraction, self-name/generic-
 // term rejection, and confidence tiering. The search calls themselves
-// (searchTavily/searchSerper via searchWithFallback) are not unit-tested
+// (searchTavily via searchWithFallback) are not unit-tested
 // here — same reasoning as tests/competitor-discovery.test.ts.
 
 import { describe, it, expect } from 'vitest'

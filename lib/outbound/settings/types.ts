@@ -46,9 +46,9 @@ export const CAPABILITY_HINTS: Record<OutboundCapability, string> = {
 // as a real, working option in the UI. Add a vendor here only once its
 // provider class actually exists.
 export const CAPABILITY_KNOWN_PROVIDERS: Record<OutboundCapability, string[]> = {
-  decision_maker_discovery: ['mock', 'prospeo', 'explee', 'linkedin-search'],
-  email_finder: ['mock', 'prospeo', 'explee'],
-  enrichment: ['mock', 'prospeo'],
+  decision_maker_discovery: ['mock', 'prospeo', 'explee', 'linkedin-search', 'exa'],
+  email_finder: ['mock', 'prospeo', 'explee', 'exa'],
+  enrichment: ['mock', 'prospeo', 'exa'],
   sending: ['mock', 'gmail'],
   warmup: ['mock'],
 }

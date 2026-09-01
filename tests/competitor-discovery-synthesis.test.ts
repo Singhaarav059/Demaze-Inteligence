@@ -8,7 +8,6 @@ vi.mock('@/lib/ai/provider-factory', () => ({
 
 vi.mock('../lib/enrichment/discovery-engine', () => ({
   searchTavily: vi.fn(),
-  searchSerper: vi.fn(),
 }))
 
 import { discoverCompetitorsViaSearchSynthesis } from '@/lib/enrichment/competitor-discovery'
@@ -35,12 +34,10 @@ describe('discoverCompetitorsViaSearchSynthesis', () => {
     getCompletionMock.mockReset()
     mockedSearchTavily.mockReset()
     process.env.TAVILY_API_KEY = 'test-tavily-key'
-    delete process.env.SERPER_API_KEY
   })
 
   afterEach(() => {
     delete process.env.TAVILY_API_KEY
-    delete process.env.SERPER_API_KEY
   })
 
   it('returns insufficient without calling the LLM when search returns nothing', async () => {

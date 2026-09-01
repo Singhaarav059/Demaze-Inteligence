@@ -1,18 +1,22 @@
 // ============================================================
 // Admin: Company Discovery search — POST /api/admin/explee-discovery
 // ============================================================
-// Thin wrapper around searchExpleeCompanies() (Explee is the sole
-// company-discovery data source, kept invisible to the UI/response shape
-// beyond this file) plus an "already researched" annotation against
+// Thin wrapper around discoverCompanies() (lib/enrichment/
+// company-discovery-provider-factory.ts) — Explee or Exa, chosen by
+// COMPANY_DISCOVERY_PROVIDER, is invisible to the UI/response shape beyond
+// this file — plus an "already researched" annotation against
 // pipeline_test_runs, reusing normalizeDomain()/normalizeName() from
 // company-discovery.ts — this ANNOTATES (alreadyResearched/lastResearchedAt)
 // rather than silently dropping, so the results UI can show real status per
-// company (see CompanyMatchList.tsx).
+// company (see CompanyMatchList.tsx). Route path/filename kept as
+// explee-discovery for now — no caller (useCompanyDiscoverySearch.ts) needs
+// to change.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdminRequest } from '@/lib/admin/auth'
-import { searchExpleeCompanies, ExpleeApiError, getExpleeApiKey, type ExpleeCompany } from '@/lib/enrichment/sources/explee-client'
+import { ExpleeApiError } from '@/lib/enrichment/sources/explee-client'
+import { discoverCompanies, type CompanyDiscoveryCompany } from '@/lib/enrichment/company-discovery-provider-factory'
 import { normalizeDomain, normalizeName } from '@/lib/enrichment/company-discovery'
 import { createServerClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logger'
@@ -32,10 +36,6 @@ export async function POST(req: NextRequest) {
   const authError = verifyAdminRequest(req)
   if (authError) return authError
 
-  if (!getExpleeApiKey()) {
-    return NextResponse.json({ success: false, error: 'EXPLEE_API_KEY is not set' }, { status: 400 })
-  }
-
   const body = await req.json().catch(() => null)
   const definition = typeof body?.definition === 'string' ? body.definition.trim() : ''
   if (!definition) {
@@ -49,33 +49,38 @@ export async function POST(req: NextRequest) {
   const pageSize = Number.isFinite(body?.pageSize) ? Math.min(Math.max(Number(body.pageSize), 1), 100) : 20
 
   try {
-    const result = await searchExpleeCompanies(
-      {
-        definition,
-        geo_include: geoInclude && geoInclude.length > 0 ? geoInclude : undefined,
-        size: range(body?.sizeMin, body?.sizeMax),
-        revenue_annual: range(body?.revenueMin, body?.revenueMax),
-        founded: range(body?.foundedMin, body?.foundedMax),
-        is_b2b: bool(body?.isB2b),
-        is_saas: bool(body?.isSaas),
-        is_startup: bool(body?.isStartup),
-        is_tech: bool(body?.isTech),
-        is_digital: bool(body?.isDigital),
-        is_ai: bool(body?.isAi),
-        is_merchant: bool(body?.isMerchant),
-        has_public_emails: bool(body?.hasPublicEmails),
-        has_company_phone: bool(body?.hasCompanyPhone),
-        has_linkedin_page: bool(body?.hasLinkedinPage),
-        has_employees_on_linkedin: bool(body?.hasEmployeesOnLinkedin),
-      },
+    const result = await discoverCompanies({
+      definition,
+      geo_include: geoInclude && geoInclude.length > 0 ? geoInclude : undefined,
+      size: range(body?.sizeMin, body?.sizeMax),
+      revenue_annual: range(body?.revenueMin, body?.revenueMax),
+      founded: range(body?.foundedMin, body?.foundedMax),
+      is_b2b: bool(body?.isB2b),
+      is_saas: bool(body?.isSaas),
+      is_startup: bool(body?.isStartup),
+      is_tech: bool(body?.isTech),
+      is_digital: bool(body?.isDigital),
+      is_ai: bool(body?.isAi),
+      is_merchant: bool(body?.isMerchant),
+      has_public_emails: bool(body?.hasPublicEmails),
+      has_company_phone: bool(body?.hasCompanyPhone),
+      has_linkedin_page: bool(body?.hasLinkedinPage),
+      has_employees_on_linkedin: bool(body?.hasEmployeesOnLinkedin),
       pageSize,
       page,
-    )
+    })
 
     const companies = await annotateAlreadyResearched(result.companies)
-    return NextResponse.json({ success: true, ...result, companies })
+    return NextResponse.json({
+      success: true,
+      companies,
+      meta: result.meta,
+      providerUsed: result.providerUsed,
+      enforcedFilters: result.enforcedFilters,
+      hintedFilters: result.hintedFilters,
+    })
   } catch (e) {
-    const message = e instanceof ExpleeApiError ? e.message : (e instanceof Error ? e.message : 'Explee search failed')
+    const message = e instanceof ExpleeApiError ? e.message : (e instanceof Error ? e.message : 'Company search failed')
     return NextResponse.json({ success: false, error: message }, { status: 502 })
   }
 }
@@ -104,7 +109,7 @@ interface HistoryEntry {
 
 // Non-fatal on DB error — an unannotated result is far cheaper than the
 // whole search failing.
-async function annotateAlreadyResearched(companies: ExpleeCompany[]): Promise<ExpleeCompany[]> {
+async function annotateAlreadyResearched(companies: CompanyDiscoveryCompany[]): Promise<CompanyDiscoveryCompany[]> {
   if (companies.length === 0) return companies
   try {
     const supabase = createServerClient()

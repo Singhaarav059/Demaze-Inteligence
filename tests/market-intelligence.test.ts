@@ -4,7 +4,7 @@
 // Covers the pure, network-free pieces of discoverMarketIntelligence() (see
 // lib/enrichment/market-intelligence.ts): category classification, the
 // "strong indicator" check, confidence tiering, and statement-sanity
-// rejection. The search calls themselves (searchTavily/searchSerper via
+// rejection. The search calls themselves (searchTavily via
 // searchWithFallback) are not unit-tested here — same reasoning as
 // tests/competitor-discovery.test.ts / tests/icp-generator.test.ts.
 

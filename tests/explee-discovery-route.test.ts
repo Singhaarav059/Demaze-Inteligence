@@ -14,6 +14,11 @@ import { FakeSupabase } from './helpers/fake-supabase'
 
 process.env.ADMIN_SECRET = ''
 process.env.EXPLEE_API_KEY = 'test-key'
+// This file tests Explee-specific request mapping, so it pins the provider
+// explicitly rather than relying on the default (flipped 'explee' -> 'exa'
+// 2026-09-01, see benchmarks/exa/REPORT.md and
+// company-discovery-provider-factory.ts's resolveProvider()).
+process.env.COMPANY_DISCOVERY_PROVIDER = 'explee'
 
 const state = { supabase: null as FakeSupabase | null }
 vi.mock('@/lib/supabase/server', () => ({

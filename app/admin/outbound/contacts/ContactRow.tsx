@@ -22,7 +22,7 @@ import { StatusDot, type StatusTone } from '../StatusDot'
 import type { OutboundContact } from './useOutboundContacts'
 
 function emailConfidenceTone(confidence: OutboundContact['email_confidence']): StatusTone {
-  if (confidence === 'high') return 'strong'
+  if (confidence === 'verified' || confidence === 'high') return 'strong'
   if (confidence === 'medium' || confidence === 'low') return 'medium'
   return 'muted'
 }

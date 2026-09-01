@@ -13,7 +13,11 @@ export interface EmailFinderRequest {
   domain: string
 }
 
-export type EmailFinderConfidence = 'high' | 'medium' | 'low' | 'none'
+// 'verified' is strictly above 'high' — reserved for an actual provider-
+// confirmed verification signal (currently only Prospeo's real SMTP-
+// verified match, see providers/prospeo.ts's mapConfidence()). Never
+// inferred from mere existence, never set by any other provider.
+export type EmailFinderConfidence = 'verified' | 'high' | 'medium' | 'low' | 'none'
 export type EmailFinderStatus = 'found' | 'not_found' | 'error'
 
 export interface EmailFinderResult {

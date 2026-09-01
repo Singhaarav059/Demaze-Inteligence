@@ -796,7 +796,11 @@ async function fetchMapUrls(client: Firecrawl, baseUrl: string): Promise<string[
 //
 // Triggered automatically when scraping yields < 800 chars.
 
-async function searchFallbackScrape(
+// Exported for testing (same precedent as selectUrlsToScrape/classifyUrl/
+// extractJsonLdPersons/assessScrapeQuality below) — the `.data`-getter-throws
+// regression this fixed (see the SearchResponse comment inside) needs a real
+// fake-client test, not just a read-through.
+export async function searchFallbackScrape(
   client: Firecrawl,
   baseUrl: string,
 ): Promise<ScrapeResult | null> {
@@ -843,16 +847,26 @@ async function searchFallbackScrape(
 
   const allPages: ScrapePageResult[] = []
 
-  // Firecrawl's search API — same key, no extra integration needed
-  // SDK response shape varies by version. Log it once so we can verify.
-  // Possible shapes:
-  //   v1:  { data: [{ url, markdown, description }] }
-  //   v4:  { success, data: [...] }  OR  { success, web: { results: [...] } }
+  // Firecrawl's search API — same key, no extra integration needed.
+  // Confirmed live 2026-09-01 (found via the web-research benchmark, see
+  // docs/DECISIONS.md): the installed @mendable/firecrawl-js's v2 /search
+  // client (node_modules/@mendable/firecrawl-js/dist/index.js, `search()`)
+  // groups results by source directly on the response object — `res.web`,
+  // `res.news`, `res.images` are the real flat arrays, there is no nested
+  // `.results` wrapper. The SDK ALSO defines a `.data` property as a GETTER
+  // that unconditionally THROWS ("SearchData has no '.data'. Results are
+  // grouped by source: ...") — a deliberate guard against exactly the old
+  // v1-shaped `.data` access this code used to make. Merely evaluating
+  // `res?.data` (even inside `Array.isArray(...)`, even with optional
+  // chaining) triggers that throw, which is what silently broke this
+  // fallback path in production: every call fell into the catch block
+  // below, logged a generic "Search query failed" warning, and produced
+  // zero recovered content — confirmed live against a real company
+  // (Muthoot Finance) whose entire scrape depends on this exact path.
   type SearchResult = { url: string; title?: string; description?: string; markdown?: string }
   type SearchResponse = {
-    data?: SearchResult[]
-    web?: { results?: SearchResult[] }
-    results?: SearchResult[]
+    web?: SearchResult[]
+    news?: SearchResult[]
   }
 
   let rawSearchLogged = false
@@ -876,12 +890,15 @@ async function searchFallbackScrape(
         console.log('[Scraper] Raw search response shape:', JSON.stringify(result, null, 2).slice(0, 1000))
       }
 
-      // Normalise across all known SDK response shapes
+      // Normalise across the confirmed real shape — `.web` first (general
+      // web content, what this fallback actually wants), `.news` as a
+      // secondary source when `.web` came back empty. Deliberately never
+      // touches `.data` (see the throwing-getter comment above) or
+      // `.images` (no markdown/text content to extract from an image hit).
       const res = result as SearchResponse
       const hits: SearchResult[] =
-        Array.isArray(res?.data)              ? res.data!
-        : Array.isArray(res?.results)         ? res.results!
-        : Array.isArray(res?.web?.results)    ? res.web!.results!
+        Array.isArray(res?.web) && res.web.length > 0  ? res.web
+        : Array.isArray(res?.news)                     ? res.news
         : []
 
       if (hits.length === 0) {

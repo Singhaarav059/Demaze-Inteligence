@@ -67,7 +67,7 @@ interface ReviewRow {
   // Informational only - see campaign-review.ts's own comment on this
   // field. A 'low' value never changes `status`, it's shown as an
   // additional badge on an otherwise-'ready' row.
-  emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
+  emailConfidence?: 'verified' | 'high' | 'medium' | 'low' | 'none' | null
   // Informational only, same discipline as emailConfidence above - see
   // campaign-review.ts's comment. 'conflict'/'not_found' never changes
   // `status`, it's surfaced as an additional badge + a confirm-dialog

@@ -12,6 +12,8 @@ import { MockDecisionMakerDiscoveryProvider } from '../lib/outbound/decision-mak
 import { DEFAULT_TARGET_TITLES } from '../lib/outbound/decision-maker-discovery/types'
 import { groundCandidate, groundCandidates } from '../lib/outbound/decision-maker-discovery/grounding'
 import { discoverDecisionMakers } from '../lib/outbound/decision-maker-discovery/provider-factory'
+import { rankCandidates } from '../lib/outbound/decision-maker-discovery/ranking'
+import { classifyRoleCategory } from '../lib/outbound/decision-maker-discovery/role-category'
 import type { DecisionMakerCandidate } from '../lib/outbound/decision-maker-discovery/types'
 
 describe('MockDecisionMakerDiscoveryProvider', () => {
@@ -198,6 +200,72 @@ describe('discoverDecisionMakers (provider-factory) — grounding integration', 
     expect(result.status).toBe('found')
     for (const candidate of result.candidates) {
       expect(candidate.grounding).toBeUndefined()
+    }
+  })
+})
+
+// ============================================================
+// Seniority ranking (rankCandidates) — presentation/ordering layer applied
+// uniformly to every provider's output at the same call site as
+// groundCandidates(), never a per-provider hack, never a synthesized
+// numeric score (see lib/outbound/decision-maker-discovery/ranking.ts).
+// ============================================================
+describe('rankCandidates', () => {
+  it('orders candidates by seniority tier, most senior first', () => {
+    const candidates: DecisionMakerCandidate[] = [
+      { personName: 'A', title: 'Operations Manager', confidence: 'high' },
+      { personName: 'B', title: 'Founder & CEO', confidence: 'low' },
+      { personName: 'C', title: 'Director of Sales', confidence: 'high' },
+      { personName: 'D', title: 'Head of IT', confidence: 'high' },
+      { personName: 'E', title: 'Chief Financial Officer', confidence: 'high' },
+      { personName: 'F', title: 'VP Engineering', confidence: 'high' },
+    ]
+    const ranked = rankCandidates(candidates)
+    expect(ranked.map(c => c.personName)).toEqual(['B', 'E', 'F', 'C', 'D', 'A'])
+  })
+
+  it('uses LinkedIn-URL presence as a tiebreaker within the same seniority tier', () => {
+    const candidates: DecisionMakerCandidate[] = [
+      { personName: 'NoLinkedIn', title: 'CEO', confidence: 'high' },
+      { personName: 'HasLinkedIn', title: 'CEO', confidence: 'high', linkedinUrl: 'https://linkedin.com/in/x' },
+    ]
+    const ranked = rankCandidates(candidates)
+    expect(ranked.map(c => c.personName)).toEqual(['HasLinkedIn', 'NoLinkedIn'])
+  })
+
+  it('uses confidence as the final tiebreaker within the same tier and LinkedIn presence', () => {
+    const candidates: DecisionMakerCandidate[] = [
+      { personName: 'Low', title: 'CEO', confidence: 'low' },
+      { personName: 'High', title: 'CEO', confidence: 'high' },
+      { personName: 'Medium', title: 'CEO', confidence: 'medium' },
+    ]
+    const ranked = rankCandidates(candidates)
+    expect(ranked.map(c => c.personName)).toEqual(['High', 'Medium', 'Low'])
+  })
+
+  it('does not mutate the input array', () => {
+    const candidates: DecisionMakerCandidate[] = [
+      { personName: 'A', title: 'Manager', confidence: 'high' },
+      { personName: 'B', title: 'CEO', confidence: 'high' },
+    ]
+    const original = [...candidates]
+    rankCandidates(candidates)
+    expect(candidates).toEqual(original)
+  })
+
+  it('is applied uniformly to every provider (not an Exa-only hack) — the mock provider is ranked too', async () => {
+    const result = await discoverDecisionMakers({
+      companyName: 'Ranking Test Co',
+      domain: 'rankingtest.com',
+      targetTitles: ['CEO', 'Manager', 'Director'],
+    })
+    if (result.status !== 'found' || result.candidates.length < 2) return // mock is seeded/probabilistic, skip if too few
+    const roleRank: Record<string, number> = { 'ceo-founder-owner': 0, 'cxo-executive': 1, vp: 2, director: 3, head: 4, manager: 5, other: 6 }
+    // Reuse the same classification the ranking module uses internally, via
+    // the shared classifyRoleCategory export, to assert real monotonicity.
+    const tiers = result.candidates.map(c => roleRank[classifyRoleCategory(c.title)])
+    for (let i = 1; i < tiers.length; i++) {
+      expect(tiers[i]).toBeGreaterThanOrEqual(tiers[i - 1])
     }
   })
 })

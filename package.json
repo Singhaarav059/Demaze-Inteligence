@@ -9,7 +9,11 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "benchmark": "npx tsx benchmarks/benchmark-runner.ts"
+    "benchmark": "npx tsx benchmarks/benchmark-runner.ts",
+    "benchmark:exa": "npx tsx benchmarks/exa/provider-benchmark.ts",
+    "benchmark:exa:web:search": "npx tsx benchmarks/exa/web-search-benchmark/run-search-benchmark.ts",
+    "benchmark:exa:web:contents": "npx tsx benchmarks/exa/web-search-benchmark/run-contents-benchmark.ts",
+    "benchmark:exa:web": "npm run benchmark:exa:web:search && npm run benchmark:exa:web:contents"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

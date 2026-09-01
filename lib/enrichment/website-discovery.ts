@@ -19,7 +19,7 @@
 // "website not found" that falls through to enrichment-only evidence.
 // ============================================================
 
-import { searchTavily, searchSerper } from './discovery-engine'
+import { searchTavily } from './discovery-engine'
 import { escapeRegex } from '../utils/regex'
 
 // A real, current-browser-shaped User-Agent — see the identical constant +
@@ -328,32 +328,21 @@ function extractDomain(url: string): string | null {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return null }
 }
 
-// Falls back to Serper per-query when Tavily returns nothing — not just when
-// the Tavily key is absent entirely. Discovered while wiring this up: Tavily
-// can fail for reasons that have nothing to do with the query (quota exhausted
-// returns HTTP 432, silently swallowed by searchTavily's catch-all error
-// handling) — without this, a Tavily outage/quota issue would make discovery
-// look like "no candidates found" instead of actually trying the other
-// configured provider. This is a real gap `discoverEvidenceSources()` in
-// discovery-engine.ts also has (same "prefer Tavily, no fallback on failure"
-// shape) — not fixed there, out of scope for this file.
+// Serper (the previous fallback here) was removed 2026-09-01 — see
+// docs/DECISIONS.md. searchTavily() now logs distinctly on a real failure
+// vs. a genuine zero-result query (discovery-engine.ts), so a Tavily outage
+// is at least observable even without a second provider to fall through to.
 async function searchWithFallback(
   query: string,
   tavilyKey: string | undefined,
-  serperKey: string | undefined,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
-  if (tavilyKey) {
-    const tavilyResults = await searchTavily(query, tavilyKey)
-    if (tavilyResults.length > 0) return tavilyResults
-  }
-  if (serperKey) return searchSerper(query, serperKey)
-  return []
+  if (!tavilyKey) return []
+  return searchTavily(query, tavilyKey)
 }
 
 async function searchCandidateDomains(companyName: string): Promise<string[]> {
   const tavilyKey = process.env.TAVILY_API_KEY
-  const serperKey = process.env.SERPER_API_KEY
-  if (!tavilyKey && !serperKey) return []
+  if (!tavilyKey) return []
 
   const queries = [
     `"${companyName}" official website`,
@@ -361,7 +350,7 @@ async function searchCandidateDomains(companyName: string): Promise<string[]> {
   ]
 
   const results = await Promise.all(
-    queries.map(q => searchWithFallback(q, tavilyKey, serperKey))
+    queries.map(q => searchWithFallback(q, tavilyKey))
   )
 
   const domains: string[] = []

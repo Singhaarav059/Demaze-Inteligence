@@ -13,7 +13,7 @@ import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { DedupedCompany } from '@/lib/batch/company-dedup'
 import type { CompanyMatch, CompanyDiscoverySufficiency } from '@/lib/enrichment/company-discovery'
-import type { ExpleeCompany, ExpleeSearchMeta } from '@/lib/enrichment/sources/explee-client'
+import type { CompanyDiscoveryCompany, CompanyDiscoveryMeta } from '@/lib/enrichment/company-discovery-provider-factory'
 import type { CompanyResearchResult } from '@/lib/research/company-signals'
 import { quotaSignatureIn, nextConsecutiveHits, shouldPauseBatch, QUOTA_PAUSE_THRESHOLD } from '@/lib/batch/quota-pause'
 import { EMPLOYEE_RANGES, REVENUE_RANGES, sectorDefinition, type SectorOption } from './search-options'
@@ -25,6 +25,22 @@ export type CompanyStatus = 'not_researched' | 'already_researched' | 'running' 
 // nothing here is invented, all of it comes straight off ExpleeCompany.
 export interface DiscoveredMatch extends CompanyMatch {
   industry?: string | null
+  // FIXED (Exa provider work, 2026-09-01): industry used to silently
+  // backfill with the searched sector/definition label whenever the
+  // provider returned no real industry value — indistinguishable downstream
+  // from a real value (it even flowed into company-research's research
+  // input). `industry` above now stays null when the provider didn't report
+  // one; this flag is the only place the UI should check to render
+  // "industry not reported" instead of guessing.
+  industryInferred?: boolean
+  // Which provider produced this row (COMPANY_DISCOVERY_PROVIDER) — purely
+  // informational, no UI currently branches on it.
+  provider?: 'explee' | 'exa'
+  // Set only for Exa rows by its conservative post-processing (see
+  // exa-company-discovery.ts's applyDataQualityChecks) — annotation only,
+  // never a reason a company is missing from this list. No UI branches on
+  // it yet; carried through so one can be built later without re-plumbing.
+  dataQualityFlags?: string[]
   employeeCount?: number | null
   hqLocation?: string | null
   hqCountryCode?: string | null
@@ -97,6 +113,53 @@ function sanitizeSearchError(message?: string): string {
 
 const PAGE_SIZE = 20
 
+// Pure function of its arguments (no hook state) — hoisted to module scope
+// and exported so the industry-null-honesty behavior below is directly
+// unit-testable without a React render harness.
+export function toMatches(raw: CompanyDiscoveryCompany[], filters: DiscoverySearchFilters, industryLabel: string | null): DiscoveredMatch[] {
+  const excludeKeywords = (filters.excludeKeywords ?? []).map(k => k.trim().toLowerCase()).filter(Boolean)
+  const excludeName = filters.excludeCompanyName?.trim().toLowerCase()
+  return raw
+    .filter((c): c is CompanyDiscoveryCompany & { name: string } => !!c.name)
+    .filter(c => !excludeName || !c.name.toLowerCase().includes(excludeName))
+    .filter(c => excludeKeywords.length === 0 || !excludeKeywords.some(k =>
+      [c.name, c.domain, c.description, c.industry].some(field => field?.toLowerCase().includes(k))
+    ))
+    .map(c => ({
+      name: c.name,
+      domain: c.domain ?? undefined,
+      reason: `Matches your search criteria${industryLabel ? ` (${industryLabel})` : ''}.`,
+      confidence: 'high' as const,
+      source_urls: c.source_urls ?? (c.url ? [c.url] : []),
+      // FIXED (Exa provider work, 2026-09-01): used to be `c.industry ??
+      // industryLabel`, silently backfilling with the *searched* sector
+      // string whenever the provider returned no real industry — an
+      // Explee/Exa row genuinely missing an industry became
+      // indistinguishable from one that actually reported it, and this
+      // fabricated value even flowed into /api/admin/company-research's
+      // research input. Never backfilled with the searched industryLabel
+      // — see DiscoveredMatch.industryInferred's comment. A null industry
+      // here means the provider genuinely didn't report one.
+      industry: c.industry ?? null,
+      industryInferred: !c.industry,
+      provider: c.provider,
+      dataQualityFlags: c.dataQualityFlags,
+      employeeCount: c.size,
+      hqLocation: c.geo_city || c.geo,
+      hqCountryCode: c.geo,
+      founded: c.founded,
+      revenueAnnual: c.revenue_annual,
+      description: c.description ?? null,
+      fundingStage: c.funding_stage ?? null,
+      linkedinUrl: c.linkedin_id
+        ? `https://www.linkedin.com/company/${c.linkedin_id}`
+        : (c.linkedin_url ?? null),
+      websiteUrl: c.url ?? null,
+      lastResearchedAt: (c as CompanyDiscoveryCompany & { lastResearchedAt?: string | null }).lastResearchedAt ?? null,
+      hasStoredResult: (c as CompanyDiscoveryCompany & { hasStoredResult?: boolean }).hasStoredResult ?? false,
+    }))
+}
+
 export function useCompanyDiscoverySearch() {
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -144,7 +207,7 @@ export function useCompanyDiscoverySearch() {
     return body
   }
 
-  async function runSearchRequest(body: Record<string, unknown>, page: number): Promise<{ ok: true; companies: ExpleeCompany[]; meta?: ExpleeSearchMeta } | { ok: false; error: string }> {
+  async function runSearchRequest(body: Record<string, unknown>, page: number): Promise<{ ok: true; companies: CompanyDiscoveryCompany[]; meta?: CompanyDiscoveryMeta } | { ok: false; error: string }> {
     try {
       const res = await fetch('/api/admin/explee-discovery', {
         method: 'POST',
@@ -157,36 +220,6 @@ export function useCompanyDiscoverySearch() {
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Network error while searching' }
     }
-  }
-
-  function toMatches(raw: ExpleeCompany[], filters: DiscoverySearchFilters, industryLabel: string | null): DiscoveredMatch[] {
-    const excludeKeywords = (filters.excludeKeywords ?? []).map(k => k.trim().toLowerCase()).filter(Boolean)
-    const excludeName = filters.excludeCompanyName?.trim().toLowerCase()
-    return raw
-      .filter((c): c is ExpleeCompany & { name: string } => !!c.name)
-      .filter(c => !excludeName || !c.name.toLowerCase().includes(excludeName))
-      .filter(c => excludeKeywords.length === 0 || !excludeKeywords.some(k =>
-        [c.name, c.domain, c.description, c.industry].some(field => field?.toLowerCase().includes(k))
-      ))
-      .map(c => ({
-        name: c.name,
-        domain: c.domain ?? undefined,
-        reason: `Matches your search criteria${industryLabel ? ` (${industryLabel})` : ''}.`,
-        confidence: 'high' as const,
-        source_urls: c.url ? [c.url] : [],
-        industry: c.industry ?? industryLabel,
-        employeeCount: c.size,
-        hqLocation: c.geo_city || c.geo,
-        hqCountryCode: c.geo,
-        founded: c.founded,
-        revenueAnnual: c.revenue_annual,
-        description: c.description ?? null,
-        fundingStage: c.funding_stage ?? null,
-        linkedinUrl: c.linkedin_id ? `https://www.linkedin.com/company/${c.linkedin_id}` : null,
-        websiteUrl: c.url ?? null,
-        lastResearchedAt: (c as ExpleeCompany & { lastResearchedAt?: string | null }).lastResearchedAt ?? null,
-        hasStoredResult: (c as ExpleeCompany & { hasStoredResult?: boolean }).hasStoredResult ?? false,
-      }))
   }
 
   // ── Search ──────────────────────────────────────────────────

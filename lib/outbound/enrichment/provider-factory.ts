@@ -9,11 +9,13 @@
 import { getActiveProviderName } from '@/lib/outbound/settings/provider-selection'
 import { MockEnrichmentProvider } from './providers/mock'
 import { ProspeoEnrichmentProvider } from './providers/prospeo'
+import { ExaEnrichmentProvider } from './providers/exa'
 import type { EnrichmentProvider, EnrichmentRequest, EnrichmentResult } from './types'
 
 const PROVIDERS: Record<string, EnrichmentProvider> = {
   mock: MockEnrichmentProvider,
   prospeo: ProspeoEnrichmentProvider,
+  exa: ExaEnrichmentProvider,
 }
 
 async function resolveProvider(): Promise<EnrichmentProvider> {

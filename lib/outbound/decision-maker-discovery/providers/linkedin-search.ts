@@ -2,8 +2,8 @@
 // LinkedIn Search-Discovery Decision-Maker Provider
 // ============================================================
 // Public search-engine discovery only: `site:linkedin.com/in/ "Company"
-// ("Title" OR "Title" ...)` via the same searchTavily/searchSerper functions
-// every other discovery module in this repo already uses (evidence
+// ("Title" OR "Title" ...)` via the same searchTavily function every other
+// discovery module in this repo already uses (evidence
 // discovery, website-discovery.ts). Never logs in, scrapes, or automates a
 // LinkedIn session — CLAUDE.md's LinkedIn exclusion stays intact; this reads
 // only what a public search engine already indexes (a result URL + title
@@ -13,7 +13,7 @@
 // becomes a candidate with a guessed/fabricated title.
 // ============================================================
 
-import { searchTavily, searchSerper } from '@/lib/enrichment/discovery-engine'
+import { searchTavily } from '@/lib/enrichment/discovery-engine'
 import { bestTargetTitleMatch, tierConfidence } from '../title-match'
 import { DEFAULT_TARGET_TITLES } from '../types'
 import type {
@@ -56,21 +56,19 @@ export const LinkedInSearchDecisionMakerDiscoveryProvider: DecisionMakerDiscover
     }
 
     const tavilyKey = process.env.TAVILY_API_KEY
-    const serperKey = process.env.SERPER_API_KEY
-    if (!tavilyKey && !serperKey) {
+    if (!tavilyKey) {
       return {
         candidates: [],
         providerUsed: 'linkedin-search',
         status: 'error',
-        reason: 'No search API key configured (TAVILY_API_KEY or SERPER_API_KEY).',
+        reason: 'No search API key configured (TAVILY_API_KEY).',
       }
     }
 
     const titles = request.targetTitles?.length ? request.targetTitles : DEFAULT_TARGET_TITLES
     const query = buildQuery(companyName, titles)
 
-    let raw = tavilyKey ? await searchTavily(query, tavilyKey, MAX_RESULTS) : []
-    if (raw.length === 0 && serperKey) raw = await searchSerper(query, serperKey, MAX_RESULTS)
+    const raw = await searchTavily(query, tavilyKey, MAX_RESULTS)
 
     const seen = new Set<string>()
     const candidates: DecisionMakerCandidate[] = []
@@ -106,6 +104,6 @@ export const LinkedInSearchDecisionMakerDiscoveryProvider: DecisionMakerDiscover
   },
 
   async isAvailable(): Promise<boolean> {
-    return Boolean(process.env.TAVILY_API_KEY || process.env.SERPER_API_KEY)
+    return Boolean(process.env.TAVILY_API_KEY)
   },
 }

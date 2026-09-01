@@ -55,7 +55,7 @@ export interface ContactReviewRow {
   // verification" signal the Contact Info step (ContactInfoRow.tsx)
   // already shows earlier in the flow, instead of that signal disappearing
   // once a contact reaches this screen.
-  emailConfidence?: 'high' | 'medium' | 'low' | 'none' | null
+  emailConfidence?: 'verified' | 'high' | 'medium' | 'low' | 'none' | null
   // Additive, informational only (Master Plan Phase 5, Step 5.4 — company
   // identity check) — never a gate. A 'conflict'/'not_found' grounding
   // result still becomes 'ready' like any other contact with a real email

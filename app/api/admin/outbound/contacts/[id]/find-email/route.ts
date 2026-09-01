@@ -20,6 +20,7 @@ import { getActiveProviderName } from '@/lib/outbound/settings/provider-selectio
 import { resolveProspeoPerson } from '@/lib/outbound/shared/prospeo-contact-cache'
 import { interpretProspeoEmailResult } from '@/lib/outbound/email-finder/providers/prospeo'
 import { interpretProspeoEnrichmentResult } from '@/lib/outbound/enrichment/providers/prospeo'
+import { shouldOverwriteEmail } from '@/lib/outbound/shared/contact-update-guard'
 import type { ProspeoEnrichPersonResponse } from '@/lib/outbound/shared/prospeo-client'
 import type { EmailFinderResult } from '@/lib/outbound/email-finder/types'
 
@@ -35,7 +36,7 @@ export async function POST(
 
   const { data: contact, error: fetchError } = await supabase
     .from('outbound_contacts')
-    .select('id, person_name, company_name, company_domain, linkedin_url, enrichment_status, prospeo_raw')
+    .select('id, person_name, company_name, company_domain, linkedin_url, email_confidence, enrichment_status, prospeo_raw')
     .eq('id', id)
     .single()
 
@@ -106,10 +107,16 @@ export async function POST(
     })
   }
 
-  update.email = result.email
-  update.email_confidence = result.confidence
-  update.email_finder_provider = result.providerUsed
-  update.email_finder_status = result.status
+  // Don't let a re-run's weaker/not-found result clobber an already-good
+  // email — see contact-update-guard.ts. Applies to whichever provider
+  // produced this `result`, not just Prospeo.
+  const overwrite = shouldOverwriteEmail(contact.email_confidence, result.confidence)
+  if (overwrite) {
+    update.email = result.email
+    update.email_confidence = result.confidence
+    update.email_finder_provider = result.providerUsed
+    update.email_finder_status = result.status
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from('outbound_contacts')
@@ -122,5 +129,5 @@ export async function POST(
     return NextResponse.json({ success: false, error: updateError.message }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true, contact: updated, result })
+  return NextResponse.json({ success: true, contact: updated, result, overwriteBlocked: !overwrite })
 }

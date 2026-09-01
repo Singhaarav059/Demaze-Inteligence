@@ -27,7 +27,7 @@
 // already stated.
 // ============================================================
 
-import { searchTavily, searchSerper } from './discovery-engine'
+import { searchTavily } from './discovery-engine'
 
 export type MarketIntelCategory = 'trend' | 'growth_indicator' | 'challenge' | 'shift'
 export type MarketIntelConfidence = 'high' | 'medium' | 'low'
@@ -148,22 +148,18 @@ export function tierConfidence(mentionCount: number, strongIndicator: boolean): 
 }
 
 // ── Search ─────────────────────────────────────────────────────────
-// Duplicated per-query Tavily→Serper fallback — same shape as
-// competitor-discovery.ts/icp-generator.ts's searchWithFallback, kept as its
-// own copy rather than a shared import, matching this codebase's existing
-// precedent (see CLAUDE.md "Item 1" history for why).
+// Serper (the previous fallback here) was removed 2026-09-01 — see
+// docs/DECISIONS.md. Kept as its own thin wrapper (same shape as
+// competitor-discovery.ts/icp-generator.ts's copies) rather than collapsing
+// to a direct searchTavily() call, so a future fallback provider only needs
+// to change this one function.
 
 async function searchWithFallback(
   query: string,
   tavilyKey: string | undefined,
-  serperKey: string | undefined,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
-  if (tavilyKey) {
-    const results = await searchTavily(query, tavilyKey)
-    if (results.length > 0) return results
-  }
-  if (serperKey) return searchSerper(query, serperKey)
-  return []
+  if (!tavilyKey) return []
+  return searchTavily(query, tavilyKey)
 }
 
 function buildMarketIntelQueries(companyName: string): string[] {
@@ -185,9 +181,8 @@ export async function discoverMarketIntelligence(
   domain: string,
 ): Promise<MarketIntelligenceResult> {
   const tavilyKey = process.env.TAVILY_API_KEY
-  const serperKey = process.env.SERPER_API_KEY
 
-  if (!tavilyKey && !serperKey) {
+  if (!tavilyKey) {
     return { items: [], sufficiency: 'insufficient', reason: 'no search API configured', candidates_considered: 0 }
   }
   if (!companyName || companyName.trim().length === 0) {
@@ -201,7 +196,7 @@ export async function discoverMarketIntelligence(
   const queries = buildMarketIntelQueries(companyName)
   let allResults: Array<{ title: string; url: string; content: string }>
   try {
-    const resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
+    const resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey)))
     allResults = resultsPerQuery.flat()
   } catch (e) {
     return {

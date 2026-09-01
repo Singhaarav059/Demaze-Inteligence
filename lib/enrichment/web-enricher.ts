@@ -2,7 +2,8 @@
 // Web Enrichment Layer — v3 (Discovery + Recovery Pipeline)
 // ============================================================
 // Full 4-stage pipeline:
-//   Stage 1: Discovery  — Tavily/Serper targeted search queries
+//   Stage 1: Discovery  — Tavily targeted search queries (Serper, the
+//     previous fallback here, was removed 2026-09-01 — see docs/DECISIONS.md)
 //   Stage 2: Prioritize — rank, deduplicate, cap at 5 external fetches
 //   Stage 3: Fetch      — Firecrawl → labeled [SOURCE:] context blocks
 //   Stage 4: Recovery   — direct corporate path probing when quality poor
@@ -28,7 +29,7 @@
 //     _operations_content) OR a consumer-facing site is detected, probeRecoveryPaths()
 //     runs even when Tavily returned results. The previous code only called
 //     enrichFromPublicPages() when discovered.length === 0, making it unreachable
-//     whenever Tavily/Serper keys were present.
+//     whenever a Tavily key was present.
 // ============================================================
 
 import { PDFParse } from 'pdf-parse'
@@ -324,7 +325,7 @@ async function fetchPrioritizedSources(
 // Triggered when:
 //   - options.recovery === true  (thin_content or no_company_operations_content)
 //   - isConsumerSite === true    (B2C patterns detected in website content)
-//   - discovered.length === 0   (no Tavily/Serper results at all)
+//   - discovered.length === 0   (no Tavily results at all)
 //
 // Probes corporate sub-paths on the company's OWN domain even when Tavily
 // already returned external results. This fills the gap for companies like
@@ -401,24 +402,23 @@ export async function probeRecoveryPaths(
 // below assembles the exact same object either function used to return.
 
 /**
- * Stages 1–3: discover candidate sources (Tavily → Serper), prioritize,
- * fetch via Firecrawl. Needs only domain + companyName — safe to call
- * before or independently of a website scrape.
+ * Stages 1–3: discover candidate sources (Tavily), prioritize, fetch via
+ * Firecrawl. Needs only domain + companyName — safe to call before or
+ * independently of a website scrape.
  */
 export async function discoverAndFetchExternalSources(
   domain: string,
   companyName: string,
 ): Promise<{ discovered: DiscoveredSource[]; prioritized: PrioritizedSource[]; contextBlocks: string[] }> {
   const tavilyKey = process.env.TAVILY_API_KEY
-  const serperKey = process.env.SERPER_API_KEY
 
-  // ── Stage 1: Discovery (Tavily → Serper) — and, in parallel, SEC EDGAR
-  // (government filings — free, deterministic, no search-API cost, so it
-  // runs unconditionally, not gated on tavilyKey/serperKey being set) ────
+  // ── Stage 1: Discovery (Tavily) — and, in parallel, SEC EDGAR (government
+  // filings — free, deterministic, no search-API cost, so it runs
+  // unconditionally, not gated on tavilyKey being set) ──────────────────
   const [discovered, edgarResult] = await Promise.all([
-    (tavilyKey || serperKey)
+    tavilyKey
       ? discoverEvidenceSources(companyName || domain, domain).then(d => {
-          console.log(`[Enrichment] Discovery: ${d.length} sources via ${tavilyKey ? 'Tavily' : 'Serper'}`)
+          console.log(`[Enrichment] Discovery: ${d.length} sources via Tavily`)
           return d
         })
       : Promise.resolve<DiscoveredSource[]>([]),
@@ -436,7 +436,7 @@ export async function discoverAndFetchExternalSources(
     : { contextBlocks: [], fetched: [] }
 
   // SEC EDGAR is a genuine, deterministic 6th source when it matches — it
-  // doesn't compete for the 5-slot Tavily/Serper fetch budget (no Firecrawl/
+  // doesn't compete for the 5-slot Tavily fetch budget (no Firecrawl/
   // search-API cost to it at all, the content is already fetched+formatted
   // by edgar-client.ts), so it's prepended here rather than folded into
   // prioritizeSources()'s capped selection.

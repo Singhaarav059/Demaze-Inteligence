@@ -32,7 +32,7 @@
 // than guessing.
 // ============================================================
 
-import { searchTavily, searchSerper } from './discovery-engine'
+import { searchTavily } from './discovery-engine'
 import { isSelfName } from './competitor-discovery'
 import { filterRelevantResults, filterTopicallyRelevantResults, extractQueryTopic, looksLikeSentenceFragment, toQueryPhrase, filterAdversarialContent } from './extraction-guards'
 import type { CompanyBusinessProfile } from '@/lib/pipeline/business-profile'
@@ -298,21 +298,18 @@ export function fallbackReason(candidate: ICPCandidate): string {
 }
 
 // ── Search ─────────────────────────────────────────────────────────
-// Duplicated per-query Tavily→Serper fallback, same shape as
-// competitor-discovery.ts's searchWithFallback — kept as its own copy
-// rather than a shared import, matching this codebase's existing precedent.
+// Serper (the previous fallback here) was removed 2026-09-01 — see
+// docs/DECISIONS.md. Kept as its own thin wrapper (same shape as
+// competitor-discovery.ts/market-intelligence.ts's copies) rather than
+// collapsing to a direct searchTavily() call, so a future fallback provider
+// only needs to change this one function.
 
 async function searchWithFallback(
   query: string,
   tavilyKey: string | undefined,
-  serperKey: string | undefined,
 ): Promise<Array<{ title: string; url: string; content: string }>> {
-  if (tavilyKey) {
-    const results = await searchTavily(query, tavilyKey)
-    if (results.length > 0) return results
-  }
-  if (serperKey) return searchSerper(query, serperKey)
-  return []
+  if (!tavilyKey) return []
+  return searchTavily(query, tavilyKey)
 }
 
 function buildICPQueries(companyName: string): string[] {
@@ -378,9 +375,8 @@ async function fetchRelevantICPSearchResults(
   | { insufficientReason: string }
 > {
   const tavilyKey = process.env.TAVILY_API_KEY
-  const serperKey = process.env.SERPER_API_KEY
 
-  if (!tavilyKey && !serperKey) return { insufficientReason: 'no search API configured' }
+  if (!tavilyKey) return { insufficientReason: 'no search API configured' }
   if (!companyName || companyName.trim().length === 0) {
     return { insufficientReason: 'no company name available to search for customer segments' }
   }
@@ -389,7 +385,7 @@ async function fetchRelevantICPSearchResults(
   let resultsPerQuery: Array<Array<{ title: string; url: string; content: string }>>
   let allResults: Array<{ title: string; url: string; content: string }>
   try {
-    resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey, serperKey)))
+    resultsPerQuery = await Promise.all(queries.map(q => searchWithFallback(q, tavilyKey)))
     allResults = resultsPerQuery.flat()
   } catch (e) {
     return { insufficientReason: `search failed: ${e instanceof Error ? e.message : String(e)}` }
@@ -402,8 +398,8 @@ async function fetchRelevantICPSearchResults(
   // Relevance gate. Two different shapes depending on which pass this is:
   //  - requireCompanyMention=true (self-referential "we serve X" base
   //    pass): drop any result that doesn't actually mention the researched
-  //    company. Tavily/Serper's quoted-phrase queries don't reliably
-  //    enforce this themselves (see extraction-guards.ts header for the
+  //    company. Tavily's quoted-phrase queries don't reliably enforce
+  //    this themselves (see extraction-guards.ts header for the
   //    live 2026-07-16 failure this fixes); without it, extraction runs on
   //    off-topic pages (a different company's own "industries we serve"
   //    page, unrelated social posts) and pulls their prose as if it

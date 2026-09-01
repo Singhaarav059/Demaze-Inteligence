@@ -5,7 +5,11 @@
 // Runs targeted search queries to discover high-value URLs:
 //   investor relations, annual reports, careers, expansion news
 //
-// Search provider priority: Tavily → Serper → (none)
+// Search provider: Tavily → (none). Serper was removed 2026-09-01 (see
+// docs/DECISIONS.md) — it was already unfunded/non-functional in production
+// at removal time, and the benchmark evidence didn't show a case where its
+// fallback recovered a result Tavily genuinely missed for a reason other
+// than a quota/outage failure Tavily itself was also having.
 // Returns DiscoveredSource[] sorted by evidence_strength desc.
 // Gracefully returns [] when no search API is configured.
 // ============================================================
@@ -230,6 +234,17 @@ export function buildDiscoveryQueries(companyName: string): Array<{ query: strin
 // already-researched company (batch retries, reprocessing) previously
 // re-paid the full ~40-query search bill from scratch every time. See
 // lib/cache/search-cache.ts for the read/write helpers and TTL.
+//
+// A non-ok response or a thrown error still returns [] to the caller (every
+// caller in this codebase treats [] as "no sources this pass" and degrades
+// gracefully, per CLAUDE.md's "never hard-fail" rule) — but each failure
+// path now logs a distinct warning first. Before this, both a real failure
+// (bad key, quota exhausted, network error) and a genuine zero-result query
+// were completely silent and indistinguishable from each other — exactly
+// the gap that let Serper's account running out of credits look like "zero
+// relevant results" for weeks in the 2026-09-01 web-research benchmark. This
+// keeps the same graceful-degradation contract for every existing caller
+// (no return-type change) while making a failure observable in logs.
 
 export async function searchTavily(
   query: string,
@@ -252,41 +267,17 @@ export async function searchTavily(
       }),
       signal: AbortSignal.timeout(10000),
     })
-    if (!resp.ok) return []
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '')
+      console.warn(`[discovery] Tavily request FAILED (not a zero-result query) — HTTP ${resp.status}: ${body.slice(0, 200)}`)
+      return []
+    }
     const data = await resp.json() as { results?: Array<{ title: string; url: string; content: string }> }
     const results = data.results ?? []
     if (results.length > 0) saveSearchCache('tavily', query, maxResults, results)
     return results
-  } catch {
-    return []
-  }
-}
-
-// ── Serper search (fallback) ──────────────────────────────────
-// Exported for reuse by website-discovery.ts — see note above. Cached the
-// same way as searchTavily() above.
-
-export async function searchSerper(
-  query: string,
-  apiKey: string,
-  numResults: number = 3,
-): Promise<Array<{ title: string; url: string; content: string }>> {
-  const cached = await getCachedSearch('serper', query, numResults)
-  if (cached) return cached
-
-  try {
-    const resp = await fetch('https://google.serper.dev/search', {
-      method: 'POST',
-      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: query, num: numResults }),
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!resp.ok) return []
-    const data = await resp.json() as { organic?: Array<{ title: string; link: string; snippet: string }> }
-    const results = (data.organic ?? []).map(r => ({ title: r.title, url: r.link, content: r.snippet }))
-    if (results.length > 0) saveSearchCache('serper', query, numResults, results)
-    return results
-  } catch {
+  } catch (err) {
+    console.warn(`[discovery] Tavily request FAILED (not a zero-result query) — ${err instanceof Error ? err.message : String(err)}`)
     return []
   }
 }
@@ -303,9 +294,8 @@ export async function discoverEvidenceSources(
   domain: string,
 ): Promise<DiscoveredSource[]> {
   const tavilyKey = process.env.TAVILY_API_KEY
-  const serperKey = process.env.SERPER_API_KEY
 
-  if (!tavilyKey && !serperKey) {
+  if (!tavilyKey) {
     console.log('[discovery] No search API key — skipping discovery')
     return []
   }
@@ -320,15 +310,7 @@ export async function discoverEvidenceSources(
 
   for (const chunk of chunks) {
     await Promise.all(chunk.map(async ({ query, category }) => {
-      // Try Tavily first, but fall through to Serper whenever Tavily comes back
-      // empty — not just when the key is absent. A failed/quota-exceeded Tavily
-      // call also resolves to [] (see searchTavily's catch), which previously
-      // meant a real outage silently produced zero results instead of falling
-      // back to a configured Serper key.
-      let raw = tavilyKey ? await searchTavily(query, tavilyKey) : []
-      if (raw.length === 0 && serperKey) {
-        raw = await searchSerper(query, serperKey)
-      }
+      const raw = await searchTavily(query, tavilyKey)
 
       for (const r of raw) {
         if (!r.url || seenUrls.has(r.url)) continue
