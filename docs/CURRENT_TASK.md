@@ -1,5 +1,85 @@
 # Current Task
 
+## Status as of 2026-08-31 — stabilization pass on reliability gaps
+
+Picked up the remaining reliability gaps flagged across prior sessions
+(research/scrape reproducibility, `published_at`, the never-exercised
+batch shared-campaign path, and the flagged deliverability caveat).
+Two parallel subagent passes, then a fresh benchmark run against a
+restarted dev server (Windows file-watcher gotcha applies to benchmark
+verification too, not just live UI checks).
+
+1. **Root-caused the ATE Group / Muthoot Finance benchmark score
+   swings** (real, confirmed via `benchmarks/evaluation-history/` —
+   ATE ranged 0–89 across runs, Muthoot dropped from a stable 79 to
+   70.67). Root cause: `parseContentSegments()` in
+   `lib/pipeline/evidence-extractor.ts` had a page-boundary regex that
+   only stopped at another `--- PAGE:` marker, so the last own-site
+   page's segment greedily swallowed the following enriched-content
+   block (filings/news/jobs) and mis-tagged it `own_site` — duplicating
+   evidence and polluting the signal counts that feed two existing,
+   deliberately-designed threshold gates (the deterministic-opportunity
+   pattern-match gate and `normalize.ts`'s insufficient-evidence
+   AND-gate). Fixed the regex to stop at either marker. Ruled out (with
+   evidence, not assumption): `evidence_id` non-determinism (already
+   content-hash-derived via `stableEvidenceId()`, confirmed
+   deterministic) and the prior session's own guess that commit
+   `6c94f92` caused it (diffed directly — 6 purely additive lines,
+   touches nothing relevant). Residual variance from real live-scrape
+   content changes and the two thresholds' correct-by-design
+   sensitivity to small evidence-count deltas is left alone, per this
+   repo's own "no speculative threshold tuning" rule — not fully
+   eliminated, just no longer amplified by a real bug.
+2. **Threaded real `published_at` dates into evidence.** The field
+   existed (Epitaxy vNext Phase 1, commit `6c94f92`) but was always
+   `undefined`. Added `nearestFilingDate()` to match a signal to the
+   specific SEC EDGAR `filed <date>` bullet it was extracted from —
+   never fabricates a date for content without one. Tavily/Serper
+   results were checked for a usable publish-date field: none is
+   requested or typed today, so nothing was wired for it rather than
+   guessing at an unconfirmed response shape (flagged as real future
+   work, not implemented).
+3. **`assessScrapeQuality()` audited, not changed** — the syndicated-
+   ticker/marketplace-mention rejections that might have been missing
+   already exist at the correct layer (`scrape-relevance.ts`,
+   `service-evidence.ts`) from earlier committed work. No evidenced gap
+   found, so no changes made.
+4. **Fixed a real cross-campaign duplicate-send gap**, found while
+   tracing the previously-flagged "batch-originated shared-campaign
+   resume path never exercised" item. The already-sent guard in
+   `lib/outbound/sending/campaign-review.ts` and the real send route
+   (`app/api/admin/outbound/campaigns/[id]/send/route.ts`) was scoped
+   to the *current* campaign only — a contact already emailed under
+   campaign A showed as fresh under campaign B, so reviewing/sending
+   through a second campaign sharing that contact could re-send to
+   them. Fixed at both the UI-classification layer and the real send
+   route (this repo's established "enforce hard blocks twice"
+   pattern). Also closed the path in `ensureCampaignId()`
+   (`app/admin/auto-gtm/useAutoGtmFlow.ts`) that could create a
+   duplicate shared campaign in batch mode. No change to Gmail OAuth,
+   no autonomous sending, per-batch confirmation unchanged.
+5. **Deliverability re-audited, no code bug found.** MIME structure,
+   `List-Unsubscribe`, reply/thread headers, and the tracking pixel
+   were already correct from an earlier (2026-08-20) audit. The real
+   spam-landing cause from the open-tracking verification sends is
+   genuinely external — SPF/DKIM/DMARC domain config, sender
+   reputation/mailbox warmup status, generic LLM-drafted subject lines
+   — documented as such rather than papered over with a speculative
+   code change.
+
+Verified: `npx tsc --noEmit` clean, full suite 1137/1137 passing, and
+(against a freshly restarted dev server, since these are exactly the
+scraper/evidence-extractor files the Windows file-watcher gotcha
+warns about) `npm run benchmark`: 7 PASS / 3 WARN / **0 FAIL**, mean
+76.83 vs the prior run's 76.74 (+0.09 — flat, not chased upward). Two
+commits pushed to `main`: `1aa234e` (reproducibility/evidence-date fix)
+and `f82f1ac` (cross-campaign duplicate-send fix).
+
+One process note for future sessions: killing/restarting the stale dev
+server required explicit user permission in this session (blocked by
+the auto-mode permission classifier by default) — don't assume it's a
+free action.
+
 ## Status as of 2026-08-10
 
 The full Phase 2 AutoGTM loop (all 9 items) and Phase 3's outbound
@@ -56,17 +136,21 @@ this repo's own established precedent for this class of change.
   flags are still unset (off) everywhere, including local dev. Turning
   either on is a deliberate user decision, not an engineering task —
   nothing in this session's verification work changes that.
-- **Batch-originated shared-campaign resume path** — the `resumeFromRun()`
-  fix for batch campaigns (multiple companies sharing one campaign row) has
-  never been exercised against a real batch (multi-company) campaign,
-  because no real batch campaign exists in the database yet. Deferred at
-  the user's own request — pick up whenever a real batch send happens
-  naturally.
-- **Real deliverability caveat** (not a code bug): test sends during the
-  open-tracking verification landed in Gmail spam. Flagged as a real
-  signal worth a future look (self-send pattern, mailbox warmup status,
-  generic LLM-drafted subject lines are all plausible contributors), not
-  investigated further.
+- ~~Batch-originated shared-campaign resume path never exercised~~ —
+  **traced and a real bug fixed 2026-08-31** (cross-campaign
+  duplicate-send gap, see above). Still true that no real multi-company
+  batch send has happened yet in production — the fix is verified via
+  code read + new tests (`tests/campaigns-contact-ids-lookup.test.ts`,
+  extended `campaign-review-blocking`/`send-route-concurrency` tests),
+  not a live multi-company send, since real sends still require
+  explicit per-batch confirmation.
+- ~~Real deliverability caveat, not investigated~~ — **re-audited
+  2026-08-31, no code-level cause found.** MIME/headers/pixel/
+  unsubscribe are already correct (per the earlier 2026-08-20 audit).
+  The spam-landing cause is external: domain SPF/DKIM/DMARC config,
+  sender reputation/mailbox warmup status, or generic LLM-drafted
+  subject lines. Still open as an *operational* item — nothing further
+  to fix in code without new evidence pointing at a specific mechanism.
 
 ## Do not start
 

@@ -1,7 +1,10 @@
 # Project State
 
-Snapshot as of 2026-08-10. For how we got here, see `docs/DECISIONS.md`. For
-what's next, see `docs/ROADMAP.md` and `CURRENT_TASK.md`.
+Snapshot as of 2026-08-10, gaps section updated 2026-08-31 — see
+`CURRENT_TASK.md`'s 2026-08-31 entry for the full stabilization-pass
+detail behind the updates below. For how we got here, see
+`docs/DECISIONS.md`. For what's next, see `docs/ROADMAP.md` and
+`CURRENT_TASK.md`.
 
 ## Pipeline (implemented, Phase 1 + Phase 2)
 
@@ -61,10 +64,13 @@ same automated run since 2026-07-23.
 
 ## Known gaps (not blocking, not being worked on right now)
 
-- **Batch-originated shared-campaign resume path** — `resumeFromRun()`'s
-  fix for a campaign shared across multiple batch-researched companies has
-  never been exercised against a real batch campaign, because none exists
-  in the database yet. Deferred at the user's own request.
+- **Batch-originated shared-campaign resume path** — traced end-to-end
+  2026-08-31, which surfaced and fixed a real cross-campaign
+  duplicate-send gap (the already-sent guard was scoped to one campaign
+  at a time; see `CURRENT_TASK.md`). The fix is verified via code +
+  new tests, not a live multi-company send — no real batch send has
+  happened in production yet, and real sends still require explicit
+  per-batch confirmation.
 - **India's MCA company registry — explicitly excluded, not deferred.**
   No public API exists, only a CAPTCHA-gated portal; building automation to
   bypass a CAPTCHA is a hard line. A paid third-party aggregator would be a
@@ -75,19 +81,27 @@ same automated run since 2026-07-23.
 - **LinkedIn scraping/automation** — stays permanently excluded regardless
   of any other decision. Contact discovery goes through Prospeo, never
   LinkedIn.
-- **Real deliverability caveat, not a code bug**: test sends during the
-  open-tracking verification landed in Gmail spam. Flagged as worth a
-  future look (self-send pattern, mailbox warmup status, generic
-  LLM-drafted subject lines are plausible contributors), not investigated.
+- **Real deliverability caveat — re-audited 2026-08-31, no code bug
+  found.** Test sends during open-tracking verification landed in Gmail
+  spam; MIME/headers/pixel/unsubscribe are confirmed already correct.
+  Remaining cause is operational/external: domain SPF/DKIM/DMARC
+  config, sender reputation/mailbox warmup status, or generic
+  LLM-drafted subject lines — not something a further code change can
+  resolve without new evidence pointing at a specific mechanism.
 - Scraper reliability flakiness for a handful of specific companies
   (A-1 Fence Products, Bharat Forge `primary_type` non-determinism) is
   real, pre-existing, and accepted — see `CLAUDE.md`'s "Company-specific
   known issues" section, don't diagnose a re-occurrence as a fresh
-  regression without retrying first.
+  regression without retrying first. Note: the ATE Group/Muthoot Finance
+  benchmark score swings that looked like a similar case turned out to
+  have a real, now-fixed root cause (a segment-boundary bug in
+  `evidence-extractor.ts` — see `CURRENT_TASK.md`'s 2026-08-31 entry) —
+  don't assume every score swing is unfixable non-determinism without
+  checking first.
 
 ## Test infra
 
-`vitest` (`npm test`). 667 assertions across 46 files as of 2026-08-10 —
+`vitest` (`npm test`). 1137 assertions across 102 files as of 2026-08-31 —
 run `npm test` for the current count, don't trust a stale number here.
 
 ## Env gotcha
