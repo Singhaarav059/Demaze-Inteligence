@@ -21,6 +21,21 @@ import { createServerClient } from '@/lib/supabase/server'
 import { normalizeDomain, normalizeName } from '@/lib/enrichment/company-discovery'
 import { logger } from '@/lib/logger'
 
+// jsonb does not preserve object key order (Postgres docs: "does not
+// preserve the order of object keys"), so a value fetched back from the
+// `filters` jsonb column can have keys in a different order than the
+// client-built object even when semantically identical - a plain
+// JSON.stringify comparison would treat every re-run as a new search. Sort
+// keys recursively before stringifying so the comparison is order-blind.
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>).sort()
+    return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
 interface SegmentCompany {
   name: string
   domain?: string | null
@@ -43,16 +58,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'name, sector, and at least one company are required' }, { status: 400 })
   }
 
+  const filters = body?.filters && typeof body.filters === 'object' ? body.filters : {}
+  const totalFound = Number.isFinite(body?.totalFound) ? Number(body.totalFound) : companies.length
+
   const supabase = createServerClient()
+
+  // Re-running the same search (same sector + filters) should update the
+  // existing Recent Searches entry, not add a duplicate row - see this
+  // file's header comment. Matched by a key-order-blind stableStringify
+  // (not a DB-level jsonb comparison) since jsonb round-trips don't
+  // preserve the client's original key order.
+  const { data: existingRows } = await supabase
+    .from('company_discovery_segments')
+    .select('id, filters')
+    .eq('sector', sector)
+  const serializedFilters = stableStringify(filters)
+  const existing = (existingRows ?? []).find(r => stableStringify(r.filters ?? {}) === serializedFilters)
+
+  if (existing) {
+    const { error } = await supabase
+      .from('company_discovery_segments')
+      .update({ name, companies, total_found: totalFound, last_viewed_at: new Date().toISOString() })
+      .eq('id', existing.id)
+    if (error) {
+      logger.warn('CompanyDiscoverySegments', 'failed to update segment', error.message)
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ success: true, id: existing.id })
+  }
+
   const { data, error } = await supabase
     .from('company_discovery_segments')
-    .insert({
-      name,
-      sector,
-      filters: body?.filters && typeof body.filters === 'object' ? body.filters : {},
-      companies,
-      total_found: Number.isFinite(body?.totalFound) ? Number(body.totalFound) : companies.length,
-    })
+    .insert({ name, sector, filters, companies, total_found: totalFound })
     .select('id')
     .single()
 
