@@ -491,7 +491,7 @@ export function OutreachStep({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            Campaign & Outreach
+            Message
             <InfoTooltip>
               Each draft is a real AI call and can take a minute or two per contact, this isn&apos;t stuck, it&apos;s
               thinking. Nothing is sent from this screen - review and send happens on the next step.
@@ -742,9 +742,9 @@ export function OutreachStep({
                   ) : (
                     !isDrafting && (
                       <div className="rounded-lg border border-dashed border-border bg-background/50 px-3 py-4 flex flex-col items-center text-center gap-2">
-                        <p className="text-xs text-muted-foreground/60">No draft yet for this contact.</p>
+                        <p className="text-xs text-muted-foreground/60">Message not ready — Demaze couldn’t create a message for this person yet.</p>
                         <Button size="sm" variant="outline" onClick={() => void draftForContact(contact)}>
-                          Draft Email
+                          Create Message
                         </Button>
                       </div>
                     )

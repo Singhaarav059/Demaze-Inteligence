@@ -332,7 +332,7 @@ export function ResearchHero({
       </Card>
 
       <div className="grid grid-cols-3 gap-2.5">
-        <MetricTile icon={Radar} label="Signals" value={signalCount} />
+        <MetricTile icon={Radar} label="Findings" value={signalCount} />
         <MetricTile icon={AlertTriangle} label="Pain points" value={painPointsCount} />
         <MetricTile icon={Lightbulb} label="Opportunities" value={opportunitiesCount} />
       </div>
@@ -405,7 +405,7 @@ export function FitSummaryRow({
 export function RecentNewsSection({ items }: { items: string[] }) {
   if (items.length === 0) return null
   return (
-    <Section label="Recent News" icon={Newspaper}>
+    <Section label="Recent Developments" icon={Newspaper}>
       <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
         {items.map((item, i) => (
           <li key={i} className="flex gap-2.5 rounded-lg border border-border/60 bg-accent/20 px-3 py-2.5 text-sm">
@@ -434,7 +434,7 @@ export interface SignalItem {
 export function SignalsSection({ signals }: { signals: SignalItem[] }) {
   if (signals.length === 0) return null
   return (
-    <Section label="Signals Detected" accent="text-signal-medium" icon={Radar}>
+    <Section label="What We Found" accent="text-signal-medium" icon={Radar}>
       <ul className="space-y-3">
         {signals.map((sig, i) => {
           const type = str(sig.type)
@@ -570,7 +570,7 @@ export function PainPointsAndOpportunitiesSection({
         )}
       </Section>
 
-      <Section label="AI Opportunities" accent="text-signal-strong" icon={Lightbulb}>
+      <Section label="Potential Opportunities" accent="text-signal-strong" icon={Lightbulb}>
         {opportunities.length > 0 ? (
           <ul className="space-y-3">
             {opportunities.map((o, i) => {
@@ -978,7 +978,7 @@ export function PersonalizationSummarySection({
     <Card className="border-primary/30 bg-primary/[0.07]">
       <CardContent className="px-6 py-5">
         <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-          <MessageSquare className="size-3.5" /> Personalization Summary
+          <MessageSquare className="size-3.5" /> Outreach Context
         </p>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {openingAngle && (
@@ -1033,7 +1033,7 @@ export function PersonalizationSummarySection({
 export function WhyDemazeSection({ whyDemaze }: { whyDemaze?: WhyDemaze }) {
   if (!whyDemaze || !whyDemaze.reasons || whyDemaze.reasons.length === 0) return null
   return (
-    <Section label="Why Demaze Should Care" accent="text-signal-strong" icon={Sparkles}>
+    <Section label="Why This Company" accent="text-signal-strong" icon={Sparkles}>
       <div className="space-y-3">
         {whyDemaze.summary && (
           <p className="text-sm leading-relaxed text-foreground/90">{humanizeText(whyDemaze.summary)}</p>

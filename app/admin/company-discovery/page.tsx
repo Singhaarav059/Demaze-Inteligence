@@ -331,9 +331,9 @@ function CompanyDiscoveryInner() {
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-muted-foreground/50 text-xs">Demaze <span className="mx-1">›</span> Discover</p>
-          <h1 className="text-xl font-semibold text-foreground mt-0.5">Discover Companies</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Find companies worth researching.</p>
+          <p className="text-muted-foreground/50 text-xs">Demaze <span className="mx-1">›</span> Find Companies</p>
+          <h1 className="text-xl font-semibold text-foreground mt-0.5">Find Companies</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Tell Demaze what kind of companies you're looking for.</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button size="sm" variant="outline" onClick={() => setShowHowItWorks(v => !v)}>

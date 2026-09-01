@@ -92,7 +92,7 @@ export function AutoFlowResearchSummary({
         <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             <Lightbulb className="size-3.5" aria-hidden="true" />
-            Intelligence Snapshot
+            Outreach Context
           </p>
           <EvidenceStack
             fact={whyContact || likelyProblem || 'No specific evidence surfaced yet.'}

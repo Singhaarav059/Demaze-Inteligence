@@ -11,10 +11,15 @@ import { cn } from '@/lib/utils'
 
 type EvidenceRowKind = 'fact' | 'inference' | 'opportunity'
 
+// Plain-language labels (2026-08-31 IA redesign) - "EVIDENCE/INFERENCE/
+// OPPORTUNITY" is internal classification vocabulary; a non-technical user
+// doesn't need to know the taxonomy to read what Demaze found and why it
+// matters. This is the single shared component behind Research, Auto Flow,
+// and Discover reports, so this one change covers all of them.
 const KIND_LABEL: Record<EvidenceRowKind, string> = {
-  fact: 'EVIDENCE',
-  inference: 'INFERENCE',
-  opportunity: 'OPPORTUNITY',
+  fact: 'WHAT WE FOUND',
+  inference: 'WHAT IT MIGHT MEAN',
+  opportunity: 'POTENTIAL OPPORTUNITY',
 }
 
 // Tailwind's compiler needs static class strings - a template-built

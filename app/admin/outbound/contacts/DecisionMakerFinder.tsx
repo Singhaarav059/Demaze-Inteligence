@@ -477,15 +477,15 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
     <Card className="border-border bg-card">
       <CardContent className="px-5 py-4 space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Find Decision Makers</h2>
+          <h2 className="text-sm font-semibold text-foreground">People to Contact</h2>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
             {checkingCache
               ? 'Checking for a previously saved search…'
               : autoStart && compact
-              ? 'Searching automatically using common titles (CEO, CTO, VP Operations, etc). Found candidates start checked below, uncheck anyone you don’t want, then hit Continue.'
+              ? 'We found people who may be relevant at this company, searched automatically by common titles (CEO, CTO, VP Operations, etc). They start checked below, uncheck anyone you don’t want, then hit Continue.'
               : autoStart
-              ? 'Searching automatically using common titles (CEO, CTO, VP Operations, etc). Found candidates start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'
-              : 'Searches for candidate decision-makers by title. Found candidates start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'}
+              ? 'We found people who may be relevant at this company, searched automatically by common titles (CEO, CTO, VP Operations, etc). They start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'
+              : 'Search for people who may be relevant at this company, by title. They start checked below, uncheck anyone you don’t want, nothing is added until you confirm.'}
           </p>
         </div>
         {checkingCache ? (
@@ -539,7 +539,7 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
         )}
         <Button size="sm" variant="outline" disabled={discovering} onClick={handleDiscover}>
           {discovering ? <Spinner className="size-3.5" /> : null}
-          {autoStart && (candidates.length > 0 || discovering) ? 'Search Again' : 'Find Decision Makers'}
+          {autoStart && (candidates.length > 0 || discovering) ? 'Search Again' : 'Find People'}
         </Button>
 
         {discovering && candidates.length === 0 && (
@@ -623,7 +623,9 @@ export const DecisionMakerFinder = forwardRef<DecisionMakerFinderHandle, {
               ) : (
                 <Button size="sm" disabled={adding || selectedCandidates.size === 0} onClick={handleAddSelected}>
                   {adding ? <Spinner className="size-3.5" /> : null}
-                  Add Selected as Contacts ({selectedCandidates.size})
+                  {recommendedCount > 0 && selectedCandidates.size === recommendedCount && Array.from(selectedCandidates).every(i => isRecommendedCandidate(candidates[i]))
+                    ? `Use recommended people (${selectedCandidates.size})`
+                    : `Add ${selectedCandidates.size} to contacts`}
                 </Button>
               )}
             </div>

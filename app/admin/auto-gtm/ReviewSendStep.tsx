@@ -325,20 +325,19 @@ export function ReviewSendStep({
       </div>
 
       <div className="rounded-lg border border-border bg-card px-4 py-3.5 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="text-muted-foreground/70">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium text-foreground">
+            {readyRows.length} of {summary.total} message{summary.total === 1 ? '' : 's'} ready
+          </p>
+          <span className="text-xs text-muted-foreground/70">
             Sending from <span className="text-foreground font-medium">{isRealSendingProvider ? sendingProviderName : 'Demo mode (mock)'}</span>
           </span>
-          <span className="text-muted-foreground/70">Sequence: 1 initial + up to 3 follow-ups</span>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatChip label="Contacts" value={summary.total} />
-          <StatChip label="Ready" value={readyRows.length} tone="strong" />
-          <StatChip label="Missing email" value={missingEmailRows.length} />
+          <StatChip label="Ready to review" value={readyRows.length} tone="strong" />
+          <StatChip label="Needs attention" value={missingEmailRows.length + notReadyRows.length + blockedRows.length} tone="medium" />
           <StatChip label="Suppressed" value={suppressedRows.length} tone="destructive" />
           <StatChip label="Already sent" value={alreadySentRows.length} />
-          <StatChip label="Needs a draft" value={notReadyRows.length} tone="medium" />
-          <StatChip label="Blocked" value={blockedRows.length} tone="destructive" />
         </div>
       </div>
 
@@ -436,7 +435,7 @@ export function ReviewSendStep({
         </p>
         <Button size="lg" disabled={readyRows.length === 0 || sendingSelected} onClick={() => setPendingConfirm(true)}>
           {sendingSelected ? <Spinner className="size-3.5" /> : null}
-          Review & Send Campaign
+          Send {readyRows.length} message{readyRows.length === 1 ? '' : 's'}
         </Button>
       </div>
 
@@ -456,7 +455,7 @@ export function ReviewSendStep({
           <AlertDialogPopup className="max-w-lg">
             <AlertDialogTitle>Preview: {preview?.personName}</AlertDialogTitle>
             <AlertDialogDescription>
-              {preview?.loading ? 'Loading…' : preview?.notFound ? 'No drafted email found for this contact yet.' : 'Read-only preview of the exact email that will be sent.'}
+              {preview?.loading ? 'Loading…' : preview?.notFound ? 'Message not ready — Demaze couldn’t create a message for this person yet.' : 'Read-only preview of the exact email that will be sent.'}
             </AlertDialogDescription>
             {preview && !preview.loading && !preview.notFound && (
               <div className="mt-3 space-y-2">

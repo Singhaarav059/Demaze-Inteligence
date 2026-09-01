@@ -13,10 +13,12 @@
 // - never as its own step, per the standing "no Sales Strategy step" rule.
 // ============================================================
 
-import { CheckCircle2, Lightbulb, Target } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2, ChevronRight, Lightbulb, Target } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { InfoTooltip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { fitLabel } from '@/lib/ui/fit-label'
 import type { QualificationResult } from '@/lib/sector-playbook/qualify'
 
 function scoreColor(score: number): string {
@@ -57,19 +59,19 @@ function ScoreRow({ label, score, reasons }: { label: string; score: number | nu
 
 export function SectorQualificationCard({ qualification, companyFitLabel = 'Company fit' }: { qualification: QualificationResult; companyFitLabel?: string }) {
   const { classification, playbook, sectorFit, companyFit, opportunityEvidence, contactability, overall, matchedOpportunities } = qualification
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   return (
     <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Target className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-foreground">Target Sector & Fit</h3>
-          <Badge variant="secondary" className="text-[10px]">DRAFT</Badge>
+          <h3 className="text-base font-semibold text-foreground">{fitLabel(overall.score)}</h3>
           <InfoTooltip>
-            Based on a draft sector playbook, not the official approved Demaze sector strategy yet. Scores are directional, not precise.
+            Based on a draft sector playbook, not the official approved Demaze sector strategy yet. Directional, not precise.
           </InfoTooltip>
         </div>
-        <span className={cn('text-lg font-semibold tabular-nums', scoreColor(overall.score))}>{overall.score}/100</span>
+        <span className={cn('text-sm font-medium tabular-nums text-muted-foreground', scoreColor(overall.score))}>{overall.score}/100</span>
       </div>
 
       {playbook ? (
@@ -79,16 +81,27 @@ export function SectorQualificationCard({ qualification, companyFitLabel = 'Comp
       )}
       <p className="text-xs text-muted-foreground">{classification.reason}</p>
 
-      <div className="pt-1">
-        <ScoreRow label="Sector fit" score={sectorFit.score} reasons={sectorFit.reasons} />
-        <ScoreRow label={companyFitLabel} score={companyFit.score} reasons={companyFit.reasons} />
-        <ScoreRow label="Opportunity evidence" score={opportunityEvidence.score} reasons={opportunityEvidence.reasons} />
-        <ScoreRow label="Contactability" score={contactability.score} reasons={contactability.reasons} />
-      </div>
+      <button
+        type="button"
+        onClick={() => setDetailsOpen(v => !v)}
+        aria-expanded={detailsOpen}
+        className="flex items-center gap-1.5 pt-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', detailsOpen && 'rotate-90')} />
+        See scoring details
+      </button>
+      {detailsOpen && (
+        <div className="border-t border-border pt-2">
+          <ScoreRow label="Sector fit" score={sectorFit.score} reasons={sectorFit.reasons} />
+          <ScoreRow label={companyFitLabel} score={companyFit.score} reasons={companyFit.reasons} />
+          <ScoreRow label="Opportunity evidence" score={opportunityEvidence.score} reasons={opportunityEvidence.reasons} />
+          <ScoreRow label="Contactability" score={contactability.score} reasons={contactability.reasons} />
+        </div>
+      )}
 
       {matchedOpportunities.length > 0 && (
         <div className="pt-1 space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Possible opportunities</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Potential opportunities</p>
           {matchedOpportunities.map((m, i) => (
             <div
               key={i}
@@ -124,13 +137,11 @@ export function CompactSectorBadge({ qualification }: { qualification: Qualifica
   const { playbook, overall } = qualification
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <span className="text-muted-foreground/60">Sector</span>
       <Badge variant={playbook ? 'default' : 'secondary'} className="text-[10px]">
         {playbook ? playbook.label : 'Outside target sectors'}
       </Badge>
       <span className="text-muted-foreground/60">·</span>
-      <span className={cn('font-medium tabular-nums', scoreColor(overall.score))}>{overall.score}/100 fit</span>
-      <Badge variant="secondary" className="text-[9px]">DRAFT</Badge>
+      <span className={cn('font-medium', scoreColor(overall.score))}>{fitLabel(overall.score)}</span>
     </div>
   )
 }

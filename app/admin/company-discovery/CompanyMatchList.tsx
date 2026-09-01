@@ -119,9 +119,9 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
           <div className="flex items-center gap-2 min-w-0">
             <Building2 className="size-4 text-muted-foreground/60 shrink-0" />
             <p className="text-foreground text-sm min-w-0">
-              <span className="font-semibold">{totalLabel}</span> compan{totalCount === 1 ? 'y' : 'ies'} matched to your criteria
+              <span className="font-semibold">{totalLabel}</span> compan{totalCount === 1 ? 'y' : 'ies'} match your search.
               {totalAvailable > companies.length && (
-                <span className="text-muted-foreground/60"> · showing best {companies.length}</span>
+                <span className="block text-muted-foreground/60 text-xs mt-0.5">We selected the {companies.length} strongest matches to research first.</span>
               )}
             </p>
           </div>
@@ -131,7 +131,7 @@ export function CompanyMatchList({ search, onAdjustSearch }: { search: CompanyDi
             </Button>
           ) : (
             <Button size="sm" onClick={researchSelected} disabled={selectedCount === 0}>
-              {selectedCount === 0 ? 'No research action yet' : `Research with Demaze (${selectedCount})`}
+              {selectedCount === 0 ? 'No research action yet' : `Research these ${selectedCount}`}
             </Button>
           )}
         </div>
